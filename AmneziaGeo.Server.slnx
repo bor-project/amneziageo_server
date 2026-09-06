@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/Server/">
+    <Project Path="amneziageo-server/AmneziaGeo.Server.Core/AmneziaGeo.Server.Core.csproj" />
+    <Project Path="amneziageo-server/AmneziaGeo.Server.Dal/AmneziaGeo.Server.Dal.csproj" />
+    <Project Path="amneziageo-server/AmneziaGeo.Server.Awg/AmneziaGeo.Server.Awg.csproj" />
+    <Project Path="amneziageo-server/AmneziaGeo.Server.Auth/AmneziaGeo.Server.Auth.csproj" />
+    <Project Path="amneziageo-server/AmneziaGeo.Server.Api/AmneziaGeo.Server.Api.csproj" />
+    <Project Path="amneziageo-server/AmneziaGeo.Server.Cli/AmneziaGeo.Server.Cli.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="amneziageo-tests/AmneziaGeo.Server.Tests/AmneziaGeo.Server.Tests.csproj" />
+  </Folder>
+</Solution>

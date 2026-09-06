@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\AmneziaGeo.Server.Core\AmneziaGeo.Server.Core.csproj" />
+    <ProjectReference Include="..\AmneziaGeo.Server.Dal\AmneziaGeo.Server.Dal.csproj" />
+    <ProjectReference Include="..\AmneziaGeo.Server.Awg\AmneziaGeo.Server.Awg.csproj" />
+    <ProjectReference Include="..\AmneziaGeo.Server.Auth\AmneziaGeo.Server.Auth.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

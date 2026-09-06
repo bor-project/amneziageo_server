@@ -1,0 +1,20 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Company>AmneziaGeo</Company>
+    <Product>AmneziaGeo Server</Product>
+    <Authors>AmneziaGeo</Authors>
+    <Description>AmneziaGeo Server - AmneziaWG server management.</Description>
+    <Copyright>Copyright (c) AmneziaGeo</Copyright>
+  </PropertyGroup>
+
+</Project>

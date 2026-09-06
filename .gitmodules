@@ -1,0 +1,3 @@
+[submodule "amneziawg/amneziawg-linux-kernel-module"]
+	path = amneziawg/amneziawg-linux-kernel-module
+	url = https://github.com/bor-project/amneziawg-linux-kernel-module.git
