@@ -1,40 +1,23 @@
 namespace AmneziaGeo.Server.Auth;
 
 /// <summary>
-/// The named sets of rights an account is given.
-/// </summary>
-public enum Role
-{
-    None = 0,
-    Viewer = 1,
-    Operator = 2,
-    Admin = 3,
-}
-
-/// <summary>
-/// Turns roles into the rights they carry.
+/// The role the server carries on its own.
 /// </summary>
 public static class Roles
 {
     /// <summary>
-    /// Returns the rights a role carries.
+    /// The role that carries every right the server knows.
     /// </summary>
-    public static IReadOnlyList<string> Scopes(Role role) => role switch
-    {
-        Role.Admin => AmneziaGeo.Server.Auth.Scopes.All,
-        Role.Operator => [AmneziaGeo.Server.Auth.Scopes.ReadState, AmneziaGeo.Server.Auth.Scopes.ManageClients],
-        Role.Viewer => [AmneziaGeo.Server.Auth.Scopes.ReadState],
-        _ => [],
-    };
+    public const string Admin = "admin";
 
     /// <summary>
-    /// Reads a role written as text, falling back to none.
+    /// The name the panel shows for the built in role.
     /// </summary>
-    public static Role Parse(string? text) =>
-        Enum.TryParse<Role>(text, ignoreCase: true, out var role) ? role : Role.None;
+    public const string AdminTitle = "Administrator";
 
     /// <summary>
-    /// Writes a role as it is stored.
+    /// Tells whether a role is the one the server keeps as it is.
     /// </summary>
-    public static string Text(Role role) => role.ToString().ToLowerInvariant();
+    public static bool IsBuiltin(string? name) =>
+        string.Equals(name, Admin, StringComparison.OrdinalIgnoreCase);
 }

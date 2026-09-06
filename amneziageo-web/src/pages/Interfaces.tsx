@@ -1,3 +1,7 @@
+import { useText } from "@/i18n"
+
 export function Interfaces() {
-  return <h1 className="text-xl font-semibold">Интерфейсы</h1>
+  const t = useText()
+
+  return <h1 className="text-xl font-semibold">{t("nav.interfaces")}</h1>
 }

@@ -1,35 +1,8 @@
+using System.Security.Claims;
 using AmneziaGeo.Server.Auth;
 using Xunit;
 
 namespace AmneziaGeo.Server.Tests;
-
-public class PasswordHasherTests
-{
-    [Fact]
-    public void APasswordVerifiesAgainstItsOwnHash()
-    {
-        var stored = PasswordHasher.Hash("correct horse battery");
-
-        Assert.True(PasswordHasher.Verify(stored, "correct horse battery"));
-    }
-
-    [Fact]
-    public void AnotherPasswordDoesNotVerify()
-    {
-        var stored = PasswordHasher.Hash("correct horse battery");
-
-        Assert.False(PasswordHasher.Verify(stored, "correct horse batterz"));
-    }
-
-    [Fact]
-    public void TwoHashesOfOnePasswordDiffer()
-    {
-        var first = PasswordHasher.Hash("correct horse battery");
-        var second = PasswordHasher.Hash("correct horse battery");
-
-        Assert.NotEqual(first.Hash, second.Hash);
-    }
-}
 
 public class TokenIssuerTests
 {
@@ -87,7 +60,7 @@ public class PasswordLoginTests
     public async Task ARightPasswordProducesBothTokens()
     {
         using var bench = new Bench();
-        await bench.UserAsync("bor", "long enough password", Role.Admin);
+        await bench.UserAsync("bor", "long enough password");
 
         var result = await bench.Login.PasswordAsync("bor", "long enough password", null, "test", CancellationToken.None);
 
@@ -124,7 +97,8 @@ public class PasswordLoginTests
     {
         using var bench = new Bench();
         var record = await bench.UserAsync("bor", "long enough password");
-        await bench.Principals.SetEnabledAsync(record.Id, false, bench.Clock.Now, CancellationToken.None);
+        record.IsEnabled = false;
+        await bench.Users.UpdateAsync(record);
 
         var result = await bench.Login.PasswordAsync("bor", "long enough password", null, "test", CancellationToken.None);
 
@@ -168,7 +142,7 @@ public class PasswordLoginTests
     public async Task APasswordThatHasToChangeCarriesOnlyThatRight()
     {
         using var bench = new Bench();
-        await bench.UserAsync("bor", "long enough password", Role.Admin, mustChange: true);
+        await bench.UserAsync("bor", "long enough password", Roles.Admin, mustChange: true);
 
         var result = await bench.Login.PasswordAsync("bor", "long enough password", null, "test", CancellationToken.None);
 
@@ -182,7 +156,8 @@ public class PasswordLoginTests
     public async Task ARoleCarriesTheRightsItStandsFor()
     {
         using var bench = new Bench();
-        await bench.UserAsync("bor", "long enough password", Role.Operator);
+        await bench.RoleAsync("operator", Scopes.ReadState, Scopes.ManageClients);
+        await bench.UserAsync("bor", "long enough password", "operator");
 
         var result = await bench.Login.PasswordAsync("bor", "long enough password", null, "test", CancellationToken.None);
 
@@ -191,11 +166,12 @@ public class PasswordLoginTests
     }
 
     [Fact]
-    public async Task RightsGrantedOnTopOfARoleAreHeldAsWell()
+    public async Task RightsGivenToAnAccountAreHeldOnTopOfItsRole()
     {
         using var bench = new Bench();
-        var record = await bench.UserAsync("bor", "long enough password", Role.Viewer);
-        await bench.Principals.SetExtraAsync(record.Id, [Scopes.ManageClients], CancellationToken.None);
+        await bench.RoleAsync("viewer", Scopes.ReadState);
+        var record = await bench.UserAsync("bor", "long enough password", "viewer");
+        await bench.Users.AddClaimAsync(record, new Claim(Scopes.ClaimType, Scopes.ManageClients));
 
         var result = await bench.Login.PasswordAsync("bor", "long enough password", null, "test", CancellationToken.None);
 

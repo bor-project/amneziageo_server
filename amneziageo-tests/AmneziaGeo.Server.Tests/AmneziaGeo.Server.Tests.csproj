@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Dal\AmneziaGeo.Server.Dal.csproj" />
     <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Awg\AmneziaGeo.Server.Awg.csproj" />
     <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Auth\AmneziaGeo.Server.Auth.csproj" />
+    <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Api\AmneziaGeo.Server.Api.csproj" />
   </ItemGroup>
 
 </Project>

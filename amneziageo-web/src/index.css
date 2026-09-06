@@ -1,12 +1,56 @@
 @import "tailwindcss";
 
-@theme {
-  --color-brand: #1A50B0;
-  --color-brand-soft: #E8EEF9;
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-hover: var(--hover);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-alarm: var(--alarm);
+  --color-alarm-soft: var(--alarm-soft);
+}
+
+:root {
+  color-scheme: light;
+  --canvas: #F8FAFC;
+  --surface: #FFFFFF;
+  --ink: #0F172A;
+  --muted: #64748B;
+  --line: #E2E8F0;
+  --hover: #F1F5F9;
+  --brand: #1A50B0;
+  --brand-ink: #1A50B0;
+  --brand-soft: #E8EEF9;
+  --alarm: #B91C1C;
+  --alarm-soft: #FEF2F2;
+}
+
+.dark {
+  color-scheme: dark;
+  --canvas: #0B1120;
+  --surface: #111B2E;
+  --ink: #E2E8F0;
+  --muted: #94A3B8;
+  --line: #22304C;
+  --hover: #182238;
+  --brand: #2C63C8;
+  --brand-ink: #8FB3F5;
+  --brand-soft: #172C52;
+  --alarm: #F2A3A3;
+  --alarm-soft: #3A1A1D;
 }
 
 html,
 body,
 #root {
   height: 100%;
+}
+
+body {
+  background-color: var(--canvas);
+  color: var(--ink);
 }

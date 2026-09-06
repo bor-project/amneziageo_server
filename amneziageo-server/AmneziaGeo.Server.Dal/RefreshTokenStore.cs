@@ -2,7 +2,7 @@ using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
 using AmneziaGeo.Server.Auth;
-using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace AmneziaGeo.Server.Dal;
 
@@ -13,19 +13,19 @@ public sealed class RefreshTokenStore : IRefreshTokens
 {
     private const int SecretLength = 32;
 
-    private readonly Db _db;
+    private readonly AppDbContext _db;
 
-    private readonly IPrincipals _principals;
+    private readonly AccessResolver _access;
 
     private readonly AuthOptions _options;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public RefreshTokenStore(Db db, IPrincipals principals, AuthOptions options)
+    public RefreshTokenStore(AppDbContext db, AccessResolver access, AuthOptions options)
     {
         _db = db;
-        _principals = principals;
+        _access = access;
         _options = options;
     }
 
@@ -40,34 +40,23 @@ public sealed class RefreshTokenStore : IRefreshTokens
         DateTimeOffset now,
         CancellationToken ct)
     {
-        var ceiling = now.Add(_options.SessionLifetime);
-
-        using var connection = await _db.OpenAsync(ct).ConfigureAwait(false);
-        using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-        var sessionId = 0L;
-
-        using (var command = Sql.Command(
-            connection,
-            """
-            INSERT INTO session (principal_id, scheme, created_utc, absolute_end_utc, address, agent)
-            VALUES (@principal, @scheme, @now, @ceiling, @address, @agent)
-            RETURNING id;
-            """,
-            ("@principal", principalId),
-            ("@scheme", scheme.ToString()),
-            ("@now", Sql.Text(now)),
-            ("@ceiling", Sql.Text(ceiling)),
-            ("@address", address),
-            ("@agent", agent)))
+        var session = new SessionEntity
         {
-            command.Transaction = transaction;
-            sessionId = Convert.ToInt64(await command.ExecuteScalarAsync(ct).ConfigureAwait(false));
-        }
+            UserId = principalId,
+            Scheme = scheme,
+            CreatedUtc = now,
+            AbsoluteEndUtc = now.Add(_options.SessionLifetime),
+            Address = address,
+            Agent = agent,
+        };
 
-        var minted = await MintAsync(connection, (SqliteTransaction)transaction, sessionId, now, ceiling, ct).ConfigureAwait(false);
-        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        _db.Sessions.Add(session);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        return (sessionId, minted.Secret);
+        var minted = Mint(session.Id, now, session.AbsoluteEndUtc);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return (session.Id, minted.Secret);
     }
 
     /// <summary>
@@ -75,65 +64,56 @@ public sealed class RefreshTokenStore : IRefreshTokens
     /// </summary>
     public async Task<RefreshResult> RotateAsync(string refresh, DateTimeOffset now, CancellationToken ct)
     {
-        using var connection = await _db.OpenAsync(ct).ConfigureAwait(false);
-        var found = await FindAsync(connection, refresh, ct).ConfigureAwait(false);
-        if (found is null)
+        var hash = Fingerprint(refresh);
+        var token = await _db.RefreshTokens
+            .Include(item => item.Session)
+            .FirstOrDefaultAsync(item => item.TokenHash == hash, ct)
+            .ConfigureAwait(false);
+
+        if (token?.Session is not { } session)
         {
             return new RefreshResult(RefreshOutcome.Unknown, null, null);
         }
 
-        if (found.SessionEnded is not null)
+        if (session.EndedUtc is not null)
         {
             return new RefreshResult(RefreshOutcome.SessionEnded, null, null);
         }
 
-        if (found.Ceiling <= now)
+        if (session.AbsoluteEndUtc <= now)
         {
-            await EndAsync(found.SessionId, now, ct).ConfigureAwait(false);
+            await EndAsync(session.Id, now, ct).ConfigureAwait(false);
 
             return new RefreshResult(RefreshOutcome.SessionEnded, null, null);
         }
 
-        if (found.Used is not null && (found.GraceEnd is null || found.GraceEnd < now))
+        if (token.UsedUtc is not null && (token.GraceEndUtc is null || token.GraceEndUtc < now))
         {
-            await EndAsync(found.SessionId, now, ct).ConfigureAwait(false);
+            await EndAsync(session.Id, now, ct).ConfigureAwait(false);
 
             return new RefreshResult(RefreshOutcome.Replayed, null, null);
         }
 
-        if (found.Used is null && found.Expires <= now)
+        if (token.UsedUtc is null && token.ExpiresUtc <= now)
         {
             return new RefreshResult(RefreshOutcome.Expired, null, null);
         }
 
-        var principal = await PrincipalAsync(found, ct).ConfigureAwait(false);
+        var principal = await PrincipalAsync(session, ct).ConfigureAwait(false);
         if (principal is null)
         {
-            await EndAsync(found.SessionId, now, ct).ConfigureAwait(false);
+            await EndAsync(session.Id, now, ct).ConfigureAwait(false);
 
             return new RefreshResult(RefreshOutcome.SessionEnded, null, null);
         }
 
-        using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-        var minted = await MintAsync(connection, (SqliteTransaction)transaction, found.SessionId, now, found.Ceiling, ct).ConfigureAwait(false);
+        var minted = Mint(session.Id, now, session.AbsoluteEndUtc);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        using (var command = Sql.Command(
-            connection,
-            """
-            UPDATE refresh_token
-            SET used_utc = COALESCE(used_utc, @now), grace_end_utc = @grace, replaced_by = @next
-            WHERE id = @id;
-            """,
-            ("@now", Sql.Text(now)),
-            ("@grace", Sql.Text(now.Add(_options.RotationGrace))),
-            ("@next", minted.Id),
-            ("@id", found.TokenId)))
-        {
-            command.Transaction = transaction;
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        }
-
-        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        token.UsedUtc ??= now;
+        token.GraceEndUtc = now.Add(_options.RotationGrace);
+        token.ReplacedBy = minted.Entity.Id;
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return new RefreshResult(RefreshOutcome.Issued, minted.Secret, principal);
     }
@@ -143,14 +123,14 @@ public sealed class RefreshTokenStore : IRefreshTokens
     /// </summary>
     public async Task EndAsync(long sessionId, DateTimeOffset now, CancellationToken ct)
     {
-        using var connection = await _db.OpenAsync(ct).ConfigureAwait(false);
-        using var command = Sql.Command(
-            connection,
-            "UPDATE session SET ended_utc = COALESCE(ended_utc, @now) WHERE id = @id;",
-            ("@now", Sql.Text(now)),
-            ("@id", sessionId));
+        var session = await _db.Sessions.FirstOrDefaultAsync(item => item.Id == sessionId, ct).ConfigureAwait(false);
+        if (session is null || session.EndedUtc is not null)
+        {
+            return;
+        }
 
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        session.EndedUtc = now;
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -158,90 +138,37 @@ public sealed class RefreshTokenStore : IRefreshTokens
     /// </summary>
     public static byte[] Fingerprint(string token) => SHA256.HashData(Encoding.UTF8.GetBytes(token));
 
-    private async Task<Principal?> PrincipalAsync(Entry entry, CancellationToken ct)
+    private async Task<Principal?> PrincipalAsync(SessionEntity session, CancellationToken ct)
     {
-        var record = await _principals.FindAsync(entry.PrincipalId, ct).ConfigureAwait(false);
-        if (record is null || !record.IsEnabled)
+        var user = await _db.Users.FirstOrDefaultAsync(item => item.Id == session.UserId, ct).ConfigureAwait(false);
+        if (user is null || !user.IsEnabled)
         {
             return null;
         }
 
-        var scopes = record.Scopes.ToHashSet(StringComparer.Ordinal);
-        if (entry.Scheme == AuthScheme.Password)
+        var scopes = (await _access.ScopesAsync(user).ConfigureAwait(false)).ToHashSet(StringComparer.Ordinal);
+        if (session.Scheme == AuthScheme.Password)
         {
-            scopes.Add(Auth.Scopes.ChangePassword);
+            scopes.Add(Scopes.ChangePassword);
         }
 
-        return new Principal(record.Id, record.Name, entry.Scheme, entry.SessionId, scopes);
+        return new Principal(user.Id, user.Name, session.Scheme, session.Id, scopes);
     }
 
-    private async Task<(long Id, string Secret)> MintAsync(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
-        long sessionId,
-        DateTimeOffset now,
-        DateTimeOffset ceiling,
-        CancellationToken ct)
+    private (RefreshTokenEntity Entity, string Secret) Mint(long sessionId, DateTimeOffset now, DateTimeOffset ceiling)
     {
         var secret = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(SecretLength));
         var expires = now.Add(_options.RefreshLifetime);
-
-        using var command = Sql.Command(
-            connection,
-            """
-            INSERT INTO refresh_token (session_id, token_hash, issued_utc, expires_utc)
-            VALUES (@session, @hash, @now, @expires)
-            RETURNING id;
-            """,
-            ("@session", sessionId),
-            ("@hash", Fingerprint(secret)),
-            ("@now", Sql.Text(now)),
-            ("@expires", Sql.Text(expires < ceiling ? expires : ceiling)));
-
-        command.Transaction = transaction;
-        var id = Convert.ToInt64(await command.ExecuteScalarAsync(ct).ConfigureAwait(false));
-
-        return (id, secret);
-    }
-
-    private static async Task<Entry?> FindAsync(SqliteConnection connection, string refresh, CancellationToken ct)
-    {
-        using var command = Sql.Command(
-            connection,
-            """
-            SELECT r.id, r.session_id, r.expires_utc, r.grace_end_utc, r.used_utc,
-                   s.ended_utc, s.absolute_end_utc, s.principal_id, s.scheme
-            FROM refresh_token r JOIN session s ON s.id = r.session_id
-            WHERE r.token_hash = @hash;
-            """,
-            ("@hash", Fingerprint(refresh)));
-
-        using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+        var entity = new RefreshTokenEntity
         {
-            return null;
-        }
+            SessionId = sessionId,
+            TokenHash = Fingerprint(secret),
+            IssuedUtc = now,
+            ExpiresUtc = expires < ceiling ? expires : ceiling,
+        };
 
-        return new Entry(
-            reader.GetInt64(0),
-            reader.GetInt64(1),
-            Sql.Time(reader.GetString(2))!.Value,
-            Sql.Time(reader.TextOrNull(3)),
-            Sql.Time(reader.TextOrNull(4)),
-            Sql.Time(reader.TextOrNull(5)),
-            Sql.Time(reader.GetString(6))!.Value,
-            reader.GetInt64(7),
-            Enum.TryParse<AuthScheme>(reader.GetString(8), out var scheme) ? scheme : AuthScheme.None);
+        _db.RefreshTokens.Add(entity);
+
+        return (entity, secret);
     }
-
-    private sealed record Entry(
-        long TokenId,
-        long SessionId,
-        DateTimeOffset Expires,
-        DateTimeOffset? GraceEnd,
-        DateTimeOffset? Used,
-        DateTimeOffset? SessionEnded,
-        DateTimeOffset Ceiling,
-        long PrincipalId,
-        AuthScheme Scheme);
 }

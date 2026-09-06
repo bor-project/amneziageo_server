@@ -11,7 +11,6 @@ public static class GenericNetlink
     private const ushort AttributeFamilyName = 2;
 
     private const ushort FlagRequest = 1;
-    private const ushort FlagAck = 4;
 
     /// <summary>
     /// Looks up the identifier of a family, returning null when the kernel does not carry it.
@@ -19,7 +18,7 @@ public static class GenericNetlink
     public static ushort? Resolve(NetlinkSocket socket, string name)
     {
         var writer = new NetlinkWriter();
-        writer.Begin(ControlFamily, FlagRequest | FlagAck, socket.NextSequence(), GetFamily, 1);
+        writer.Begin(ControlFamily, FlagRequest, socket.NextSequence(), GetFamily, 1);
         writer.PutString(AttributeFamilyName, name);
 
         var answer = Answer(socket, writer);

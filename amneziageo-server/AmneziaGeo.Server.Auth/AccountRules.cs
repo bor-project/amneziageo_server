@@ -37,16 +37,16 @@ public static partial class AccountRules
     /// <summary>
     /// Returns why a password is unusable, or null when it holds.
     /// </summary>
-    public static string? CheckPassword(string? password)
+    public static string? CheckPassword(string? password, int minimum = MinPasswordLength)
     {
         if (string.IsNullOrEmpty(password))
         {
             return "the password is empty";
         }
 
-        if (password.Length < MinPasswordLength)
+        if (password.Length < minimum)
         {
-            return $"the password is shorter than {MinPasswordLength} characters";
+            return $"the password is shorter than {minimum} characters";
         }
 
         return null;

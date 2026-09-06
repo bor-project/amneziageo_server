@@ -58,6 +58,16 @@ public sealed class NetlinkWriter
     }
 
     /// <summary>
+    /// Appends an attribute holding a 64 bit number.
+    /// </summary>
+    public void PutU64(ushort type, ulong value)
+    {
+        Span<byte> value8 = stackalloc byte[8];
+        BinaryPrimitives.WriteUInt64LittleEndian(value8, value);
+        PutBytes(type, value8);
+    }
+
+    /// <summary>
     /// Appends an attribute holding a null terminated string.
     /// </summary>
     public void PutString(ushort type, string value)

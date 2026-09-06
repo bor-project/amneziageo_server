@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Identity;
+
 namespace AmneziaGeo.Server.Auth;
 
 /// <summary>
@@ -43,9 +45,11 @@ public sealed record LoginResult(
 /// </summary>
 public sealed class LoginService
 {
-    private readonly IPrincipals _principals;
+    private readonly UserManager<AppUser> _users;
 
-    private readonly IPasswords _passwords;
+    private readonly AccountManager _accounts;
+
+    private readonly AccessResolver _access;
 
     private readonly IRefreshTokens _refreshTokens;
 
@@ -61,16 +65,18 @@ public sealed class LoginService
     /// ctor
     /// </summary>
     public LoginService(
-        IPrincipals principals,
-        IPasswords passwords,
+        UserManager<AppUser> users,
+        AccountManager accounts,
+        AccessResolver access,
         IRefreshTokens refreshTokens,
         ITokenIssuer issuer,
         IAuditLog audit,
         AuthOptions options,
         TimeProvider? time = null)
     {
-        _principals = principals;
-        _passwords = passwords;
+        _users = users;
+        _accounts = accounts;
+        _access = access;
         _refreshTokens = refreshTokens;
         _issuer = issuer;
         _audit = audit;
@@ -84,38 +90,54 @@ public sealed class LoginService
     public async Task<LoginResult> PasswordAsync(string name, string password, string? address, string? agent, CancellationToken ct)
     {
         var now = _time.GetUtcNow();
-        var record = await _principals.FindAsync(name, ct).ConfigureAwait(false);
-        if (record is null)
+        var user = await _users.FindByNameAsync(name).ConfigureAwait(false);
+        if (user is null)
         {
             await NoteAsync(now, null, AuthScheme.Password, "login.unknown", name, address, ct).ConfigureAwait(false);
 
             return Failed(LoginOutcome.UnknownUser);
         }
 
-        if (!record.IsEnabled)
+        if (!user.IsEnabled)
         {
-            await NoteAsync(now, record.Id, AuthScheme.Password, "login.disabled", name, address, ct).ConfigureAwait(false);
+            await NoteAsync(now, user.Id, AuthScheme.Password, "login.disabled", name, address, ct).ConfigureAwait(false);
 
             return Failed(LoginOutcome.Disabled);
         }
 
-        var checkup = await _passwords.CheckAsync(record.Id, password, now, ct).ConfigureAwait(false);
-        if (checkup is not (PasswordCheck.Ok or PasswordCheck.MustChange))
+        if (!await _users.HasPasswordAsync(user).ConfigureAwait(false))
         {
-            await NoteAsync(now, record.Id, AuthScheme.Password, Action("login", checkup), name, address, ct).ConfigureAwait(false);
+            await NoteAsync(now, user.Id, AuthScheme.Password, "login.notset", name, address, ct).ConfigureAwait(false);
 
-            return Failed(Reason(checkup));
+            return Failed(LoginOutcome.NoPassword);
         }
 
-        if (checkup == PasswordCheck.MustChange)
+        if (user.LockoutEnd is { } until && until > now)
         {
-            await NoteAsync(now, record.Id, AuthScheme.Password, "login.mustchange", name, address, ct).ConfigureAwait(false);
-            var limited = new Principal(record.Id, record.Name, AuthScheme.Password, 0, Only(Scopes.ChangePassword));
+            await NoteAsync(now, user.Id, AuthScheme.Password, "login.locked", name, address, ct).ConfigureAwait(false);
+
+            return Failed(LoginOutcome.Locked);
+        }
+
+        if (!await _users.CheckPasswordAsync(user, password).ConfigureAwait(false))
+        {
+            var outcome = await FailAsync(user, now).ConfigureAwait(false);
+            await NoteAsync(now, user.Id, AuthScheme.Password, Action("login", outcome), name, address, ct).ConfigureAwait(false);
+
+            return Failed(outcome);
+        }
+
+        await PassedAsync(user).ConfigureAwait(false);
+
+        if (user.MustChangePassword)
+        {
+            await NoteAsync(now, user.Id, AuthScheme.Password, "login.mustchange", name, address, ct).ConfigureAwait(false);
+            var limited = new Principal(user.Id, user.Name, AuthScheme.Password, 0, Only(Scopes.ChangePassword));
 
             return new LoginResult(LoginOutcome.Ok, _issuer.Issue(limited, now), null, limited, MustChangePassword: true);
         }
 
-        return await IssueAsync(record, AuthScheme.Password, address, agent, now, ct).ConfigureAwait(false);
+        return await IssueAsync(user, AuthScheme.Password, address, agent, now, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -141,34 +163,38 @@ public sealed class LoginService
 
         var now = _time.GetUtcNow();
         var granted = HostRole(user);
-        var record = await _principals.FindByHostUserAsync(user.Name, ct).ConfigureAwait(false);
+        var record = FindByHostUser(user.Name);
 
         if (record is null)
         {
-            if (await _principals.FindAsync(user.Name, ct).ConfigureAwait(false) is not null)
+            if (await _users.FindByNameAsync(user.Name).ConfigureAwait(false) is not null)
             {
                 return Failed(LoginOutcome.NameTaken);
             }
 
-            if (_options.HostLogin == HostLogin.Strict && granted == Role.None)
+            if (_options.HostLogin == HostLogin.Strict && granted is null)
             {
                 await NoteAsync(now, null, AuthScheme.HostUser, "login.norole", user.Name, address, ct).ConfigureAwait(false);
 
                 return Failed(LoginOutcome.NoRole);
             }
 
-            record = await _principals
-                .RegisterHostUserAsync(user.Name, user.Uid, user.Name, granted, ct)
-                .ConfigureAwait(false);
+            var added = await _accounts.RegisterHostUserAsync(user.Name, user.Uid, granted, ct).ConfigureAwait(false);
+            if (!added.IsOk)
+            {
+                return Failed(LoginOutcome.NameTaken);
+            }
 
+            record = added.Record!;
             await NoteAsync(now, record.Id, AuthScheme.HostUser, "login.register", user.Name, address, ct).ConfigureAwait(false);
         }
         else
         {
-            await _principals.SeenAsync(record.Id, user.Uid, now, ct).ConfigureAwait(false);
-            record = await SyncRoleAsync(record, granted, ct).ConfigureAwait(false);
+            await SeenAsync(record, user.Uid, now).ConfigureAwait(false);
+            await SyncRoleAsync(record, granted, ct).ConfigureAwait(false);
 
-            if (_options.HostLogin == HostLogin.Strict && record.Role == Role.None)
+            if (_options.HostLogin == HostLogin.Strict
+                && (await _access.ScopesAsync(record).ConfigureAwait(false)).Count == 0)
             {
                 await NoteAsync(now, record.Id, AuthScheme.HostUser, "login.norole", user.Name, address, ct).ConfigureAwait(false);
 
@@ -210,41 +236,89 @@ public sealed class LoginService
         await _refreshTokens.EndAsync(sessionId, _time.GetUtcNow(), ct).ConfigureAwait(false);
 
     /// <summary>
-    /// Returns the role the groups of the host give an account.
+    /// Returns the role the groups of the host give an account, or null when they give none.
     /// </summary>
-    public Role HostRole(LocalUser user)
+    public string? HostRole(LocalUser user)
     {
         if (_options.RootIsAdmin && user.Uid == 0)
         {
-            return Role.Admin;
+            return Roles.Admin;
         }
 
-        var role = Role.None;
         foreach (var pair in _options.HostGroups)
         {
-            if (pair.Value > role && LocalUsers.IsMemberOf(user, pair.Key))
+            if (LocalUsers.IsMemberOf(user, pair.Key))
             {
-                role = pair.Value;
+                return pair.Value;
             }
         }
 
-        return role;
+        return null;
     }
 
-    private async Task<PrincipalRecord> SyncRoleAsync(PrincipalRecord record, Role granted, CancellationToken ct)
+    /// <summary>
+    /// Returns the account a host user is registered as, or null when it is not registered.
+    /// </summary>
+    public AppUser? FindByHostUser(string userName) =>
+        _users.Users.Where(user => user.HostUserName == userName).ToList().FirstOrDefault();
+
+    private async Task SeenAsync(AppUser user, uint uid, DateTimeOffset now)
     {
-        if (granted == Role.None || granted == record.Role)
+        user.HostUid = uid;
+        user.HostSeenUtc = now;
+        await _users.UpdateAsync(user).ConfigureAwait(false);
+    }
+
+    private async Task SyncRoleAsync(AppUser user, string? granted, CancellationToken ct)
+    {
+        if (granted is not { Length: > 0 })
         {
-            return record;
+            return;
         }
 
-        await _principals.SetRoleAsync(record.Id, granted, ct).ConfigureAwait(false);
+        var held = await _users.GetRolesAsync(user).ConfigureAwait(false);
+        if (held.Contains(granted, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
 
-        return record with { Role = granted };
+        if (held.Count > 0)
+        {
+            await _users.RemoveFromRolesAsync(user, held).ConfigureAwait(false);
+        }
+
+        await _users.AddToRoleAsync(user, granted).ConfigureAwait(false);
+    }
+
+    private async Task<LoginOutcome> FailAsync(AppUser user, DateTimeOffset now)
+    {
+        user.AccessFailedCount++;
+        var locked = user.AccessFailedCount >= _options.FailedAttempts;
+        if (locked)
+        {
+            user.AccessFailedCount = 0;
+            user.LockoutEnd = now.Add(_options.LockDuration);
+        }
+
+        await _users.UpdateAsync(user).ConfigureAwait(false);
+
+        return locked ? LoginOutcome.Locked : LoginOutcome.WrongPassword;
+    }
+
+    private async Task PassedAsync(AppUser user)
+    {
+        if (user.AccessFailedCount == 0 && user.LockoutEnd is null)
+        {
+            return;
+        }
+
+        user.AccessFailedCount = 0;
+        user.LockoutEnd = null;
+        await _users.UpdateAsync(user).ConfigureAwait(false);
     }
 
     private async Task<LoginResult> IssueAsync(
-        PrincipalRecord record,
+        AppUser user,
         AuthScheme scheme,
         string? address,
         string? agent,
@@ -252,17 +326,17 @@ public sealed class LoginService
         CancellationToken ct)
     {
         var session = await _refreshTokens
-            .OpenAsync(record.Id, scheme, address, agent, now, ct)
+            .OpenAsync(user.Id, scheme, address, agent, now, ct)
             .ConfigureAwait(false);
 
-        var scopes = record.Scopes.ToHashSet(StringComparer.Ordinal);
+        var scopes = (await _access.ScopesAsync(user).ConfigureAwait(false)).ToHashSet(StringComparer.Ordinal);
         if (scheme == AuthScheme.Password)
         {
             scopes.Add(Scopes.ChangePassword);
         }
 
-        var principal = new Principal(record.Id, record.Name, scheme, session.SessionId, scopes);
-        await NoteAsync(now, record.Id, scheme, "login.ok", record.Name, address, ct).ConfigureAwait(false);
+        var principal = new Principal(user.Id, user.Name, scheme, session.SessionId, scopes);
+        await NoteAsync(now, user.Id, scheme, "login.ok", user.Name, address, ct).ConfigureAwait(false);
 
         return new LoginResult(LoginOutcome.Ok, _issuer.Issue(principal, now), session.Refresh, principal);
     }
@@ -284,13 +358,6 @@ public sealed class LoginService
         string.Concat(prefix, ".", outcome.ToString()!.ToLowerInvariant());
 
     private static LoginResult Failed(LoginOutcome outcome) => new(outcome, null, null, null);
-
-    private static LoginOutcome Reason(PasswordCheck checkup) => checkup switch
-    {
-        PasswordCheck.NotSet => LoginOutcome.NoPassword,
-        PasswordCheck.Locked => LoginOutcome.Locked,
-        _ => LoginOutcome.WrongPassword,
-    };
 
     private static LoginOutcome Reason(RefreshOutcome outcome) => outcome switch
     {

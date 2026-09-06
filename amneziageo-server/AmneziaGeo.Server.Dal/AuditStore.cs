@@ -7,12 +7,12 @@ namespace AmneziaGeo.Server.Dal;
 /// </summary>
 public sealed class AuditStore : IAuditLog
 {
-    private readonly Db _db;
+    private readonly AppDbContext _db;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public AuditStore(Db db)
+    public AuditStore(AppDbContext db)
     {
         _db = db;
     }
@@ -30,18 +30,17 @@ public sealed class AuditStore : IAuditLog
         string? address,
         CancellationToken ct)
     {
-        using var connection = await _db.OpenAsync(ct).ConfigureAwait(false);
-        using var command = Sql.Command(
-            connection,
-            "INSERT INTO audit (at_utc, principal_id, scheme, action, target, detail, address) VALUES (@at, @principal, @scheme, @action, @target, @detail, @address);",
-            ("@at", Sql.Text(at)),
-            ("@principal", principalId),
-            ("@scheme", scheme.ToString()),
-            ("@action", action),
-            ("@target", target),
-            ("@detail", detail),
-            ("@address", address));
+        _db.AuditEntries.Add(new AuditEntity
+        {
+            AtUtc = at,
+            UserId = principalId,
+            Scheme = scheme,
+            Action = action,
+            Target = target,
+            Detail = detail,
+            Address = address,
+        });
 
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 }

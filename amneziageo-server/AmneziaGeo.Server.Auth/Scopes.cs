@@ -5,6 +5,11 @@ namespace AmneziaGeo.Server.Auth;
 /// </summary>
 public static class Scopes
 {
+    /// <summary>
+    /// The claim a right is carried as.
+    /// </summary>
+    public const string ClaimType = "scope";
+
     public const string ReadState = "state:read";
     public const string ManageClients = "clients:write";
     public const string ManageInterfaces = "interfaces:write";

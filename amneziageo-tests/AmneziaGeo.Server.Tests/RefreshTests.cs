@@ -113,8 +113,9 @@ public class RefreshTests
         using var bench = new Bench();
         var first = await SignInAsync(bench);
 
-        var record = await bench.Principals.FindAsync("bor", CancellationToken.None);
-        await bench.Principals.SetEnabledAsync(record!.Id, false, bench.Clock.Now, CancellationToken.None);
+        var record = await bench.Users.FindByNameAsync("bor");
+        record!.IsEnabled = false;
+        await bench.Users.UpdateAsync(record);
 
         var result = await bench.Login.RefreshAsync(first.Refresh!, CancellationToken.None);
 
@@ -125,11 +126,12 @@ public class RefreshTests
     public async Task RefreshedRightsFollowTheAccount()
     {
         using var bench = new Bench();
-        var first = await SignInAsync(bench);
+        await bench.RoleAsync("viewer", Scopes.ReadState);
+        await bench.UserAsync("bor", "long enough password", "viewer");
+        await bench.UserAsync("keeper", "long enough password");
+        var first = await bench.Login.PasswordAsync("bor", "long enough password", null, "test", CancellationToken.None);
 
-        var record = await bench.Principals.FindAsync("bor", CancellationToken.None);
-        await bench.Principals.SetRoleAsync(record!.Id, Role.Admin, CancellationToken.None);
-
+        await bench.Accounts.SetRoleAsync("bor", Roles.Admin, actorId: 0, CancellationToken.None);
         var rotated = await bench.Login.RefreshAsync(first.Refresh!, CancellationToken.None);
 
         Assert.True(rotated.Principal!.Holds(Scopes.ManageInterfaces));
@@ -149,24 +151,15 @@ public class AccountTests
     public async Task AnAddedAccountIsFoundByName()
     {
         using var bench = new Bench();
-        await bench.Principals.AddAsync("bor", "Bor", Role.Operator, CancellationToken.None);
+        await bench.RoleAsync("operator", Scopes.ReadState, Scopes.ManageClients);
+        await bench.UserAsync("bor", "long enough password", "operator");
 
-        var found = await bench.Principals.FindAsync("bor", CancellationToken.None);
+        var found = await bench.Accounts.FindAsync("bor", CancellationToken.None);
 
         Assert.NotNull(found);
-        Assert.Equal(Role.Operator, found.Role);
-        Assert.Equal(PrincipalKind.Local, found.Kind);
-        Assert.True(found.IsEnabled);
-    }
-
-    [Fact]
-    public async Task TheSameNameIsNotTakenTwice()
-    {
-        using var bench = new Bench();
-        await bench.Principals.AddAsync("bor", "Bor", Role.Viewer, CancellationToken.None);
-
-        await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await bench.Principals.AddAsync("bor", "Bor", Role.Viewer, CancellationToken.None));
+        Assert.Equal("operator", found!.Role);
+        Assert.Equal(PrincipalKind.Local, found.Record.Kind);
+        Assert.True(found.Record.IsEnabled);
     }
 
     [Fact]
@@ -174,35 +167,38 @@ public class AccountTests
     {
         using var bench = new Bench();
 
-        Assert.False(await bench.Principals.HasAdminAsync(CancellationToken.None));
+        Assert.False(await bench.Accounts.HasAdminAsync(CancellationToken.None));
 
-        await bench.Principals.AddAsync("bor", "Bor", Role.Admin, CancellationToken.None);
+        await bench.UserAsync("bor", "long enough password");
 
-        Assert.True(await bench.Principals.HasAdminAsync(CancellationToken.None));
+        Assert.True(await bench.Accounts.HasAdminAsync(CancellationToken.None));
     }
 
     [Fact]
     public async Task ARegisteredHostUserIsFoundByItsHostName()
     {
         using var bench = new Bench();
-        await bench.Principals.RegisterHostUserAsync("bor", 1000, "bor", Role.Admin, CancellationToken.None);
+        var registered = await bench.Accounts.RegisterHostUserAsync("bor", 1000, Roles.Admin, CancellationToken.None);
 
-        var found = await bench.Principals.FindByHostUserAsync("bor", CancellationToken.None);
+        Assert.True(registered.IsOk, registered.Message);
+
+        var found = bench.Login.FindByHostUser("bor");
 
         Assert.NotNull(found);
-        Assert.Equal(PrincipalKind.Host, found.Kind);
-        Assert.Equal(Role.Admin, found.Role);
+        Assert.Equal(PrincipalKind.Host, found!.Kind);
+        Assert.Equal(Roles.Admin, await bench.Access.RoleAsync(found));
     }
 
     [Fact]
     public async Task RemovingAnAccountTakesItsPasswordWithIt()
     {
         using var bench = new Bench();
-        var record = await bench.UserAsync("bor", "long enough password");
+        await bench.UserAsync("keeper", "long enough password");
+        await bench.UserAsync("bor", "long enough password");
 
-        await bench.Principals.RemoveAsync(record.Id, CancellationToken.None);
+        await bench.Accounts.RemoveAsync("bor", actorId: 0, CancellationToken.None);
 
-        Assert.False(await bench.Passwords.HasAsync(record.Id, CancellationToken.None));
+        Assert.Null(await bench.Users.FindByNameAsync("bor"));
     }
 
     [Fact]

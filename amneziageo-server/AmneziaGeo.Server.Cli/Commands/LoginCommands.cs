@@ -13,7 +13,7 @@ public static class LoginCommands
     /// </summary>
     public static async Task<int> InitAsync(Context context, Arguments args, CancellationToken ct)
     {
-        if (await context.Principals.HasAdminAsync(ct).ConfigureAwait(false))
+        if (await context.Accounts.HasAdminAsync(ct).ConfigureAwait(false))
         {
             Terminal.Fail("the panel already carries an administrator, this window is closed");
 
@@ -68,10 +68,11 @@ public static class LoginCommands
             return 1;
         }
 
-        var record = await context.Principals.FindByHostUserAsync(user.Name, ct).ConfigureAwait(false);
+        var record = context.Login.FindByHostUser(user.Name);
+        var view = record is null ? null : await context.Accounts.ViewAsync(record).ConfigureAwait(false);
         Terminal.Say($"host user:  {user.Name} (uid {user.Uid})");
-        Terminal.Say($"host grants: {Roles.Text(context.Login.HostRole(user))}");
-        Terminal.Say($"registered: {(record is null ? "no" : $"yes, {Roles.Text(record.Role)}, {(record.IsEnabled ? "enabled" : "disabled")}")}");
+        Terminal.Say($"host grants: {context.Login.HostRole(user) ?? "no role"}");
+        Terminal.Say($"registered: {(view is null ? "no" : $"yes, {(view.Role is { Length: > 0 } ? view.Role : "no role")}, {(view.Record.IsEnabled ? "enabled" : "disabled")}")}");
         Terminal.Say($"host login: {context.Options.HostLogin.ToString().ToLowerInvariant()}");
 
         return 0;
@@ -108,16 +109,23 @@ public static class LoginCommands
             return 1;
         }
 
-        if (await context.Principals.FindAsync(user.Name, ct).ConfigureAwait(false) is not null)
+        if (await context.Users.FindByNameAsync(user.Name).ConfigureAwait(false) is not null)
         {
             Terminal.Fail($"the panel already carries a user called '{user.Name}'");
 
             return 1;
         }
 
-        await context.Principals
-            .RegisterHostUserAsync(user.Name, user.Uid, user.Name, Role.Admin, ct)
+        var registered = await context.Accounts
+            .RegisterHostUserAsync(user.Name, user.Uid, Roles.Admin, ct)
             .ConfigureAwait(false);
+
+        if (!registered.IsOk)
+        {
+            Terminal.Fail(registered.Message);
+
+            return 1;
+        }
 
         Terminal.Say($"{user.Name} is the administrator");
         Terminal.Say($"put the other host users into the {context.Options.HostGroupNames} groups to let them in");
@@ -151,10 +159,16 @@ public static class LoginCommands
             return 1;
         }
 
-        var record = await context.Principals.AddAsync(name, name, Role.Admin, ct).ConfigureAwait(false);
-        await context.Passwords
-            .SetAsync(record.Id, password, !args.Has("permanent"), DateTimeOffset.UtcNow, ct)
+        var result = await context.Accounts
+            .AddAsync(name, name, Roles.Admin, password, !args.Has("permanent"), ct)
             .ConfigureAwait(false);
+
+        if (!result.IsOk)
+        {
+            Terminal.Fail(result.Message);
+
+            return 1;
+        }
 
         if (args.Has("generate"))
         {

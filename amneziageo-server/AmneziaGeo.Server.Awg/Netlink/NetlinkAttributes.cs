@@ -68,6 +68,28 @@ public static class NetlinkAttributes
             : null;
 
     /// <summary>
+    /// Reads a number of whatever width the kernel wrote, or null when the attribute is absent.
+    /// </summary>
+    public static ulong? Number(Dictionary<ushort, ReadOnlyMemory<byte>> map, ushort type)
+    {
+        if (!map.TryGetValue(type, out var value))
+        {
+            return null;
+        }
+
+        var span = value.Span;
+
+        return span.Length switch
+        {
+            >= 8 => BinaryPrimitives.ReadUInt64LittleEndian(span),
+            >= 4 => BinaryPrimitives.ReadUInt32LittleEndian(span),
+            >= 2 => BinaryPrimitives.ReadUInt16LittleEndian(span),
+            1 => span[0],
+            _ => null,
+        };
+    }
+
+    /// <summary>
     /// Reads a null terminated string, or null when the attribute is absent.
     /// </summary>
     public static string? Text(Dictionary<ushort, ReadOnlyMemory<byte>> map, ushort type)

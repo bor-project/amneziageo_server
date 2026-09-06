@@ -60,6 +60,7 @@ public sealed partial class NetlinkSocket : IDisposable
             throw new NetlinkException("the netlink request could not be sent", Marshal.GetLastPInvokeError());
         }
 
+        var sequence = BinaryPrimitives.ReadUInt32LittleEndian(request.AsSpan(8));
         var answer = new List<NetlinkMessage>();
         var buffer = new byte[ReceiveBufferLength];
         var reading = true;
@@ -72,7 +73,7 @@ public sealed partial class NetlinkSocket : IDisposable
                 throw new NetlinkException("the netlink answer could not be read", Marshal.GetLastPInvokeError());
             }
 
-            reading = Gather(buffer.AsSpan(0, (int)read), answer);
+            reading = Gather(buffer.AsSpan(0, (int)read), sequence, answer);
         }
 
         return answer;
@@ -92,7 +93,7 @@ public sealed partial class NetlinkSocket : IDisposable
         CloseSocket(_handle);
     }
 
-    private static bool Gather(ReadOnlySpan<byte> buffer, List<NetlinkMessage> answer)
+    private static bool Gather(ReadOnlySpan<byte> buffer, uint sequence, List<NetlinkMessage> answer)
     {
         var offset = 0;
         var more = false;
@@ -102,9 +103,18 @@ public sealed partial class NetlinkSocket : IDisposable
             var length = (int)BinaryPrimitives.ReadUInt32LittleEndian(buffer[offset..]);
             var type = BinaryPrimitives.ReadUInt16LittleEndian(buffer[(offset + 4)..]);
             var flags = BinaryPrimitives.ReadUInt16LittleEndian(buffer[(offset + 6)..]);
+            var seen = BinaryPrimitives.ReadUInt32LittleEndian(buffer[(offset + 8)..]);
             if (length < 16 || offset + length > buffer.Length)
             {
                 break;
+            }
+
+            if (seen != sequence)
+            {
+                offset += (length + 3) & ~3;
+                more = true;
+
+                continue;
             }
 
             var body = buffer.Slice(offset + 16, length - 16);

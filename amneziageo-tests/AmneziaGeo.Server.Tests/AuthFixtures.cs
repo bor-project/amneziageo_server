@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Dal;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -34,13 +36,17 @@ public sealed class Clock : TimeProvider
 }
 
 /// <summary>
-/// A database in a temporary file with the stores wired over it.
+/// A database in a temporary file with the identity services wired over it.
 /// </summary>
 public sealed class Bench : IDisposable
 {
     private readonly string _path;
 
     private readonly ECDsa _key;
+
+    private readonly ServiceProvider _services;
+
+    private readonly IServiceScope _scope;
 
     /// <summary>
     /// ctor
@@ -52,44 +58,90 @@ public sealed class Bench : IDisposable
 
         Options = options ?? new AuthOptions();
         Clock = new Clock(now ?? new DateTimeOffset(2026, 9, 6, 12, 0, 0, TimeSpan.Zero));
-        Db = new Db(_path);
-        Db.Migrate();
-
-        Principals = new PrincipalStore(Db);
-        Passwords = new PasswordStore(Db, Options);
-        RefreshTokens = new RefreshTokenStore(Db, Principals, Options);
         Issuer = new TokenIssuer(_key, Options);
-        Audit = new AuditStore(Db);
-        Login = new LoginService(Principals, Passwords, RefreshTokens, Issuer, Audit, Options, Clock);
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(Options);
+        services.AddSingleton<TimeProvider>(Clock);
+        services.AddSingleton<ITokenIssuer>(Issuer);
+        services.AddServerDatabase(_path, Options);
+
+        _services = services.BuildServiceProvider();
+        ServerDatabase.PrepareAsync(_services).GetAwaiter().GetResult();
+        _scope = _services.CreateScope();
+
+        Db = _scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Users = _scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        RoleStore = _scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();
+        Access = _scope.ServiceProvider.GetRequiredService<AccessResolver>();
+        Accounts = _scope.ServiceProvider.GetRequiredService<AccountManager>();
+        Catalog = _scope.ServiceProvider.GetRequiredService<RoleCatalog>();
+        RefreshTokens = _scope.ServiceProvider.GetRequiredService<IRefreshTokens>();
+        Audit = _scope.ServiceProvider.GetRequiredService<IAuditLog>();
+        Login = _scope.ServiceProvider.GetRequiredService<LoginService>();
     }
 
     public AuthOptions Options { get; }
 
     public Clock Clock { get; }
 
-    public Db Db { get; }
+    public AppDbContext Db { get; }
 
-    public PrincipalStore Principals { get; }
+    public UserManager<AppUser> Users { get; }
 
-    public PasswordStore Passwords { get; }
+    public RoleManager<AppRole> RoleStore { get; }
 
-    public RefreshTokenStore RefreshTokens { get; }
+    public AccessResolver Access { get; }
+
+    public AccountManager Accounts { get; }
+
+    public RoleCatalog Catalog { get; }
+
+    public IRefreshTokens RefreshTokens { get; }
+
+    public IAuditLog Audit { get; }
 
     public TokenIssuer Issuer { get; }
-
-    public AuditStore Audit { get; }
 
     public LoginService Login { get; }
 
     /// <summary>
     /// Adds an account with a password and returns it.
     /// </summary>
-    public async Task<PrincipalRecord> UserAsync(string name, string password, Role role = Role.Viewer, bool mustChange = false)
+    public async Task<AppUser> UserAsync(string name, string password, string role = Roles.Admin, bool mustChange = false)
     {
-        var record = await Principals.AddAsync(name, name, role, CancellationToken.None);
-        await Passwords.SetAsync(record.Id, password, mustChange, Clock.Now, CancellationToken.None);
+        var user = new AppUser
+        {
+            UserName = name,
+            DisplayName = name,
+            Kind = PrincipalKind.Local,
+            IsEnabled = true,
+            MustChangePassword = mustChange,
+            CreatedUtc = Clock.Now,
+        };
 
-        return record;
+        var created = await Users.CreateAsync(user, password);
+        Assert.True(created.Succeeded, string.Join("; ", created.Errors.Select(error => error.Description)));
+
+        if (role is { Length: > 0 })
+        {
+            var given = await Users.AddToRoleAsync(user, role);
+            Assert.True(given.Succeeded, string.Join("; ", given.Errors.Select(error => error.Description)));
+        }
+
+        return user;
+    }
+
+    /// <summary>
+    /// Adds a role carrying the rights it is given.
+    /// </summary>
+    public async Task<AppRole> RoleAsync(string name, params string[] scopes)
+    {
+        var result = await Catalog.AddAsync(name, name, scopes, CancellationToken.None);
+        Assert.True(result.IsOk, result.Message);
+
+        return result.Record!;
     }
 
     /// <summary>
@@ -97,6 +149,8 @@ public sealed class Bench : IDisposable
     /// </summary>
     public void Dispose()
     {
+        _scope.Dispose();
+        _services.Dispose();
         _key.Dispose();
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
 

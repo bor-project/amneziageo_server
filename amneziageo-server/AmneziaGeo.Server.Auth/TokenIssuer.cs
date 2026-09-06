@@ -14,6 +14,8 @@ public sealed class TokenIssuer : ITokenIssuer, IDisposable
 {
     private static readonly byte[] _header = "{\"alg\":\"ES256\",\"typ\":\"JWT\"}"u8.ToArray();
 
+    private readonly Lock _gate = new();
+
     private readonly ECDsa _key;
 
     private readonly AuthOptions _options;
@@ -60,7 +62,7 @@ public sealed class TokenIssuer : ITokenIssuer, IDisposable
         var head = Base64Url.EncodeToString(_header);
         var body = Base64Url.EncodeToString(payload.WrittenSpan);
         var signed = Encoding.ASCII.GetBytes(string.Concat(head, ".", body));
-        var signature = _key.SignData(signed, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        var signature = Sign(signed);
 
         return string.Concat(head, ".", body, ".", Base64Url.EncodeToString(signature));
     }
@@ -91,6 +93,22 @@ public sealed class TokenIssuer : ITokenIssuer, IDisposable
         }
     }
 
+    private byte[] Sign(byte[] signed)
+    {
+        lock (_gate)
+        {
+            return _key.SignData(signed, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        }
+    }
+
+    private bool Verify(byte[] signed, byte[] signature)
+    {
+        lock (_gate)
+        {
+            return _key.VerifyData(signed, signature, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        }
+    }
+
     private Principal? Parse(string token, DateTimeOffset now)
     {
         var parts = token.Split('.');
@@ -109,7 +127,7 @@ public sealed class TokenIssuer : ITokenIssuer, IDisposable
 
         var signed = Encoding.ASCII.GetBytes(string.Concat(parts[0], ".", parts[1]));
         var signature = Base64Url.DecodeFromChars(parts[2]);
-        if (!_key.VerifyData(signed, signature, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation))
+        if (!Verify(signed, signature))
         {
             return null;
         }

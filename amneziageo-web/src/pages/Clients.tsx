@@ -1,3 +1,7 @@
+import { useText } from "@/i18n"
+
 export function Clients() {
-  return <h1 className="text-xl font-semibold">Клиенты</h1>
+  const t = useText()
+
+  return <h1 className="text-xl font-semibold">{t("nav.clients")}</h1>
 }

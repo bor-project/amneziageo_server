@@ -41,3 +41,7 @@ indent_size = 2
 
 [amneziageo-server/**/*.cs]
 dotnet_diagnostic.CA2007.severity = warning
+
+[amneziageo-server/AmneziaGeo.Server.Dal/Migrations/*.cs]
+dotnet_diagnostic.IDE0161.severity = none
+dotnet_diagnostic.CA2007.severity = none

@@ -1,10 +1,12 @@
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Dal;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AmneziaGeo.Server.Cli;
 
 /// <summary>
-/// The database, the stores and the login service wired together for one run.
+/// The database, the identity stores and the login service wired together for one run.
 /// </summary>
 public sealed class Context : IDisposable
 {
@@ -13,35 +15,47 @@ public sealed class Context : IDisposable
     /// </summary>
     public const string KeyVariable = "AMNEZIAGEO_SIGNING_KEY";
 
+    /// <summary>
+    /// Environment variable that moves the shortest password an account may carry.
+    /// </summary>
+    public const string PasswordLengthVariable = "AMNEZIAGEO_MIN_PASSWORD";
+
+    private readonly ServiceProvider _services;
+
+    private readonly IServiceScope _scope;
+
     private readonly TokenIssuer _issuer;
 
     /// <summary>
     /// ctor
     /// </summary>
-    private Context(Db db, AuthOptions options, TokenIssuer issuer)
+    private Context(ServiceProvider services, IServiceScope scope, AuthOptions options, TokenIssuer issuer, string path)
     {
-        Db = db;
-        Options = options;
+        _services = services;
+        _scope = scope;
         _issuer = issuer;
 
-        Principals = new PrincipalStore(db);
-        Passwords = new PasswordStore(db, options);
-        RefreshTokens = new RefreshTokenStore(db, Principals, options);
-        Audit = new AuditStore(db);
-        Login = new LoginService(Principals, Passwords, RefreshTokens, issuer, Audit, options);
-    }
+        Options = options;
+        Path = path;
 
-    public Db Db { get; }
+        Users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        Roles = scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();
+        Accounts = scope.ServiceProvider.GetRequiredService<AccountManager>();
+        Catalog = scope.ServiceProvider.GetRequiredService<RoleCatalog>();
+        Login = scope.ServiceProvider.GetRequiredService<LoginService>();
+    }
 
     public AuthOptions Options { get; }
 
-    public IPrincipals Principals { get; }
+    public string Path { get; }
 
-    public IPasswords Passwords { get; }
+    public UserManager<AppUser> Users { get; }
 
-    public IRefreshTokens RefreshTokens { get; }
+    public RoleManager<AppRole> Roles { get; }
 
-    public IAuditLog Audit { get; }
+    public AccountManager Accounts { get; }
+
+    public RoleCatalog Catalog { get; }
 
     public LoginService Login { get; }
 
@@ -56,14 +70,34 @@ public sealed class Context : IDisposable
             options.SigningKeyPath = key;
         }
 
-        var db = new Db(databasePath ?? Db.DefaultPath());
-        db.Migrate();
+        if (int.TryParse(Environment.GetEnvironmentVariable(PasswordLengthVariable), out var length) && length > 0)
+        {
+            options.MinimumPasswordLength = length;
+        }
 
-        return new Context(db, options, TokenIssuer.Open(options));
+        var path = databasePath ?? ServerDatabase.DefaultPath();
+        var issuer = TokenIssuer.Open(options);
+        var services = new ServiceCollection();
+
+        services.AddLogging();
+        services.AddSingleton(options);
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<ITokenIssuer>(issuer);
+        services.AddServerDatabase(path, options);
+
+        var provider = services.BuildServiceProvider();
+        ServerDatabase.PrepareAsync(provider).GetAwaiter().GetResult();
+
+        return new Context(provider, provider.CreateScope(), options, issuer, path);
     }
 
     /// <summary>
-    /// Releases the signing key.
+    /// Releases the signing key and the services.
     /// </summary>
-    public void Dispose() => _issuer.Dispose();
+    public void Dispose()
+    {
+        _scope.Dispose();
+        _services.Dispose();
+        _issuer.Dispose();
+    }
 }

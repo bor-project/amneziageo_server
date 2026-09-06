@@ -63,11 +63,9 @@ public sealed class AuthOptions
     /// <summary>
     /// Groups of the host and the role each one grants.
     /// </summary>
-    public Dictionary<string, Role> HostGroups { get; set; } = new(StringComparer.Ordinal)
+    public Dictionary<string, string> HostGroups { get; set; } = new(StringComparer.Ordinal)
     {
-        ["amneziageo-admin"] = Role.Admin,
-        ["amneziageo-operator"] = Role.Operator,
-        ["amneziageo"] = Role.Viewer,
+        ["amneziageo-admin"] = Roles.Admin,
     };
 
     /// <summary>
@@ -79,6 +77,11 @@ public sealed class AuthOptions
     /// The groups of the host that map to a role, written out.
     /// </summary>
     public string HostGroupNames => string.Join(", ", HostGroups.Keys);
+
+    /// <summary>
+    /// The shortest password an account is allowed to carry.
+    /// </summary>
+    public int MinimumPasswordLength { get; set; } = AccountRules.MinPasswordLength;
 
     /// <summary>
     /// How many wrong passwords an account takes before it locks.
