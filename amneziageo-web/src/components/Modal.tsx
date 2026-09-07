@@ -7,11 +7,13 @@ export function Modal({
   onClose,
   children,
   footer,
+  wide = false,
 }: {
   title: string
   onClose: () => void
   children: ReactNode
   footer: ReactNode
+  wide?: boolean
 }) {
   useEffect(() => {
     const escape = (event: KeyboardEvent) => {
@@ -31,11 +33,11 @@ export function Modal({
       onMouseDown={onClose}
     >
       <div
-        className={`w-full max-w-md p-5 shadow-xl ${card}`}
+        className={`w-full ${wide ? "max-w-3xl" : "max-w-md"} p-5 shadow-xl ${card}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="text-base font-semibold text-ink">{title}</div>
-        <div className="mt-4 flex flex-col gap-3">{children}</div>
+        <div className="mt-4 flex max-h-[70vh] flex-col gap-3 overflow-y-auto">{children}</div>
         <div className="mt-5 flex justify-end gap-2">{footer}</div>
       </div>
     </div>

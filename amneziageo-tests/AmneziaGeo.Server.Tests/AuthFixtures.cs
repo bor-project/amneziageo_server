@@ -77,6 +77,7 @@ public sealed class Bench : IDisposable
         Access = _scope.ServiceProvider.GetRequiredService<AccessResolver>();
         Accounts = _scope.ServiceProvider.GetRequiredService<AccountManager>();
         Catalog = _scope.ServiceProvider.GetRequiredService<RoleCatalog>();
+        Configs = _scope.ServiceProvider.GetRequiredService<ConfigStore>();
         RefreshTokens = _scope.ServiceProvider.GetRequiredService<IRefreshTokens>();
         Audit = _scope.ServiceProvider.GetRequiredService<IAuditLog>();
         Login = _scope.ServiceProvider.GetRequiredService<LoginService>();
@@ -97,6 +98,8 @@ public sealed class Bench : IDisposable
     public AccountManager Accounts { get; }
 
     public RoleCatalog Catalog { get; }
+
+    public ConfigStore Configs { get; }
 
     public IRefreshTokens RefreshTokens { get; }
 

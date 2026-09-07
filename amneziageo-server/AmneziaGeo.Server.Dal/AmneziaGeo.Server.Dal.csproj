@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AmneziaGeo.Server.Core\AmneziaGeo.Server.Core.csproj" />
+    <ProjectReference Include="..\AmneziaGeo.Server.Awg\AmneziaGeo.Server.Awg.csproj" />
     <ProjectReference Include="..\\AmneziaGeo.Server.Auth\\AmneziaGeo.Server.Auth.csproj" />
   </ItemGroup>
 

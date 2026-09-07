@@ -56,6 +56,7 @@ public static class ServerDatabase
         services.AddScoped<AccessResolver>();
         services.AddScoped<AccountManager>();
         services.AddScoped<RoleCatalog>();
+        services.AddScoped<ConfigStore>();
         services.AddScoped<IRefreshTokens, RefreshTokenStore>();
         services.AddScoped<IAuditLog, AuditStore>();
         services.AddScoped<LoginService>();

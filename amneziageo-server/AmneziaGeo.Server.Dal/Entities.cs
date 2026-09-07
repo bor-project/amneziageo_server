@@ -71,3 +71,73 @@ public sealed class AuditEntity
 
     public string? Address { get; set; }
 }
+
+/// <summary>
+/// The settings of one server endpoint the panel holds.
+/// </summary>
+public sealed class ConfigEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Host { get; set; } = string.Empty;
+
+    public int ListenPort { get; set; }
+
+    public string Address { get; set; } = string.Empty;
+
+    public string Dns { get; set; } = string.Empty;
+
+    public string AllowedIps { get; set; } = string.Empty;
+
+    public int Mtu { get; set; }
+
+    public int Keepalive { get; set; }
+
+    public string PrivateKey { get; set; } = string.Empty;
+
+    public string PublicKey { get; set; } = string.Empty;
+
+    public string PresharedKey { get; set; } = string.Empty;
+
+    public int Jc { get; set; }
+
+    public int Jmin { get; set; }
+
+    public int Jmax { get; set; }
+
+    public int S1 { get; set; }
+
+    public int S2 { get; set; }
+
+    public int S3 { get; set; }
+
+    public int S4 { get; set; }
+
+    public long H1 { get; set; }
+
+    public long H2 { get; set; }
+
+    public long H3 { get; set; }
+
+    public long H4 { get; set; }
+
+    public string? I1 { get; set; }
+
+    public string? I2 { get; set; }
+
+    public string? I3 { get; set; }
+
+    public string? I4 { get; set; }
+
+    public string? I5 { get; set; }
+
+    public bool RandomTrailers { get; set; }
+
+    public bool DisableCookies { get; set; }
+
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}

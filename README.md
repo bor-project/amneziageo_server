@@ -49,4 +49,5 @@ sudo dotnet run --project amneziageo-server/AmneziaGeo.Server.Cli -- device show
 What the panel listens on is in [docs/serving.md](docs/serving.md), how accounts and tokens work is in
 [docs/auth.md](docs/auth.md), how the kernel is spoken to is in [docs/kernel.md](docs/kernel.md), the theme
 and the language of the interface are in [docs/appearance.md](docs/appearance.md), what the overview
-of the host reads is in [docs/overview.md](docs/overview.md).
+of the host reads is in [docs/overview.md](docs/overview.md), what a server endpoint carries is in
+[docs/configs.md](docs/configs.md).

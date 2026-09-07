@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Configs;
 using AmneziaGeo.Server.Api.Status;
 using AmneziaGeo.Server.Api.Web;
 
@@ -30,6 +31,7 @@ app.MapOverview();
 app.MapAuth();
 app.MapUsers();
 app.MapRoles();
+app.MapConfigs();
 app.MapControllers();
 app.MapFallbackToFile("index.html");
 

@@ -7,6 +7,7 @@ import { Roles } from "@/components/Roles"
 import { Users } from "@/components/Users"
 import { Access } from "@/pages/Access"
 import { Clients } from "@/pages/Clients"
+import { Configs } from "@/pages/Configs"
 import { Dashboard } from "@/pages/Dashboard"
 import { Interfaces } from "@/pages/Interfaces"
 import { Login } from "@/pages/Login"
@@ -26,6 +27,7 @@ export function App() {
           <Route element={<Layout />}>
             <Route element={<RequireScope scope={scopes.readState} />}>
               <Route index element={<Dashboard />} />
+              <Route path="configs" element={<Configs />} />
               <Route path="interfaces" element={<Interfaces />} />
               <Route path="clients" element={<Clients />} />
             </Route>

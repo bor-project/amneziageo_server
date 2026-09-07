@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Awg.Config;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,6 +23,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
     public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
 
     public DbSet<AuditEntity> AuditEntries => Set<AuditEntity>();
+
+    public DbSet<ConfigEntity> Configs => Set<ConfigEntity>();
 
     /// <summary>
     /// Shapes the tables the server adds to the identity ones.
@@ -65,6 +68,13 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(entry => entry.Scheme).HasConversion<string>().HasMaxLength(32);
             entity.Property(entry => entry.Action).HasMaxLength(64);
             entity.HasIndex(entry => entry.AtUtc);
+        });
+
+        builder.Entity<ConfigEntity>(entity =>
+        {
+            entity.Property(config => config.Name).HasMaxLength(ConfigRules.MaxNameLength);
+            entity.Property(config => config.Host).HasMaxLength(ConfigRules.MaxHostLength);
+            entity.HasIndex(config => config.Name).IsUnique();
         });
     }
 }

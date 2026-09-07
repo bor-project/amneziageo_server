@@ -13,6 +13,7 @@ import { sidebarToggled } from "@/store/uiSlice"
 
 const links: { to: string; label: TextKey; scope: string }[] = [
   { to: "/", label: "nav.overview", scope: scopes.readState },
+  { to: "/configs", label: "nav.configs", scope: scopes.readState },
   { to: "/interfaces", label: "nav.interfaces", scope: scopes.readState },
   { to: "/clients", label: "nav.clients", scope: scopes.readState },
 ]
