@@ -1,3 +1,4 @@
+using System.Globalization;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Dal;
@@ -24,8 +25,8 @@ public class ConfigTests
         var other = ConfigDefaults.Obfuscation();
 
         var types = new[] { one.H1, one.H2, one.H3, one.H4 };
-        Assert.Equal(4, types.Distinct().Count());
-        Assert.All(types, type => Assert.InRange(type, ConfigRules.LowestType, ConfigRules.HighestType));
+        Assert.Equal(4, types.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(types, type => Assert.InRange(long.Parse(type, CultureInfo.InvariantCulture), ConfigRules.LowestType, ConfigRules.HighestType));
         Assert.NotEqual(types, [other.H1, other.H2, other.H3, other.H4]);
         Assert.NotEqual(one.S1 + ConfigRules.HandshakeGap, one.S2);
     }
@@ -76,8 +77,11 @@ public class ConfigTests
     public void ObfuscationThatMakesPacketsAlikeIsRefused()
     {
         Assert.Contains("makes the two alike", Obfuscation(one => one with { S1 = 50, S2 = 50 + ConfigRules.HandshakeGap }));
-        Assert.Contains("two packet types are the same", Obfuscation(one => one with { H1 = 100, H2 = 100 }));
-        Assert.Contains("packet type is outside", Obfuscation(one => one with { H3 = 4 }));
+        Assert.Contains("two packet types are the same", Obfuscation(one => one with { H1 = "100", H2 = "90-110" }));
+        Assert.Contains("packet type is outside", Obfuscation(one => one with { H3 = "4" }));
+        Assert.Contains("neither a number nor a span", Obfuscation(one => one with { H4 = "many" }));
+        Assert.Contains("a timing is neither", Obfuscation(one => one with { RekeyTimeout = "5-" }));
+        Assert.Contains("header protection key", Obfuscation(one => one with { HeaderProtectionKey = "short" }));
         Assert.Contains("junk packet count", Obfuscation(one => one with { Jc = 500 }));
         Assert.Contains("junk packet size", Obfuscation(one => one with { Jmin = 900, Jmax = 100 }));
         Assert.Contains("junk prepended", Obfuscation(one => one with { S3 = 5000 }));

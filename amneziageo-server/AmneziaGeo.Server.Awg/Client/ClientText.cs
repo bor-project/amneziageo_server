@@ -1,0 +1,141 @@
+using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using AmneziaGeo.Server.Awg.Config;
+
+namespace AmneziaGeo.Server.Awg.Client;
+
+/// <summary>
+/// Writes the configuration a client connects with.
+/// </summary>
+public static class ClientText
+{
+    /// <summary>
+    /// Returns the configuration of a client as it is handed out.
+    /// </summary>
+    public static string Text(ServerConfig config, TunnelClient client)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(client);
+
+        var text = new StringBuilder();
+        text.Append("[Interface]\n");
+        Line(text, "PrivateKey", client.PrivateKey);
+        Line(text, "Address", string.Join(", ", client.Address));
+        Line(text, "DNS", string.Join(", ", config.Dns));
+        if (config.Mtu > 0)
+        {
+            Line(text, "MTU", Number(config.Mtu));
+        }
+
+        Obfuscation(text, config.Obfuscation);
+
+        text.Append("\n[Peer]\n");
+        Line(text, "PublicKey", config.PublicKey);
+        Line(text, "PresharedKey", Preshared(config, client));
+        Line(text, "AllowedIPs", string.Join(", ", config.AllowedIps));
+        Line(text, "Endpoint", Endpoint(config));
+        if (config.Keepalive > 0)
+        {
+            Line(text, "PersistentKeepalive", Number(config.Keepalive));
+        }
+
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// Returns the name the configuration of a client is saved under.
+    /// </summary>
+    public static string FileName(ServerConfig config, TunnelClient client)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(client);
+
+        return $"{config.Name}-{client.Name}.conf";
+    }
+
+    /// <summary>
+    /// Returns the key a client adds to the handshake.
+    /// </summary>
+    public static string Preshared(ServerConfig config, TunnelClient client)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(client);
+
+        return client.PresharedKey.Length > 0 ? client.PresharedKey : config.PresharedKey;
+    }
+
+    /// <summary>
+    /// Returns the address and port a client sends packets to.
+    /// </summary>
+    public static string Endpoint(ServerConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        if (config.Host.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var host = IPAddress.TryParse(config.Host, out var address) && address.AddressFamily == AddressFamily.InterNetworkV6
+            ? $"[{config.Host}]"
+            : config.Host;
+
+        return $"{host}:{Number(config.ListenPort)}";
+    }
+
+    private static void Obfuscation(StringBuilder text, ObfuscationSettings obfuscation)
+    {
+        Size(text, "Jc", obfuscation.Jc);
+        Size(text, "Jmin", obfuscation.Jmin);
+        Size(text, "Jmax", obfuscation.Jmax);
+        Size(text, "S1", obfuscation.S1);
+        Size(text, "S2", obfuscation.S2);
+        Size(text, "S3", obfuscation.S3);
+        Size(text, "S4", obfuscation.S4);
+        Line(text, "H1", obfuscation.H1);
+        Line(text, "H2", obfuscation.H2);
+        Line(text, "H3", obfuscation.H3);
+        Line(text, "H4", obfuscation.H4);
+        Line(text, "I1", obfuscation.I1);
+        Line(text, "I2", obfuscation.I2);
+        Line(text, "I3", obfuscation.I3);
+        Line(text, "I4", obfuscation.I4);
+        Line(text, "I5", obfuscation.I5);
+        Line(text, "HeaderProtectionKey", obfuscation.HeaderProtectionKey);
+        Line(text, "ContentPaddingAddition", obfuscation.ContentPaddingAddition);
+        Line(text, "RekeyAfterTime", obfuscation.RekeyAfterTime);
+        Line(text, "RekeyTimeout", obfuscation.RekeyTimeout);
+        Line(text, "RejectAfterTime", obfuscation.RejectAfterTime);
+        Line(text, "KeepaliveTimeout", obfuscation.KeepaliveTimeout);
+        Line(text, "MaxHandshakeAttempts", obfuscation.MaxHandshakeAttempts);
+        if (obfuscation.RandomTrailers)
+        {
+            Line(text, "RandomTrailers", "on");
+        }
+
+        if (obfuscation.DisableCookies)
+        {
+            Line(text, "DisableCookies", "on");
+        }
+    }
+
+    private static void Size(StringBuilder text, string key, int value)
+    {
+        if (value > 0)
+        {
+            Line(text, key, Number(value));
+        }
+    }
+
+    private static void Line(StringBuilder text, string key, string? value)
+    {
+        if (!string.IsNullOrEmpty(value))
+        {
+            text.Append(key).Append(" = ").Append(value).Append('\n');
+        }
+    }
+
+    private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
+}

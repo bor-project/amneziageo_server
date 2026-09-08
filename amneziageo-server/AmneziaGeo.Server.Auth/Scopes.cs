@@ -13,6 +13,7 @@ public static class Scopes
     public const string ReadState = "state:read";
     public const string ManageClients = "clients:write";
     public const string ManageInterfaces = "interfaces:write";
+    public const string ManageRouting = "routing:write";
     public const string ManageAccess = "access:write";
 
     /// <summary>
@@ -23,12 +24,12 @@ public static class Scopes
     /// <summary>
     /// Every right that a role can carry.
     /// </summary>
-    public static readonly string[] All = [ReadState, ManageClients, ManageInterfaces, ManageAccess];
+    public static readonly string[] All = [ReadState, ManageClients, ManageInterfaces, ManageRouting, ManageAccess];
 
     /// <summary>
     /// Rights that change a live tunnel and are refused to a caller without a fresh login.
     /// </summary>
-    public static readonly string[] Sensitive = [ManageInterfaces, ManageAccess];
+    public static readonly string[] Sensitive = [ManageInterfaces, ManageRouting, ManageAccess];
 
     /// <summary>
     /// Tells whether a name is a right the server knows.

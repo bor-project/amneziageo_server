@@ -115,13 +115,13 @@ public sealed class ConfigEntity
 
     public int S4 { get; set; }
 
-    public long H1 { get; set; }
+    public string H1 { get; set; } = string.Empty;
 
-    public long H2 { get; set; }
+    public string H2 { get; set; } = string.Empty;
 
-    public long H3 { get; set; }
+    public string H3 { get; set; } = string.Empty;
 
-    public long H4 { get; set; }
+    public string H4 { get; set; } = string.Empty;
 
     public string? I1 { get; set; }
 
@@ -133,9 +133,263 @@ public sealed class ConfigEntity
 
     public string? I5 { get; set; }
 
+    public string HeaderProtectionKey { get; set; } = string.Empty;
+
+    public string ContentPaddingAddition { get; set; } = string.Empty;
+
+    public string RekeyAfterTime { get; set; } = string.Empty;
+
+    public string RekeyTimeout { get; set; } = string.Empty;
+
+    public string RejectAfterTime { get; set; } = string.Empty;
+
+    public string KeepaliveTimeout { get; set; } = string.Empty;
+
+    public string MaxHandshakeAttempts { get; set; } = string.Empty;
+
     public bool RandomTrailers { get; set; }
 
     public bool DisableCookies { get; set; }
+
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// One geo database the panel downloads and matches rules against.
+/// </summary>
+public sealed class GeoSourceEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Kind { get; set; } = string.Empty;
+
+    public string Url { get; set; } = string.Empty;
+
+    public int Position { get; set; }
+
+    public bool IsEnabled { get; set; }
+
+    public DateTimeOffset? UpdatedUtc { get; set; }
+
+    public string Sha256 { get; set; } = string.Empty;
+
+    public int EntryCount { get; set; }
+
+    public long Size { get; set; }
+
+    public string ETag { get; set; } = string.Empty;
+
+    public string LastModified { get; set; } = string.Empty;
+
+    public string LastError { get; set; } = string.Empty;
+
+    public DateTimeOffset CreatedUtc { get; set; }
+}
+
+/// <summary>
+/// One way out of the host the panel holds.
+/// </summary>
+public sealed class OutboundEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Kind { get; set; } = string.Empty;
+
+    public int Position { get; set; }
+
+    public bool IsEnabled { get; set; }
+
+    public string Host { get; set; } = string.Empty;
+
+    public int Port { get; set; }
+
+    public string PrivateKey { get; set; } = string.Empty;
+
+    public string PublicKey { get; set; } = string.Empty;
+
+    public string PeerKey { get; set; } = string.Empty;
+
+    public string PresharedKey { get; set; } = string.Empty;
+
+    public string Address { get; set; } = string.Empty;
+
+    public string Dns { get; set; } = string.Empty;
+
+    public int Mtu { get; set; }
+
+    public int Keepalive { get; set; }
+
+    public long Mark { get; set; }
+
+    public int Table { get; set; }
+
+    public int Jc { get; set; }
+
+    public int Jmin { get; set; }
+
+    public int Jmax { get; set; }
+
+    public int S1 { get; set; }
+
+    public int S2 { get; set; }
+
+    public int S3 { get; set; }
+
+    public int S4 { get; set; }
+
+    public string H1 { get; set; } = string.Empty;
+
+    public string H2 { get; set; } = string.Empty;
+
+    public string H3 { get; set; } = string.Empty;
+
+    public string H4 { get; set; } = string.Empty;
+
+    public string? I1 { get; set; }
+
+    public string? I2 { get; set; }
+
+    public string? I3 { get; set; }
+
+    public string? I4 { get; set; }
+
+    public string? I5 { get; set; }
+
+    public string HeaderProtectionKey { get; set; } = string.Empty;
+
+    public string ContentPaddingAddition { get; set; } = string.Empty;
+
+    public string RekeyAfterTime { get; set; } = string.Empty;
+
+    public string RekeyTimeout { get; set; } = string.Empty;
+
+    public string RejectAfterTime { get; set; } = string.Empty;
+
+    public string KeepaliveTimeout { get; set; } = string.Empty;
+
+    public string MaxHandshakeAttempts { get; set; } = string.Empty;
+
+    public bool RandomTrailers { get; set; }
+
+    public bool DisableCookies { get; set; }
+
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// One routing rule as the database holds it.
+/// </summary>
+public sealed class RouteRuleEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public int Position { get; set; }
+
+    public bool IsEnabled { get; set; }
+
+    public string Action { get; set; } = string.Empty;
+
+    public string Outbound { get; set; } = string.Empty;
+
+    public string Targets { get; set; } = string.Empty;
+
+    public string Sources { get; set; } = string.Empty;
+
+    public string Ports { get; set; } = string.Empty;
+
+    public string Protocol { get; set; } = string.Empty;
+
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// The resolver the panel runs for the clients of the tunnels.
+/// </summary>
+public sealed class DnsSettingsEntity
+{
+    public long Id { get; set; }
+
+    public bool IsEnabled { get; set; }
+
+    public int Port { get; set; }
+
+    public string Upstreams { get; set; } = string.Empty;
+
+    public string Listen { get; set; } = string.Empty;
+
+    public int NameMinutes { get; set; }
+
+    public int CacheSize { get; set; }
+
+    public int MinTtl { get; set; }
+
+    public int MaxTtl { get; set; }
+
+    public bool Intercept { get; set; }
+
+    public bool BlockDot { get; set; }
+
+    public bool BlockDoh { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// One balancer as the database holds it.
+/// </summary>
+public sealed class BalancerEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public int Position { get; set; }
+
+    public bool IsEnabled { get; set; }
+
+    public string Strategy { get; set; } = string.Empty;
+
+    public string Members { get; set; } = string.Empty;
+
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// One client of an endpoint as the database holds it.
+/// </summary>
+public sealed class ClientEntity
+{
+    public long Id { get; set; }
+
+    public long ConfigId { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string PrivateKey { get; set; } = string.Empty;
+
+    public string PublicKey { get; set; } = string.Empty;
+
+    public string PresharedKey { get; set; } = string.Empty;
+
+    public string Address { get; set; } = string.Empty;
+
+    public bool IsEnabled { get; set; }
+
+    public string Note { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedUtc { get; set; }
 

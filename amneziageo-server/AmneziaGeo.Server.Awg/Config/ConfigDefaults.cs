@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using AmneziaGeo.Server.Core.Crypto;
 
@@ -89,13 +90,16 @@ public static class ConfigDefaults
         return second == first + ConfigRules.HandshakeGap ? second + 1 : second;
     }
 
-    private static long[] Types()
+    private static string[] Types()
     {
-        var types = new List<long>(4);
+        var types = new List<string>(4);
         while (types.Count < 4)
         {
-            var type = (long)RandomNumberGenerator.GetInt32(ConfigRules.LowestType, ConfigRules.HighestType);
-            if (!types.Contains(type))
+            var type = RandomNumberGenerator
+                .GetInt32(ConfigRules.LowestType, ConfigRules.HighestType)
+                .ToString(CultureInfo.InvariantCulture);
+
+            if (!types.Contains(type, StringComparer.Ordinal))
             {
                 types.Add(type);
             }

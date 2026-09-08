@@ -9,6 +9,7 @@ TestResults/
 
 node_modules/
 dist/
+out/
 .vite/
 *.tsbuildinfo
 

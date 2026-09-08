@@ -50,4 +50,10 @@ What the panel listens on is in [docs/serving.md](docs/serving.md), how accounts
 [docs/auth.md](docs/auth.md), how the kernel is spoken to is in [docs/kernel.md](docs/kernel.md), the theme
 and the language of the interface are in [docs/appearance.md](docs/appearance.md), what the overview
 of the host reads is in [docs/overview.md](docs/overview.md), what a server endpoint carries is in
-[docs/configs.md](docs/configs.md).
+[docs/configs.md](docs/configs.md), what the clients of an endpoint carry is in
+[docs/clients.md](docs/clients.md), what the geo databases carry is in [docs/geo.md](docs/geo.md),
+how traffic leaves the host is in [docs/outbounds.md](docs/outbounds.md), how it is spread over the
+ways out is in [docs/balancers.md](docs/balancers.md), where it is sent is in
+[docs/rules.md](docs/rules.md), how the names of the clients are answered is in
+[docs/dns.md](docs/dns.md), and how the panel goes on a server is in
+[docs/install.md](docs/install.md).

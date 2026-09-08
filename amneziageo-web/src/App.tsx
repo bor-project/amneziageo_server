@@ -9,10 +9,13 @@ import { Access } from "@/pages/Access"
 import { Clients } from "@/pages/Clients"
 import { Configs } from "@/pages/Configs"
 import { Dashboard } from "@/pages/Dashboard"
-import { Interfaces } from "@/pages/Interfaces"
 import { Login } from "@/pages/Login"
 import { Password } from "@/pages/Password"
-import { General } from "@/pages/General"
+import { Balancers } from "@/pages/Balancers"
+import { Dns } from "@/pages/Dns"
+import { Geo } from "@/pages/Geo"
+import { Outbounds } from "@/pages/Outbounds"
+import { Rules } from "@/pages/Rules"
 import { useAppearance } from "@/theme/theme"
 
 export function App() {
@@ -28,12 +31,15 @@ export function App() {
             <Route element={<RequireScope scope={scopes.readState} />}>
               <Route index element={<Dashboard />} />
               <Route path="configs" element={<Configs />} />
-              <Route path="interfaces" element={<Interfaces />} />
               <Route path="clients" element={<Clients />} />
+              <Route path="geo" element={<Geo />} />
+              <Route path="outbounds" element={<Outbounds />} />
+              <Route path="balancers" element={<Balancers />} />
+              <Route path="rules" element={<Rules />} />
+              <Route path="dns" element={<Dns />} />
             </Route>
-            <Route path="settings/general" element={<General />} />
             <Route element={<RequireScope scope={scopes.manageAccess} />}>
-              <Route path="settings/access" element={<Access />}>
+              <Route path="access" element={<Access />}>
                 <Route index element={<Users />} />
                 <Route path="roles" element={<Roles />} />
               </Route>

@@ -13,15 +13,22 @@ public sealed record ObfuscationBody(
     int S2,
     int S3,
     int S4,
-    long H1,
-    long H2,
-    long H3,
-    long H4,
+    string? H1,
+    string? H2,
+    string? H3,
+    string? H4,
     string? I1,
     string? I2,
     string? I3,
     string? I4,
     string? I5,
+    string? HeaderProtectionKey,
+    string? ContentPaddingAddition,
+    string? RekeyAfterTime,
+    string? RekeyTimeout,
+    string? RejectAfterTime,
+    string? KeepaliveTimeout,
+    string? MaxHandshakeAttempts,
     bool RandomTrailers,
     bool DisableCookies);
 
@@ -116,6 +123,13 @@ public static class ConfigAnswers
         settings.I3,
         settings.I4,
         settings.I5,
+        settings.HeaderProtectionKey,
+        settings.ContentPaddingAddition,
+        settings.RekeyAfterTime,
+        settings.RekeyTimeout,
+        settings.RejectAfterTime,
+        settings.KeepaliveTimeout,
+        settings.MaxHandshakeAttempts,
         settings.RandomTrailers,
         settings.DisableCookies);
 
@@ -137,7 +151,10 @@ public static class ConfigAnswers
         Obfuscation = Settings(request.Obfuscation),
     };
 
-    private static ObfuscationSettings Settings(ObfuscationBody? body) => body is null
+    /// <summary>
+    /// Reads the obfuscation an interface sends.
+    /// </summary>
+    public static ObfuscationSettings Settings(ObfuscationBody? body) => body is null
         ? new ObfuscationSettings()
         : new ObfuscationSettings
         {
@@ -148,16 +165,25 @@ public static class ConfigAnswers
             S2 = body.S2,
             S3 = body.S3,
             S4 = body.S4,
-            H1 = body.H1,
-            H2 = body.H2,
-            H3 = body.H3,
-            H4 = body.H4,
+            H1 = Text(body.H1),
+            H2 = Text(body.H2),
+            H3 = Text(body.H3),
+            H4 = Text(body.H4),
             I1 = body.I1,
             I2 = body.I2,
             I3 = body.I3,
             I4 = body.I4,
             I5 = body.I5,
+            HeaderProtectionKey = Text(body.HeaderProtectionKey),
+            ContentPaddingAddition = Text(body.ContentPaddingAddition),
+            RekeyAfterTime = Text(body.RekeyAfterTime),
+            RekeyTimeout = Text(body.RekeyTimeout),
+            RejectAfterTime = Text(body.RejectAfterTime),
+            KeepaliveTimeout = Text(body.KeepaliveTimeout),
+            MaxHandshakeAttempts = Text(body.MaxHandshakeAttempts),
             RandomTrailers = body.RandomTrailers,
             DisableCookies = body.DisableCookies,
         };
+
+    private static string Text(string? value) => (value ?? string.Empty).Trim();
 }

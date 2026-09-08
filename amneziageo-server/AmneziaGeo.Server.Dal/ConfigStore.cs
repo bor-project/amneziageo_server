@@ -223,6 +223,13 @@ public sealed class ConfigStore
             I3 = entity.I3,
             I4 = entity.I4,
             I5 = entity.I5,
+            HeaderProtectionKey = entity.HeaderProtectionKey,
+            ContentPaddingAddition = entity.ContentPaddingAddition,
+            RekeyAfterTime = entity.RekeyAfterTime,
+            RekeyTimeout = entity.RekeyTimeout,
+            RejectAfterTime = entity.RejectAfterTime,
+            KeepaliveTimeout = entity.KeepaliveTimeout,
+            MaxHandshakeAttempts = entity.MaxHandshakeAttempts,
             RandomTrailers = entity.RandomTrailers,
             DisableCookies = entity.DisableCookies,
         },
@@ -257,6 +264,13 @@ public sealed class ConfigStore
         entity.I3 = Text(config.Obfuscation.I3);
         entity.I4 = Text(config.Obfuscation.I4);
         entity.I5 = Text(config.Obfuscation.I5);
+        entity.HeaderProtectionKey = config.Obfuscation.HeaderProtectionKey.Trim();
+        entity.ContentPaddingAddition = config.Obfuscation.ContentPaddingAddition.Trim();
+        entity.RekeyAfterTime = config.Obfuscation.RekeyAfterTime.Trim();
+        entity.RekeyTimeout = config.Obfuscation.RekeyTimeout.Trim();
+        entity.RejectAfterTime = config.Obfuscation.RejectAfterTime.Trim();
+        entity.KeepaliveTimeout = config.Obfuscation.KeepaliveTimeout.Trim();
+        entity.MaxHandshakeAttempts = config.Obfuscation.MaxHandshakeAttempts.Trim();
         entity.RandomTrailers = config.Obfuscation.RandomTrailers;
         entity.DisableCookies = config.Obfuscation.DisableCookies;
     }

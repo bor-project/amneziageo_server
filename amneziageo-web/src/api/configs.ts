@@ -9,15 +9,22 @@ export interface Obfuscation {
   s2: number
   s3: number
   s4: number
-  h1: number
-  h2: number
-  h3: number
-  h4: number
+  h1: string
+  h2: string
+  h3: string
+  h4: string
   i1: string | null
   i2: string | null
   i3: string | null
   i4: string | null
   i5: string | null
+  headerProtectionKey: string
+  contentPaddingAddition: string
+  rekeyAfterTime: string
+  rekeyTimeout: string
+  rejectAfterTime: string
+  keepaliveTimeout: string
+  maxHandshakeAttempts: string
   randomTrailers: boolean
   disableCookies: boolean
 }

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Geo.Files;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -42,6 +43,8 @@ public sealed class Bench : IDisposable
 {
     private readonly string _path;
 
+    private readonly string _geo;
+
     private readonly ECDsa _key;
 
     private readonly ServiceProvider _services;
@@ -54,6 +57,7 @@ public sealed class Bench : IDisposable
     public Bench(AuthOptions? options = null, DateTimeOffset? now = null)
     {
         _path = Path.Combine(Path.GetTempPath(), $"amneziageo-{Guid.NewGuid():N}.db");
+        _geo = Path.Combine(Path.GetTempPath(), $"amneziageo-geo-{Guid.NewGuid():N}");
         _key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
         Options = options ?? new AuthOptions();
@@ -65,7 +69,7 @@ public sealed class Bench : IDisposable
         services.AddSingleton(Options);
         services.AddSingleton<TimeProvider>(Clock);
         services.AddSingleton<ITokenIssuer>(Issuer);
-        services.AddServerDatabase(_path, Options);
+        services.AddServerDatabase(_path, Options, _geo);
 
         _services = services.BuildServiceProvider();
         ServerDatabase.PrepareAsync(_services).GetAwaiter().GetResult();
@@ -78,6 +82,13 @@ public sealed class Bench : IDisposable
         Accounts = _scope.ServiceProvider.GetRequiredService<AccountManager>();
         Catalog = _scope.ServiceProvider.GetRequiredService<RoleCatalog>();
         Configs = _scope.ServiceProvider.GetRequiredService<ConfigStore>();
+        Clients = _scope.ServiceProvider.GetRequiredService<ClientStore>();
+        Geo = _scope.ServiceProvider.GetRequiredService<GeoStore>();
+        Outbounds = _scope.ServiceProvider.GetRequiredService<OutboundStore>();
+        Rules = _scope.ServiceProvider.GetRequiredService<RouteStore>();
+        Balancers = _scope.ServiceProvider.GetRequiredService<BalanceStore>();
+        Resolver = _scope.ServiceProvider.GetRequiredService<DnsStore>();
+        GeoFiles = _scope.ServiceProvider.GetRequiredService<IGeoFileStore>();
         RefreshTokens = _scope.ServiceProvider.GetRequiredService<IRefreshTokens>();
         Audit = _scope.ServiceProvider.GetRequiredService<IAuditLog>();
         Login = _scope.ServiceProvider.GetRequiredService<LoginService>();
@@ -100,6 +111,20 @@ public sealed class Bench : IDisposable
     public RoleCatalog Catalog { get; }
 
     public ConfigStore Configs { get; }
+
+    public ClientStore Clients { get; }
+
+    public GeoStore Geo { get; }
+
+    public OutboundStore Outbounds { get; }
+
+    public RouteStore Rules { get; }
+
+    public BalanceStore Balancers { get; }
+
+    public DnsStore Resolver { get; }
+
+    public IGeoFileStore GeoFiles { get; }
 
     public IRefreshTokens RefreshTokens { get; }
 
@@ -156,6 +181,11 @@ public sealed class Bench : IDisposable
         _services.Dispose();
         _key.Dispose();
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+        if (Directory.Exists(_geo))
+        {
+            Directory.Delete(_geo, recursive: true);
+        }
 
         foreach (var suffix in new[] { string.Empty, "-wal", "-shm" })
         {

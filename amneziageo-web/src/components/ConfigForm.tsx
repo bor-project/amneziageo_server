@@ -1,10 +1,11 @@
 import { useState } from "react"
-import type { ReactNode } from "react"
 import { complaint } from "@/api/auth"
 import { useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import { Modal } from "@/components/Modal"
+import { Count, Flag, Line, Section } from "@/components/fields"
 import { field, label, primary, secondary } from "@/components/styles"
+import { parts } from "@/format"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 
@@ -154,16 +155,59 @@ export function ConfigForm({
           <Count id="config-s2" caption={t("configs.s2")} value={cover.s2} onChange={(value) => twist({ s2: value })} />
           <Count id="config-s3" caption={t("configs.s3")} value={cover.s3} onChange={(value) => twist({ s3: value })} />
           <Count id="config-s4" caption={t("configs.s4")} value={cover.s4} onChange={(value) => twist({ s4: value })} />
-          <Count id="config-h1" caption={t("configs.h1")} value={cover.h1} onChange={(value) => twist({ h1: value })} />
-          <Count id="config-h2" caption={t("configs.h2")} value={cover.h2} onChange={(value) => twist({ h2: value })} />
-          <Count id="config-h3" caption={t("configs.h3")} value={cover.h3} onChange={(value) => twist({ h3: value })} />
-          <Count id="config-h4" caption={t("configs.h4")} value={cover.h4} onChange={(value) => twist({ h4: value })} />
+          <Line id="config-h1" caption={t("configs.h1")} value={cover.h1} onChange={(value) => twist({ h1: value })} />
+          <Line id="config-h2" caption={t("configs.h2")} value={cover.h2} onChange={(value) => twist({ h2: value })} />
+          <Line id="config-h3" caption={t("configs.h3")} value={cover.h3} onChange={(value) => twist({ h3: value })} />
+          <Line id="config-h4" caption={t("configs.h4")} value={cover.h4} onChange={(value) => twist({ h4: value })} />
+          <Line
+            id="config-padding"
+            caption={t("configs.padding")}
+            value={cover.contentPaddingAddition}
+            onChange={(value) => twist({ contentPaddingAddition: value })}
+          />
+          <Line
+            id="config-rekey-after"
+            caption={t("configs.rekeyAfter")}
+            value={cover.rekeyAfterTime}
+            onChange={(value) => twist({ rekeyAfterTime: value })}
+          />
+          <Line
+            id="config-rekey-timeout"
+            caption={t("configs.rekeyTimeout")}
+            value={cover.rekeyTimeout}
+            onChange={(value) => twist({ rekeyTimeout: value })}
+          />
+          <Line
+            id="config-reject-after"
+            caption={t("configs.rejectAfter")}
+            value={cover.rejectAfterTime}
+            onChange={(value) => twist({ rejectAfterTime: value })}
+          />
+          <Line
+            id="config-keepalive-timeout"
+            caption={t("configs.keepaliveTimeout")}
+            value={cover.keepaliveTimeout}
+            onChange={(value) => twist({ keepaliveTimeout: value })}
+          />
+          <Line
+            id="config-attempts"
+            caption={t("configs.attempts")}
+            value={cover.maxHandshakeAttempts}
+            onChange={(value) => twist({ maxHandshakeAttempts: value })}
+          />
         </div>
         <Line id="config-i1" caption={t("configs.i1")} value={cover.i1 ?? ""} onChange={(value) => twist({ i1: value })} />
         <Line id="config-i2" caption={t("configs.i2")} value={cover.i2 ?? ""} onChange={(value) => twist({ i2: value })} />
         <Line id="config-i3" caption={t("configs.i3")} value={cover.i3 ?? ""} onChange={(value) => twist({ i3: value })} />
         <Line id="config-i4" caption={t("configs.i4")} value={cover.i4 ?? ""} onChange={(value) => twist({ i4: value })} />
         <Line id="config-i5" caption={t("configs.i5")} value={cover.i5 ?? ""} onChange={(value) => twist({ i5: value })} />
+        <Line
+          id="config-header-key"
+          caption={t("configs.headerKey")}
+          value={cover.headerProtectionKey}
+          onChange={(value) => twist({ headerProtectionKey: value.trim() })}
+          wide
+        />
         <Flag
           id="config-trailers"
           caption={t("configs.trailers")}
@@ -185,93 +229,3 @@ export function ConfigForm({
   )
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="border-t border-line pt-3 first:border-t-0 first:pt-0">
-      <div className="text-xs font-medium tracking-wide text-muted uppercase">{title}</div>
-      <div className="mt-2 grid grid-cols-2 gap-3">{children}</div>
-    </div>
-  )
-}
-
-function Line({
-  id,
-  caption,
-  value,
-  onChange,
-  wide = false,
-}: {
-  id: string
-  caption: string
-  value: string
-  onChange: (value: string) => void
-  wide?: boolean
-}) {
-  return (
-    <div className={wide ? "col-span-2" : ""}>
-      <label className={label} htmlFor={id}>
-        {caption}
-      </label>
-      <input id={id} value={value} onChange={(e) => onChange(e.target.value)} className={`mt-1 ${field}`} />
-    </div>
-  )
-}
-
-function Count({
-  id,
-  caption,
-  value,
-  onChange,
-}: {
-  id: string
-  caption: string
-  value: number
-  onChange: (value: number) => void
-}) {
-  return (
-    <div>
-      <label className={label} htmlFor={id}>
-        {caption}
-      </label>
-      <input
-        id={id}
-        type="number"
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className={`mt-1 ${field}`}
-      />
-    </div>
-  )
-}
-
-function Flag({
-  id,
-  caption,
-  value,
-  onChange,
-}: {
-  id: string
-  caption: string
-  value: boolean
-  onChange: (value: boolean) => void
-}) {
-  return (
-    <label className="flex items-center gap-2 text-sm text-muted" htmlFor={id}>
-      <input
-        id={id}
-        type="checkbox"
-        checked={value}
-        onChange={(e) => onChange(e.target.checked)}
-        className="size-4 accent-brand"
-      />
-      {caption}
-    </label>
-  )
-}
-
-function parts(text: string): string[] {
-  return text
-    .split(/[,\s]+/)
-    .map((one) => one.trim())
-    .filter((one) => one.length > 0)
-}

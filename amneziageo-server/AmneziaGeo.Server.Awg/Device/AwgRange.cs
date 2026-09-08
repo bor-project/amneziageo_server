@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace AmneziaGeo.Server.Awg.Device;
 
 /// <summary>
@@ -44,7 +46,38 @@ public readonly record struct AwgRange(uint Low, uint High)
     public uint ToNarrow() => ((uint)(ushort)High << 16) | (ushort)Low;
 
     /// <summary>
+    /// Reads a span written as one number or as a pair separated by a dash.
+    /// </summary>
+    public static bool TryParse(string? text, out AwgRange range)
+    {
+        range = default;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var body = text.Trim();
+        var mark = body.IndexOf('-', StringComparison.Ordinal);
+        if (mark < 0)
+        {
+            return uint.TryParse(body, NumberStyles.Integer, CultureInfo.InvariantCulture, out var one)
+                && Take(one, one, out range);
+        }
+
+        return uint.TryParse(body[..mark].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var low)
+            && uint.TryParse(body[(mark + 1)..].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var high)
+            && Take(low, high, out range);
+    }
+
+    /// <summary>
     /// Writes the span as one number, or as a pair separated by a dash.
     /// </summary>
     public override string ToString() => IsOne ? $"{Low}" : $"{Low}-{High}";
+
+    private static bool Take(uint low, uint high, out AwgRange range)
+    {
+        range = new AwgRange(low, high);
+
+        return low <= high;
+    }
 }

@@ -36,9 +36,15 @@ go only to a caller that holds `interfaces:write`; to anyone else they come back
 | Preshared key | the key added to the handshake, empty when the endpoint carries none |
 | Jc, Jmin, Jmax | the junk packets before a handshake and their sizes |
 | S1 to S4 | the junk prepended to the four packet kinds |
-| H1 to H4 | the type of the four packet kinds |
+| H1 to H4 | the type of the four packet kinds, one number or a span like `194488238-194553774` |
 | I1 to I5 | the special packets the interface sends |
+| Header protection key | the key the packet header is hidden with, 32 bytes in base64 |
+| Content padding | the padding added to the content of a transport packet, in bytes |
+| Rekey after, Rekey timeout, Reject after, Keepalive timeout, Handshake attempts | the timings of the session, each one number or a span |
 | Random trailers, Disable cookies | the two switches of the 3.1 profile |
+
+Every span takes one number or two separated by a dash; the kernel picks a value out of it. An empty
+setting leaves the kernel its own default, and the client takes the same lines the interface carries.
 
 ## A fresh configuration
 
@@ -68,8 +74,10 @@ the code into a phrase of its own language.
 | `bad-key` | the private key is not 32 bytes in base64 |
 | `bad-preshared` | the preshared key is not 32 bytes in base64 |
 | `bad-junk` | a junk size is outside 0 to 1280, the shortest is above the longest, or S1 plus 56 equals S2 |
-| `bad-type` | a packet type is below 5, or two of the four are the same |
+| `bad-type` | a packet type is below 5, is neither a number nor a span, or two of the four overlap |
 | `bad-special` | a special packet is longer than 1024 characters |
+| `bad-span` | a timing is neither a number nor a span of two |
+| `bad-header-key` | the header protection key is not 32 bytes in base64 |
 | `name-taken` | the panel already carries an endpoint under this name |
 | `port-taken` | the panel already listens on this port |
 | `unknown-config` | there is no endpoint under this number |

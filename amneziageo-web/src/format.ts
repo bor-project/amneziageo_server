@@ -52,3 +52,10 @@ export function average(values: number[]): number {
 export function peak(values: number[]): number {
   return values.length === 0 ? 0 : Math.max(...values)
 }
+
+export function parts(text: string): string[] {
+  return text
+    .split(/[,\s]+/)
+    .map((one) => one.trim())
+    .filter((one) => one.length > 0)
+}

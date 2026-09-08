@@ -135,21 +135,69 @@ public static partial class ConfigRules
                 $"the junk of a response is {HandshakeGap} bytes above the junk of an initiation, which makes the two alike");
         }
 
-        return CheckTypes(obfuscation) ?? CheckSpecials(obfuscation);
+        return CheckTypes(obfuscation) ?? CheckSpecials(obfuscation) ?? CheckSpans(obfuscation);
     }
 
     private static ConfigFault? CheckTypes(ObfuscationSettings obfuscation)
     {
-        var types = (long[])[obfuscation.H1, obfuscation.H2, obfuscation.H3, obfuscation.H4];
-        foreach (var type in types)
+        var types = new List<AwgRange>(4);
+        foreach (var text in (string[])[obfuscation.H1, obfuscation.H2, obfuscation.H3, obfuscation.H4])
         {
-            if (type is < LowestType or > HighestType)
+            if (!AwgRange.TryParse(text, out var type))
+            {
+                return Fault("bad-type", "a packet type is neither a number nor a span of two");
+            }
+
+            if (type.Low < LowestType || type.High > HighestType)
             {
                 return Fault("bad-type", $"a packet type is outside {LowestType} to {HighestType}");
             }
+
+            types.Add(type);
         }
 
-        return types.Distinct().Count() == types.Length ? null : Fault("bad-type", "two packet types are the same");
+        return Apart(types) ? null : Fault("bad-type", "two packet types are the same");
+    }
+
+    private static ConfigFault? CheckSpans(ObfuscationSettings obfuscation)
+    {
+        var spans = (string[])
+        [
+            obfuscation.ContentPaddingAddition,
+            obfuscation.RekeyAfterTime,
+            obfuscation.RekeyTimeout,
+            obfuscation.RejectAfterTime,
+            obfuscation.KeepaliveTimeout,
+            obfuscation.MaxHandshakeAttempts,
+        ];
+
+        foreach (var span in spans)
+        {
+            if (span.Length > 0 && !AwgRange.TryParse(span, out _))
+            {
+                return Fault("bad-span", "a timing is neither a number nor a span of two");
+            }
+        }
+
+        return obfuscation.HeaderProtectionKey.Length == 0 || Curve25519.IsKey(obfuscation.HeaderProtectionKey)
+            ? null
+            : Fault("bad-header-key", "the header protection key is not 32 bytes in base64");
+    }
+
+    private static bool Apart(IReadOnlyList<AwgRange> types)
+    {
+        for (var one = 0; one < types.Count; one++)
+        {
+            for (var other = one + 1; other < types.Count; other++)
+            {
+                if (types[one].Low <= types[other].High && types[other].Low <= types[one].High)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     private static ConfigFault? CheckSpecials(ObfuscationSettings obfuscation)
@@ -161,7 +209,10 @@ public static partial class ConfigRules
             : null;
     }
 
-    private static ConfigFault? CheckHost(string? host)
+    /// <summary>
+    /// Returns why the address clients reach an endpoint at is unusable, or null when it holds.
+    /// </summary>
+    public static ConfigFault? CheckHost(string? host)
     {
         if (string.IsNullOrWhiteSpace(host))
         {

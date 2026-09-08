@@ -1,5 +1,9 @@
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
+using AmneziaGeo.Server.Geo;
+using AmneziaGeo.Server.Routing.Balance;
+using AmneziaGeo.Server.Routing.Route;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +29,18 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
     public DbSet<AuditEntity> AuditEntries => Set<AuditEntity>();
 
     public DbSet<ConfigEntity> Configs => Set<ConfigEntity>();
+
+    public DbSet<ClientEntity> Clients => Set<ClientEntity>();
+
+    public DbSet<GeoSourceEntity> GeoSources => Set<GeoSourceEntity>();
+
+    public DbSet<OutboundEntity> Outbounds => Set<OutboundEntity>();
+
+    public DbSet<RouteRuleEntity> Rules => Set<RouteRuleEntity>();
+
+    public DbSet<BalancerEntity> Balancers => Set<BalancerEntity>();
+
+    public DbSet<DnsSettingsEntity> Resolver => Set<DnsSettingsEntity>();
 
     /// <summary>
     /// Shapes the tables the server adds to the identity ones.
@@ -75,6 +91,60 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(config => config.Name).HasMaxLength(ConfigRules.MaxNameLength);
             entity.Property(config => config.Host).HasMaxLength(ConfigRules.MaxHostLength);
             entity.HasIndex(config => config.Name).IsUnique();
+        });
+
+        builder.Entity<ClientEntity>(entity =>
+        {
+            entity.Property(client => client.Name).HasMaxLength(ClientRules.MaxNameLength);
+            entity.Property(client => client.Note).HasMaxLength(ClientRules.MaxNoteLength);
+            entity.HasIndex(client => new { client.ConfigId, client.Name }).IsUnique();
+            entity.HasIndex(client => client.PublicKey).IsUnique();
+            entity.HasOne<ConfigEntity>()
+                .WithMany()
+                .HasForeignKey(client => client.ConfigId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<GeoSourceEntity>(entity =>
+        {
+            entity.Property(source => source.Name).HasMaxLength(GeoSourceRules.MaxNameLength);
+            entity.Property(source => source.Kind).HasMaxLength(16);
+            entity.Property(source => source.Url).HasMaxLength(GeoSourceRules.MaxUrlLength);
+            entity.HasIndex(source => source.Name).IsUnique();
+            entity.HasIndex(source => source.Position);
+        });
+
+        builder.Entity<OutboundEntity>(entity =>
+        {
+            entity.Property(outbound => outbound.Name).HasMaxLength(ConfigRules.MaxNameLength);
+            entity.Property(outbound => outbound.Kind).HasMaxLength(16);
+            entity.Property(outbound => outbound.Host).HasMaxLength(ConfigRules.MaxHostLength);
+            entity.HasIndex(outbound => outbound.Name).IsUnique();
+            entity.HasIndex(outbound => outbound.Mark).IsUnique();
+            entity.HasIndex(outbound => outbound.Position);
+        });
+
+        builder.Entity<DnsSettingsEntity>(entity =>
+        {
+            entity.Property(row => row.Upstreams).HasMaxLength(512);
+            entity.Property(row => row.Listen).HasMaxLength(512);
+        });
+
+        builder.Entity<BalancerEntity>(entity =>
+        {
+            entity.Property(balancer => balancer.Name).HasMaxLength(BalanceRules.MaxNameLength);
+            entity.Property(balancer => balancer.Strategy).HasMaxLength(16);
+            entity.HasIndex(balancer => balancer.Name).IsUnique();
+            entity.HasIndex(balancer => balancer.Position);
+        });
+
+        builder.Entity<RouteRuleEntity>(entity =>
+        {
+            entity.Property(rule => rule.Name).HasMaxLength(RouteRules.MaxNameLength);
+            entity.Property(rule => rule.Action).HasMaxLength(16);
+            entity.Property(rule => rule.Protocol).HasMaxLength(16);
+            entity.Property(rule => rule.Outbound).HasMaxLength(ConfigRules.MaxNameLength);
+            entity.HasIndex(rule => rule.Position);
         });
     }
 }

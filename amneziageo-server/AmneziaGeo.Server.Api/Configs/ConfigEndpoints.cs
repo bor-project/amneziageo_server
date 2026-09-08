@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Dns;
+using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
@@ -67,27 +69,62 @@ public static class ConfigEndpoints
     private static IResult Preshared() =>
         Results.Ok(new KeyResponse(Convert.ToBase64String(RandomNumberGenerator.GetBytes(Curve25519.KeySize))));
 
-    private static async Task<IResult> AddAsync(ConfigRequest request, ConfigStore store, CancellationToken ct)
+    private static async Task<IResult> AddAsync(
+        ConfigRequest request,
+        ConfigStore store,
+        RouteApplier routes,
+        DnsHost resolver,
+        CancellationToken ct)
     {
         var result = await store.AddAsync(ConfigAnswers.Draft(request), ct).ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
 
-        return result.IsOk
-            ? Results.Created($"/api/configs/{result.Record!.Id}", ConfigAnswers.Config(result.Record, true))
-            : Explain(result);
+        await routes.SettleAsync(ct).ConfigureAwait(false);
+        await resolver.RestartAsync(ct).ConfigureAwait(false);
+
+        return Results.Created($"/api/configs/{result.Record!.Id}", ConfigAnswers.Config(result.Record, true));
     }
 
-    private static async Task<IResult> ChangeAsync(long id, ConfigRequest request, ConfigStore store, CancellationToken ct)
+    private static async Task<IResult> ChangeAsync(
+        long id,
+        ConfigRequest request,
+        ConfigStore store,
+        RouteApplier routes,
+        DnsHost resolver,
+        CancellationToken ct)
     {
         var result = await store.ChangeAsync(id, ConfigAnswers.Draft(request), ct).ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
 
-        return result.IsOk ? Results.Ok(ConfigAnswers.Config(result.Record!, true)) : Explain(result);
+        await routes.SettleAsync(ct).ConfigureAwait(false);
+        await resolver.RestartAsync(ct).ConfigureAwait(false);
+
+        return Results.Ok(ConfigAnswers.Config(result.Record!, true));
     }
 
-    private static async Task<IResult> RemoveAsync(long id, ConfigStore store, CancellationToken ct)
+    private static async Task<IResult> RemoveAsync(
+        long id,
+        ConfigStore store,
+        RouteApplier routes,
+        DnsHost resolver,
+        CancellationToken ct)
     {
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
 
-        return result.IsOk ? Results.NoContent() : Explain(result);
+        await routes.SettleAsync(ct).ConfigureAwait(false);
+        await resolver.RestartAsync(ct).ConfigureAwait(false);
+
+        return Results.NoContent();
     }
 
     private static bool Secrets(HttpContext context) =>

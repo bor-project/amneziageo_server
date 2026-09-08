@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Geo.Files;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +28,7 @@ public static class ServerDatabase
     /// <summary>
     /// Registers the database, the identity stores and the account services.
     /// </summary>
-    public static IServiceCollection AddServerDatabase(this IServiceCollection services, string path, AuthOptions options)
+    public static IServiceCollection AddServerDatabase(this IServiceCollection services, string path, AuthOptions options, string? geoPath = null)
     {
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
@@ -56,7 +57,14 @@ public static class ServerDatabase
         services.AddScoped<AccessResolver>();
         services.AddScoped<AccountManager>();
         services.AddScoped<RoleCatalog>();
+        services.AddSingleton<IGeoFileStore>(new DiskGeoFiles(geoPath ?? DiskGeoFiles.PathNear(path)));
         services.AddScoped<ConfigStore>();
+        services.AddScoped<ClientStore>();
+        services.AddScoped<GeoStore>();
+        services.AddScoped<OutboundStore>();
+        services.AddScoped<RouteStore>();
+        services.AddScoped<BalanceStore>();
+        services.AddScoped<DnsStore>();
         services.AddScoped<IRefreshTokens, RefreshTokenStore>();
         services.AddScoped<IAuditLog, AuditStore>();
         services.AddScoped<LoginService>();
@@ -72,6 +80,8 @@ public static class ServerDatabase
         using var scope = services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync(ct).ConfigureAwait(false);
         await SeedAsync(scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>()).ConfigureAwait(false);
+        await scope.ServiceProvider.GetRequiredService<GeoStore>().SeedAsync(ct).ConfigureAwait(false);
+        await scope.ServiceProvider.GetRequiredService<OutboundStore>().SeedAsync(ct).ConfigureAwait(false);
     }
 
     /// <summary>

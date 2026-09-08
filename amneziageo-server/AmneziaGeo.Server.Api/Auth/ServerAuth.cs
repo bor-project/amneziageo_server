@@ -24,7 +24,7 @@ public static class ServerAuth
         services.AddSingleton(options);
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ITokenIssuer>(_ => TokenIssuer.Open(options));
-        services.AddServerDatabase(path, options);
+        services.AddServerDatabase(path, options, configuration["Geo:Path"]);
 
         return services;
     }

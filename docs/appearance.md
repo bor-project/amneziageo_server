@@ -1,7 +1,7 @@
 # Theme and language of the panel
 
-The theme is the icon beside the name in the sidebar, and it walks auto, light, dark and back with every
-press. The language is in `Panel settings` -> `General`. The sign-in page carries both above the form,
+The theme is the icon in the header, and it walks auto, light, dark and back with every press. The
+language is in the account menu next to it. The sign-in page carries both above the form,
 so a browser that speaks neither language is not stuck. The choice is kept in `localStorage` of the browser
 under `amneziageo.theme` and `amneziageo.language`, so it belongs to the browser, not to the account.
 

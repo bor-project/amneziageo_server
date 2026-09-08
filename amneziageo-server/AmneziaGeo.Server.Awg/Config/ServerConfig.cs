@@ -41,24 +41,24 @@ public sealed record ObfuscationSettings
     public int S4 { get; init; }
 
     /// <summary>
-    /// The type written into a handshake initiation.
+    /// The type written into a handshake initiation, one number or a span.
     /// </summary>
-    public long H1 { get; init; }
+    public string H1 { get; init; } = string.Empty;
 
     /// <summary>
-    /// The type written into a handshake response.
+    /// The type written into a handshake response, one number or a span.
     /// </summary>
-    public long H2 { get; init; }
+    public string H2 { get; init; } = string.Empty;
 
     /// <summary>
-    /// The type written into a cookie reply.
+    /// The type written into a cookie reply, one number or a span.
     /// </summary>
-    public long H3 { get; init; }
+    public string H3 { get; init; } = string.Empty;
 
     /// <summary>
-    /// The type written into a transport packet.
+    /// The type written into a transport packet, one number or a span.
     /// </summary>
-    public long H4 { get; init; }
+    public string H4 { get; init; } = string.Empty;
 
     /// <summary>
     /// The first special junk packet.
@@ -84,6 +84,41 @@ public sealed record ObfuscationSettings
     /// The fifth special junk packet.
     /// </summary>
     public string? I5 { get; init; }
+
+    /// <summary>
+    /// The key the packet header is hidden with, in base64.
+    /// </summary>
+    public string HeaderProtectionKey { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Padding added to the content of a transport packet, in bytes.
+    /// </summary>
+    public string ContentPaddingAddition { get; init; } = string.Empty;
+
+    /// <summary>
+    /// When a session is renewed, in seconds.
+    /// </summary>
+    public string RekeyAfterTime { get; init; } = string.Empty;
+
+    /// <summary>
+    /// How long a handshake attempt waits before it repeats, in seconds.
+    /// </summary>
+    public string RekeyTimeout { get; init; } = string.Empty;
+
+    /// <summary>
+    /// When a session stops being accepted, in seconds.
+    /// </summary>
+    public string RejectAfterTime { get; init; } = string.Empty;
+
+    /// <summary>
+    /// How long a quiet path is held open, in seconds.
+    /// </summary>
+    public string KeepaliveTimeout { get; init; } = string.Empty;
+
+    /// <summary>
+    /// How many handshakes are attempted before the peer is given up on.
+    /// </summary>
+    public string MaxHandshakeAttempts { get; init; } = string.Empty;
 
     /// <summary>
     /// Whether random bytes are appended to packets.

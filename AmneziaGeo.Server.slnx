@@ -4,6 +4,8 @@
     <Project Path="amneziageo-server/AmneziaGeo.Server.Dal/AmneziaGeo.Server.Dal.csproj" />
     <Project Path="amneziageo-server/AmneziaGeo.Server.Awg/AmneziaGeo.Server.Awg.csproj" />
     <Project Path="amneziageo-server/AmneziaGeo.Server.Auth/AmneziaGeo.Server.Auth.csproj" />
+    <Project Path="amneziageo-server/AmneziaGeo.Server.Geo/AmneziaGeo.Server.Geo.csproj" />
+    <Project Path="amneziageo-server/AmneziaGeo.Server.Routing/AmneziaGeo.Server.Routing.csproj" />
     <Project Path="amneziageo-server/AmneziaGeo.Server.Api/AmneziaGeo.Server.Api.csproj" />
     <Project Path="amneziageo-server/AmneziaGeo.Server.Cli/AmneziaGeo.Server.Cli.csproj" />
   </Folder>

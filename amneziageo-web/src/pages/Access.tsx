@@ -3,8 +3,8 @@ import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 
 const tabs: { to: string; label: TextKey; end?: boolean }[] = [
-  { to: "/settings/access", label: "users.title", end: true },
-  { to: "/settings/access/roles", label: "roles.title" },
+  { to: "/access", label: "users.title", end: true },
+  { to: "/access/roles", label: "roles.title" },
 ]
 
 const tab = "-mb-px border-b-2 px-1 pb-2 text-sm"

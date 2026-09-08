@@ -43,6 +43,8 @@ public sealed class Context : IDisposable
         Accounts = scope.ServiceProvider.GetRequiredService<AccountManager>();
         Catalog = scope.ServiceProvider.GetRequiredService<RoleCatalog>();
         Login = scope.ServiceProvider.GetRequiredService<LoginService>();
+        Configs = scope.ServiceProvider.GetRequiredService<ConfigStore>();
+        Clients = scope.ServiceProvider.GetRequiredService<ClientStore>();
     }
 
     public AuthOptions Options { get; }
@@ -58,6 +60,10 @@ public sealed class Context : IDisposable
     public RoleCatalog Catalog { get; }
 
     public LoginService Login { get; }
+
+    public ConfigStore Configs { get; }
+
+    public ClientStore Clients { get; }
 
     /// <summary>
     /// Opens the database, brings its schema up to date and reads the signing key.

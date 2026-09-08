@@ -132,10 +132,10 @@ The last enabled account that holds `access:write` cannot be demoted, disabled o
 
 ## Managing accounts over HTTP
 
-The panel does everything the console does, on the `Users` tab of `Panel settings` -> `Access`, and every
+The panel does everything the console does, on the `Users` tab of `Access`, and every
 route below asks for `access:write`. What an account may do follows from its role alone; claims given to an
 account one by one are left to the console and the panel neither shows nor sets them. The account of the
-caller changes its own password on `Panel settings` -> `General`.
+caller changes its own password from the account menu in the header.
 
 | Route | What it does |
 |---|---|
