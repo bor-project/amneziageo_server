@@ -34,6 +34,7 @@ public static class OutboundEndpoints
         writing.MapPost("/{id:long}/switch", SwitchAsync);
         writing.MapPost("/{id:long}/move", MoveAsync);
         writing.MapPost("/{id:long}/apply", ApplyAsync);
+        writing.MapPost("/{id:long}/probe", ProbeAsync);
         writing.MapPost("/apply", SyncAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
@@ -113,6 +114,31 @@ public static class OutboundEndpoints
         return Results.Created(
             $"/api/outbounds/{result.Record!.Id}",
             OutboundAnswers.Outbound(result.Record, state, true));
+    }
+
+    private static async Task<IResult> ProbeAsync(
+        long id,
+        OutboundStore store,
+        OutboundHost host,
+        ProbeRunner runner,
+        RouteApplier routes,
+        CancellationToken ct)
+    {
+        var found = await store.FindAsync(id, ct).ConfigureAwait(false);
+        if (found is null)
+        {
+            return Refuse(
+                StatusCodes.Status404NotFound,
+                "unknown-outbound",
+                $"there is no outbound under the number {id}");
+        }
+
+        if (await runner.RunAsync(found, ct).ConfigureAwait(false))
+        {
+            await routes.SettleAsync(ct).ConfigureAwait(false);
+        }
+
+        return Results.Ok(OutboundAnswers.State(host.State(found)));
     }
 
     private static async Task<IResult> ChangeAsync(

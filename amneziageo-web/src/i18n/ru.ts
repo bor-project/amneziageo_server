@@ -449,6 +449,10 @@ export const ru: Dictionary = {
   "outbounds.dns": "Серверы имён",
   "outbounds.mtu": "MTU",
   "outbounds.keepalive": "Keepalive",
+  "outbounds.probe": "Проба",
+  "outbounds.probeServer": "Сервер имён",
+  "outbounds.probeEvery": "Период, с",
+  "outbounds.probeNow": "Проверить",
   "outbounds.keys": "Ключи",
   "outbounds.private": "Приватный ключ",
   "outbounds.public": "Публичный ключ",
@@ -481,6 +485,7 @@ export const ru: Dictionary = {
   "outbounds.notUp": "не поднято",
   "outbounds.ready": "готово",
   "outbounds.noHandshake": "рукопожатия не было",
+  "outbounds.noProbe": "проба не проходит",
 
   "rules.add": "Добавить",
   "rules.apply": "Применить",

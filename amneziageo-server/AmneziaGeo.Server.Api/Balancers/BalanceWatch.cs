@@ -54,7 +54,7 @@ public sealed class BalanceWatch : BackgroundService
             }
 
             var outbounds = await services.GetRequiredService<OutboundStore>().ListAsync(ct).ConfigureAwait(false);
-            var alive = _host.States(outbounds).Where(state => state.IsAlive).Select(state => state.Name);
+            var alive = _host.States(outbounds).Where(state => state.Carries).Select(state => state.Name);
             if (!_live.Keep(alive))
             {
                 return;

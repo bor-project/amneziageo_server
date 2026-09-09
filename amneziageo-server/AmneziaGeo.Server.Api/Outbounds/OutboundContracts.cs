@@ -1,8 +1,14 @@
 using AmneziaGeo.Server.Api.Configs;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Routing.Outbound;
+using AmneziaGeo.Server.Routing.Probe;
 
 namespace AmneziaGeo.Server.Api.Outbounds;
+
+/// <summary>
+/// What the probes of an outbound came to, as the interface reads it.
+/// </summary>
+public sealed record OutboundProbeBody(bool IsReached, int Falls, DateTimeOffset At);
 
 /// <summary>
 /// What the host holds for an outbound, as the interface reads it.
@@ -14,7 +20,9 @@ public sealed record OutboundStateBody(
     ulong RxBytes,
     ulong TxBytes,
     bool IsAlive,
-    string Fault);
+    string Fault,
+    bool Carries,
+    OutboundProbeBody? Probe);
 
 /// <summary>
 /// An outbound as the interface reads it.
@@ -36,6 +44,8 @@ public sealed record OutboundResponse(
     string[] Dns,
     int Mtu,
     int Keepalive,
+    string Probe,
+    int ProbeEvery,
     long Mark,
     int Table,
     ObfuscationBody Obfuscation,
@@ -60,6 +70,8 @@ public sealed record OutboundRequest(
     string[]? Dns,
     int Mtu,
     int Keepalive,
+    string? Probe,
+    int ProbeEvery,
     ObfuscationBody? Obfuscation);
 
 /// <summary>
@@ -106,6 +118,8 @@ public static class OutboundAnswers
             [.. outbound.Dns],
             outbound.Mtu,
             outbound.Keepalive,
+            outbound.Probe,
+            outbound.ProbeEvery,
             outbound.Mark,
             outbound.Table,
             ConfigAnswers.Obfuscation(outbound.Obfuscation),
@@ -128,8 +142,16 @@ public static class OutboundAnswers
             state.RxBytes,
             state.TxBytes,
             state.IsAlive,
-            state.Fault);
+            state.Fault,
+            state.Carries,
+            Probe(state.Probe));
     }
+
+    /// <summary>
+    /// Describes what the probes of an outbound came to.
+    /// </summary>
+    public static OutboundProbeBody? Probe(ProbeReading? reading) =>
+        reading is null ? null : new OutboundProbeBody(reading.IsReached, reading.Falls, reading.At);
 
     /// <summary>
     /// Reads the outbound an interface sends.
@@ -153,6 +175,8 @@ public static class OutboundAnswers
             Dns = request.Dns ?? [],
             Mtu = request.Mtu,
             Keepalive = request.Keepalive,
+            Probe = (request.Probe ?? string.Empty).Trim(),
+            ProbeEvery = request.ProbeEvery,
             Obfuscation = ConfigAnswers.Settings(request.Obfuscation),
         };
     }

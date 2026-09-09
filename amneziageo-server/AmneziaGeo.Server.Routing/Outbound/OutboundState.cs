@@ -1,3 +1,5 @@
+using AmneziaGeo.Server.Routing.Probe;
+
 namespace AmneziaGeo.Server.Routing.Outbound;
 
 /// <summary>
@@ -11,6 +13,7 @@ namespace AmneziaGeo.Server.Routing.Outbound;
 /// <param name="TxBytes">Bytes given to the server.</param>
 /// <param name="IsAlive">Whether the last handshake is recent enough to carry traffic.</param>
 /// <param name="Fault">Why the host does not hold the outbound.</param>
+/// <param name="Probe">What the probes of the outbound came to, or null when it was never probed.</param>
 public sealed record OutboundState(
     string Name,
     bool HasLink,
@@ -19,8 +22,14 @@ public sealed record OutboundState(
     ulong RxBytes,
     ulong TxBytes,
     bool IsAlive,
-    string Fault)
+    string Fault,
+    ProbeReading? Probe = null)
 {
+    /// <summary>
+    /// Tells whether the outbound carries traffic, taking the probe over the handshake.
+    /// </summary>
+    public bool Carries => IsAlive && Probe is not { IsReached: false };
+
     /// <summary>
     /// How long a handshake stands before the tunnel counts as dead.
     /// </summary>

@@ -304,6 +304,8 @@ public sealed class OutboundStore
         Dns = Parts(entity.Dns),
         Mtu = entity.Mtu,
         Keepalive = entity.Keepalive,
+        Probe = entity.Probe,
+        ProbeEvery = entity.ProbeEvery,
         Mark = (uint)entity.Mark,
         Table = entity.Table,
         CreatedUtc = entity.CreatedUtc,
@@ -355,6 +357,8 @@ public sealed class OutboundStore
         entity.Dns = string.Join(", ", outbound.Dns);
         entity.Mtu = outbound.Mtu;
         entity.Keepalive = outbound.Keepalive;
+        entity.Probe = outbound.Probe.Trim();
+        entity.ProbeEvery = outbound.ProbeEvery;
         entity.Mark = outbound.Mark;
         entity.Table = outbound.Table;
         entity.Jc = outbound.Obfuscation.Jc;

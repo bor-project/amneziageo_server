@@ -35,10 +35,13 @@ client stays on one outbound while the set of live members does not change.
 
 ## What carries traffic
 
-An outbound that leaves through the host itself always counts. A tunnel counts while its last handshake
-is under three minutes old, which is read from the kernel together with the counters of the peer. The
-server reads this back every fifteen seconds, and when the set of live outbounds is other than before it
-lays the whole ruleset again, so a member that went quiet is replaced without anyone touching the panel.
+An outbound counts while its probe gets through: a question to a name server sent under the mark of the
+outbound, with the address and the period held by the outbound itself, see [outbounds.md](outbounds.md).
+Two probes that miss in a row take a member off, and one answer brings it back. Until an outbound is
+probed the handshake stands in: an outbound through the host itself always counts, and a tunnel counts
+while its last handshake is under three minutes old. The server reads this back every fifteen seconds, and
+when the set of live outbounds is other than before it lays the whole ruleset again, so a member that went
+quiet is replaced without anyone touching the panel.
 
 ## What the host takes
 

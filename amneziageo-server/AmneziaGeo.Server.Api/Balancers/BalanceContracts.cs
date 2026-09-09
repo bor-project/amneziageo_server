@@ -111,7 +111,7 @@ public static class BalanceAnswers
         }
 
         var outbound = outbounds[at];
-        var alive = outbound.IsEnabled && at < states.Count && states[at].IsAlive;
+        var alive = outbound.IsEnabled && at < states.Count && states[at].Carries;
 
         return new BalanceMemberBody(name, true, outbound.IsEnabled, alive, outbound.Mark);
     }

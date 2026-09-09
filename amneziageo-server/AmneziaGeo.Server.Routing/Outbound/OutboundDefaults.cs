@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Core.Crypto;
+using AmneziaGeo.Server.Routing.Probe;
 
 namespace AmneziaGeo.Server.Routing.Outbound;
 
@@ -38,6 +39,8 @@ public static class OutboundDefaults
         IsEnabled = true,
         Mark = OutboundRules.FirstMark,
         Table = OutboundRules.TableOf(OutboundRules.FirstMark, OutboundKind.Local),
+        Probe = ProbeDefaults.Address,
+        ProbeEvery = ProbeDefaults.Every,
     };
 
     /// <summary>
@@ -56,6 +59,8 @@ public static class OutboundDefaults
             Keepalive = Keepalive,
             PrivateKey = pair.PrivateKey,
             PublicKey = pair.PublicKey,
+            Probe = ProbeDefaults.Address,
+            ProbeEvery = ProbeDefaults.Every,
         };
     }
 }

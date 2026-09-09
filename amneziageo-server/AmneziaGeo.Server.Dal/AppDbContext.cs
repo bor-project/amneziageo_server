@@ -2,6 +2,7 @@ using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Proxy;
+using AmneziaGeo.Server.Routing.Probe;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Balance;
@@ -125,6 +126,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(outbound => outbound.Name).HasMaxLength(ConfigRules.MaxNameLength);
             entity.Property(outbound => outbound.Kind).HasMaxLength(16);
             entity.Property(outbound => outbound.Host).HasMaxLength(ConfigRules.MaxHostLength);
+            entity.Property(outbound => outbound.Probe).HasMaxLength(ProbeDefaults.MaxAddressLength);
             entity.HasIndex(outbound => outbound.Name).IsUnique();
             entity.HasIndex(outbound => outbound.Mark).IsUnique();
             entity.HasIndex(outbound => outbound.Position);

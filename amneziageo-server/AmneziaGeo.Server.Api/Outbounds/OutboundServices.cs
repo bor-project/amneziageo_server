@@ -4,6 +4,7 @@ using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Carrier;
 using AmneziaGeo.Server.Routing.Host;
+using AmneziaGeo.Server.Routing.Probe;
 
 namespace AmneziaGeo.Server.Api.Outbounds;
 
@@ -44,12 +45,16 @@ public static class OutboundServices
         services.AddSingleton<IHostNetwork, IpHostNetwork>();
         services.AddSingleton<IAwgDevices, AwgDevices>();
         services.AddSingleton(provider => Carriers(provider));
+        services.AddSingleton<ProbeLive>();
+        services.AddSingleton<IProbeLink, ProbeLink>();
+        services.AddSingleton<ProbeRunner>();
         services.AddSingleton<OutboundHost>();
         services.AddSingleton<RouteHost>();
         services.AddSingleton<RoutePlans>();
         services.AddSingleton<BalanceLive>();
         services.AddScoped<RouteApplier>();
         services.AddHostedService<BalanceWatch>();
+        services.AddHostedService<ProbeWatch>();
 
         return services;
     }

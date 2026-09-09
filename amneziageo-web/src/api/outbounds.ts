@@ -4,6 +4,12 @@ import type { KeyPair, Obfuscation } from "./configs"
 
 export type OutboundKind = "local" | "wg" | "ws"
 
+export interface OutboundProbe {
+  isReached: boolean
+  falls: number
+  at: string
+}
+
 export interface OutboundState {
   hasLink: boolean
   endpoint: string
@@ -12,6 +18,8 @@ export interface OutboundState {
   txBytes: number
   isAlive: boolean
   fault: string
+  carries: boolean
+  probe: OutboundProbe | null
 }
 
 export interface Outbound {
@@ -31,6 +39,8 @@ export interface Outbound {
   dns: string[]
   mtu: number
   keepalive: number
+  probe: string
+  probeEvery: number
   mark: number
   table: number
   obfuscation: Obfuscation
@@ -53,6 +63,8 @@ export interface OutboundDraft {
   dns: string[]
   mtu: number
   keepalive: number
+  probe: string
+  probeEvery: number
   obfuscation: Obfuscation
 }
 
@@ -98,6 +110,10 @@ export function useApplyOutbound() {
   return useRefreshing((id: number) => client.post(`/outbounds/${id}/apply`))
 }
 
+export function useProbeOutbound() {
+  return useRefreshing((id: number) => client.post(`/outbounds/${id}/probe`))
+}
+
 export function useApplyOutbounds() {
   return useRefreshing(() => client.post("/outbounds/apply"))
 }
@@ -130,6 +146,8 @@ export function draftOf(outbound: Outbound): OutboundDraft {
     dns: outbound.dns,
     mtu: outbound.mtu,
     keepalive: outbound.keepalive,
+    probe: outbound.probe,
+    probeEvery: outbound.probeEvery,
     obfuscation: outbound.obfuscation,
   }
 }

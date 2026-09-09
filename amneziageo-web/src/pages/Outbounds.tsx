@@ -8,6 +8,7 @@ import {
   useFreshOutbound,
   useMoveOutbound,
   useOutbounds,
+  useProbeOutbound,
   useRemoveOutbound,
   useSwitchOutbound,
 } from "@/api/outbounds"
@@ -40,6 +41,7 @@ export function Outbounds() {
   const turn = useSwitchOutbound()
   const apply = useApplyOutbound()
   const applyAll = useApplyOutbounds()
+  const probe = useProbeOutbound()
   const may = holds(user, scopes.manageRouting)
   const last = (outbounds.data?.length ?? 0) - 1
 
@@ -110,6 +112,7 @@ export function Outbounds() {
                           title={t("outbounds.actions")}
                           actions={[
                             { label: t("outbounds.apply"), onPick: () => void apply.mutateAsync(outbound.id) },
+                            { label: t("outbounds.probeNow"), onPick: () => void probe.mutateAsync(outbound.id) },
                             {
                               label: outbound.isEnabled ? t("outbounds.turnOff") : t("outbounds.turnOn"),
                               onPick: () => void turn.mutateAsync({ id: outbound.id, on: !outbound.isEnabled }),
@@ -203,6 +206,10 @@ function State({ outbound, t, language }: { outbound: Outbound; t: Text; languag
 
   if (!state.hasLink) {
     return <span className="text-muted">{t("outbounds.notUp")}</span>
+  }
+
+  if (state.probe !== null && !state.probe.isReached) {
+    return <span className="text-alarm">{t("outbounds.noProbe")}</span>
   }
 
   if (outbound.kind !== "wg") {

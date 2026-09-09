@@ -233,6 +233,10 @@ public sealed class OutboundEntity
 
     public int Keepalive { get; set; }
 
+    public string Probe { get; set; } = string.Empty;
+
+    public int ProbeEvery { get; set; }
+
     public long Mark { get; set; }
 
     public int Table { get; set; }

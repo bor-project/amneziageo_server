@@ -3,6 +3,8 @@ using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Routing.Carrier;
+using AmneziaGeo.Server.Routing.Dns;
+using AmneziaGeo.Server.Routing.Probe;
 
 namespace AmneziaGeo.Server.Routing.Outbound;
 
@@ -47,6 +49,7 @@ public static class OutboundRules
             ?? CheckKind(outbound.Kind)
             ?? CheckMark(outbound.Mark)
             ?? CheckTable(outbound)
+            ?? CheckProbe(outbound)
             ?? (OutboundKind.HasLink(outbound.Kind) ? CheckTunnel(outbound) : CheckPlain(outbound));
     }
 
@@ -61,6 +64,28 @@ public static class OutboundRules
     /// </summary>
     public static OutboundFault? CheckKind(string? kind) =>
         OutboundKind.Known(kind) ? null : Fault("bad-kind", $"'{kind}' is not a kind an outbound takes");
+
+    /// <summary>
+    /// Returns why the probe of an outbound is unusable, or null when it holds.
+    /// </summary>
+    public static OutboundFault? CheckProbe(OutboundConfig outbound)
+    {
+        ArgumentNullException.ThrowIfNull(outbound);
+
+        if (outbound.Probe.Length == 0)
+        {
+            return null;
+        }
+
+        if (!DnsRules.Upstream(outbound.Probe, out _))
+        {
+            return Fault("bad-probe", $"'{outbound.Probe}' is not an address of a name server");
+        }
+
+        return outbound.ProbeEvery is >= ProbeDefaults.MinEvery and <= ProbeDefaults.MaxEvery
+            ? null
+            : Fault("bad-probe", "the probe goes out no oftener than every " + ProbeDefaults.MinEvery + " seconds");
+    }
 
     /// <summary>
     /// Returns the routing table an outbound of a kind looks the way out up in.

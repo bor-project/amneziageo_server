@@ -4,6 +4,7 @@ using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Awg.Netlink;
 using AmneziaGeo.Server.Routing.Carrier;
 using AmneziaGeo.Server.Routing.Outbound;
+using AmneziaGeo.Server.Routing.Probe;
 
 namespace AmneziaGeo.Server.Routing.Host;
 
@@ -20,6 +21,8 @@ public sealed class OutboundHost
 
     private readonly CarrierHost? _carriers;
 
+    private readonly ProbeLive? _probes;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -27,12 +30,14 @@ public sealed class OutboundHost
         IHostNetwork network,
         IAwgDevices devices,
         TimeProvider? time = null,
-        CarrierHost? carriers = null)
+        CarrierHost? carriers = null,
+        ProbeLive? probes = null)
     {
         _network = network;
         _devices = devices;
         _time = time ?? TimeProvider.System;
         _carriers = carriers;
+        _probes = probes;
     }
 
     /// <summary>
@@ -131,14 +136,18 @@ public sealed class OutboundHost
     {
         ArgumentNullException.ThrowIfNull(outbound);
 
+        var reading = _probes?.Find(outbound.Name);
         if (!OutboundKind.HasLink(outbound.Kind))
         {
-            return new OutboundState(outbound.Name, true, string.Empty, null, 0, 0, true, string.Empty);
+            return new OutboundState(outbound.Name, true, string.Empty, null, 0, 0, true, string.Empty, reading);
         }
 
         try
         {
-            return OutboundDevice.State(outbound, _devices.Find(outbound.Name), _time.GetUtcNow());
+            return OutboundDevice.State(outbound, _devices.Find(outbound.Name), _time.GetUtcNow()) with
+            {
+                Probe = reading,
+            };
         }
         catch (Exception ex) when (ex is NetlinkException or IOException or InvalidOperationException)
         {

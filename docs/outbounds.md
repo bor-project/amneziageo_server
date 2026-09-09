@@ -20,6 +20,7 @@ puts them on the host through the `ip` and `nft` tools.
 | `POST /api/outbounds/{id}/switch` | `routing:write` |
 | `POST /api/outbounds/{id}/move` | `routing:write` |
 | `POST /api/outbounds/{id}/apply` | `routing:write` |
+| `POST /api/outbounds/{id}/probe` | `routing:write` |
 | `POST /api/outbounds/apply` | `routing:write` |
 | `DELETE /api/outbounds/{id}` | `routing:write` |
 
@@ -68,6 +69,24 @@ the carrier down. Every other setting is the one a `wg` outbound carries.
 
 A tunnel with no obfuscation at all is a plain WireGuard tunnel, and nothing is sent to the kernel about
 it. A tunnel that carries some of it is checked the way an endpoint is.
+
+## The probe
+
+Every outbound carries a probe of its own: the name server it asks over UDP, and how often. The question
+goes out under the mark of the outbound, so it takes the way out the rules take, and an answer means that
+way is open. The panel asks for `example.com` and waits two seconds.
+
+| Setting | Holds |
+|---|---|
+| Name server | the server the probe asks, empty for no probe |
+| Every, seconds | how often the probe goes out, from 5 to 3600 |
+
+Two probes that miss in a row take the outbound off the balancers, and one answer brings it back. A probe
+that cannot be marked, which is what happens without `CAP_NET_ADMIN`, leaves the verdict as it was, and the
+age of the handshake stands in again.
+
+`POST /api/outbounds/{id}/probe` sends one probe at once and answers with what the host holds for the
+outbound. The panel does the same under `Probe now` in the row menu.
 
 ## Reading a client configuration
 

@@ -122,6 +122,21 @@ export function OutboundForm({
         />
       </Section>
 
+      <Section title={t("outbounds.probe")}>
+        <Line
+          id="outbound-probe"
+          caption={t("outbounds.probeServer")}
+          value={draft.probe}
+          onChange={(value) => put({ probe: value })}
+        />
+        <Count
+          id="outbound-probe-every"
+          caption={t("outbounds.probeEvery")}
+          value={draft.probeEvery}
+          onChange={(value) => put({ probeEvery: value })}
+        />
+      </Section>
+
       {tunnel && (
         <Section title={t("outbounds.server")}>
           <Line

@@ -447,6 +447,10 @@ export const en = {
   "outbounds.dns": "Name servers",
   "outbounds.mtu": "MTU",
   "outbounds.keepalive": "Keepalive",
+  "outbounds.probe": "Probe",
+  "outbounds.probeServer": "Name server",
+  "outbounds.probeEvery": "Every, seconds",
+  "outbounds.probeNow": "Probe now",
   "outbounds.keys": "Keys",
   "outbounds.private": "Private key",
   "outbounds.public": "Public key",
@@ -479,6 +483,7 @@ export const en = {
   "outbounds.notUp": "not up",
   "outbounds.ready": "ready",
   "outbounds.noHandshake": "no handshake yet",
+  "outbounds.noProbe": "the probe does not get through",
 
   "rules.add": "Add",
   "rules.apply": "Apply",

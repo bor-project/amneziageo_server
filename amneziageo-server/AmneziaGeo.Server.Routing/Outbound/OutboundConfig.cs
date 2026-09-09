@@ -88,6 +88,16 @@ public sealed record OutboundConfig
     public int Keepalive { get; init; }
 
     /// <summary>
+    /// The name server the probe asks, empty when the outbound is not probed.
+    /// </summary>
+    public string Probe { get; init; } = string.Empty;
+
+    /// <summary>
+    /// How often the probe goes out, in seconds.
+    /// </summary>
+    public int ProbeEvery { get; init; }
+
+    /// <summary>
     /// The obfuscation the tunnel carries.
     /// </summary>
     public ObfuscationSettings Obfuscation { get; init; } = new();
