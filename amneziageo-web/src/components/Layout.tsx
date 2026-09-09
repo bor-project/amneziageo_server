@@ -1,18 +1,19 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { signOut } from "@/api/auth"
 import { useHealth } from "@/api/health"
+import { usePanel } from "@/api/panel"
 import { scopes } from "@/api/scopes"
 import { queryClient } from "@/api/queryClient"
 import { LanguagePicker } from "@/components/LanguagePicker"
 import { PasswordDialog } from "@/components/PasswordDialog"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { card } from "@/components/styles"
-import { useText } from "@/i18n"
+import { isLanguageChoice, useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { holds, sessionClosed } from "@/store/authSlice"
-import { sidebarToggled } from "@/store/uiSlice"
+import { languageServed, sidebarToggled } from "@/store/uiSlice"
 
 const links: { to: string; label: TextKey; scope: string }[] = [
   { to: "/", label: "nav.overview", scope: scopes.readState },
@@ -23,7 +24,9 @@ const links: { to: string; label: TextKey; scope: string }[] = [
   { to: "/balancers", label: "nav.balancers", scope: scopes.readState },
   { to: "/rules", label: "nav.rules", scope: scopes.readState },
   { to: "/dns", label: "nav.dns", scope: scopes.readState },
+  { to: "/proxies", label: "nav.proxies", scope: scopes.readState },
   { to: "/access", label: "nav.access", scope: scopes.manageAccess },
+  { to: "/settings", label: "nav.settings", scope: scopes.manageAccess },
 ]
 
 const item = "rounded px-3 py-2 text-sm"
@@ -36,6 +39,13 @@ export function Layout() {
   const user = useAppSelector((s) => s.auth.user)
   const dispatch = useAppDispatch()
   const health = useHealth()
+  const served = usePanel().data?.language
+
+  useEffect(() => {
+    if (served !== undefined && isLanguageChoice(served)) {
+      dispatch(languageServed(served))
+    }
+  }, [dispatch, served])
 
   return (
     <div className="flex h-full bg-canvas text-ink">

@@ -19,7 +19,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
+        <BrowserRouter basename={new URL(".", document.baseURI).pathname}>
           <App />
         </BrowserRouter>
       </QueryClientProvider>

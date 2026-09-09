@@ -4,13 +4,15 @@ import { access, drop, keep, refresh } from "./tokens"
 
 type Retried = InternalAxiosRequestConfig & { retried?: boolean }
 
+const root = new URL("api", document.baseURI).pathname
+
 export const client = axios.create({
-  baseURL: "/api",
+  baseURL: root,
   timeout: 15000,
 })
 
 const bare = axios.create({
-  baseURL: "/api",
+  baseURL: root,
   timeout: 15000,
 })
 

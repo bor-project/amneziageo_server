@@ -17,7 +17,7 @@ public static class OutboundDevice
     /// <summary>
     /// Returns the change that puts the settings of an outbound on its interface.
     /// </summary>
-    public static AwgUpdate Update(OutboundConfig outbound, IPAddress server)
+    public static AwgUpdate Update(OutboundConfig outbound, IPEndPoint server)
     {
         ArgumentNullException.ThrowIfNull(outbound);
         ArgumentNullException.ThrowIfNull(server);
@@ -37,7 +37,7 @@ public static class OutboundDevice
     /// <summary>
     /// Returns the server of an outbound as a peer of its interface.
     /// </summary>
-    public static AwgPeerUpdate Peer(OutboundConfig outbound, IPAddress server)
+    public static AwgPeerUpdate Peer(OutboundConfig outbound, IPEndPoint server)
     {
         ArgumentNullException.ThrowIfNull(outbound);
         ArgumentNullException.ThrowIfNull(server);
@@ -46,7 +46,7 @@ public static class OutboundDevice
         {
             PublicKey = outbound.PeerKey,
             PresharedKey = outbound.PresharedKey.Length > 0 ? outbound.PresharedKey : null,
-            Endpoint = new IPEndPoint(server, outbound.Port),
+            Endpoint = server,
             PersistentKeepalive = new AwgRange((uint)outbound.Keepalive),
             ReplaceAllowedIps = true,
             AllowedIps = [.. AllowedIps.Select(AwgAllowedIp.Parse)],

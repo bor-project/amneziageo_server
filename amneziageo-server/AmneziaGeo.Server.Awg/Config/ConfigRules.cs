@@ -74,6 +74,7 @@ public static partial class ConfigRules
         ?? CheckPort(config.ListenPort)
         ?? CheckRanges(config.Address, "bad-address", "the interface")
         ?? CheckRanges(config.AllowedIps, "bad-allowed", "the client")
+        ?? CheckBlocked(config.Blocked)
         ?? CheckServers(config.Dns)
         ?? CheckMtu(config.Mtu)
         ?? CheckKeepalive(config.Keepalive)
@@ -101,6 +102,24 @@ public static partial class ConfigRules
             : Fault(
                 "bad-interface-name",
                 "the name takes lower case letters, digits, dash and underscore, and starts with a letter");
+    }
+
+    /// <summary>
+    /// Returns why the ranges kept away from clients are unusable, or null when they hold.
+    /// </summary>
+    public static ConfigFault? CheckBlocked(IReadOnlyList<string> ranges)
+    {
+        ArgumentNullException.ThrowIfNull(ranges);
+
+        foreach (var range in ranges)
+        {
+            if (!AwgAllowedIp.TryParse(range, out _))
+            {
+                return Fault("bad-blocked", $"'{range}' is not an address range");
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

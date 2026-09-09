@@ -81,7 +81,7 @@ public class OutboundTests
     {
         var outbound = Tunnel() with { Mark = OutboundRules.FirstMark };
 
-        var update = OutboundDevice.Update(outbound, System.Net.IPAddress.Parse("46.8.237.222"));
+        var update = OutboundDevice.Update(outbound, new System.Net.IPEndPoint(System.Net.IPAddress.Parse("46.8.237.222"), outbound.Port));
 
         Assert.Equal(outbound.Name, update.Name);
         Assert.Equal(outbound.PrivateKey, update.PrivateKey);
@@ -197,7 +197,7 @@ public class OutboundTests
         var outbound = Tunnel() with { Obfuscation = new ObfuscationSettings() };
 
         Assert.Null(OutboundRules.Check(outbound));
-        Assert.Null(OutboundDevice.Update(outbound, System.Net.IPAddress.Loopback).Obfuscation);
+        Assert.Null(OutboundDevice.Update(outbound, new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, outbound.Port)).Obfuscation);
     }
 
     private static OutboundConfig Tunnel() => new()

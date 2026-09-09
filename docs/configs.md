@@ -15,6 +15,8 @@ intent in SQLite; the kernel is the fact, and the two are brought together separ
 | `POST /api/configs/preshared` | `interfaces:write` |
 | `POST /api/configs` | `interfaces:write` |
 | `PUT /api/configs/{id}` | `interfaces:write` |
+| `POST /api/configs/apply` | `interfaces:write` |
+| `POST /api/configs/{id}/apply` | `interfaces:write` |
 | `DELETE /api/configs/{id}` | `interfaces:write` |
 
 Reading gives the public key to everyone who may read the state. The private key and the preshared key
@@ -29,6 +31,9 @@ go only to a caller that holds `interfaces:write`; to anyone else they come back
 | Port | the UDP port the endpoint listens on |
 | MTU | the packet size clients take, 0 leaves it to the system |
 | Interface address | the address ranges the interface carries |
+| Closed to clients | the ranges clients of the endpoint are not let into |
+| Raise the interface | whether the panel puts the endpoint on the host |
+| NAT for clients | whether what clients send out is masqueraded behind the address of the host |
 | AllowedIPs | the ranges a client sends through the tunnel |
 | DNS | the name servers a client takes |
 | Keepalive | how often a client sends an empty packet, in seconds |
@@ -77,6 +82,7 @@ the code into a phrase of its own language.
 | `bad-type` | a packet type is below 5, is neither a number nor a span, or two of the four overlap |
 | `bad-special` | a special packet is longer than 1024 characters |
 | `bad-span` | a timing is neither a number nor a span of two |
+| `bad-blocked` | a range closed to clients is not an address range |
 | `bad-header-key` | the header protection key is not 32 bytes in base64 |
 | `name-taken` | the panel already carries an endpoint under this name |
 | `port-taken` | the panel already listens on this port |
@@ -85,6 +91,25 @@ the code into a phrase of its own language.
 `S1 + 56 == S2` is refused because it makes an initiation and a response the same size. Nothing keeps
 two endpoints from carrying the same address range: they meet only on the host, and the ranges of one
 are its own business.
+
+## What the host takes
+
+An endpoint that is turned on is put on the host whole: the interface is added when the host carries none,
+the private key, the port and the obfuscation go into the kernel, the address ranges are laid on the
+interface and it is brought up at the packet size the endpoint names. Turning an endpoint off takes its
+interface off the host, and so does removing it.
+
+The rules travel in the `inet amneziageo_in` table, rewritten whenever an endpoint changes:
+
+| Rule | What it does |
+|---|---|
+| `ip saddr <range> oifname "<uplink>" masquerade` | sends clients out behind the address of the host |
+| `iifname "<endpoint>" ip daddr <own range> accept` | lets clients of one endpoint reach each other |
+| `iifname "<endpoint>" ip daddr <closed range> reject` | keeps clients out of the ranges the endpoint closes |
+
+Both families travel the same way, and the host is told to pass packets between interfaces in both of them.
+`POST /api/configs/{id}/apply` puts one endpoint on the host again, `POST /api/configs/apply` all of them.
+Every endpoint is raised once more when the server starts, before the clients are laid on top.
 
 ## The keys
 

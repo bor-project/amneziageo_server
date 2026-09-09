@@ -2,6 +2,7 @@ using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Api.Balancers;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Routing.Balance;
+using AmneziaGeo.Server.Routing.Carrier;
 using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Api.Outbounds;
@@ -42,6 +43,7 @@ public static class OutboundServices
         services.AddSingleton<IHostCommands>(new HostCommands(options.Sudo));
         services.AddSingleton<IHostNetwork, IpHostNetwork>();
         services.AddSingleton<IAwgDevices, AwgDevices>();
+        services.AddSingleton(provider => Carriers(provider));
         services.AddSingleton<OutboundHost>();
         services.AddSingleton<RouteHost>();
         services.AddSingleton<RoutePlans>();
@@ -50,5 +52,24 @@ public static class OutboundServices
         services.AddHostedService<BalanceWatch>();
 
         return services;
+    }
+
+    private static CarrierHost Carriers(IServiceProvider provider)
+    {
+        var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(CarrierHost));
+
+        return new CarrierHost((message, error) => Note(logger, message, error));
+    }
+
+    private static void Note(ILogger logger, string message, Exception? error)
+    {
+        if (error is null)
+        {
+            logger.LogInformation("{Message}", message);
+
+            return;
+        }
+
+        logger.LogWarning(error, "{Message}", message);
     }
 }

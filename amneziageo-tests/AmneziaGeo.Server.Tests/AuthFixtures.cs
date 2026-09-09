@@ -88,6 +88,7 @@ public sealed class Bench : IDisposable
         Rules = _scope.ServiceProvider.GetRequiredService<RouteStore>();
         Balancers = _scope.ServiceProvider.GetRequiredService<BalanceStore>();
         Resolver = _scope.ServiceProvider.GetRequiredService<DnsStore>();
+        Panel = _scope.ServiceProvider.GetRequiredService<PanelStore>();
         GeoFiles = _scope.ServiceProvider.GetRequiredService<IGeoFileStore>();
         RefreshTokens = _scope.ServiceProvider.GetRequiredService<IRefreshTokens>();
         Audit = _scope.ServiceProvider.GetRequiredService<IAuditLog>();
@@ -123,6 +124,10 @@ public sealed class Bench : IDisposable
     public BalanceStore Balancers { get; }
 
     public DnsStore Resolver { get; }
+
+    public PanelStore Panel { get; }
+
+    public string DatabasePath => _path;
 
     public IGeoFileStore GeoFiles { get; }
 

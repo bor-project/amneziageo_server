@@ -1,7 +1,8 @@
 # The ways out
 
-An outbound is a way traffic leaves the host: through the uplink of the host itself, or through an
-AmneziaWG tunnel the host holds as a client of another server. Every outbound carries a mark of its own;
+An outbound is a way traffic leaves the host: through the uplink of the host itself, through an
+AmneziaWG tunnel the host holds as a client of another server, or through such a tunnel carried inside a
+websocket to a wstunnel proxy. Every outbound carries a mark of its own;
 a packet marked with it is routed out through that outbound. The panel keeps the outbounds in SQLite and
 puts them on the host through the `ip` and `nft` tools.
 
@@ -31,8 +32,25 @@ caller without a fresh login is refused. Keys are answered only to a caller that
 |---|---|
 | `local` | the uplink of the host, no interface of its own |
 | `wg` | an AmneziaWG interface the host raises as a client of another server |
+| `ws` | the same interface, with its UDP carried inside a websocket to a wstunnel proxy |
 
 A fresh database is seeded with one `local` outbound named `direct`.
+
+## Through a websocket
+
+A `ws` outbound is for a network that carries web traffic and nothing else. The panel binds a loopback
+port, points the interface at it, and every datagram travels to the proxy as one websocket message; the
+proxy hands it to the server on its own loopback, at the port the outbound names. The websocket opens on
+the first datagram and is opened again after a drop.
+
+| Setting | Holds |
+|---|---|
+| Websocket proxy | the proxy, as `proxy.example.net` or `wss://user:secret@proxy.example.net:8443/token` |
+| Address, Port | the server behind the proxy, and the port the proxy hands the tunnel to |
+
+A bare name takes the port of the server; an address carries the port, the path token and the basic-auth
+credentials. Changing the proxy opens a new carrier and drops the old one; turning the outbound off takes
+the carrier down. Every other setting is the one a `wg` outbound carries.
 
 ## The settings of a tunnel
 
@@ -85,4 +103,5 @@ runs without it answers with the outbound and the reason on it instead of failin
 ## What the panel shows
 
 The table names the kind, the server, the mark and the table, the last handshake and the traffic each way.
+A `ws` outbound names the server behind the proxy, and the proxy itself stands in the form.
 A tunnel counts as alive while its handshake is under three minutes old.

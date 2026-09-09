@@ -305,6 +305,10 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Blocked")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ContentPaddingAddition")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -359,6 +363,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<string>("I5")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Jc")
                         .HasColumnType("INTEGER");
 
@@ -389,6 +396,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsRequired()
                         .HasMaxLength(15)
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("Nat")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("PresharedKey")
                         .IsRequired()
@@ -677,6 +687,10 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Proxy")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("PublicKey")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -725,6 +739,99 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.HasIndex("Position");
 
                     b.ToTable("Outbounds");
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.PanelEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Certificate")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CertificateKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Domains")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Listen")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Port")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Panel");
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.ProxyEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Certificate")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CertificateKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(15)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Port")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("Port")
+                        .IsUnique();
+
+                    b.ToTable("Proxy");
                 });
 
             modelBuilder.Entity("AmneziaGeo.Server.Dal.RefreshTokenEntity", b =>

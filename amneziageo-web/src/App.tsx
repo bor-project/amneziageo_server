@@ -13,9 +13,11 @@ import { Login } from "@/pages/Login"
 import { Password } from "@/pages/Password"
 import { Balancers } from "@/pages/Balancers"
 import { Dns } from "@/pages/Dns"
+import { Proxies } from "@/pages/Proxies"
 import { Geo } from "@/pages/Geo"
 import { Outbounds } from "@/pages/Outbounds"
 import { Rules } from "@/pages/Rules"
+import { Settings } from "@/pages/Settings"
 import { useAppearance } from "@/theme/theme"
 
 export function App() {
@@ -37,8 +39,10 @@ export function App() {
               <Route path="balancers" element={<Balancers />} />
               <Route path="rules" element={<Rules />} />
               <Route path="dns" element={<Dns />} />
+              <Route path="proxies" element={<Proxies />} />
             </Route>
             <Route element={<RequireScope scope={scopes.manageAccess} />}>
+              <Route path="settings" element={<Settings />} />
               <Route path="access" element={<Access />}>
                 <Route index element={<Users />} />
                 <Route path="roles" element={<Roles />} />

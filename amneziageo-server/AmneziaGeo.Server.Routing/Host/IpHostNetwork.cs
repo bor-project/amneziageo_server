@@ -12,6 +12,12 @@ public sealed class IpHostNetwork : IHostNetwork
 
     private static readonly char[] Blanks = [' ', '\t', '\n', '\r'];
 
+    private static readonly string[] Forwarding =
+    [
+        "/proc/sys/net/ipv4/ip_forward",
+        "/proc/sys/net/ipv6/conf/all/forwarding",
+    ];
+
     private readonly IHostCommands _commands;
 
     /// <summary>
@@ -136,6 +142,17 @@ public sealed class IpHostNetwork : IHostNetwork
         }
 
         return string.Empty;
+    }
+
+    /// <summary>
+    /// Lets the host pass packets between interfaces, in both families.
+    /// </summary>
+    public async Task ForwardingAsync(CancellationToken ct)
+    {
+        foreach (var knob in Forwarding)
+        {
+            await File.WriteAllTextAsync(knob, "1", ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

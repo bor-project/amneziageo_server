@@ -16,9 +16,14 @@ public static class OutboundKind
     public const string Wg = "wg";
 
     /// <summary>
+    /// Leaves through an AmneziaWG tunnel carried inside a websocket to a wstunnel proxy.
+    /// </summary>
+    public const string Ws = "ws";
+
+    /// <summary>
     /// Every kind an outbound takes.
     /// </summary>
-    public static readonly string[] All = [Local, Wg];
+    public static readonly string[] All = [Local, Wg, Ws];
 
     /// <summary>
     /// Tells whether a kind is one the server knows.
@@ -28,5 +33,10 @@ public static class OutboundKind
     /// <summary>
     /// Tells whether a kind carries an interface of its own.
     /// </summary>
-    public static bool HasLink(string? kind) => kind == Wg;
+    public static bool HasLink(string? kind) => kind is Wg or Ws;
+
+    /// <summary>
+    /// Tells whether a kind speaks to its server through a websocket proxy.
+    /// </summary>
+    public static bool HasProxy(string? kind) => kind == Ws;
 }

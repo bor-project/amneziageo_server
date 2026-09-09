@@ -1,5 +1,13 @@
 import { useState } from "react"
-import { draftOf, useAddConfig, useChangeConfig, useConfigs, useFreshConfig, useRemoveConfig } from "@/api/configs"
+import {
+  draftOf,
+  useAddConfig,
+  useApplyConfig,
+  useChangeConfig,
+  useConfigs,
+  useFreshConfig,
+  useRemoveConfig,
+} from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { scopes } from "@/api/scopes"
 import { ConfigForm } from "@/components/ConfigForm"
@@ -21,6 +29,7 @@ export function Configs() {
   const add = useAddConfig()
   const change = useChangeConfig()
   const remove = useRemoveConfig()
+  const apply = useApplyConfig()
   const may = holds(user, scopes.manageInterfaces)
 
   async function save(config: Config, draft: Parameters<typeof change.mutateAsync>[0]["draft"]) {
@@ -70,6 +79,7 @@ export function Configs() {
                           title={t("configs.actions")}
                           actions={[
                             { label: t("configs.edit"), onPick: () => setEditing(config) },
+                            { label: t("configs.apply"), onPick: () => void apply.mutateAsync(config.id) },
                             { label: t("configs.remove"), onPick: () => setRemoving(config), alarming: true },
                           ]}
                         />

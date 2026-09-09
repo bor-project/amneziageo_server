@@ -51,6 +51,11 @@ public interface IHostNetwork
     Task<string> UplinkAsync(CancellationToken ct);
 
     /// <summary>
+    /// Lets the host pass packets between interfaces, in both families.
+    /// </summary>
+    Task ForwardingAsync(CancellationToken ct);
+
+    /// <summary>
     /// Puts a firewall ruleset on the host, replacing the one it holds.
     /// </summary>
     Task FirewallAsync(string ruleset, CancellationToken ct);

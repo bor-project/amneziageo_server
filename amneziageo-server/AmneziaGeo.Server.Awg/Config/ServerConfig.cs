@@ -182,6 +182,21 @@ public sealed record ServerConfig
     public int Keepalive { get; init; }
 
     /// <summary>
+    /// Whether the panel raises the interface of the endpoint.
+    /// </summary>
+    public bool IsEnabled { get; init; } = true;
+
+    /// <summary>
+    /// Whether what clients send out is masqueraded behind the address of the host.
+    /// </summary>
+    public bool Nat { get; init; } = true;
+
+    /// <summary>
+    /// The ranges clients of the endpoint are not let into.
+    /// </summary>
+    public IReadOnlyList<string> Blocked { get; init; } = [];
+
+    /// <summary>
     /// The private key of the interface, in base64.
     /// </summary>
     public string PrivateKey { get; init; } = string.Empty;

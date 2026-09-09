@@ -86,6 +86,25 @@ export function ConfigForm({
           onChange={(value) => put({ address: parts(value) })}
           wide
         />
+        <Line
+          id="config-blocked"
+          caption={t("configs.blocked")}
+          value={draft.blocked.join(", ")}
+          onChange={(value) => put({ blocked: parts(value) })}
+          wide
+        />
+        <Flag
+          id="config-enabled"
+          caption={t("configs.enabled")}
+          value={draft.isEnabled}
+          onChange={(value) => put({ isEnabled: value })}
+        />
+        <Flag
+          id="config-nat"
+          caption={t("configs.nat")}
+          value={draft.nat}
+          onChange={(value) => put({ nat: value })}
+        />
       </Section>
 
       <Section title={t("configs.clients")}>

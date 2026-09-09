@@ -15,6 +15,7 @@ Management server for kernel AmneziaWG: interfaces, clients, keys and traffic ac
 | `amneziageo-web` | React interface |
 | `amneziageo-tests` | tests |
 | `amneziawg` | kernel module as a submodule |
+| `wstunnel` | websocket proxy as a submodule |
 | `deploy` | systemd unit and package files |
 
 ## Build
@@ -31,7 +32,7 @@ npm --prefix amneziageo-web run build
 dotnet run --project amneziageo-server/AmneziaGeo.Server.Api
 ```
 
-The panel is at `http://<address>:5080/`. While the interface is being worked on, `npm --prefix
+The panel is at `http://<address>:8443/`. While the interface is being worked on, `npm --prefix
 amneziageo-web run dev` serves it at port 5173 with reloading and sends `/api` on to the server.
 
 The first administrator is made once, from the console:
@@ -55,5 +56,6 @@ of the host reads is in [docs/overview.md](docs/overview.md), what a server endp
 how traffic leaves the host is in [docs/outbounds.md](docs/outbounds.md), how it is spread over the
 ways out is in [docs/balancers.md](docs/balancers.md), where it is sent is in
 [docs/rules.md](docs/rules.md), how the names of the clients are answered is in
-[docs/dns.md](docs/dns.md), and how the panel goes on a server is in
+[docs/dns.md](docs/dns.md), how the tunnels are carried inside a websocket is in
+[docs/proxy.md](docs/proxy.md), and how the panel goes on a server is in
 [docs/install.md](docs/install.md).

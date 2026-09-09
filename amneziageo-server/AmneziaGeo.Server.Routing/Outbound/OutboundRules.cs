@@ -2,6 +2,7 @@ using System.Net;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Crypto;
+using AmneziaGeo.Server.Routing.Carrier;
 
 namespace AmneziaGeo.Server.Routing.Outbound;
 
@@ -82,13 +83,38 @@ public static class OutboundRules
             ? null
             : Fault("bad-mark", $"the mark is outside {FirstMark} to {LastMark}");
 
+    /// <summary>
+    /// Returns why the proxy of an outbound is unusable, or null when it holds.
+    /// </summary>
+    public static OutboundFault? CheckProxy(string? proxy)
+    {
+        if (string.IsNullOrWhiteSpace(proxy))
+        {
+            return Fault("bad-proxy", "the address of the websocket proxy is empty");
+        }
+
+        var parsed = WsEndpoint.Parse(proxy, 0, string.Empty);
+        if (parsed.Host.Length == 0)
+        {
+            return Fault("bad-proxy", $"'{proxy}' is not an address of a websocket proxy");
+        }
+
+        return ConfigRules.CheckHost(parsed.Host) is { } fault
+            ? new OutboundFault("bad-proxy", fault.Message)
+            : CheckProxyPort(parsed.Port);
+    }
+
+    private static OutboundFault? CheckProxyPort(int port) =>
+        port is > 0 and <= 65535 ? null : Fault("bad-proxy", "the port of the websocket proxy is outside 1 to 65535");
+
     private static OutboundFault? CheckPlain(OutboundConfig outbound) =>
-        outbound.Host.Length > 0 || outbound.Port > 0 || outbound.PrivateKey.Length > 0
+        outbound.Host.Length > 0 || outbound.Port > 0 || outbound.PrivateKey.Length > 0 || outbound.Proxy.Length > 0
             ? Fault("bad-kind", "an outbound that leaves through the host itself carries no server")
             : CheckServers(outbound.Dns);
 
     private static OutboundFault? CheckTunnel(OutboundConfig outbound) =>
-        CheckHost(outbound.Host)
+        (OutboundKind.HasProxy(outbound.Kind) ? CheckProxy(outbound.Proxy) : CheckNoProxy(outbound.Proxy))
+        ?? CheckHost(outbound.Host)
         ?? CheckPort(outbound.Port)
         ?? CheckKey(outbound.PrivateKey, "bad-key", "the private key")
         ?? CheckKey(outbound.PeerKey, "bad-peer-key", "the public key of the server")
@@ -98,6 +124,11 @@ public static class OutboundRules
         ?? CheckMtu(outbound.Mtu)
         ?? CheckKeepalive(outbound.Keepalive)
         ?? CheckObfuscation(outbound.Obfuscation);
+
+    private static OutboundFault? CheckNoProxy(string? proxy) =>
+        string.IsNullOrEmpty(proxy)
+            ? null
+            : Fault("bad-proxy", "only an outbound of the websocket kind carries a proxy");
 
     private static OutboundFault? CheckHost(string? host)
     {

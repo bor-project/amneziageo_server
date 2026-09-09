@@ -1,11 +1,13 @@
 using System.Security.Cryptography;
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Dns;
+using AmneziaGeo.Server.Api.Proxy;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Api.Configs;
 
@@ -28,6 +30,8 @@ public static class ConfigEndpoints
         writing.MapPost("/keys", Keys);
         writing.MapPost("/preshared", Preshared);
         writing.MapPost("/", AddAsync);
+        writing.MapPost("/apply", ApplyAllAsync);
+        writing.MapPost("/{id:long}/apply", ApplyAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
@@ -72,8 +76,10 @@ public static class ConfigEndpoints
     private static async Task<IResult> AddAsync(
         ConfigRequest request,
         ConfigStore store,
+        EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
+        ProxyApplier proxy,
         CancellationToken ct)
     {
         var result = await store.AddAsync(ConfigAnswers.Draft(request), ct).ConfigureAwait(false);
@@ -82,8 +88,10 @@ public static class ConfigEndpoints
             return Explain(result);
         }
 
+        await RaiseAsync(store, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RestartAsync(ct).ConfigureAwait(false);
+        await proxy.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Created($"/api/configs/{result.Record!.Id}", ConfigAnswers.Config(result.Record, true));
     }
@@ -92,18 +100,28 @@ public static class ConfigEndpoints
         long id,
         ConfigRequest request,
         ConfigStore store,
+        EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
+        ProxyApplier proxy,
         CancellationToken ct)
     {
+        var held = await store.FindAsync(id, ct).ConfigureAwait(false);
         var result = await store.ChangeAsync(id, ConfigAnswers.Draft(request), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
+        if (held is not null && !string.Equals(held.Name, result.Record!.Name, StringComparison.Ordinal))
+        {
+            await host.WithdrawAsync(held.Name, ct).ConfigureAwait(false);
+        }
+
+        await RaiseAsync(store, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RestartAsync(ct).ConfigureAwait(false);
+        await proxy.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(ConfigAnswers.Config(result.Record!, true));
     }
@@ -111,8 +129,10 @@ public static class ConfigEndpoints
     private static async Task<IResult> RemoveAsync(
         long id,
         ConfigStore store,
+        EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
+        ProxyApplier proxy,
         CancellationToken ct)
     {
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
@@ -121,10 +141,56 @@ public static class ConfigEndpoints
             return Explain(result);
         }
 
+        await host.WithdrawAsync(result.Record!.Name, ct).ConfigureAwait(false);
+        await host.FirewallAsync(await store.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RestartAsync(ct).ConfigureAwait(false);
+        await proxy.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.NoContent();
+    }
+
+    private static async Task<IResult> ApplyAsync(
+        long id,
+        ConfigStore store,
+        EndpointHost host,
+        ProxyApplier proxy,
+        CancellationToken ct)
+    {
+        var found = await store.FindAsync(id, ct).ConfigureAwait(false);
+        if (found is null)
+        {
+            return Refuse(StatusCodes.Status404NotFound, "unknown-config", $"there is no endpoint under the number {id}");
+        }
+
+        var sync = await host.ApplyAsync(found, ct).ConfigureAwait(false);
+        await host.FirewallAsync(await store.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        await proxy.SettleAsync(ct).ConfigureAwait(false);
+
+        return Results.Ok(new ConfigSyncResponse(sync.Name, sync.IsDone, sync.Message));
+    }
+
+    private static async Task<IResult> ApplyAllAsync(
+        ConfigStore store,
+        EndpointHost host,
+        ProxyApplier proxy,
+        CancellationToken ct)
+    {
+        var found = await store.ListAsync(ct).ConfigureAwait(false);
+        var done = await host.SyncAsync(found, ct).ConfigureAwait(false);
+        await proxy.SettleAsync(ct).ConfigureAwait(false);
+
+        return Results.Ok(done.Select(sync => new ConfigSyncResponse(sync.Name, sync.IsDone, sync.Message)).ToArray());
+    }
+
+    private static async Task RaiseAsync(
+        ConfigStore store,
+        EndpointHost host,
+        ServerConfig config,
+        CancellationToken ct)
+    {
+        await host.ApplyAsync(config, ct).ConfigureAwait(false);
+        await host.FirewallAsync(await store.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
 
     private static bool Secrets(HttpContext context) =>

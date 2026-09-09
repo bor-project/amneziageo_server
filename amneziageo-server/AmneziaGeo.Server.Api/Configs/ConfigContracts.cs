@@ -45,6 +45,9 @@ public sealed record ConfigResponse(
     string[] AllowedIps,
     int Mtu,
     int Keepalive,
+    bool IsEnabled,
+    bool Nat,
+    string[] Blocked,
     string PublicKey,
     string? PrivateKey,
     string? PresharedKey,
@@ -64,9 +67,17 @@ public sealed record ConfigRequest(
     string[]? AllowedIps,
     int Mtu,
     int Keepalive,
+    bool? IsEnabled,
+    bool? Nat,
+    string[]? Blocked,
     string? PrivateKey,
     string? PresharedKey,
     ObfuscationBody? Obfuscation);
+
+/// <summary>
+/// What putting an endpoint on the host produced, as the interface reads it.
+/// </summary>
+public sealed record ConfigSyncResponse(string Name, bool IsDone, string Message);
 
 /// <summary>
 /// A key pair as the interface reads it.
@@ -96,6 +107,9 @@ public static class ConfigAnswers
         [.. config.AllowedIps],
         config.Mtu,
         config.Keepalive,
+        config.IsEnabled,
+        config.Nat,
+        [.. config.Blocked],
         config.PublicKey,
         secrets ? config.PrivateKey : null,
         secrets ? config.PresharedKey : null,
@@ -146,6 +160,9 @@ public static class ConfigAnswers
         AllowedIps = request.AllowedIps ?? [],
         Mtu = request.Mtu,
         Keepalive = request.Keepalive,
+        IsEnabled = request.IsEnabled ?? true,
+        Nat = request.Nat ?? true,
+        Blocked = request.Blocked ?? [],
         PrivateKey = (request.PrivateKey ?? string.Empty).Trim(),
         PresharedKey = (request.PresharedKey ?? string.Empty).Trim(),
         Obfuscation = Settings(request.Obfuscation),

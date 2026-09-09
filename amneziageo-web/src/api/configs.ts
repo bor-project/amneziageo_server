@@ -39,6 +39,9 @@ export interface Config {
   allowedIps: string[]
   mtu: number
   keepalive: number
+  isEnabled: boolean
+  nat: boolean
+  blocked: string[]
   publicKey: string
   privateKey: string | null
   presharedKey: string | null
@@ -56,9 +59,18 @@ export interface ConfigDraft {
   allowedIps: string[]
   mtu: number
   keepalive: number
+  isEnabled: boolean
+  nat: boolean
+  blocked: string[]
   privateKey: string
   presharedKey: string
   obfuscation: Obfuscation
+}
+
+export interface ConfigSync {
+  name: string
+  isDone: boolean
+  message: string
 }
 
 export interface KeyPair {
@@ -101,6 +113,10 @@ export function useRemoveConfig() {
   return useRefreshing((id: number) => client.delete(`/configs/${id}`))
 }
 
+export function useApplyConfig() {
+  return useRefreshing((id: number) => client.post<ConfigSync>(`/configs/${id}/apply`))
+}
+
 export function usePresharedKey() {
   return useMutation({
     mutationFn: async () => (await client.post<SingleKey>("/configs/preshared")).data,
@@ -123,6 +139,9 @@ export function draftOf(config: Config): ConfigDraft {
     allowedIps: config.allowedIps,
     mtu: config.mtu,
     keepalive: config.keepalive,
+    isEnabled: config.isEnabled,
+    nat: config.nat,
+    blocked: config.blocked,
     privateKey: config.privateKey ?? "",
     presharedKey: config.presharedKey ?? "",
     obfuscation: config.obfuscation,

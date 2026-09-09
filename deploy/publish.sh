@@ -19,7 +19,13 @@ for project in Api Cli; do
     --output "$out/publish"
 done
 
+PATH="$HOME/.cargo/bin:$PATH" cargo build --release \
+  --manifest-path "$root/wstunnel/wstunnel/Cargo.toml" \
+  --package wstunnel-cli
+cp "$root/wstunnel/wstunnel/target/release/wstunnel" "$out/"
+
 cp "$root/deploy/amneziageo-server.service" "$out/"
+cp "$root/deploy/amneziageo-proxy@.service" "$out/"
 cp "$root/deploy/install.sh" "$out/"
 chmod +x "$out/install.sh"
 

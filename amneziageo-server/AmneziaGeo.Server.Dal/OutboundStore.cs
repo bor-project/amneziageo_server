@@ -295,6 +295,7 @@ public sealed class OutboundStore
         IsEnabled = entity.IsEnabled,
         Host = entity.Host,
         Port = entity.Port,
+        Proxy = entity.Proxy,
         PrivateKey = entity.PrivateKey,
         PublicKey = entity.PublicKey,
         PeerKey = entity.PeerKey,
@@ -345,6 +346,7 @@ public sealed class OutboundStore
         entity.IsEnabled = outbound.IsEnabled;
         entity.Host = outbound.Host.Trim();
         entity.Port = outbound.Port;
+        entity.Proxy = outbound.Proxy.Trim();
         entity.PrivateKey = outbound.PrivateKey;
         entity.PublicKey = outbound.PrivateKey.Length > 0 ? Curve25519.PublicOf(outbound.PrivateKey) : string.Empty;
         entity.PeerKey = outbound.PeerKey.Trim();

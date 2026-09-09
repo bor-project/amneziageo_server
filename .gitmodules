@@ -1,3 +1,6 @@
 [submodule "amneziawg/amneziawg-linux-kernel-module"]
 	path = amneziawg/amneziawg-linux-kernel-module
 	url = https://github.com/bor-project/amneziawg-linux-kernel-module.git
+[submodule "wstunnel/wstunnel"]
+	path = wstunnel/wstunnel
+	url = https://github.com/bor-project/wstunnel.git

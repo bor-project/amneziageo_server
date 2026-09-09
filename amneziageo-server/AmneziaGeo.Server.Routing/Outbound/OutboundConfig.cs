@@ -43,6 +43,11 @@ public sealed record OutboundConfig
     public int Port { get; init; }
 
     /// <summary>
+    /// The wstunnel proxy the tunnel travels through, as a host or a wss:// address.
+    /// </summary>
+    public string Proxy { get; init; } = string.Empty;
+
+    /// <summary>
     /// The private key of the interface, in base64.
     /// </summary>
     public string PrivateKey { get; init; } = string.Empty;

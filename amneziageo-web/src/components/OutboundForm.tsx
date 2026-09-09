@@ -69,7 +69,7 @@ export function OutboundForm({
   }
 
   const cover = draft.obfuscation
-  const tunnel = draft.kind === "wg"
+  const tunnel = draft.kind === "wg" || draft.kind === "ws"
 
   return (
     <Modal
@@ -111,6 +111,7 @@ export function OutboundForm({
           >
             <option value="local">{t("outbounds.kindLocal")}</option>
             <option value="wg">{t("outbounds.kindWg")}</option>
+            <option value="ws">{t("outbounds.kindWs")}</option>
           </select>
         </div>
         <Flag
@@ -135,6 +136,15 @@ export function OutboundForm({
             value={draft.port}
             onChange={(value) => put({ port: value })}
           />
+          {draft.kind === "ws" && (
+            <Line
+              id="outbound-proxy"
+              caption={t("outbounds.proxy")}
+              value={draft.proxy}
+              onChange={(value) => put({ proxy: value })}
+              wide
+            />
+          )}
           <Line
             id="outbound-address"
             caption={t("outbounds.address")}

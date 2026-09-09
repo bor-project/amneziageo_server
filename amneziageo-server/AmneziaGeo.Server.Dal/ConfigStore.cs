@@ -200,6 +200,9 @@ public sealed class ConfigStore
         AllowedIps = Parts(entity.AllowedIps),
         Mtu = entity.Mtu,
         Keepalive = entity.Keepalive,
+        IsEnabled = entity.IsEnabled,
+        Nat = entity.Nat,
+        Blocked = Parts(entity.Blocked),
         PrivateKey = entity.PrivateKey,
         PublicKey = entity.PublicKey,
         PresharedKey = entity.PresharedKey,
@@ -245,6 +248,9 @@ public sealed class ConfigStore
         entity.AllowedIps = string.Join(", ", config.AllowedIps);
         entity.Mtu = config.Mtu;
         entity.Keepalive = config.Keepalive;
+        entity.IsEnabled = config.IsEnabled;
+        entity.Nat = config.Nat;
+        entity.Blocked = string.Join(", ", config.Blocked);
         entity.PrivateKey = config.PrivateKey;
         entity.PublicKey = Curve25519.PublicOf(config.PrivateKey);
         entity.PresharedKey = config.PresharedKey.Trim();

@@ -1,6 +1,8 @@
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
+using AmneziaGeo.Server.Core.Proxy;
+using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Route;
@@ -41,6 +43,10 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
     public DbSet<BalancerEntity> Balancers => Set<BalancerEntity>();
 
     public DbSet<DnsSettingsEntity> Resolver => Set<DnsSettingsEntity>();
+
+    public DbSet<PanelEntity> Panel => Set<PanelEntity>();
+
+    public DbSet<ProxyEntity> Proxy => Set<ProxyEntity>();
 
     /// <summary>
     /// Shapes the tables the server adds to the identity ones.
@@ -128,6 +134,26 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
         {
             entity.Property(row => row.Upstreams).HasMaxLength(512);
             entity.Property(row => row.Listen).HasMaxLength(512);
+        });
+
+        builder.Entity<PanelEntity>(entity =>
+        {
+            entity.Property(row => row.Listen).HasMaxLength(1024);
+            entity.Property(row => row.Domains).HasMaxLength(4096);
+            entity.Property(row => row.Path).HasMaxLength(PanelRules.MaxPathLength);
+            entity.Property(row => row.Certificate).HasMaxLength(PanelRules.MaxFileLength);
+            entity.Property(row => row.CertificateKey).HasMaxLength(PanelRules.MaxFileLength);
+            entity.Property(row => row.Language).HasMaxLength(8);
+        });
+
+        builder.Entity<ProxyEntity>(entity =>
+        {
+            entity.Property(row => row.Name).HasMaxLength(ProxyRules.MaxNameLength);
+            entity.Property(row => row.Path).HasMaxLength(ProxyRules.MaxPathLength);
+            entity.Property(row => row.Certificate).HasMaxLength(ProxyRules.MaxFileLength);
+            entity.Property(row => row.CertificateKey).HasMaxLength(ProxyRules.MaxFileLength);
+            entity.HasIndex(row => row.Name).IsUnique();
+            entity.HasIndex(row => row.Port).IsUnique();
         });
 
         builder.Entity<BalancerEntity>(entity =>

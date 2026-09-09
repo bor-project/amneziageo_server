@@ -52,6 +52,31 @@ public sealed record AwgAllowedIp(IPAddress Address, byte Cidr)
     }
 
     /// <summary>
+    /// Tells whether the range carries addresses of the second family.
+    /// </summary>
+    public bool IsSix => Address.AddressFamily == AddressFamily.InterNetworkV6;
+
+    /// <summary>
+    /// Returns the range with the bits under the prefix cleared.
+    /// </summary>
+    public AwgAllowedIp Network()
+    {
+        var bytes = Address.GetAddressBytes();
+        for (var at = 0; at < bytes.Length; at++)
+        {
+            var kept = Cidr - (at * 8);
+            bytes[at] = kept switch
+            {
+                >= 8 => bytes[at],
+                <= 0 => 0,
+                _ => (byte)(bytes[at] & (0xFF << (8 - kept))),
+            };
+        }
+
+        return new AwgAllowedIp(new IPAddress(bytes), Cidr);
+    }
+
+    /// <summary>
     /// Writes the range as an address with a prefix length.
     /// </summary>
     public override string ToString() => $"{Address}/{Cidr}";

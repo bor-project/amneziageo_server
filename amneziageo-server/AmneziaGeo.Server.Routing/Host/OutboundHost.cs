@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Awg.Netlink;
+using AmneziaGeo.Server.Routing.Carrier;
 using AmneziaGeo.Server.Routing.Outbound;
 
 namespace AmneziaGeo.Server.Routing.Host;
@@ -17,14 +18,21 @@ public sealed class OutboundHost
 
     private readonly TimeProvider _time;
 
+    private readonly CarrierHost? _carriers;
+
     /// <summary>
     /// ctor
     /// </summary>
-    public OutboundHost(IHostNetwork network, IAwgDevices devices, TimeProvider? time = null)
+    public OutboundHost(
+        IHostNetwork network,
+        IAwgDevices devices,
+        TimeProvider? time = null,
+        CarrierHost? carriers = null)
     {
         _network = network;
         _devices = devices;
         _time = time ?? TimeProvider.System;
+        _carriers = carriers;
     }
 
     /// <summary>
@@ -77,6 +85,7 @@ public sealed class OutboundHost
             return;
         }
 
+        _carriers?.Withdraw(outbound.Name);
         await _network.ClearRouteAsync(outbound.Table, ct).ConfigureAwait(false);
         if (_network.HasLink(outbound.Name))
         {
@@ -149,7 +158,7 @@ public sealed class OutboundHost
 
     private async Task RaiseAsync(OutboundConfig outbound, CancellationToken ct)
     {
-        var server = await ResolveAsync(outbound.Host, ct).ConfigureAwait(false);
+        var server = await ServerAsync(outbound, ct).ConfigureAwait(false);
         if (!_network.HasLink(outbound.Name))
         {
             await _network.AddLinkAsync(outbound.Name, ct).ConfigureAwait(false);
@@ -161,17 +170,19 @@ public sealed class OutboundHost
         await _network.RouteAsync(outbound.Name, outbound.Table, ct).ConfigureAwait(false);
     }
 
-    private static async Task<IPAddress> ResolveAsync(string host, CancellationToken ct)
+    private async Task<IPEndPoint> ServerAsync(OutboundConfig outbound, CancellationToken ct)
     {
-        if (IPAddress.TryParse(host, out var address))
+        if (!OutboundKind.HasProxy(outbound.Kind))
         {
-            return address;
+            var address = await HostAddress.ResolveAsync(outbound.Host, ct).ConfigureAwait(false);
+
+            return new IPEndPoint(address, outbound.Port);
         }
 
-        var found = await System.Net.Dns.GetHostAddressesAsync(host, ct).ConfigureAwait(false);
+        var carriers = _carriers
+            ?? throw new HostNetworkException($"'{outbound.Name}' asks for a websocket the panel does not carry");
+        var port = await carriers.RaiseAsync(outbound, ct).ConfigureAwait(false);
 
-        return found.FirstOrDefault(one => one.AddressFamily == AddressFamily.InterNetwork)
-            ?? found.FirstOrDefault()
-            ?? throw new HostNetworkException($"'{host}' does not resolve to an address");
+        return new IPEndPoint(IPAddress.Loopback, port);
     }
 }

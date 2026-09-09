@@ -6,6 +6,7 @@ import path from 'node:path'
 const root = import.meta.dirname
 
 export default defineConfig({
+  base: './',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': path.resolve(root, 'src') },
@@ -18,7 +19,7 @@ export default defineConfig({
     host: true,
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:5080', changeOrigin: true },
+      '/api': { target: 'http://localhost:8443', changeOrigin: true },
     },
   },
 })

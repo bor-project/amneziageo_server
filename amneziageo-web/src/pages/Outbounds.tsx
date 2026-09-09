@@ -11,7 +11,7 @@ import {
   useRemoveOutbound,
   useSwitchOutbound,
 } from "@/api/outbounds"
-import type { Outbound } from "@/api/outbounds"
+import type { Outbound, OutboundKind } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
 import { Modal } from "@/components/Modal"
 import { OutboundForm } from "@/components/OutboundForm"
@@ -19,6 +19,7 @@ import { RowActions } from "@/components/RowActions"
 import { card, danger, primary, secondary } from "@/components/styles"
 import { bytes } from "@/format"
 import { useLanguage, useText } from "@/i18n"
+import type { TextKey } from "@/i18n"
 import type { Text } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
@@ -31,7 +32,7 @@ export function Outbounds() {
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Outbound | null>(null)
   const [removing, setRemoving] = useState<Outbound | null>(null)
-  const fresh = useFreshOutbound(adding, nextName(outbounds.data))
+  const fresh = useFreshOutbound(adding, nextName(outbounds.data), "wg")
   const add = useAddOutbound()
   const change = useChangeOutbound()
   const remove = useRemoveOutbound()
@@ -87,10 +88,10 @@ export function Outbounds() {
                       {!outbound.isEnabled && <span className="ml-2 text-xs text-muted">{t("outbounds.off")}</span>}
                     </td>
                     <td className="px-4 py-2 text-muted">
-                      {outbound.kind === "wg" ? t("outbounds.kindWg") : t("outbounds.kindLocal")}
+                      {t(kindKey(outbound.kind))}
                     </td>
                     <td className="px-4 py-2 text-muted">
-                      {outbound.kind === "wg" ? `${outbound.host}:${outbound.port}` : ""}
+                      {outbound.kind === "local" ? "" : `${outbound.host}:${outbound.port}`}
                     </td>
                     <td className="px-4 py-2 text-muted">
                       {outbound.mark} / {outbound.table}
@@ -99,7 +100,7 @@ export function Outbounds() {
                       <State outbound={outbound} t={t} language={language} />
                     </td>
                     <td className="px-4 py-2 text-muted">
-                      {outbound.state !== null && outbound.state.hasLink && outbound.kind === "wg"
+                      {outbound.state !== null && outbound.state.hasLink && outbound.kind !== "local"
                         ? `${bytes(t, outbound.state.rxBytes)} / ${bytes(t, outbound.state.txBytes)}`
                         : ""}
                     </td>
@@ -178,7 +179,7 @@ export function Outbounds() {
           }
         >
           <div className="text-sm text-muted">
-            {removing.kind === "wg" ? `${removing.host}:${removing.port}` : t("outbounds.kindLocal")}
+            {removing.kind === "local" ? t("outbounds.kindLocal") : `${removing.host}:${removing.port}`}
           </div>
         </Modal>
       )}
@@ -215,6 +216,14 @@ function State({ outbound, t, language }: { outbound: Outbound; t: Text; languag
         : new Date(state.lastHandshake).toLocaleString(language)}
     </span>
   )
+}
+
+function kindKey(kind: OutboundKind): TextKey {
+  if (kind === "wg") {
+    return "outbounds.kindWg"
+  }
+
+  return kind === "ws" ? "outbounds.kindWs" : "outbounds.kindLocal"
 }
 
 function nextName(outbounds: Outbound[] | undefined): string {

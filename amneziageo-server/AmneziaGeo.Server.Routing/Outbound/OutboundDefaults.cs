@@ -43,14 +43,14 @@ public static class OutboundDefaults
     /// <summary>
     /// Returns a tunnel with a key pair of its own.
     /// </summary>
-    public static OutboundConfig Fresh(string name)
+    public static OutboundConfig Fresh(string name, string kind = OutboundKind.Wg)
     {
         var pair = Curve25519.Create();
 
         return new OutboundConfig
         {
             Name = name,
-            Kind = OutboundKind.Wg,
+            Kind = OutboundKind.HasLink(kind) ? kind : OutboundKind.Wg,
             Port = Port,
             Mtu = Mtu,
             Keepalive = Keepalive,

@@ -69,9 +69,11 @@ public static class OutboundEndpoints
             : Results.Ok(OutboundAnswers.Outbound(found, host.State(found), Secrets(context)));
     }
 
-    private static IResult Draft(string? name) =>
+    private static IResult Draft(string? name, string? kind) =>
         Results.Ok(OutboundAnswers.Outbound(
-            OutboundDefaults.Fresh(string.IsNullOrWhiteSpace(name) ? "out0" : name.Trim()),
+            OutboundDefaults.Fresh(
+                string.IsNullOrWhiteSpace(name) ? "out0" : name.Trim(),
+                string.IsNullOrWhiteSpace(kind) ? OutboundKind.Wg : kind.Trim()),
             null,
             true));
 

@@ -75,6 +75,11 @@ public sealed class Ledger : IHostNetwork
     public Task RouteAsync(string name, int table, CancellationToken ct) => Step($"route {name} {table}");
 
     /// <summary>
+    /// Lets the host pass packets between interfaces, in both families.
+    /// </summary>
+    public Task ForwardingAsync(CancellationToken ct) => Step("forwarding");
+
+    /// <summary>
     /// Clears a routing table.
     /// </summary>
     public Task ClearRouteAsync(int table, CancellationToken ct) => Step($"clear {table}");

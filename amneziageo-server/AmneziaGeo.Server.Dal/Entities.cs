@@ -95,6 +95,12 @@ public sealed class ConfigEntity
 
     public int Keepalive { get; set; }
 
+    public bool IsEnabled { get; set; } = true;
+
+    public bool Nat { get; set; } = true;
+
+    public string Blocked { get; set; } = string.Empty;
+
     public string PrivateKey { get; set; } = string.Empty;
 
     public string PublicKey { get; set; } = string.Empty;
@@ -209,6 +215,8 @@ public sealed class OutboundEntity
 
     public int Port { get; set; }
 
+    public string Proxy { get; set; } = string.Empty;
+
     public string PrivateKey { get; set; } = string.Empty;
 
     public string PublicKey { get; set; } = string.Empty;
@@ -310,6 +318,52 @@ public sealed class RouteRuleEntity
     public string Protocol { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// The settings of the panel as the database holds them.
+/// </summary>
+public sealed class PanelEntity
+{
+    public long Id { get; set; }
+
+    public string Listen { get; set; } = string.Empty;
+
+    public string Domains { get; set; } = string.Empty;
+
+    public int Port { get; set; }
+
+    public string Path { get; set; } = string.Empty;
+
+    public string Certificate { get; set; } = string.Empty;
+
+    public string CertificateKey { get; set; } = string.Empty;
+
+    public string Language { get; set; } = string.Empty;
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// The websocket proxy as the database holds it.
+/// </summary>
+public sealed class ProxyEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public bool IsEnabled { get; set; }
+
+    public int Port { get; set; }
+
+    public string Path { get; set; } = string.Empty;
+
+    public string Certificate { get; set; } = string.Empty;
+
+    public string CertificateKey { get; set; } = string.Empty;
 
     public DateTimeOffset UpdatedUtc { get; set; }
 }

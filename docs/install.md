@@ -1,8 +1,9 @@
 # Putting the panel on a server
 
-The panel goes on a server that already carries AmneziaWG in the kernel and raises its interfaces with
-`awg-quick`. It takes the clients over: the interfaces, the addresses, the NAT and the forwarding stay
-where they are, and the panel adds and removes peers and writes them into the interface files.
+The panel goes on a server that carries AmneziaWG in the kernel. It takes the clients over, and it raises
+the interfaces of the endpoints itself: the key, the port and the obfuscation go into the kernel, the
+address ranges onto the interface, the masquerade and the closed ranges into the firewall. A host that has
+been raising its interfaces with `awg-quick` hands them over whole.
 
 ## Build the package
 
@@ -35,14 +36,28 @@ systemctl start amneziageo-server
 
 ## Reach it
 
-The service listens on `127.0.0.1:5080` alone, so the panel is not on the network of the host:
+The service listens on `127.0.0.1:8443` alone, so the panel is not on the network of the host:
 
 ```
-ssh -N -L 5080:127.0.0.1:5080 root@<host>
+ssh -N -L 8443:127.0.0.1:8443 root@<host>
 ```
 
-Then `http://localhost:5080/`. To answer inside a tunnel instead, name the interface in the service file:
-`Web__Listen__0=awg1:5080`, see [serving.md](serving.md).
+Then `http://localhost:8443/`. The address, the port, the path and the domain move from the **Settings**
+page of the panel afterwards, see [serving.md](serving.md).
+
+## Under a certificate
+
+`/etc/amneziageo-server/server.env` is read by the service and holds what the panel starts under. Naming a
+certificate there puts the panel on the network of the host over TLS:
+
+```
+Web__Listen__0=*:8443
+Web__Certificate=/etc/letsencrypt/live/<host>/fullchain.pem
+Web__CertificateKey=/etc/letsencrypt/live/<host>/privkey.pem
+```
+
+`systemctl restart amneziageo-server` takes the change. The chain itself is read again whenever it is
+renewed on disk. The panel names the same certificate by a pair of paths, on the **Settings** page.
 
 ## Take the clients the host carries
 
@@ -65,6 +80,23 @@ needs a file of its own is made anew.
 
 Then open the panel and press the button that puts the clients on the host: it answers with what every
 interface took and with the peers the panel does not hold.
+
+## Taking the interfaces over from awg-quick
+
+Read the endpoints and the clients out of the interface files first, and check them in the panel. Then stop
+the old units and start the service:
+
+```
+systemctl disable --now awg-quick@awg0 awg-quick@awg1
+systemctl start amneziageo-server
+```
+
+The endpoints keep the keys, the ports, the addresses and the obfuscation the files carried, so clients come
+back on their own with the files they already hold. What the `PostUp` lines of the old files used to reject
+belongs in `Closed to clients` of every endpoint, and what they masqueraded is the NAT switch beside it.
+
+The old files stay where they are, so `systemctl enable --now awg-quick@awg0` brings the host back to what
+it was, once the service is stopped.
 
 ## Before the panel is the one in charge
 

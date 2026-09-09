@@ -8,12 +8,14 @@ interface UiState {
   sidebarOpen: boolean
   theme: ThemeChoice
   language: LanguageChoice
+  served: LanguageChoice
 }
 
 const initialState: UiState = {
   sidebarOpen: true,
   theme: storedTheme(),
   language: storedLanguage(),
+  served: 'auto',
 }
 
 const uiSlice = createSlice({
@@ -32,8 +34,11 @@ const uiSlice = createSlice({
     languageChosen(state, action: PayloadAction<LanguageChoice>) {
       state.language = action.payload
     },
+    languageServed(state, action: PayloadAction<LanguageChoice>) {
+      state.served = action.payload
+    },
   },
 })
 
-export const { sidebarToggled, sidebarSet, themeChosen, languageChosen } = uiSlice.actions
+export const { sidebarToggled, sidebarSet, themeChosen, languageChosen, languageServed } = uiSlice.actions
 export default uiSlice.reducer

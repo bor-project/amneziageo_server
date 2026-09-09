@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
 import type { KeyPair, Obfuscation } from "./configs"
 
-export type OutboundKind = "local" | "wg"
+export type OutboundKind = "local" | "wg" | "ws"
 
 export interface OutboundState {
   hasLink: boolean
@@ -22,6 +22,7 @@ export interface Outbound {
   isEnabled: boolean
   host: string
   port: number
+  proxy: string
   publicKey: string
   peerKey: string
   privateKey: string | null
@@ -44,6 +45,7 @@ export interface OutboundDraft {
   isEnabled: boolean
   host: string
   port: number
+  proxy: string
   privateKey: string
   peerKey: string
   presharedKey: string
@@ -61,10 +63,11 @@ export function useOutbounds() {
   })
 }
 
-export function useFreshOutbound(enabled: boolean, name: string) {
+export function useFreshOutbound(enabled: boolean, name: string, kind: OutboundKind) {
   return useQuery({
-    queryKey: ["outbounds", "draft", name],
-    queryFn: async () => (await client.get<Outbound>(`/outbounds/draft?name=${encodeURIComponent(name)}`)).data,
+    queryKey: ["outbounds", "draft", name, kind],
+    queryFn: async () =>
+      (await client.get<Outbound>(`/outbounds/draft?name=${encodeURIComponent(name)}&kind=${kind}`)).data,
     enabled,
     gcTime: 0,
     staleTime: 0,
@@ -119,6 +122,7 @@ export function draftOf(outbound: Outbound): OutboundDraft {
     isEnabled: outbound.isEnabled,
     host: outbound.host,
     port: outbound.port,
+    proxy: outbound.proxy,
     privateKey: outbound.privateKey ?? "",
     peerKey: outbound.peerKey,
     presharedKey: outbound.presharedKey ?? "",

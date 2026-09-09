@@ -37,8 +37,13 @@ export function systemLanguage(): Language {
 
 export function useLanguage(): Language {
   const chosen = useAppSelector((s) => s.ui.language)
+  const served = useAppSelector((s) => s.ui.served)
 
-  return chosen === "auto" ? systemLanguage() : chosen
+  if (chosen !== "auto") {
+    return chosen
+  }
+
+  return served === "auto" ? systemLanguage() : served
 }
 
 export function useText(): Text {
