@@ -9,6 +9,7 @@ using AmneziaGeo.Server.Api.Geo;
 using AmneziaGeo.Server.Api.Outbounds;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Api.Status;
+using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -25,6 +26,7 @@ builder.Services.AddClients(builder.Configuration);
 builder.Services.AddResolver();
 builder.Services.AddPanel();
 builder.Services.AddProxies(builder.Configuration);
+builder.Services.AddSubscriptions();
 
 var app = builder.Build();
 
@@ -34,6 +36,7 @@ app.SeedPanel();
 app.SettleProxies();
 app.StartOverview();
 
+app.UseSubscriptions();
 app.UsePanel();
 app.UseStaticFiles();
 app.UseBearer();
@@ -59,6 +62,7 @@ app.MapBalancers();
 app.MapRules();
 app.MapResolver();
 app.MapPanel();
+app.MapSubscriptions();
 app.MapProxies();
 app.MapDiagnostics();
 app.MapControllers();

@@ -3,25 +3,18 @@ import { useJournal, useVersions } from "@/api/diagnostics"
 import type { JournalEntry } from "@/api/diagnostics"
 import { useHealth } from "@/api/health"
 import { useOverview } from "@/api/overview"
-import { useRuleset } from "@/api/rules"
-import { scopes } from "@/api/scopes"
 import { card, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
-import { holds } from "@/store/authSlice"
-import { useAppSelector } from "@/store/hooks"
 
 const loud = new Set(["Warning", "Error", "Critical"])
 
 export function Diagnostics() {
   const t = useText()
   const language = useLanguage()
-  const user = useAppSelector((s) => s.auth.user)
   const health = useHealth()
   const overview = useOverview()
   const versions = useVersions()
   const journal = useJournal()
-  const routing = holds(user, scopes.manageRouting)
-  const ruleset = useRuleset(routing)
   const tunnel = overview.data?.tunnel
   const known = versions.data
 
@@ -47,18 +40,6 @@ export function Diagnostics() {
           ))}
         </div>
       </div>
-
-      {routing && (
-        <div className={card}>
-          <div className="flex items-center justify-between border-b border-line px-4 py-3">
-            <span className="text-sm font-medium text-ink">{t("diagnostics.ruleset")}</span>
-            <button type="button" onClick={() => void ruleset.refetch()} className={secondary}>
-              {t("diagnostics.refresh")}
-            </button>
-          </div>
-          <pre className="max-h-[50vh] overflow-auto p-4 font-mono text-xs text-ink">{ruleset.data ?? ""}</pre>
-        </div>
-      )}
 
       <div className={card}>
         <div className="flex items-center justify-between border-b border-line px-4 py-3">

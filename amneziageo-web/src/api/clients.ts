@@ -22,6 +22,7 @@ export interface Client {
   isEnabled: boolean
   note: string
   templateId: number | null
+  subscriptionId: string
   state: ClientState
   createdUtc: string
   updatedUtc: string
@@ -37,20 +38,14 @@ export interface ClientDraft {
   isEnabled: boolean
   note: string
   templateId: number | null
+  subscriptionId: string
 }
 
 export interface ClientConfig {
   fileName: string
   text: string
   link: string
-}
-
-export interface ClientApply {
-  config: string
-  isDone: boolean
-  clients: number
-  stale: string[]
-  message: string
+  subscription: string
 }
 
 export function useClients() {
@@ -94,10 +89,6 @@ export function useSwitchClient() {
   return useRefreshing(({ id, on }: { id: number; on: boolean }) => client.post(`/clients/${id}/switch`, { on }))
 }
 
-export function useApplyClients() {
-  return useRefreshing(() => client.post<ClientApply[]>("/clients/apply"))
-}
-
 export function draftOf(one: Client): ClientDraft {
   return {
     configId: one.configId,
@@ -109,6 +100,7 @@ export function draftOf(one: Client): ClientDraft {
     isEnabled: one.isEnabled,
     note: one.note,
     templateId: one.templateId,
+    subscriptionId: one.subscriptionId,
   }
 }
 

@@ -68,6 +68,7 @@ public static class ServerDatabase
         services.AddScoped<PanelStore>();
         services.AddScoped<ProxyStore>();
         services.AddScoped<TemplateStore>();
+        services.AddScoped<SubscriptionStore>();
         services.AddScoped<IRefreshTokens, RefreshTokenStore>();
         services.AddScoped<IAuditLog, AuditStore>();
         services.AddScoped<LoginService>();

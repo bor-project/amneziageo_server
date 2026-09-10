@@ -111,9 +111,9 @@ tunnel puts on its own packets, so there is no loop to break.
 ## Putting it on the host
 
 Adding, changing, turning on and off, and removing an outbound each put it on the host straight away.
-`POST /api/outbounds/apply` goes over every outbound and rewrites the firewall table, which is what the
-`Apply all` button in the panel does. An outbound that is turned off is taken off the host: the rule goes,
-the table is cleared, and the interface is removed.
+`POST /api/outbounds/apply` goes over every outbound, rewrites the firewall table and lays the rules again;
+the panel does the same when it starts, so the outbounds and the rules come back after a reboot. An outbound
+that is turned off is taken off the host: the rule goes, the table is cleared, and the interface is removed.
 
 Raising an interface, writing keys to it and changing routing rules need `CAP_NET_ADMIN`. A server that
 runs without it answers with the outbound and the reason on it instead of failing the request. Setting

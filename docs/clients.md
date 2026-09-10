@@ -29,10 +29,11 @@ The private key of a client is written out only to a caller that holds `clients:
 | Addresses | one out of every range of the endpoint: not its network, broadcast or own address, and not one another client of the endpoint carries |
 | On | whether the interface takes the client |
 | Note | a line of your own, up to 255 characters |
+| Subscription | the subscription that hands the client out, see [subscriptions.md](subscriptions.md) |
 
-`GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair and a name no other client
-carries. With `?config=<id>` it also carries the first number free in every range of the endpoint, as an address
-out of each.
+`GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair, a subscription of its own and
+a name no other client carries. With `?config=<id>` it also carries the first number free in every range of the
+endpoint, as an address out of each.
 
 The panel adds a client to the interface picked in its form, and the address is written as a number: the head
 of every range comes from the interface and the number goes into each of them, so a client of an interface with
@@ -57,6 +58,9 @@ zlib and written in base64url. The AmneziaGeo client reads it from a QR as well,
 takes it as a pasted key, and a long list of ranges takes far less room in it than in the file. The panel
 draws a QR of the file and of the link, opens on the link when the file does not fit, and says so when
 neither fits.
+
+While the subscriptions are on, the answer carries `subscription` too, the address the client reads its
+subscription at, and the window draws it as a third QR code, see [subscriptions.md](subscriptions.md).
 
 An endpoint with no address of its own leaves the `Endpoint` line out, and a client that gets such a file
 has nowhere to connect: name the address of the server in the settings of the endpoint first.
@@ -95,7 +99,8 @@ second family to every client, the way the host builds it out of the last number
 
 A client whose public key the panel already holds is passed over, so an import runs twice without doubling.
 A name another client already carries gets a number after it (`milena-2`), and the import says so. The
-addresses are taken as the host has them, without the range checks the panel makes.
+addresses are taken as the host has them, without the range checks the panel makes. Every client taken gets a
+subscription of its own.
 
 ## When something is refused
 
@@ -110,6 +115,7 @@ addresses are taken as the host has them, without the range checks the panel mak
 | `client-name-taken` | another client already carries this name, whatever the case |
 | `client-key-taken` | another client already carries this public key |
 | `client-address-taken` | another client of the endpoint already carries this address |
+| `bad-client-subscription` | the subscription takes letters the rules do not or is longer than 64 characters |
 | `unknown-client` | the panel holds no client under this number |
 | `unknown-config` | the panel holds no endpoint under this number |
 

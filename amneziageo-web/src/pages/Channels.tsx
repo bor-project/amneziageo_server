@@ -13,7 +13,6 @@ import {
   draftOf as channelDraft,
   useAddOutbound,
   useApplyOutbound,
-  useApplyOutbounds,
   useChangeOutbound,
   useFreshOutbound,
   useMoveOutbound,
@@ -54,7 +53,6 @@ export function Channels() {
   const move = useMoveOutbound()
   const turn = useSwitchOutbound()
   const apply = useApplyOutbound()
-  const applyAll = useApplyOutbounds()
   const probe = useProbeOutbound()
   const addGroup = useAddBalancer()
   const changeGroup = useChangeBalancer()
@@ -71,14 +69,6 @@ export function Channels() {
       <div className={`mt-4 ${card}`}>
         {may && (
           <div className="flex justify-end gap-2 border-b border-line px-4 py-3">
-            <button
-              type="button"
-              onClick={() => void applyAll.mutateAsync()}
-              disabled={applyAll.isPending}
-              className={secondary}
-            >
-              {applyAll.isPending ? t("outbounds.applying") : t("outbounds.apply")}
-            </button>
             <RowActions
               title={t("outbounds.add")}
               trigger={t("outbounds.add")}

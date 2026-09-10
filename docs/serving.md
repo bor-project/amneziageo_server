@@ -4,7 +4,8 @@ The panel holds where it answers itself, on the **Server** and **Certificates** 
 it holds is taken at start: `Save`
 writes a change down, and it takes hold after `Restart`, the button that shows in the header while a saved
 change waits for it. `Cancel` drops what is not saved yet, and an edit left unsaved stays while other pages
-are opened. The language takes hold at once.
+are opened. The language takes hold at once. The subscriptions of the clients have a tab of their own and take
+hold without a restart, see [subscriptions.md](subscriptions.md).
 
 | Setting | What it does |
 |---|---|

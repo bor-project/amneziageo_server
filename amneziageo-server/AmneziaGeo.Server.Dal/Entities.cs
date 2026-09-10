@@ -457,7 +457,37 @@ public sealed class ClientEntity
 
     public long? TemplateId { get; set; }
 
+    public string SubscriptionId { get; set; } = string.Empty;
+
     public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// The settings of the subscriptions as the database holds them.
+/// </summary>
+public sealed class SubscriptionEntity
+{
+    public long Id { get; set; }
+
+    public bool IsEnabled { get; set; }
+
+    public string Listen { get; set; } = string.Empty;
+
+    public string Domains { get; set; } = string.Empty;
+
+    public int Port { get; set; }
+
+    public string Path { get; set; } = string.Empty;
+
+    public string Certificate { get; set; } = string.Empty;
+
+    public string CertificateKey { get; set; } = string.Empty;
+
+    public int UpdateHours { get; set; }
+
+    public string Title { get; set; } = string.Empty;
 
     public DateTimeOffset UpdatedUtc { get; set; }
 }

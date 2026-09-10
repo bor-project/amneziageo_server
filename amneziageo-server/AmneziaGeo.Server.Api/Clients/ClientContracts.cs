@@ -28,6 +28,7 @@ public sealed record ClientResponse(
     bool IsEnabled,
     string Note,
     long? TemplateId,
+    string SubscriptionId,
     ClientStateBody State,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc);
@@ -44,7 +45,8 @@ public sealed record ClientRequest(
     IReadOnlyList<string>? Address,
     bool IsEnabled,
     string? Note,
-    long? TemplateId = null);
+    long? TemplateId = null,
+    string? SubscriptionId = null);
 
 /// <summary>
 /// Whether a client is on.
@@ -52,9 +54,9 @@ public sealed record ClientRequest(
 public sealed record ClientSwitchRequest(bool On);
 
 /// <summary>
-/// The configuration a client connects with.
+/// The configuration a client connects with and the address of its subscription.
 /// </summary>
-public sealed record ClientConfigResponse(string FileName, string Text, string Link);
+public sealed record ClientConfigResponse(string FileName, string Text, string Link, string Subscription);
 
 /// <summary>
 /// What putting the clients of one endpoint on the host produced.
@@ -88,6 +90,7 @@ public static class ClientAnswers
             client.IsEnabled,
             client.Note,
             client.TemplateId,
+            secrets ? client.SubscriptionId : string.Empty,
             new ClientStateBody(
                 state.IsOnline,
                 state.IsPresent,
@@ -100,11 +103,12 @@ public static class ClientAnswers
     }
 
     /// <summary>
-    /// Returns what a request asks a client to become.
+    /// Returns what a request asks a client to become, with the subscription it takes when the request names none.
     /// </summary>
-    public static TunnelClient Draft(ClientRequest request)
+    public static TunnelClient Draft(ClientRequest request, string subscription)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(subscription);
 
         return new TunnelClient
         {
@@ -117,6 +121,7 @@ public static class ClientAnswers
             IsEnabled = request.IsEnabled,
             Note = (request.Note ?? string.Empty).Trim(),
             TemplateId = request.TemplateId,
+            SubscriptionId = request.SubscriptionId is null ? subscription : request.SubscriptionId.Trim(),
         };
     }
 

@@ -51,6 +51,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<TemplateEntity> Templates => Set<TemplateEntity>();
 
+    public DbSet<SubscriptionEntity> Subscription => Set<SubscriptionEntity>();
+
     /// <summary>
     /// Shapes the tables the server adds to the identity ones.
     /// </summary>
@@ -106,6 +108,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
         {
             entity.Property(client => client.Name).HasMaxLength(ClientRules.MaxNameLength);
             entity.Property(client => client.Note).HasMaxLength(ClientRules.MaxNoteLength);
+            entity.Property(client => client.SubscriptionId).HasMaxLength(ClientRules.MaxSubscriptionLength);
             entity.HasIndex(client => new { client.ConfigId, client.Name }).IsUnique();
             entity.HasIndex(client => client.PublicKey).IsUnique();
             entity.HasOne<ConfigEntity>()
@@ -113,6 +116,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
                 .HasForeignKey(client => client.ConfigId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(client => client.TemplateId);
+            entity.HasIndex(client => client.SubscriptionId);
         });
 
         builder.Entity<TemplateEntity>(entity =>
@@ -155,6 +159,16 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(row => row.Certificate).HasMaxLength(PanelRules.MaxFileLength);
             entity.Property(row => row.CertificateKey).HasMaxLength(PanelRules.MaxFileLength);
             entity.Property(row => row.Language).HasMaxLength(8);
+        });
+
+        builder.Entity<SubscriptionEntity>(entity =>
+        {
+            entity.Property(row => row.Listen).HasMaxLength(1024);
+            entity.Property(row => row.Domains).HasMaxLength(4096);
+            entity.Property(row => row.Path).HasMaxLength(PanelRules.MaxPathLength);
+            entity.Property(row => row.Certificate).HasMaxLength(PanelRules.MaxFileLength);
+            entity.Property(row => row.CertificateKey).HasMaxLength(PanelRules.MaxFileLength);
+            entity.Property(row => row.Title).HasMaxLength(SubscriptionRules.MaxTitleLength);
         });
 
         builder.Entity<ProxyEntity>(entity =>

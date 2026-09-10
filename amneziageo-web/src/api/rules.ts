@@ -48,16 +48,6 @@ export function useRules() {
   })
 }
 
-export function useRuleset(enabled: boolean) {
-  return useQuery({
-    queryKey: ["rules", "ruleset"],
-    queryFn: async () => (await client.get<{ text: string }>("/rules/ruleset")).data.text,
-    enabled,
-    gcTime: 0,
-    staleTime: 0,
-  })
-}
-
 export function useAddRule() {
   return useRefreshing((draft: RuleDraft) => client.post("/rules", draft))
 }
@@ -76,10 +66,6 @@ export function useMoveRule() {
 
 export function useSwitchRule() {
   return useRefreshing(({ id, on }: { id: number; on: boolean }) => client.post(`/rules/${id}/switch`, { on }))
-}
-
-export function useApplyRules() {
-  return useRefreshing(() => client.post("/rules/apply"))
 }
 
 export function draftOf(rule: Rule): RuleDraft {

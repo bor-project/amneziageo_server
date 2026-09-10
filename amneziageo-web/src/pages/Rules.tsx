@@ -5,7 +5,6 @@ import {
   draftOf,
   freshRule,
   useAddRule,
-  useApplyRules,
   useChangeRule,
   useMoveRule,
   useRemoveRule,
@@ -36,7 +35,6 @@ export function Rules() {
   const remove = useRemoveRule()
   const move = useMoveRule()
   const turn = useSwitchRule()
-  const apply = useApplyRules()
   const may = holds(user, scopes.manageRouting)
   const last = (rules.data?.length ?? 0) - 1
 
@@ -45,14 +43,6 @@ export function Rules() {
       <div className={`mt-4 ${card}`}>
         {may && (
           <div className="flex justify-end gap-2 border-b border-line px-4 py-3">
-            <button
-              type="button"
-              onClick={() => void apply.mutateAsync()}
-              disabled={apply.isPending}
-              className={secondary}
-            >
-              {apply.isPending ? t("rules.applying") : t("rules.apply")}
-            </button>
             <button
               type="button"
               onClick={() => setAdding(true)}

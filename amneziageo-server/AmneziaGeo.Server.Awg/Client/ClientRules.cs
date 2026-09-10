@@ -25,6 +25,11 @@ public static partial class ClientRules
     public const int MaxAddresses = 4;
 
     /// <summary>
+    /// The longest name of the subscription a client carries.
+    /// </summary>
+    public const int MaxSubscriptionLength = 64;
+
+    /// <summary>
     /// Returns why the settings of a client are unusable, or null when they hold.
     /// </summary>
     public static ClientFault? Check(TunnelClient client)
@@ -35,7 +40,8 @@ public static partial class ClientRules
             ?? CheckKey(client.PrivateKey, client.PublicKey)
             ?? CheckPreshared(client.PresharedKey)
             ?? CheckAddress(client.Address)
-            ?? CheckNote(client.Note);
+            ?? CheckNote(client.Note)
+            ?? CheckSubscription(client.SubscriptionId);
     }
 
     /// <summary>
@@ -86,6 +92,12 @@ public static partial class ClientRules
         return null;
     }
 
+    /// <summary>
+    /// Tells whether a text names a subscription.
+    /// </summary>
+    public static bool IsSubscription(string? id) =>
+        !string.IsNullOrEmpty(id) && id.Length <= MaxSubscriptionLength && SubscriptionShape().IsMatch(id);
+
     private static ClientFault? CheckKey(string? privateKey, string? publicKey)
     {
         if (!string.IsNullOrEmpty(privateKey) && !Curve25519.IsKey(privateKey))
@@ -108,8 +120,16 @@ public static partial class ClientRules
             ? null
             : Fault("bad-client-note", $"the note is longer than {MaxNoteLength} characters");
 
+    private static ClientFault? CheckSubscription(string? id) =>
+        string.IsNullOrEmpty(id) || IsSubscription(id)
+            ? null
+            : Fault("bad-client-subscription", $"the subscription takes letters, digits, dash and underscore, up to {MaxSubscriptionLength}");
+
     private static ClientFault Fault(string code, string message) => new(code, message);
 
     [GeneratedRegex("^[a-zA-Z0-9][a-zA-Z0-9._-]*$")]
     private static partial Regex NameShape();
+
+    [GeneratedRegex(@"^[a-zA-Z0-9_-]+\z")]
+    private static partial Regex SubscriptionShape();
 }

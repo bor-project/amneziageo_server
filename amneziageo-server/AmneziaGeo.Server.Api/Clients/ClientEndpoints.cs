@@ -1,7 +1,10 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Subscriptions;
+using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
+using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Host;
 
@@ -122,9 +125,13 @@ public static class ClientEndpoints
 
     private static async Task<IResult> TextAsync(
         long id,
+        HttpContext context,
         ConfigStore configs,
         ClientStore store,
         TemplateStore templates,
+        SubscriptionState subscriptions,
+        PanelSettings panel,
+        WebOptions options,
         CancellationToken ct)
     {
         var client = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -146,7 +153,13 @@ public static class ClientEndpoints
         return Results.Ok(new ClientConfigResponse(
             ClientText.FileName(endpoint, client),
             ClientText.Text(endpoint, client, template),
-            ClientLink.Link(endpoint, client, template)));
+            ClientLink.Link(endpoint, client, template),
+            SubscriptionAnswer.Address(
+                subscriptions.Current,
+                panel,
+                Listening.Chain(options, panel).Length > 0,
+                context.Request.Host.Host,
+                client.PrivateKey.Length > 0 ? client.SubscriptionId : string.Empty)));
     }
 
     private static async Task<IResult> AddAsync(
@@ -156,7 +169,8 @@ public static class ClientEndpoints
         ClientHost host,
         CancellationToken ct)
     {
-        var result = await store.AddAsync(ClientAnswers.Draft(request), ct).ConfigureAwait(false);
+        var result = await store.AddAsync(ClientAnswers.Draft(request, ClientDefaults.SubscriptionId()), ct)
+            .ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -183,7 +197,8 @@ public static class ClientEndpoints
             return Refuse(StatusCodes.Status404NotFound, "unknown-client", $"there is no client under the number {id}");
         }
 
-        var result = await store.ChangeAsync(id, ClientAnswers.Draft(request), ct).ConfigureAwait(false);
+        var result = await store.ChangeAsync(id, ClientAnswers.Draft(request, held.SubscriptionId), ct)
+            .ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);

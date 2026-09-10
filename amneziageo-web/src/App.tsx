@@ -18,6 +18,7 @@ import { Password } from "@/pages/Password"
 import { Proxies } from "@/pages/Proxies"
 import { Rules } from "@/pages/Rules"
 import { PanelCertificates, PanelServer } from "@/pages/Settings"
+import { Subscriptions } from "@/pages/Subscriptions"
 import { Templates } from "@/pages/Templates"
 import { useAppearance } from "@/theme/theme"
 
@@ -38,6 +39,7 @@ const routing: Tab[] = [
 const settings: Tab[] = [
   { to: "/settings", label: "tab.server", scope: scopes.manageAccess, end: true },
   { to: "/settings/certificates", label: "tab.certificates", scope: scopes.manageAccess },
+  { to: "/settings/subscriptions", label: "tab.subscriptions", scope: scopes.manageAccess },
   { to: "/settings/users", label: "tab.users", scope: scopes.manageAccess },
   { to: "/settings/diagnostics", label: "tab.diagnostics", scope: scopes.manageAccess },
 ]
@@ -86,6 +88,7 @@ export function App() {
               <Route path="settings" element={<Tabbed title="nav.settings" tabs={settings} />}>
                 <Route index element={<PanelServer />} />
                 <Route path="certificates" element={<PanelCertificates />} />
+                <Route path="subscriptions" element={<Subscriptions />} />
                 <Route path="users" element={<Accounts />} />
                 <Route path="diagnostics" element={<Diagnostics />} />
               </Route>

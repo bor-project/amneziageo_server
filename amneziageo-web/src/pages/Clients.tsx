@@ -2,7 +2,6 @@ import { useState } from "react"
 import {
   draftOf,
   useAddClient,
-  useApplyClients,
   useChangeClient,
   useClientDraft,
   useClients,
@@ -39,7 +38,6 @@ export function Clients() {
   const change = useChangeClient()
   const remove = useRemoveClient()
   const turn = useSwitchClient()
-  const apply = useApplyClients()
   const may = holds(user, scopes.manageClients)
   const shown = (clients.data ?? []).filter((one) => picked === 0 || one.configId === picked)
   const names = new Map((templates.data ?? []).map((one): [number, string] => [one.id, one.name]))
@@ -67,24 +65,14 @@ export function Clients() {
           </select>
 
           {may && (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => void apply.mutateAsync()}
-                disabled={apply.isPending}
-                className={secondary}
-              >
-                {t("clients.apply")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdding(picked)}
-                disabled={(configs.data?.length ?? 0) === 0}
-                className={primary}
-              >
-                {t("clients.add")}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setAdding(picked)}
+              disabled={(configs.data?.length ?? 0) === 0}
+              className={primary}
+            >
+              {t("clients.add")}
+            </button>
           )}
         </div>
 

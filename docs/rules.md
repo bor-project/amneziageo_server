@@ -78,5 +78,6 @@ Rules also need at least one endpoint: without a configuration to arrive on, not
 ## What the panel shows
 
 The routing page carries the rules in their order, what each one matches and sends the traffic to, how
-many ranges and names it came out as, and whether it is on the host. `Kernel rules` shows the ruleset
-the host is given, as it is written.
+many ranges and names it came out as, and whether it is on the host. The panel lays the ruleset when it
+starts, after every change and when the live outbounds change; `GET /api/rules/ruleset` returns it as it is
+written.

@@ -12,7 +12,7 @@ import { Flag, Line, Pick, Regenerate } from "@/components/fields"
 import { field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
-import { randomKey } from "@/keys"
+import { randomId, randomKey } from "@/keys"
 
 export function ClientForm({
   title,
@@ -53,10 +53,12 @@ export function ClientForm({
   const rest = prefix.length > 0 ? spans.slice(1) : spans
   const derived = whole ? rest.map((one) => nth(one, BigInt(shown))).join(", ") : ""
   const clash = others.some((one) => one.name.toLowerCase() === draft.name.trim().toLowerCase())
+  const misnamed = !/^[A-Za-z0-9_-]{0,64}$/.test(draft.subscriptionId)
   const ready =
     !pending &&
     draft.name.trim().length > 0 &&
     !clash &&
+    !misnamed &&
     draft.configId > 0 &&
     (legacy ? parts(listed).length > 0 : whole && spans.length > 0 && problem.length === 0)
 
@@ -169,6 +171,16 @@ export function ClientForm({
             </option>
           ))}
         </Pick>
+
+        <Line
+          id="client-subscription"
+          caption={t("clients.subscription")}
+          value={draft.subscriptionId}
+          onChange={(subscriptionId) => put({ subscriptionId: subscriptionId.trim() })}
+          fault={misnamed ? t("error.badClientSubscription") : ""}
+          after={<Regenerate title={t("clients.generate")} onClick={() => put({ subscriptionId: randomId() })} />}
+          wide
+        />
 
         <Line id="client-note" caption={t("clients.note")} value={draft.note} onChange={(note) => put({ note })} wide />
 

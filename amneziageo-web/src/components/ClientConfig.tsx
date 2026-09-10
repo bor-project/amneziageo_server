@@ -6,7 +6,7 @@ import { primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 
-type Kind = "file" | "link"
+type Kind = "file" | "link" | "subscription"
 
 interface Picture {
   url: string
@@ -16,6 +16,7 @@ interface Picture {
 const kinds: { kind: Kind; label: TextKey }[] = [
   { kind: "file", label: "clients.qrFile" },
   { kind: "link", label: "clients.qrLink" },
+  { kind: "subscription", label: "clients.qrSubscription" },
 ]
 
 const tab = "-mb-px border-b-2 px-1 pb-2 text-sm"
@@ -26,18 +27,26 @@ export function ClientConfig({ id, title, onClose }: { id: number; title: string
   const t = useText()
   const config = useClientConfig(id)
   const [picked, setPicked] = useState<Kind | null>(null)
-  const text = config.data?.text ?? ""
-  const link = config.data?.link ?? ""
+  const words: Record<Kind, string> = {
+    file: config.data?.text ?? "",
+    link: config.data?.link ?? "",
+    subscription: config.data?.subscription ?? "",
+  }
   const pictures = useQuery({
-    queryKey: ["client-qr", id, text, link],
-    queryFn: async () => ({ file: await draw(text), link: await draw(link) }),
-    enabled: text.length > 0,
+    queryKey: ["client-qr", id, words.file, words.link, words.subscription],
+    queryFn: async () => ({
+      file: await draw(words.file),
+      link: await draw(words.link),
+      subscription: words.subscription.length > 0 ? await draw(words.subscription) : null,
+    }),
+    enabled: words.file.length > 0,
   })
   const file = pictures.data?.file
   const packed = pictures.data?.link
   const kind = picked ?? (file === null && packed ? "link" : "file")
-  const picture = kind === "file" ? file : packed
-  const room = Math.min(440, Math.max(280, 3 * Math.max(file?.modules ?? 0, packed?.modules ?? 0)))
+  const picture = pictures.data?.[kind]
+  const offered = kinds.filter((one) => one.kind !== "subscription" || words.subscription.length > 0)
+  const room = Math.min(440, Math.max(280, 3 * Math.max(...offered.map((one) => pictures.data?.[one.kind]?.modules ?? 0))))
 
   return (
     <Modal
@@ -51,8 +60,8 @@ export function ClientConfig({ id, title, onClose }: { id: number; title: string
           </button>
           <button
             type="button"
-            onClick={() => save(config.data?.fileName ?? "client.conf", text)}
-            disabled={text.length === 0}
+            onClick={() => save(config.data?.fileName ?? "client.conf", words.file)}
+            disabled={words.file.length === 0}
             className={primary}
           >
             {t("clients.download")}
@@ -63,7 +72,7 @@ export function ClientConfig({ id, title, onClose }: { id: number; title: string
       <div className="grid gap-4 sm:grid-cols-[auto_1fr]">
         <div className="flex flex-col items-center gap-3">
           <div className="flex gap-6 self-stretch border-b border-line">
-            {kinds.map((one) => (
+            {offered.map((one) => (
               <button
                 key={one.kind}
                 type="button"
@@ -95,9 +104,9 @@ export function ClientConfig({ id, title, onClose }: { id: number; title: string
         </div>
 
         <pre
-          className={`max-h-80 overflow-auto rounded border border-line bg-canvas p-3 text-xs text-ink ${kind === "link" ? "break-all whitespace-pre-wrap" : ""}`}
+          className={`max-h-80 overflow-auto rounded border border-line bg-canvas p-3 text-xs text-ink ${kind === "file" ? "" : "break-all whitespace-pre-wrap"}`}
         >
-          {kind === "file" ? text : link}
+          {words[kind]}
         </pre>
       </div>
     </Modal>

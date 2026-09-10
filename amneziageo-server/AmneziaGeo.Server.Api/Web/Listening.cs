@@ -233,7 +233,10 @@ public static class Listening
         return new ListenPlan([.. any.Distinct()], [.. points.Distinct()], missing);
     }
 
-    private static void Secure(ListenOptions listen, WebCertificate? certificate)
+    /// <summary>
+    /// Puts a listener under the certificate, leaving it plain without one.
+    /// </summary>
+    internal static void Secure(ListenOptions listen, WebCertificate? certificate)
     {
         if (certificate is null)
         {

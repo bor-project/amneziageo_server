@@ -92,6 +92,26 @@ public sealed class ClientStore
     }
 
     /// <summary>
+    /// Returns the clients a subscription carries.
+    /// </summary>
+    public async Task<IReadOnlyList<TunnelClient>> SubscribedAsync(string id, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(id))
+        {
+            return [];
+        }
+
+        var found = await _db.Clients.AsNoTracking()
+            .Where(client => client.SubscriptionId == id)
+            .OrderBy(client => client.ConfigId)
+            .ThenBy(client => client.Name)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return [.. found.Select(Read)];
+    }
+
+    /// <summary>
     /// Returns one client, or null when the panel holds none under the number.
     /// </summary>
     public async Task<TunnelClient?> FindAsync(long id, CancellationToken ct)
@@ -151,13 +171,13 @@ public sealed class ClientStore
     }
 
     /// <summary>
-    /// Adds a client a host already carries, under a free name and with the addresses the host gave it.
+    /// Adds a client a host already carries, under a free name, with the addresses the host gave it and a subscription.
     /// </summary>
     public async Task<ClientResult> ImportAsync(TunnelClient draft, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
-        var wanted = Whole(draft);
+        var wanted = Subscribed(Whole(draft));
         if (await KeyHeldAsync(wanted.PublicKey, 0, ct).ConfigureAwait(false))
         {
             return KeyTaken();
@@ -338,6 +358,7 @@ public sealed class ClientStore
         IsEnabled = entity.IsEnabled,
         Note = entity.Note,
         TemplateId = entity.TemplateId,
+        SubscriptionId = entity.SubscriptionId,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
     };
@@ -352,6 +373,7 @@ public sealed class ClientStore
         entity.IsEnabled = client.IsEnabled;
         entity.Note = client.Note.Trim();
         entity.TemplateId = client.TemplateId;
+        entity.SubscriptionId = client.SubscriptionId.Trim();
     }
 
     private static TunnelClient Whole(TunnelClient draft) => draft with
@@ -361,7 +383,11 @@ public sealed class ClientStore
         PublicKey = Key(draft),
         PresharedKey = draft.PresharedKey.Trim(),
         Note = draft.Note.Trim(),
+        SubscriptionId = draft.SubscriptionId.Trim(),
     };
+
+    private static TunnelClient Subscribed(TunnelClient client) =>
+        client.SubscriptionId.Length > 0 ? client : client with { SubscriptionId = ClientDefaults.SubscriptionId() };
 
     private static string Key(TunnelClient client) =>
         Curve25519.IsKey(client.PrivateKey) ? Curve25519.PublicOf(client.PrivateKey) : client.PublicKey.Trim();

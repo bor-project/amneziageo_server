@@ -56,6 +56,11 @@ public sealed record TunnelClient
     public long? TemplateId { get; init; }
 
     /// <summary>
+    /// The subscription that hands the client out, empty for none.
+    /// </summary>
+    public string SubscriptionId { get; init; } = string.Empty;
+
+    /// <summary>
     /// When the client was added.
     /// </summary>
     public DateTimeOffset CreatedUtc { get; init; }

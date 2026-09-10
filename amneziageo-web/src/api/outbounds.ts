@@ -114,10 +114,6 @@ export function useProbeOutbound() {
   return useRefreshing((id: number) => client.post(`/outbounds/${id}/probe`))
 }
 
-export function useApplyOutbounds() {
-  return useRefreshing(() => client.post("/outbounds/apply"))
-}
-
 export function useImportOutbound() {
   return useMutation({
     mutationFn: async ({ name, config }: { name: string; config: string }) =>
