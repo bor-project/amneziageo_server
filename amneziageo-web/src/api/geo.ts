@@ -43,6 +43,20 @@ export function useGeoKeys() {
   })
 }
 
+export interface GeoEntries {
+  total: number
+  entries: string[]
+}
+
+export function useGeoEntries(key: string | null) {
+  return useQuery({
+    queryKey: ["geo", "entries", key],
+    queryFn: async () => (await client.get<GeoEntries>("/geo/entries", { params: { key } })).data,
+    enabled: key !== null,
+    staleTime: 60000,
+  })
+}
+
 export function useAddGeoSource() {
   return useRefreshing((draft: GeoSourceDraft) => client.post("/geo/sources", draft))
 }

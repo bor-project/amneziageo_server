@@ -44,8 +44,6 @@ export function Geo() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">{t("nav.geo")}</h1>
-
       <div className={`mt-4 flex flex-wrap gap-6 px-4 py-3 ${card}`}>
         <Tally caption={t("geo.countries")} value={keys.data?.countries.length ?? 0} />
         <Tally caption={t("geo.categories")} value={keys.data?.categories.length ?? 0} />

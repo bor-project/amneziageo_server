@@ -1,3 +1,7 @@
+using System.Buffers.Binary;
+using System.Buffers.Text;
+using System.IO.Compression;
+using System.Text.Json;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
@@ -36,9 +40,31 @@ public class ClientTests
     [Fact]
     public void ARangeWithNoRoomLeftHandsOutNothing()
     {
-        var picked = ClientPool.Free(["10.8.0.0/30"], ["10.8.0.2/32", "10.8.0.3/32"]);
+        var picked = ClientPool.Free(["10.8.0.1/30"], ["10.8.0.2/32"]);
 
         Assert.Empty(picked);
+    }
+
+    [Fact]
+    public void TheSameNumberComesOutOfEveryRange()
+    {
+        var picked = ClientPool.Free(["10.8.0.1/24", "fd00::1/64"], ["10.8.0.2/32", "fd00::3/128"]);
+
+        Assert.Equal(["10.8.0.4/32", "fd00::4/128"], picked);
+    }
+
+    [Fact]
+    public void AnAddressFitsOnlyInsideTheRangesAndOffTheirEdges()
+    {
+        Assert.Null(Fitting("10.8.0.5/32", "fd00::5/128"));
+        Assert.Null(Fitting("fd00::ff/128"));
+        Assert.Equal("client-address-outside", Fitting("10.9.0.5/32"));
+        Assert.Equal("client-address-reserved", Fitting("10.8.0.1/32"));
+        Assert.Equal("client-address-reserved", Fitting("10.8.0.0/32"));
+        Assert.Equal("client-address-reserved", Fitting("10.8.0.255/32"));
+        Assert.Equal("client-address-reserved", Fitting("fd00::/128"));
+        Assert.Equal("bad-client-address", Fitting("10.8.0.5/24"));
+        Assert.Equal("bad-client-address", Fitting("10.8.0.5/32", "10.8.0.6/32"));
     }
 
     [Fact]
@@ -231,6 +257,141 @@ public class ClientTests
     public void AClientWithoutAnAddressIsRefused()
     {
         Assert.Equal("bad-client-address", ClientRules.CheckAddress([])!.Code);
+    }
+
+    [Fact]
+    public void TheLinkCarriesTheSameFileAsTheText()
+    {
+        using var document = Opened(ClientLink.Link(Endpoint(), Client()));
+        var awg = document.RootElement.GetProperty("containers")[0].GetProperty("awg");
+        using var last = JsonDocument.Parse(awg.GetProperty("last_config").GetString()!);
+
+        Assert.Equal(ClientText.Text(Endpoint(), Client()), last.RootElement.GetProperty("config").GetString());
+        Assert.Equal(51820, last.RootElement.GetProperty("port").GetInt32());
+    }
+
+    [Fact]
+    public void TheLinkNamesTheClientAndTheServer()
+    {
+        using var document = Opened(ClientLink.Link(Endpoint(), Client()));
+        var root = document.RootElement;
+
+        Assert.Equal("awg1-milena", root.GetProperty("description").GetString());
+        Assert.Equal("bor.sytes.net", root.GetProperty("hostName").GetString());
+        Assert.Equal("amnezia-awg", root.GetProperty("defaultContainer").GetString());
+        Assert.Equal("51820", root.GetProperty("containers")[0].GetProperty("awg").GetProperty("port").GetString());
+    }
+
+    [Fact]
+    public void ALongListOfRangesTakesLessRoomInTheLink()
+    {
+        var ranges = Enumerable.Range(0, 1000).Select(n => $"10.{n / 256}.{n % 256}.0/24").ToArray();
+        var endpoint = Endpoint() with { AllowedIps = ranges };
+
+        var link = ClientLink.Link(endpoint, Client());
+
+        Assert.StartsWith("vpn://", link, StringComparison.Ordinal);
+        Assert.True(link.Length < ClientText.Text(endpoint, Client()).Length / 2);
+    }
+
+    [Fact]
+    public void ATemplateReplacesTheSettingsItNames()
+    {
+        var template = new ClientTemplate
+        {
+            Name = "blocked",
+            AllowedIps = ["10.0.0.0/8", "192.168.0.0/16"],
+            Dns = ["9.9.9.9"],
+            Mtu = 1280,
+            Keepalive = 0,
+        };
+
+        var text = ClientText.Text(Endpoint(), Client(), template);
+
+        Assert.Contains("AllowedIPs = 10.0.0.0/8, 192.168.0.0/16", text, StringComparison.Ordinal);
+        Assert.Contains("DNS = 9.9.9.9", text, StringComparison.Ordinal);
+        Assert.Contains("MTU = 1280", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("PersistentKeepalive", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEmptyTemplateGivesTheDefaultsOfThePanel()
+    {
+        var endpoint = Endpoint() with { Dns = ["10.8.0.1"], AllowedIps = ["10.0.0.0/8"], Mtu = 1280, Keepalive = 0 };
+
+        var text = ClientText.Text(endpoint, Client(), new ClientTemplate { Name = "plain" });
+
+        Assert.Contains("DNS = 1.1.1.1, 1.0.0.1\n", text, StringComparison.Ordinal);
+        Assert.Contains("MTU = 1420\n", text, StringComparison.Ordinal);
+        Assert.Contains("AllowedIPs = 0.0.0.0/0\n", text, StringComparison.Ordinal);
+        Assert.Contains("PersistentKeepalive = 25\n", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AClientWithoutATemplateKeepsTheSettingsOfTheEndpoint()
+    {
+        var endpoint = Endpoint() with { Dns = ["10.8.0.1"], AllowedIps = ["10.0.0.0/8"], Mtu = 1280, Keepalive = 0 };
+
+        var text = ClientText.Text(endpoint, Client());
+
+        Assert.Contains("DNS = 10.8.0.1\n", text, StringComparison.Ordinal);
+        Assert.Contains("MTU = 1280\n", text, StringComparison.Ordinal);
+        Assert.Contains("AllowedIPs = 10.0.0.0/8\n", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("PersistentKeepalive", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEmptyTemplateRoutesIpv6OnlyForAClientThatHoldsIt()
+    {
+        var client = Client() with { Address = ["10.8.0.2/32", "fdcc:ad94:bacf:61a5::2/128"] };
+
+        var text = ClientText.Text(Endpoint(), client, new ClientTemplate { Name = "plain" });
+
+        Assert.Contains("AllowedIPs = 0.0.0.0/0, ::/0\n", text, StringComparison.Ordinal);
+        Assert.Equal(["0.0.0.0/0"], TemplateDefaults.AllowedIps(["10.8.0.1/24"]));
+        Assert.Equal(["0.0.0.0/0", "::/0"], TemplateDefaults.AllowedIps(["10.8.0.1/24", "fd00::1/64"]));
+    }
+
+    [Fact]
+    public void TheLinkCarriesTheTemplateToo()
+    {
+        var template = new ClientTemplate { Name = "blocked", AllowedIps = ["10.0.0.0/8"] };
+
+        using var document = Opened(ClientLink.Link(Endpoint(), Client(), template));
+        var awg = document.RootElement.GetProperty("containers")[0].GetProperty("awg");
+        using var last = JsonDocument.Parse(awg.GetProperty("last_config").GetString()!);
+
+        Assert.Contains(
+            "AllowedIPs = 10.0.0.0/8\n",
+            last.RootElement.GetProperty("config").GetString(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATemplateWithABadNameOrValueIsRefused()
+    {
+        Assert.Equal("bad-template-name", TemplateRules.Check(new ClientTemplate { Name = " " })!.Code);
+        Assert.Equal("bad-allowed", TemplateRules.Check(new ClientTemplate { Name = "a", AllowedIps = ["not-a-range"] })!.Code);
+        Assert.Equal("bad-dns", TemplateRules.Check(new ClientTemplate { Name = "a", Dns = ["dns.google"] })!.Code);
+        Assert.Equal("bad-mtu", TemplateRules.Check(new ClientTemplate { Name = "a", Mtu = 100 })!.Code);
+        Assert.Equal("bad-keepalive", TemplateRules.Check(new ClientTemplate { Name = "a", Keepalive = -1 })!.Code);
+        Assert.Null(TemplateRules.Check(new ClientTemplate { Name = "a", Mtu = 1280, Keepalive = 0 }));
+    }
+
+    private static string? Fitting(params string[] addresses) =>
+        ClientPool.Fit(["10.8.0.1/24", "fd00::1/120"], addresses)?.Code;
+
+    private static JsonDocument Opened(string link)
+    {
+        var packed = Base64Url.DecodeFromChars(link.AsSpan("vpn://".Length));
+        using var source = new MemoryStream(packed, 4, packed.Length - 4);
+        using var zlib = new ZLibStream(source, CompressionMode.Decompress);
+        using var output = new MemoryStream();
+        zlib.CopyTo(output);
+
+        Assert.Equal(BinaryPrimitives.ReadInt32BigEndian(packed), (int)output.Length);
+
+        return JsonDocument.Parse(output.ToArray());
     }
 
     private static ServerConfig Endpoint() => new()

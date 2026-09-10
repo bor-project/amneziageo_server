@@ -21,6 +21,7 @@ export interface Client {
   address: string[]
   isEnabled: boolean
   note: string
+  templateId: number | null
   state: ClientState
   createdUtc: string
   updatedUtc: string
@@ -35,11 +36,13 @@ export interface ClientDraft {
   address: string[]
   isEnabled: boolean
   note: string
+  templateId: number | null
 }
 
 export interface ClientConfig {
   fileName: string
   text: string
+  link: string
 }
 
 export interface ClientApply {
@@ -66,11 +69,10 @@ export function useClientConfig(id: number | null) {
   })
 }
 
-export function useClientDraft(configId: number | null) {
+export function useClientDraft() {
   return useQuery({
-    queryKey: ["client-draft", configId],
-    queryFn: async () => (await client.get<Client>(`/clients/draft?config=${configId}`)).data,
-    enabled: configId !== null,
+    queryKey: ["client-draft"],
+    queryFn: async () => (await client.get<Client>("/clients/draft")).data,
     gcTime: 0,
     staleTime: 0,
   })
@@ -106,6 +108,7 @@ export function draftOf(one: Client): ClientDraft {
     address: one.address,
     isEnabled: one.isEnabled,
     note: one.note,
+    templateId: one.templateId,
   }
 }
 
@@ -116,6 +119,8 @@ function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
     mutationFn: call,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["clients"] })
+      await queryClient.invalidateQueries({ queryKey: ["templates"] })
+      await queryClient.invalidateQueries({ queryKey: ["client-config"] })
     },
   })
 }

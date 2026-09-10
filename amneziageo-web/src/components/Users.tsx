@@ -20,7 +20,8 @@ export function Users() {
 
   return (
     <div className={`mt-4 ${card}`}>
-      <div className="flex justify-end border-b border-line px-4 py-3">
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
+        <span className="text-sm font-medium text-ink">{t("users.title")}</span>
         <button type="button" onClick={() => setAdding(true)} className={primary}>
           {t("users.add")}
         </button>
@@ -208,7 +209,7 @@ function EditDialog({ user, onClose }: { user: User; onClose: () => void }) {
 
       <label className="flex items-center gap-2 text-sm text-muted">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-        {t("users.state")}: {t(enabled ? "users.enabled" : "users.disabled")}
+        {t("users.on")}
       </label>
 
       <Complaint error={change.error} />

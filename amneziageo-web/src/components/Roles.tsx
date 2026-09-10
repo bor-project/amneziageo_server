@@ -17,7 +17,8 @@ export function Roles() {
 
   return (
     <div className={`mt-4 ${card}`}>
-      <div className="flex justify-end border-b border-line px-4 py-3">
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
+        <span className="text-sm font-medium text-ink">{t("roles.title")}</span>
         <button type="button" onClick={() => setAdding(true)} className={primary}>
           {t("roles.add")}
         </button>

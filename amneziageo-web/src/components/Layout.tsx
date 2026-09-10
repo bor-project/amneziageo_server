@@ -18,15 +18,8 @@ import { languageServed, sidebarToggled } from "@/store/uiSlice"
 
 const links: { to: string; label: TextKey; scope: string }[] = [
   { to: "/", label: "nav.overview", scope: scopes.readState },
-  { to: "/configs", label: "nav.configs", scope: scopes.readState },
-  { to: "/clients", label: "nav.clients", scope: scopes.readState },
-  { to: "/geo", label: "nav.geo", scope: scopes.readState },
-  { to: "/outbounds", label: "nav.outbounds", scope: scopes.readState },
-  { to: "/balancers", label: "nav.balancers", scope: scopes.readState },
-  { to: "/rules", label: "nav.rules", scope: scopes.readState },
-  { to: "/dns", label: "nav.dns", scope: scopes.readState },
-  { to: "/proxies", label: "nav.proxies", scope: scopes.readState },
-  { to: "/access", label: "nav.access", scope: scopes.manageAccess },
+  { to: "/connections", label: "nav.connections", scope: scopes.readState },
+  { to: "/routing", label: "nav.routing", scope: scopes.readState },
   { to: "/settings", label: "nav.settings", scope: scopes.manageAccess },
 ]
 

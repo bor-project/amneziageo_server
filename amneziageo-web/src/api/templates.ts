@@ -1,0 +1,96 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { client } from "./client"
+
+export interface Template {
+  id: number
+  name: string
+  entries: string[]
+  allowedIps: string[]
+  missed: string[]
+  dns: string[]
+  mtu: number | null
+  keepalive: number | null
+  clients: number
+  refreshedUtc: string | null
+  createdUtc: string
+  updatedUtc: string
+}
+
+export interface TemplateDraft {
+  name: string
+  entries: string[]
+  dns: string[]
+  mtu: number | null
+  keepalive: number | null
+}
+
+export interface TemplateDefaults {
+  allowedIps: string[]
+  dns: string[]
+  mtu: number
+  keepalive: number
+}
+
+const slow = { timeout: 120000 }
+
+export function useTemplates() {
+  return useQuery({
+    queryKey: ["templates"],
+    queryFn: async () => (await client.get<Template[]>("/templates")).data,
+  })
+}
+
+export function useTemplateDefaults() {
+  return useQuery({
+    queryKey: ["template-defaults"],
+    queryFn: async () => (await client.get<TemplateDefaults>("/templates/defaults")).data,
+  })
+}
+
+export function useAddTemplate() {
+  return useRefreshing((draft: TemplateDraft) => client.post("/templates", draft, slow))
+}
+
+export function useChangeTemplate() {
+  return useRefreshing(({ id, draft }: { id: number; draft: TemplateDraft }) =>
+    client.put(`/templates/${id}`, draft, slow),
+  )
+}
+
+export function useRefreshTemplate() {
+  return useRefreshing((id: number) => client.post(`/templates/${id}/refresh`, null, slow))
+}
+
+export function useRemoveTemplate() {
+  return useRefreshing((id: number) => client.delete(`/templates/${id}`))
+}
+
+export function draftOf(template: Template): TemplateDraft {
+  return {
+    name: template.name,
+    entries: template.entries,
+    dns: template.dns,
+    mtu: template.mtu,
+    keepalive: template.keepalive,
+  }
+}
+
+export const freshTemplate: TemplateDraft = {
+  name: "",
+  entries: [],
+  dns: [],
+  mtu: null,
+  keepalive: null,
+}
+
+function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: call,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["templates"] })
+      await queryClient.invalidateQueries({ queryKey: ["client-config"] })
+    },
+  })
+}

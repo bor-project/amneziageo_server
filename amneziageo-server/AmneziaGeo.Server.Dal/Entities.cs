@@ -455,6 +455,36 @@ public sealed class ClientEntity
 
     public string Note { get; set; } = string.Empty;
 
+    public long? TemplateId { get; set; }
+
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// One client template as the database holds it.
+/// </summary>
+public sealed class TemplateEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Entries { get; set; } = string.Empty;
+
+    public string AllowedIps { get; set; } = string.Empty;
+
+    public string Missed { get; set; } = string.Empty;
+
+    public string Dns { get; set; } = string.Empty;
+
+    public int? Mtu { get; set; }
+
+    public int? Keepalive { get; set; }
+
+    public DateTimeOffset? RefreshedUtc { get; set; }
+
     public DateTimeOffset CreatedUtc { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }

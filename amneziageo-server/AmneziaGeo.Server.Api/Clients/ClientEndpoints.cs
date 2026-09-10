@@ -85,30 +85,47 @@ public static class ClientEndpoints
     }
 
     private static async Task<IResult> DraftAsync(
-        long config,
+        long? config,
         string? name,
         ConfigStore configs,
         ClientStore store,
         CancellationToken ct)
     {
-        var endpoint = await configs.FindAsync(config, ct).ConfigureAwait(false);
-        if (endpoint is null)
+        var endpoint = config is null ? null : await configs.FindAsync(config.Value, ct).ConfigureAwait(false);
+        if (config is not null && endpoint is null)
         {
-            return Missing(config);
+            return Missing(config.Value);
         }
 
-        var taken = await store.AddressesAsync(config, ct).ConfigureAwait(false);
         var wanted = string.IsNullOrWhiteSpace(name) ? "client" : name.Trim();
-        var fresh = ClientDefaults.Fresh(config, await store.FreeNameAsync(config, wanted, ct).ConfigureAwait(false))
-            with
-            {
-                Address = ClientPool.Free(endpoint.Address, [.. taken, .. endpoint.Address]),
-            };
+        var free = await store.FreeNameAsync(wanted, ct).ConfigureAwait(false);
+        var address = await FreeAddressAsync(endpoint, store, ct).ConfigureAwait(false);
+        var fresh = ClientDefaults.Fresh(config ?? 0, free) with { Address = address };
 
-        return Results.Ok(ClientAnswers.Client(fresh, endpoint.Name, ClientState.Missing(fresh), true));
+        return Results.Ok(ClientAnswers.Client(fresh, endpoint?.Name ?? string.Empty, ClientState.Missing(fresh), true));
     }
 
-    private static async Task<IResult> TextAsync(long id, ConfigStore configs, ClientStore store, CancellationToken ct)
+    private static async Task<IReadOnlyList<string>> FreeAddressAsync(
+        ServerConfig? endpoint,
+        ClientStore store,
+        CancellationToken ct)
+    {
+        if (endpoint is null)
+        {
+            return [];
+        }
+
+        var taken = await store.AddressesAsync(endpoint.Id, ct).ConfigureAwait(false);
+
+        return ClientPool.Free(endpoint.Address, [.. taken, .. endpoint.Address]);
+    }
+
+    private static async Task<IResult> TextAsync(
+        long id,
+        ConfigStore configs,
+        ClientStore store,
+        TemplateStore templates,
+        CancellationToken ct)
     {
         var client = await store.FindAsync(id, ct).ConfigureAwait(false);
         if (client is null)
@@ -122,9 +139,14 @@ public static class ClientEndpoints
             return Missing(client.ConfigId);
         }
 
+        var template = client.TemplateId is { } chosen
+            ? await templates.FindAsync(chosen, ct).ConfigureAwait(false)
+            : null;
+
         return Results.Ok(new ClientConfigResponse(
             ClientText.FileName(endpoint, client),
-            ClientText.Text(endpoint, client)));
+            ClientText.Text(endpoint, client, template),
+            ClientLink.Link(endpoint, client, template)));
     }
 
     private static async Task<IResult> AddAsync(

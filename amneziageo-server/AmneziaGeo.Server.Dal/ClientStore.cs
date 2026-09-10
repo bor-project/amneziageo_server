@@ -1,4 +1,6 @@
+using System.Net;
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Crypto;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,6 +18,7 @@ public enum ClientOutcome
     KeyTaken = 4,
     AddressTaken = 5,
     UnknownConfig = 6,
+    UnknownTemplate = 7,
 }
 
 /// <summary>
@@ -114,12 +117,11 @@ public sealed class ClientStore
     }
 
     /// <summary>
-    /// Returns the wanted name, or the first name under it no client of the endpoint carries.
+    /// Returns the wanted name, or the first name under it no client of the panel carries.
     /// </summary>
-    public async Task<string> FreeNameAsync(long configId, string wanted, CancellationToken ct)
+    public async Task<string> FreeNameAsync(string wanted, CancellationToken ct)
     {
         var found = await _db.Clients.AsNoTracking()
-            .Where(client => client.ConfigId == configId)
             .Select(client => client.Name)
             .ToListAsync(ct)
             .ConfigureAwait(false);
@@ -145,20 +147,25 @@ public sealed class ClientStore
     {
         ArgumentNullException.ThrowIfNull(draft);
 
+        return await InsertAsync(Whole(draft), fit: true, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Adds a client a host already carries, under a free name and with the addresses the host gave it.
+    /// </summary>
+    public async Task<ClientResult> ImportAsync(TunnelClient draft, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+
         var wanted = Whole(draft);
-        if (await Refusal(wanted, 0, ct).ConfigureAwait(false) is { } refusal)
+        if (await KeyHeldAsync(wanted.PublicKey, 0, ct).ConfigureAwait(false))
         {
-            return refusal;
+            return KeyTaken();
         }
 
-        var now = _time.GetUtcNow();
-        var entity = new ClientEntity { ConfigId = wanted.ConfigId, CreatedUtc = now, UpdatedUtc = now };
-        Write(entity, wanted);
+        var free = await FreeNameAsync(wanted.Name, ct).ConfigureAwait(false);
 
-        _db.Clients.Add(entity);
-        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
-
-        return ClientResult.Done(Read(entity));
+        return await InsertAsync(wanted with { Name = free }, fit: false, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -175,7 +182,7 @@ public sealed class ClientStore
         }
 
         var wanted = Whole(draft) with { ConfigId = entity.ConfigId };
-        if (await Refusal(wanted, id, ct).ConfigureAwait(false) is { } refusal)
+        if (await Refusal(wanted, id, fit: true, ct).ConfigureAwait(false) is { } refusal)
         {
             return refusal;
         }
@@ -223,14 +230,36 @@ public sealed class ClientStore
         return ClientResult.Done(gone);
     }
 
-    private async Task<ClientResult?> Refusal(TunnelClient draft, long id, CancellationToken ct)
+    private async Task<ClientResult> InsertAsync(TunnelClient wanted, bool fit, CancellationToken ct)
+    {
+        if (await Refusal(wanted, 0, fit, ct).ConfigureAwait(false) is { } refusal)
+        {
+            return refusal;
+        }
+
+        var now = _time.GetUtcNow();
+        var entity = new ClientEntity { ConfigId = wanted.ConfigId, CreatedUtc = now, UpdatedUtc = now };
+        Write(entity, wanted);
+
+        _db.Clients.Add(entity);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return ClientResult.Done(Read(entity));
+    }
+
+    private async Task<ClientResult?> Refusal(TunnelClient draft, long id, bool fit, CancellationToken ct)
     {
         if (ClientRules.Check(draft) is { } fault)
         {
             return ClientResult.No(ClientOutcome.Invalid, fault.Code, fault.Message);
         }
 
-        if (!await _db.Configs.AnyAsync(config => config.Id == draft.ConfigId, ct).ConfigureAwait(false))
+        var ranges = await _db.Configs.AsNoTracking()
+            .Where(config => config.Id == draft.ConfigId)
+            .Select(config => config.Address)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        if (ranges is null)
         {
             return ClientResult.No(
                 ClientOutcome.UnknownConfig,
@@ -238,24 +267,34 @@ public sealed class ClientStore
                 $"there is no endpoint under the number {draft.ConfigId}");
         }
 
+        if (fit && ClientPool.Fit(Parts(ranges), draft.Address) is { } misfit)
+        {
+            return ClientResult.No(ClientOutcome.Invalid, misfit.Code, misfit.Message);
+        }
+
+        if (draft.TemplateId is { } template
+            && !await _db.Templates.AnyAsync(one => one.Id == template, ct).ConfigureAwait(false))
+        {
+            return ClientResult.No(
+                ClientOutcome.UnknownTemplate,
+                "unknown-template",
+                $"there is no template under the number {template}");
+        }
+
         if (await _db.Clients.AnyAsync(
-                client => client.ConfigId == draft.ConfigId && client.Name == draft.Name && client.Id != id,
+                client => EF.Functions.Collate(client.Name, "NOCASE") == draft.Name && client.Id != id,
                 ct)
             .ConfigureAwait(false))
         {
             return ClientResult.No(
                 ClientOutcome.NameTaken,
                 "client-name-taken",
-                $"the endpoint already carries a client called '{draft.Name}'");
+                $"another client already carries the name '{draft.Name}'");
         }
 
-        if (await _db.Clients.AnyAsync(client => client.PublicKey == draft.PublicKey && client.Id != id, ct)
-            .ConfigureAwait(false))
+        if (await KeyHeldAsync(draft.PublicKey, id, ct).ConfigureAwait(false))
         {
-            return ClientResult.No(
-                ClientOutcome.KeyTaken,
-                "client-key-taken",
-                "another client already carries this public key");
+            return KeyTaken();
         }
 
         var held = await _db.Clients.AsNoTracking()
@@ -263,20 +302,26 @@ public sealed class ClientStore
             .Select(client => client.Address)
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        var taken = new HashSet<string>(held.SelectMany(Parts).Select(Bare), StringComparer.OrdinalIgnoreCase);
-        foreach (var address in draft.Address.Select(Bare))
+        var taken = new HashSet<IPAddress>(held.SelectMany(Parts).Select(Point).OfType<IPAddress>());
+        foreach (var address in draft.Address)
         {
-            if (taken.Contains(address))
+            if (Point(address) is { } point && taken.Contains(point))
             {
                 return ClientResult.No(
                     ClientOutcome.AddressTaken,
                     "client-address-taken",
-                    $"another client of the endpoint already carries {address}");
+                    $"another client of the endpoint already carries {point}");
             }
         }
 
         return null;
     }
+
+    private Task<bool> KeyHeldAsync(string key, long id, CancellationToken ct) =>
+        _db.Clients.AnyAsync(client => client.PublicKey == key && client.Id != id, ct);
+
+    private static ClientResult KeyTaken() =>
+        ClientResult.No(ClientOutcome.KeyTaken, "client-key-taken", "another client already carries this public key");
 
     private static ClientResult Missing(long id) =>
         ClientResult.No(ClientOutcome.Unknown, "unknown-client", $"there is no client under the number {id}");
@@ -292,6 +337,7 @@ public sealed class ClientStore
         Address = Parts(entity.Address),
         IsEnabled = entity.IsEnabled,
         Note = entity.Note,
+        TemplateId = entity.TemplateId,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
     };
@@ -305,6 +351,7 @@ public sealed class ClientStore
         entity.Address = string.Join(", ", client.Address);
         entity.IsEnabled = client.IsEnabled;
         entity.Note = client.Note.Trim();
+        entity.TemplateId = client.TemplateId;
     }
 
     private static TunnelClient Whole(TunnelClient draft) => draft with
@@ -319,12 +366,8 @@ public sealed class ClientStore
     private static string Key(TunnelClient client) =>
         Curve25519.IsKey(client.PrivateKey) ? Curve25519.PublicOf(client.PrivateKey) : client.PublicKey.Trim();
 
-    private static string Bare(string address)
-    {
-        var mark = address.IndexOf('/', StringComparison.Ordinal);
-
-        return mark < 0 ? address : address[..mark];
-    }
+    private static IPAddress? Point(string address) =>
+        AwgAllowedIp.TryParse(address, out var found) ? found.Address : null;
 
     private static IReadOnlyList<string> Parts(string text) =>
         [.. text.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];

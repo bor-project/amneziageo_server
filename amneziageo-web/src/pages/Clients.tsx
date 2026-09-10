@@ -12,6 +12,7 @@ import {
 import type { Client } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import { scopes } from "@/api/scopes"
+import { useTemplates } from "@/api/templates"
 import { ClientConfig } from "@/components/ClientConfig"
 import { ClientForm } from "@/components/ClientForm"
 import { Modal } from "@/components/Modal"
@@ -29,6 +30,7 @@ export function Clients() {
   const user = useAppSelector((s) => s.auth.user)
   const configs = useConfigs()
   const clients = useClients()
+  const templates = useTemplates()
   const [picked, setPicked] = useState(0)
   const [adding, setAdding] = useState<number | null>(null)
   const [editing, setEditing] = useState<Client | null>(null)
@@ -40,11 +42,14 @@ export function Clients() {
   const apply = useApplyClients()
   const may = holds(user, scopes.manageClients)
   const shown = (clients.data ?? []).filter((one) => picked === 0 || one.configId === picked)
+  const names = new Map((templates.data ?? []).map((one): [number, string] => [one.id, one.name]))
+
+  function named(one: Client): string {
+    return (one.templateId === null ? undefined : names.get(one.templateId)) ?? t("clients.dash")
+  }
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">{t("nav.clients")}</h1>
-
       <div className={`mt-4 ${card}`}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
           <select
@@ -73,7 +78,7 @@ export function Clients() {
               </button>
               <button
                 type="button"
-                onClick={() => setAdding(picked === 0 ? (configs.data?.[0]?.id ?? 0) : picked)}
+                onClick={() => setAdding(picked)}
                 disabled={(configs.data?.length ?? 0) === 0}
                 className={primary}
               >
@@ -92,6 +97,7 @@ export function Clients() {
                 <tr>
                   <th className="px-4 py-2 font-normal">{t("clients.name")}</th>
                   <th className="px-4 py-2 font-normal">{t("clients.endpointName")}</th>
+                  <th className="px-4 py-2 font-normal">{t("clients.template")}</th>
                   <th className="px-4 py-2 font-normal">{t("clients.address")}</th>
                   <th className="px-4 py-2 font-normal">{t("clients.traffic")}</th>
                   <th className="px-4 py-2 font-normal">{t("clients.state")}</th>
@@ -106,6 +112,7 @@ export function Clients() {
                       {!one.isEnabled && <span className="ml-2 text-xs text-muted">{t("clients.off")}</span>}
                     </td>
                     <td className="px-4 py-2 text-muted">{one.config}</td>
+                    <td className="px-4 py-2 text-muted">{named(one)}</td>
                     <td className="px-4 py-2 text-muted">{one.address.join(", ")}</td>
                     <td className="px-4 py-2 text-muted">
                       {one.state.isPresent
@@ -139,12 +146,13 @@ export function Clients() {
         )}
       </div>
 
-      {adding !== null && adding > 0 && <Adding configId={adding} onClose={() => setAdding(null)} />}
+      {adding !== null && <Adding configId={adding} onClose={() => setAdding(null)} />}
 
       {editing && (
         <ClientForm
           title={t("clients.editTitle", { name: editing.name })}
           start={draftOf(editing)}
+          self={editing.id}
           pending={change.isPending}
           error={change.error}
           onSave={(draft) => void change.mutateAsync({ id: editing.id, draft }).then(() => setEditing(null))}
@@ -189,7 +197,7 @@ export function Clients() {
 
 function Adding({ configId, onClose }: { configId: number; onClose: () => void }) {
   const t = useText()
-  const draft = useClientDraft(configId)
+  const draft = useClientDraft()
   const add = useAddClient()
 
   if (draft.data === undefined) {
@@ -203,7 +211,7 @@ function Adding({ configId, onClose }: { configId: number; onClose: () => void }
   return (
     <ClientForm
       title={t("clients.newTitle")}
-      start={draftOf(draft.data)}
+      start={{ ...draftOf(draft.data), configId, address: [] }}
       pending={add.isPending}
       error={add.error}
       onSave={(body) => void add.mutateAsync(body).then(onClose)}

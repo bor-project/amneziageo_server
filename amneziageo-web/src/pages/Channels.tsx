@@ -1,6 +1,16 @@
 import { useState } from "react"
 import {
-  draftOf,
+  draftOf as groupDraft,
+  freshBalancer,
+  useAddBalancer,
+  useBalancers,
+  useChangeBalancer,
+  useRemoveBalancer,
+  useSwitchBalancer,
+} from "@/api/balancers"
+import type { Balancer, BalancerMember } from "@/api/balancers"
+import {
+  draftOf as channelDraft,
   useAddOutbound,
   useApplyOutbound,
   useApplyOutbounds,
@@ -14,25 +24,29 @@ import {
 } from "@/api/outbounds"
 import type { Outbound, OutboundKind } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
+import { BalancerForm } from "@/components/BalancerForm"
 import { Modal } from "@/components/Modal"
 import { OutboundForm } from "@/components/OutboundForm"
 import { RowActions } from "@/components/RowActions"
-import { card, danger, primary, secondary } from "@/components/styles"
+import { card, danger, secondary } from "@/components/styles"
 import { bytes } from "@/format"
 import { useLanguage, useText } from "@/i18n"
-import type { TextKey } from "@/i18n"
-import type { Text } from "@/i18n"
+import type { Text, TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
 
-export function Outbounds() {
+export function Channels() {
   const t = useText()
   const language = useLanguage()
   const user = useAppSelector((s) => s.auth.user)
   const outbounds = useOutbounds()
+  const balancers = useBalancers()
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Outbound | null>(null)
   const [removing, setRemoving] = useState<Outbound | null>(null)
+  const [grouping, setGrouping] = useState(false)
+  const [regrouping, setRegrouping] = useState<Balancer | null>(null)
+  const [ungrouping, setUngrouping] = useState<Balancer | null>(null)
   const fresh = useFreshOutbound(adding, nextName(outbounds.data), "wg")
   const add = useAddOutbound()
   const change = useChangeOutbound()
@@ -42,13 +56,18 @@ export function Outbounds() {
   const apply = useApplyOutbound()
   const applyAll = useApplyOutbounds()
   const probe = useProbeOutbound()
+  const addGroup = useAddBalancer()
+  const changeGroup = useChangeBalancer()
+  const removeGroup = useRemoveBalancer()
+  const turnGroup = useSwitchBalancer()
   const may = holds(user, scopes.manageRouting)
-  const last = (outbounds.data?.length ?? 0) - 1
+  const channels = outbounds.data ?? []
+  const groups = balancers.data ?? []
+  const last = channels.length - 1
+  const loaded = outbounds.data !== undefined && balancers.data !== undefined
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">{t("nav.outbounds")}</h1>
-
       <div className={`mt-4 ${card}`}>
         {may && (
           <div className="flex justify-end gap-2 border-b border-line px-4 py-3">
@@ -58,17 +77,24 @@ export function Outbounds() {
               disabled={applyAll.isPending}
               className={secondary}
             >
-              {applyAll.isPending ? t("outbounds.applying") : t("outbounds.applyAll")}
+              {applyAll.isPending ? t("outbounds.applying") : t("outbounds.apply")}
             </button>
-            <button type="button" onClick={() => setAdding(true)} className={primary}>
-              {t("outbounds.add")}
-            </button>
+            <RowActions
+              title={t("outbounds.add")}
+              trigger={t("outbounds.add")}
+              actions={[
+                { label: t("outbounds.channel"), onPick: () => setAdding(true) },
+                ...(channels.length > 0 ? [{ label: t("outbounds.group"), onPick: () => setGrouping(true) }] : []),
+              ]}
+            />
           </div>
         )}
 
-        {outbounds.data?.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("outbounds.empty")}</div>}
+        {loaded && channels.length + groups.length === 0 && (
+          <div className="px-4 py-6 text-sm text-muted">{t("outbounds.empty")}</div>
+        )}
 
-        {outbounds.data && outbounds.data.length > 0 && (
+        {channels.length + groups.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-xs text-muted">
@@ -83,15 +109,13 @@ export function Outbounds() {
                 </tr>
               </thead>
               <tbody>
-                {outbounds.data.map((outbound, at) => (
-                  <tr key={outbound.id} className="border-t border-line">
+                {channels.map((outbound, at) => (
+                  <tr key={`channel-${outbound.id}`} className="border-t border-line">
                     <td className="px-4 py-2 font-medium text-ink">
                       {outbound.name}
                       {!outbound.isEnabled && <span className="ml-2 text-xs text-muted">{t("outbounds.off")}</span>}
                     </td>
-                    <td className="px-4 py-2 text-muted">
-                      {t(kindKey(outbound.kind))}
-                    </td>
+                    <td className="px-4 py-2 text-muted">{t(kindKey(outbound.kind))}</td>
                     <td className="px-4 py-2 text-muted">
                       {outbound.kind === "local" ? "" : `${outbound.host}:${outbound.port}`}
                     </td>
@@ -99,7 +123,7 @@ export function Outbounds() {
                       {outbound.mark} / {outbound.table}
                     </td>
                     <td className="px-4 py-2">
-                      <State outbound={outbound} t={t} language={language} />
+                      <ChannelState outbound={outbound} t={t} language={language} />
                     </td>
                     <td className="px-4 py-2 text-muted">
                       {outbound.state !== null && outbound.state.hasLink && outbound.kind !== "local"
@@ -131,6 +155,41 @@ export function Outbounds() {
                     </td>
                   </tr>
                 ))}
+
+                {groups.map((balancer) => (
+                  <tr key={`group-${balancer.id}`} className="border-t border-line">
+                    <td className="px-4 py-2 font-medium text-ink">
+                      {balancer.name}
+                      {!balancer.isEnabled && <span className="ml-2 text-xs text-muted">{t("balancers.off")}</span>}
+                    </td>
+                    <td className="px-4 py-2 text-muted">
+                      {t("outbounds.group")} · {t(strategy(balancer))}
+                    </td>
+                    <td className="px-4 py-2">
+                      <Members members={balancer.state.members} />
+                    </td>
+                    <td className="px-4 py-2" />
+                    <td className="px-4 py-2">
+                      <GroupState balancer={balancer} t={t} />
+                    </td>
+                    <td className="px-4 py-2" />
+                    <td className="px-4 py-2">
+                      {may && (
+                        <RowActions
+                          title={t("balancers.actions")}
+                          actions={[
+                            {
+                              label: balancer.isEnabled ? t("balancers.turnOff") : t("balancers.turnOn"),
+                              onPick: () => void turnGroup.mutateAsync({ id: balancer.id, on: !balancer.isEnabled }),
+                            },
+                            { label: t("balancers.edit"), onPick: () => setRegrouping(balancer) },
+                            { label: t("balancers.remove"), onPick: () => setUngrouping(balancer), alarming: true },
+                          ]}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -140,7 +199,7 @@ export function Outbounds() {
       {adding && fresh.data && (
         <OutboundForm
           title={t("outbounds.newTitle")}
-          start={draftOf(fresh.data)}
+          start={channelDraft(fresh.data)}
           publicKey={fresh.data.publicKey}
           pending={add.isPending}
           error={add.error}
@@ -152,7 +211,7 @@ export function Outbounds() {
       {editing && (
         <OutboundForm
           title={t("outbounds.editTitle", { name: editing.name })}
-          start={draftOf(editing)}
+          start={channelDraft(editing)}
           publicKey={editing.publicKey}
           pending={change.isPending}
           error={change.error}
@@ -186,11 +245,59 @@ export function Outbounds() {
           </div>
         </Modal>
       )}
+
+      {grouping && (
+        <BalancerForm
+          title={t("balancers.newTitle")}
+          start={freshBalancer}
+          pending={addGroup.isPending}
+          error={addGroup.error}
+          onSave={(draft) => void addGroup.mutateAsync(draft).then(() => setGrouping(false))}
+          onClose={() => setGrouping(false)}
+        />
+      )}
+
+      {regrouping && (
+        <BalancerForm
+          title={t("balancers.editTitle", { name: regrouping.name })}
+          start={groupDraft(regrouping)}
+          pending={changeGroup.isPending}
+          error={changeGroup.error}
+          onSave={(draft) =>
+            void changeGroup.mutateAsync({ id: regrouping.id, draft }).then(() => setRegrouping(null))
+          }
+          onClose={() => setRegrouping(null)}
+        />
+      )}
+
+      {ungrouping && (
+        <Modal
+          title={t("balancers.removeTitle", { name: ungrouping.name })}
+          onClose={() => setUngrouping(null)}
+          footer={
+            <>
+              <button type="button" onClick={() => setUngrouping(null)} className={secondary}>
+                {t("balancers.cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void removeGroup.mutateAsync(ungrouping.id).then(() => setUngrouping(null))}
+                disabled={removeGroup.isPending}
+                className={danger}
+              >
+                {t("balancers.remove")}
+              </button>
+            </>
+          }
+        >
+          <div className="text-sm text-muted">{ungrouping.members.join(", ")}</div>
+        </Modal>
+      )}
     </div>
   )
 }
 
-function State({ outbound, t, language }: { outbound: Outbound; t: Text; language: string }) {
+function ChannelState({ outbound, t, language }: { outbound: Outbound; t: Text; language: string }) {
   const state = outbound.state
   if (state === null) {
     return <span className="text-muted">{t("outbounds.unknown")}</span>
@@ -225,12 +332,47 @@ function State({ outbound, t, language }: { outbound: Outbound; t: Text; languag
   )
 }
 
+function GroupState({ balancer, t }: { balancer: Balancer; t: Text }) {
+  if (!balancer.isEnabled) {
+    return <span className="text-muted">{t("balancers.off")}</span>
+  }
+
+  if (!balancer.state.isLive) {
+    return <span className="text-alarm">{t("error.noLiveMember")}</span>
+  }
+
+  return <span className="text-ink">{t("balancers.live")}</span>
+}
+
+function Members({ members }: { members: BalancerMember[] }) {
+  return (
+    <span className="flex flex-wrap gap-2">
+      {members.map((member) => (
+        <span
+          key={member.name}
+          className={member.isAlive ? "rounded bg-brand-soft px-2 py-0.5 text-brand-ink" : "rounded px-2 py-0.5 text-muted"}
+        >
+          {member.name}
+        </span>
+      ))}
+    </span>
+  )
+}
+
 function kindKey(kind: OutboundKind): TextKey {
   if (kind === "wg") {
     return "outbounds.kindWg"
   }
 
   return kind === "ws" ? "outbounds.kindWs" : "outbounds.kindLocal"
+}
+
+function strategy(balancer: Balancer): TextKey {
+  if (balancer.strategy === "round") {
+    return "balancers.round"
+  }
+
+  return balancer.strategy === "sticky" ? "balancers.sticky" : "balancers.priority"
 }
 
 function nextName(outbounds: Outbound[] | undefined): string {

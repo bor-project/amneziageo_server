@@ -3,6 +3,7 @@ import { complaint } from "@/api/auth"
 import { useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import { Modal } from "@/components/Modal"
+import { ObfuscationFields } from "@/components/Obfuscation"
 import { Count, Flag, Line, Section } from "@/components/fields"
 import { field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
@@ -50,8 +51,6 @@ export function ConfigForm({
     const made = await shared.mutateAsync()
     put({ presharedKey: made.key })
   }
-
-  const cover = draft.obfuscation
 
   return (
     <Modal
@@ -166,79 +165,7 @@ export function ConfigForm({
       </Section>
 
       <Section title={t("configs.obfuscation")}>
-        <div className="col-span-2 grid grid-cols-4 gap-3">
-          <Count id="config-jc" caption={t("configs.jc")} value={cover.jc} onChange={(value) => twist({ jc: value })} />
-          <Count id="config-jmin" caption={t("configs.jmin")} value={cover.jmin} onChange={(value) => twist({ jmin: value })} />
-          <Count id="config-jmax" caption={t("configs.jmax")} value={cover.jmax} onChange={(value) => twist({ jmax: value })} />
-          <Count id="config-s1" caption={t("configs.s1")} value={cover.s1} onChange={(value) => twist({ s1: value })} />
-          <Count id="config-s2" caption={t("configs.s2")} value={cover.s2} onChange={(value) => twist({ s2: value })} />
-          <Count id="config-s3" caption={t("configs.s3")} value={cover.s3} onChange={(value) => twist({ s3: value })} />
-          <Count id="config-s4" caption={t("configs.s4")} value={cover.s4} onChange={(value) => twist({ s4: value })} />
-          <Line id="config-h1" caption={t("configs.h1")} value={cover.h1} onChange={(value) => twist({ h1: value })} />
-          <Line id="config-h2" caption={t("configs.h2")} value={cover.h2} onChange={(value) => twist({ h2: value })} />
-          <Line id="config-h3" caption={t("configs.h3")} value={cover.h3} onChange={(value) => twist({ h3: value })} />
-          <Line id="config-h4" caption={t("configs.h4")} value={cover.h4} onChange={(value) => twist({ h4: value })} />
-          <Line
-            id="config-padding"
-            caption={t("configs.padding")}
-            value={cover.contentPaddingAddition}
-            onChange={(value) => twist({ contentPaddingAddition: value })}
-          />
-          <Line
-            id="config-rekey-after"
-            caption={t("configs.rekeyAfter")}
-            value={cover.rekeyAfterTime}
-            onChange={(value) => twist({ rekeyAfterTime: value })}
-          />
-          <Line
-            id="config-rekey-timeout"
-            caption={t("configs.rekeyTimeout")}
-            value={cover.rekeyTimeout}
-            onChange={(value) => twist({ rekeyTimeout: value })}
-          />
-          <Line
-            id="config-reject-after"
-            caption={t("configs.rejectAfter")}
-            value={cover.rejectAfterTime}
-            onChange={(value) => twist({ rejectAfterTime: value })}
-          />
-          <Line
-            id="config-keepalive-timeout"
-            caption={t("configs.keepaliveTimeout")}
-            value={cover.keepaliveTimeout}
-            onChange={(value) => twist({ keepaliveTimeout: value })}
-          />
-          <Line
-            id="config-attempts"
-            caption={t("configs.attempts")}
-            value={cover.maxHandshakeAttempts}
-            onChange={(value) => twist({ maxHandshakeAttempts: value })}
-          />
-        </div>
-        <Line id="config-i1" caption={t("configs.i1")} value={cover.i1 ?? ""} onChange={(value) => twist({ i1: value })} />
-        <Line id="config-i2" caption={t("configs.i2")} value={cover.i2 ?? ""} onChange={(value) => twist({ i2: value })} />
-        <Line id="config-i3" caption={t("configs.i3")} value={cover.i3 ?? ""} onChange={(value) => twist({ i3: value })} />
-        <Line id="config-i4" caption={t("configs.i4")} value={cover.i4 ?? ""} onChange={(value) => twist({ i4: value })} />
-        <Line id="config-i5" caption={t("configs.i5")} value={cover.i5 ?? ""} onChange={(value) => twist({ i5: value })} />
-        <Line
-          id="config-header-key"
-          caption={t("configs.headerKey")}
-          value={cover.headerProtectionKey}
-          onChange={(value) => twist({ headerProtectionKey: value.trim() })}
-          wide
-        />
-        <Flag
-          id="config-trailers"
-          caption={t("configs.trailers")}
-          value={cover.randomTrailers}
-          onChange={(value) => twist({ randomTrailers: value })}
-        />
-        <Flag
-          id="config-cookies"
-          caption={t("configs.cookies")}
-          value={cover.disableCookies}
-          onChange={(value) => twist({ disableCookies: value })}
-        />
+        <ObfuscationFields id="config" cover={draft.obfuscation} onChange={twist} />
       </Section>
 
       {error !== null && error !== undefined && (
@@ -247,4 +174,3 @@ export function ConfigForm({
     </Modal>
   )
 }
-

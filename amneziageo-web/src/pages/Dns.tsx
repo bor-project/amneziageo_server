@@ -12,15 +12,12 @@ import { dnsDrafted, same } from "@/store/draftSlice"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 
 export function Dns() {
-  const t = useText()
   const user = useAppSelector((s) => s.auth.user)
   const resolver = useResolver()
   const may = holds(user, scopes.manageRouting)
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">{t("nav.dns")}</h1>
-
       {resolver.data && (
         <>
           <Watch state={resolver.data.state} />

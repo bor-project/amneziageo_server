@@ -11,24 +11,27 @@ import { holds } from "@/store/authSlice"
 import { panelDrafted, same } from "@/store/draftSlice"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 
+type Part = "server" | "certificates"
+
 const own = "*"
 
-export function Settings() {
-  const t = useText()
+export function PanelServer() {
+  return <Settings part="server" />
+}
+
+export function PanelCertificates() {
+  return <Settings part="certificates" />
+}
+
+function Settings({ part }: { part: Part }) {
   const user = useAppSelector((s) => s.auth.user)
   const panel = usePanel()
   const may = holds(user, scopes.manageAccess)
 
-  return (
-    <div>
-      <h1 className="text-xl font-semibold">{t("nav.settings")}</h1>
-
-      {panel.data && <Editor settings={panel.data} may={may} />}
-    </div>
-  )
+  return panel.data ? <Editor settings={panel.data} may={may} part={part} /> : null
 }
 
-function Editor({ settings, may }: { settings: Panel; may: boolean }) {
+function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: Part }) {
   const t = useText()
   const dispatch = useAppDispatch()
   const kept = useAppSelector((s) => s.drafts.panel)
@@ -38,8 +41,8 @@ function Editor({ settings, may }: { settings: Panel; may: boolean }) {
   const draft = kept ?? saved
   const domain = domainOf(draft, settings.certificateRoot)
 
-  function set(part: Partial<PanelDraft>) {
-    const next = { ...draft, ...part }
+  function set(change: Partial<PanelDraft>) {
+    const next = { ...draft, ...change }
     dispatch(panelDrafted(same(next, saved) ? null : next))
   }
 
@@ -77,82 +80,88 @@ function Editor({ settings, may }: { settings: Panel; may: boolean }) {
 
   return (
     <div className={`mt-4 px-4 py-2 ${card}`}>
-      <Row id="panel-listen" caption={t("settings.listen")}>
-        <Multi
-          id="panel-listen"
-          value={draft.listen}
-          offers={settings.addresses}
-          placeholder={t("settings.everyAddress")}
-          onChange={(listen) => set({ listen })}
-        />
-      </Row>
+      {part === "server" ? (
+        <>
+          <Row id="panel-listen" caption={t("settings.listen")}>
+            <Multi
+              id="panel-listen"
+              value={draft.listen}
+              offers={settings.addresses}
+              placeholder={t("settings.everyAddress")}
+              onChange={(listen) => set({ listen })}
+            />
+          </Row>
 
-      <Row id="panel-domains" caption={t("settings.domains")}>
-        <Multi
-          id="panel-domains"
-          value={draft.domains}
-          offers={settings.certificates}
-          placeholder={t("settings.anyDomain")}
-          onChange={(domains) => set({ domains })}
-        />
-      </Row>
+          <Row id="panel-domains" caption={t("settings.domains")}>
+            <Multi
+              id="panel-domains"
+              value={draft.domains}
+              offers={settings.certificates}
+              placeholder={t("settings.anyDomain")}
+              onChange={(domains) => set({ domains })}
+            />
+          </Row>
 
-      <Row id="panel-port" caption={t("settings.port")}>
-        <input
-          id="panel-port"
-          type="number"
-          className={field}
-          value={draft.port}
-          onChange={(e) => set({ port: Number(e.target.value) })}
-        />
-      </Row>
+          <Row id="panel-port" caption={t("settings.port")}>
+            <input
+              id="panel-port"
+              type="number"
+              className={field}
+              value={draft.port}
+              onChange={(e) => set({ port: Number(e.target.value) })}
+            />
+          </Row>
 
-      <Row id="panel-path" caption={t("settings.path")}>
-        <input id="panel-path" className={field} value={draft.path} onChange={(e) => set({ path: e.target.value })} />
-      </Row>
+          <Row id="panel-path" caption={t("settings.path")}>
+            <input id="panel-path" className={field} value={draft.path} onChange={(e) => set({ path: e.target.value })} />
+          </Row>
 
-      <Row id="panel-domain" caption={t("settings.domain")}>
-        <select id="panel-domain" className={field} value={domain} onChange={(e) => pickDomain(e.target.value)}>
-          <option value="">{t("settings.noDomain")}</option>
-          {settings.certificates.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-          <option value={own}>{t("settings.ownCertificate")}</option>
-        </select>
-      </Row>
+          <Row id="panel-language" caption={t("settings.language")}>
+            <select
+              id="panel-language"
+              className={field}
+              value={draft.language}
+              onChange={(e) => set({ language: e.target.value })}
+            >
+              <option value="auto">{t("language.auto")}</option>
+              <option value="en">{languageNames.en}</option>
+              <option value="ru">{languageNames.ru}</option>
+            </select>
+          </Row>
+        </>
+      ) : (
+        <>
+          <Row id="panel-domain" caption={t("settings.domain")}>
+            <select id="panel-domain" className={field} value={domain} onChange={(e) => pickDomain(e.target.value)}>
+              <option value="">{t("settings.noDomain")}</option>
+              {settings.certificates.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+              <option value={own}>{t("settings.ownCertificate")}</option>
+            </select>
+          </Row>
 
-      <Row id="panel-certificate" caption={t("settings.certificate")}>
-        <input
-          id="panel-certificate"
-          className={field}
-          value={draft.certificate}
-          onChange={(e) => set({ certificate: e.target.value })}
-        />
-      </Row>
+          <Row id="panel-certificate" caption={t("settings.certificate")}>
+            <input
+              id="panel-certificate"
+              className={field}
+              value={draft.certificate}
+              onChange={(e) => set({ certificate: e.target.value })}
+            />
+          </Row>
 
-      <Row id="panel-certificate-key" caption={t("settings.certificateKey")}>
-        <input
-          id="panel-certificate-key"
-          className={field}
-          value={draft.certificateKey}
-          onChange={(e) => set({ certificateKey: e.target.value })}
-        />
-      </Row>
-
-      <Row id="panel-language" caption={t("settings.language")}>
-        <select
-          id="panel-language"
-          className={field}
-          value={draft.language}
-          onChange={(e) => set({ language: e.target.value })}
-        >
-          <option value="auto">{t("language.auto")}</option>
-          <option value="en">{languageNames.en}</option>
-          <option value="ru">{languageNames.ru}</option>
-        </select>
-      </Row>
+          <Row id="panel-certificate-key" caption={t("settings.certificateKey")}>
+            <input
+              id="panel-certificate-key"
+              className={field}
+              value={draft.certificateKey}
+              onChange={(e) => set({ certificateKey: e.target.value })}
+            />
+          </Row>
+        </>
+      )}
 
       <div className="flex items-center gap-2 border-t border-line py-3">
         <button

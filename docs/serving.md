@@ -1,6 +1,7 @@
 # Where the panel answers
 
-The panel holds where it answers itself, on the **Settings** page. What it holds is taken at start: `Save`
+The panel holds where it answers itself, on the **Server** and **Certificates** tabs of **Settings**. What
+it holds is taken at start: `Save`
 writes a change down, and it takes hold after `Restart`, the button that shows in the header while a saved
 change waits for it. `Cancel` drops what is not saved yet, and an edit left unsaved stays while other pages
 are opened. The language takes hold at once.

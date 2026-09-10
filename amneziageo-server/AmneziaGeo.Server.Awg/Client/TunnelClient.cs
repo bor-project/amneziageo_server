@@ -51,6 +51,11 @@ public sealed record TunnelClient
     public string Note { get; init; } = string.Empty;
 
     /// <summary>
+    /// The template the file of the client takes settings from.
+    /// </summary>
+    public long? TemplateId { get; init; }
+
+    /// <summary>
     /// When the client was added.
     /// </summary>
     public DateTimeOffset CreatedUtc { get; init; }

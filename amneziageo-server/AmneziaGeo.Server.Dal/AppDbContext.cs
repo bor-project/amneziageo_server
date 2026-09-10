@@ -49,6 +49,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<ProxyEntity> Proxy => Set<ProxyEntity>();
 
+    public DbSet<TemplateEntity> Templates => Set<TemplateEntity>();
+
     /// <summary>
     /// Shapes the tables the server adds to the identity ones.
     /// </summary>
@@ -110,6 +112,13 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
                 .WithMany()
                 .HasForeignKey(client => client.ConfigId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(client => client.TemplateId);
+        });
+
+        builder.Entity<TemplateEntity>(entity =>
+        {
+            entity.Property(template => template.Name).HasMaxLength(TemplateRules.MaxNameLength);
+            entity.HasIndex(template => template.Name).IsUnique();
         });
 
         builder.Entity<GeoSourceEntity>(entity =>

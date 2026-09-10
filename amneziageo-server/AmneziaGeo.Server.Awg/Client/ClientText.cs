@@ -14,19 +14,26 @@ public static class ClientText
     /// <summary>
     /// Returns the configuration of a client as it is handed out.
     /// </summary>
-    public static string Text(ServerConfig config, TunnelClient client)
+    public static string Text(ServerConfig config, TunnelClient client, ClientTemplate? template = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
+
+        var dns = template is null ? config.Dns : Either(template.Dns, TemplateDefaults.Dns);
+        var ranges = template is null
+            ? config.AllowedIps
+            : Either(template.AllowedIps, TemplateDefaults.AllowedIps(client.Address));
+        var mtu = template is null ? config.Mtu : template.Mtu ?? TemplateDefaults.Mtu;
+        var keepalive = template is null ? config.Keepalive : template.Keepalive ?? TemplateDefaults.Keepalive;
 
         var text = new StringBuilder();
         text.Append("[Interface]\n");
         Line(text, "PrivateKey", client.PrivateKey);
         Line(text, "Address", string.Join(", ", client.Address));
-        Line(text, "DNS", string.Join(", ", config.Dns));
-        if (config.Mtu > 0)
+        Line(text, "DNS", string.Join(", ", dns));
+        if (mtu > 0)
         {
-            Line(text, "MTU", Number(config.Mtu));
+            Line(text, "MTU", Number(mtu));
         }
 
         Obfuscation(text, config.Obfuscation);
@@ -34,11 +41,11 @@ public static class ClientText
         text.Append("\n[Peer]\n");
         Line(text, "PublicKey", config.PublicKey);
         Line(text, "PresharedKey", Preshared(config, client));
-        Line(text, "AllowedIPs", string.Join(", ", config.AllowedIps));
+        Line(text, "AllowedIPs", string.Join(", ", ranges));
         Line(text, "Endpoint", Endpoint(config));
-        if (config.Keepalive > 0)
+        if (keepalive > 0)
         {
-            Line(text, "PersistentKeepalive", Number(config.Keepalive));
+            Line(text, "PersistentKeepalive", Number(keepalive));
         }
 
         return text.ToString();
@@ -49,10 +56,18 @@ public static class ClientText
     /// </summary>
     public static string FileName(ServerConfig config, TunnelClient client)
     {
+        return $"{Title(config, client)}.conf";
+    }
+
+    /// <summary>
+    /// Returns the name the configuration of a client goes by.
+    /// </summary>
+    public static string Title(ServerConfig config, TunnelClient client)
+    {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
-        return $"{config.Name}-{client.Name}.conf";
+        return $"{config.Name}-{client.Name}";
     }
 
     /// <summary>
@@ -84,6 +99,9 @@ public static class ClientText
 
         return $"{host}:{Number(config.ListenPort)}";
     }
+
+    private static IReadOnlyList<string> Either(IReadOnlyList<string> own, IReadOnlyList<string> otherwise) =>
+        own.Count > 0 ? own : otherwise;
 
     private static void Obfuscation(StringBuilder text, ObfuscationSettings obfuscation)
     {

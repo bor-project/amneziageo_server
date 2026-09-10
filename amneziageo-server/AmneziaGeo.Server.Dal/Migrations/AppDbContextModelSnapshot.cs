@@ -277,6 +277,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("TemplateId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTimeOffset>("UpdatedUtc")
                         .HasColumnType("TEXT");
 
@@ -284,6 +287,8 @@ namespace AmneziaGeo.Server.Dal.Migrations
 
                     b.HasIndex("PublicKey")
                         .IsUnique();
+
+                    b.HasIndex("TemplateId");
 
                     b.HasIndex("ConfigId", "Name")
                         .IsUnique();
@@ -985,6 +990,56 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.HasIndex("UserId", "EndedUtc");
 
                     b.ToTable("Sessions");
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.TemplateEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AllowedIps")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Dns")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Entries")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Keepalive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Missed")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Mtu")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("RefreshedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Templates");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<long>", b =>

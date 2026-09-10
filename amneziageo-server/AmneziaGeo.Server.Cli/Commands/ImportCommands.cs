@@ -207,15 +207,19 @@ public static class ImportCommands
         var refused = 0;
         foreach (var client in clients)
         {
-            var result = await context.Clients.AddAsync(client, ct).ConfigureAwait(false);
+            var result = await context.Clients.ImportAsync(client, ct).ConfigureAwait(false);
             if (result.IsOk)
             {
                 added++;
+                if (!string.Equals(result.Record!.Name, client.Name.Trim(), StringComparison.Ordinal))
+                {
+                    Terminal.Say($"{name}: {client.Name} taken as {result.Record.Name}");
+                }
 
                 continue;
             }
 
-            if (result.Outcome is ClientOutcome.KeyTaken or ClientOutcome.NameTaken)
+            if (result.Outcome is ClientOutcome.KeyTaken)
             {
                 held++;
 

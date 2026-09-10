@@ -24,14 +24,20 @@ The private key of a client is written out only to a caller that holds `clients:
 
 | Setting | Holds |
 |---|---|
-| Name | what the client is listed under, up to 64 characters |
+| Name | what the client is listed under, up to 64 characters, one of a kind in the whole panel whatever the case |
 | Keys | the pair of the client and, when it carries one of its own, a preshared key |
-| Addresses | what the client carries inside the tunnel, up to four |
+| Addresses | one out of every range of the endpoint: not its network, broadcast or own address, and not one another client of the endpoint carries |
 | On | whether the interface takes the client |
 | Note | a line of your own, up to 255 characters |
 
-`GET /api/clients/draft?config=<id>` returns a client that is not saved yet: a fresh key pair, a name no
-other client of the endpoint carries and the first free address out of every range of the endpoint.
+`GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair and a name no other client
+carries. With `?config=<id>` it also carries the first number free in every range of the endpoint, as an address
+out of each.
+
+The panel adds a client to the interface picked in its form, and the address is written as a number: the head
+of every range comes from the interface and the number goes into each of them, so a client of an interface with
+IPv6 takes the same number in both families. A client whose addresses do not come out of one number is edited as
+a list.
 
 ## What the client is handed
 
@@ -39,9 +45,18 @@ other client of the endpoint carries and the first free address out of every ran
 the name servers, the packet size and the obfuscation of the endpoint, and under `[Peer]` the public key of
 the endpoint, the preshared key, the ranges the client routes into the tunnel, the address the endpoint
 answers at and the keepalive. A client without a preshared key of its own takes the one of the endpoint.
-The panel shows the same file as a QR code and hands it over as a file. The obfuscation goes over whole:
-the junk sizes, the packet types with their spans, the special packets, the header protection key, the
-padding and the timings, so a client of a 3.1 endpoint carries the same lines the interface does.
+A client with a template takes the ranges, the name servers, the packet size and the keepalive from the
+template instead, and the defaults of the panel where the template names none, see [templates.md](templates.md).
+The obfuscation goes over whole: the junk sizes, the packet types with their spans, the special packets,
+the header protection key, the padding and the timings, so a client of a 3.1 endpoint carries the same
+lines the interface does.
+
+The panel shows the same file as a QR code and hands it over as a file. The answer also carries `link`,
+the same file as an Amnezia `vpn://` link: the JSON document Amnezia shares configurations in, packed with
+zlib and written in base64url. The AmneziaGeo client reads it from a QR as well, the Amnezia application
+takes it as a pasted key, and a long list of ranges takes far less room in it than in the file. The panel
+draws a QR of the file and of the link, opens on the link when the file does not fit, and says so when
+neither fits.
 
 An endpoint with no address of its own leaves the `Endpoint` line out, and a client that gets such a file
 has nowhere to connect: name the address of the server in the settings of the endpoint first.
@@ -79,6 +94,8 @@ clients` reads the file a host keeps its clients in, private keys included; `--v
 second family to every client, the way the host builds it out of the last number of the first one.
 
 A client whose public key the panel already holds is passed over, so an import runs twice without doubling.
+A name another client already carries gets a number after it (`milena-2`), and the import says so. The
+addresses are taken as the host has them, without the range checks the panel makes.
 
 ## When something is refused
 
@@ -87,8 +104,10 @@ A client whose public key the panel already holds is passed over, so an import r
 | `bad-client-name` | the name is empty, too long or takes letters the rules do not |
 | `bad-client-key` | the pair of the client is not 32 bytes in base64 |
 | `bad-client-preshared` | the preshared key is not 32 bytes in base64 |
-| `bad-client-address` | the client carries no address, too many, or one that is not an address |
-| `client-name-taken` | the endpoint already carries a client under this name |
+| `bad-client-address` | the client carries no address, too many, one that is not a single address or two in one range |
+| `client-address-outside` | an address lies outside the ranges of the endpoint |
+| `client-address-reserved` | an address is the network, the broadcast or the address of the endpoint |
+| `client-name-taken` | another client already carries this name, whatever the case |
 | `client-key-taken` | another client already carries this public key |
 | `client-address-taken` | another client of the endpoint already carries this address |
 | `unknown-client` | the panel holds no client under this number |

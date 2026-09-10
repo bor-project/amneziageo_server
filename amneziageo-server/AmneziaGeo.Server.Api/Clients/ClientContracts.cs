@@ -27,6 +27,7 @@ public sealed record ClientResponse(
     IReadOnlyList<string> Address,
     bool IsEnabled,
     string Note,
+    long? TemplateId,
     ClientStateBody State,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc);
@@ -42,7 +43,8 @@ public sealed record ClientRequest(
     string? PresharedKey,
     IReadOnlyList<string>? Address,
     bool IsEnabled,
-    string? Note);
+    string? Note,
+    long? TemplateId = null);
 
 /// <summary>
 /// Whether a client is on.
@@ -52,7 +54,7 @@ public sealed record ClientSwitchRequest(bool On);
 /// <summary>
 /// The configuration a client connects with.
 /// </summary>
-public sealed record ClientConfigResponse(string FileName, string Text);
+public sealed record ClientConfigResponse(string FileName, string Text, string Link);
 
 /// <summary>
 /// What putting the clients of one endpoint on the host produced.
@@ -85,6 +87,7 @@ public static class ClientAnswers
             client.Address,
             client.IsEnabled,
             client.Note,
+            client.TemplateId,
             new ClientStateBody(
                 state.IsOnline,
                 state.IsPresent,
@@ -113,6 +116,7 @@ public static class ClientAnswers
             Address = Clean(request.Address),
             IsEnabled = request.IsEnabled,
             Note = (request.Note ?? string.Empty).Trim(),
+            TemplateId = request.TemplateId,
         };
     }
 

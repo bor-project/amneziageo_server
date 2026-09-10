@@ -4,6 +4,7 @@ import type { Obfuscation } from "@/api/configs"
 import { useImportOutbound, useOutboundKeys } from "@/api/outbounds"
 import type { OutboundDraft, OutboundKind } from "@/api/outbounds"
 import { Modal } from "@/components/Modal"
+import { ObfuscationFields } from "@/components/Obfuscation"
 import { Count, Flag, Line, Section } from "@/components/fields"
 import { field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
@@ -68,7 +69,6 @@ export function OutboundForm({
     setText("")
   }
 
-  const cover = draft.obfuscation
   const tunnel = draft.kind === "wg" || draft.kind === "ws"
 
   return (
@@ -225,79 +225,7 @@ export function OutboundForm({
 
       {tunnel && (
         <Section title={t("outbounds.obfuscation")}>
-          <div className="col-span-2 grid grid-cols-4 gap-3">
-            <Count id="outbound-jc" caption={t("configs.jc")} value={cover.jc} onChange={(value) => twist({ jc: value })} />
-            <Count id="outbound-jmin" caption={t("configs.jmin")} value={cover.jmin} onChange={(value) => twist({ jmin: value })} />
-            <Count id="outbound-jmax" caption={t("configs.jmax")} value={cover.jmax} onChange={(value) => twist({ jmax: value })} />
-            <Count id="outbound-s1" caption={t("configs.s1")} value={cover.s1} onChange={(value) => twist({ s1: value })} />
-            <Count id="outbound-s2" caption={t("configs.s2")} value={cover.s2} onChange={(value) => twist({ s2: value })} />
-            <Count id="outbound-s3" caption={t("configs.s3")} value={cover.s3} onChange={(value) => twist({ s3: value })} />
-            <Count id="outbound-s4" caption={t("configs.s4")} value={cover.s4} onChange={(value) => twist({ s4: value })} />
-            <Line id="outbound-h1" caption={t("configs.h1")} value={cover.h1} onChange={(value) => twist({ h1: value })} />
-            <Line id="outbound-h2" caption={t("configs.h2")} value={cover.h2} onChange={(value) => twist({ h2: value })} />
-            <Line id="outbound-h3" caption={t("configs.h3")} value={cover.h3} onChange={(value) => twist({ h3: value })} />
-            <Line id="outbound-h4" caption={t("configs.h4")} value={cover.h4} onChange={(value) => twist({ h4: value })} />
-            <Line
-              id="outbound-padding"
-              caption={t("configs.padding")}
-              value={cover.contentPaddingAddition}
-              onChange={(value) => twist({ contentPaddingAddition: value })}
-            />
-            <Line
-              id="outbound-rekey-after"
-              caption={t("configs.rekeyAfter")}
-              value={cover.rekeyAfterTime}
-              onChange={(value) => twist({ rekeyAfterTime: value })}
-            />
-            <Line
-              id="outbound-rekey-timeout"
-              caption={t("configs.rekeyTimeout")}
-              value={cover.rekeyTimeout}
-              onChange={(value) => twist({ rekeyTimeout: value })}
-            />
-            <Line
-              id="outbound-reject-after"
-              caption={t("configs.rejectAfter")}
-              value={cover.rejectAfterTime}
-              onChange={(value) => twist({ rejectAfterTime: value })}
-            />
-            <Line
-              id="outbound-keepalive-timeout"
-              caption={t("configs.keepaliveTimeout")}
-              value={cover.keepaliveTimeout}
-              onChange={(value) => twist({ keepaliveTimeout: value })}
-            />
-            <Line
-              id="outbound-attempts"
-              caption={t("configs.attempts")}
-              value={cover.maxHandshakeAttempts}
-              onChange={(value) => twist({ maxHandshakeAttempts: value })}
-            />
-          </div>
-          <Line id="outbound-i1" caption={t("configs.i1")} value={cover.i1 ?? ""} onChange={(value) => twist({ i1: value })} />
-          <Line id="outbound-i2" caption={t("configs.i2")} value={cover.i2 ?? ""} onChange={(value) => twist({ i2: value })} />
-          <Line id="outbound-i3" caption={t("configs.i3")} value={cover.i3 ?? ""} onChange={(value) => twist({ i3: value })} />
-          <Line id="outbound-i4" caption={t("configs.i4")} value={cover.i4 ?? ""} onChange={(value) => twist({ i4: value })} />
-          <Line id="outbound-i5" caption={t("configs.i5")} value={cover.i5 ?? ""} onChange={(value) => twist({ i5: value })} />
-          <Line
-            id="outbound-header-key"
-            caption={t("configs.headerKey")}
-            value={cover.headerProtectionKey}
-            onChange={(value) => twist({ headerProtectionKey: value.trim() })}
-            wide
-          />
-          <Flag
-            id="outbound-trailers"
-            caption={t("configs.trailers")}
-            value={cover.randomTrailers}
-            onChange={(value) => twist({ randomTrailers: value })}
-          />
-          <Flag
-            id="outbound-cookies"
-            caption={t("configs.cookies")}
-            value={cover.disableCookies}
-            onChange={(value) => twist({ disableCookies: value })}
-          />
+          <ObfuscationFields id="outbound" cover={draft.obfuscation} onChange={twist} />
         </Section>
       )}
 

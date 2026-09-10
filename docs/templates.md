@@ -1,0 +1,56 @@
+# Client templates
+
+A template names what the file of a client takes in place of the settings of its interface: the ranges the
+client routes into the tunnel (`AllowedIPs`), the name servers, the packet size and the keepalive. A field the
+template leaves empty takes the default of the panel: `0.0.0.0/0`, and `::/0` too for a client with an IPv6
+address, the name servers `1.1.1.1` and `1.0.0.1`, the packet size 1420 and the keepalive 25. A client without a
+template keeps the settings of its interface. The keys, the address of the client, the endpoint and the
+obfuscation always come from the interface: they have to match the server.
+
+## Where the ranges come from
+
+The ranges are not written by hand. The template keeps a list of entries, the way the client keeps its lists:
+
+| Entry | Written as | Gives |
+|---|---|---|
+| GeoIP | `geoip:ru` | the ranges the geo databases carry for the country |
+| GeoSite | `geosite:youtube` | the addresses the names of the category resolve to |
+| Network | `10.0.0.0/8` | itself |
+| Address | `1.2.3.4` | itself |
+| Domain | `example.com` | the addresses the name resolves to |
+
+The client forms `domain:example.com` and `cidr:10.0.0.0/8` are taken too, and so is a link, which leaves its
+host. A name is asked for both families through the name servers of the panel resolver (`upstreams` in
+[dns.md](dns.md)); of a geosite category only the domains and the exact names are asked, keywords and
+expressions have no address of their own. One pass asks at most 4000 names and stops after a minute; a name that
+did not answer in time counts as not found.
+
+What the entries give is folded into the fewest ranges that cover it and kept with the template, together with
+the entries that gave nothing and the time of the pass. This is what goes into `AllowedIPs` of every client of
+the template; when nothing came out, the default ranges go instead.
+
+The list is worked out again when the template is saved and by `Refresh` (`POST /api/templates/{id}/refresh`):
+names move and geo databases update, and the files of the clients follow only after a refresh.
+
+A template a client takes cannot be removed (`template-in-use`): pick another template for those clients
+first.
+
+| Setting | Holds |
+|---|---|
+| Name | up to 64 characters, one of a kind |
+| Entries | up to 256 geo keys, networks, addresses and domains; empty gives `0.0.0.0/0`, with `::/0` for a client with an IPv6 address |
+| DNS | name server addresses; empty gives `1.1.1.1` and `1.0.0.1` |
+| MTU | 576 to 9000; empty gives 1420 |
+| Keepalive | 0 to 65535 seconds, 0 turns it off; empty gives 25 |
+
+`GET /api/templates` lists the templates with their entries, the ranges they gave, the entries that gave
+nothing, the time of the last pass and the number of clients that take each; `GET /api/templates/{id}` returns
+one; `GET /api/templates/defaults` returns what an empty field gives, `::/0` among the ranges when an interface
+carries IPv6; all three need `state:read`. `POST /api/templates`, `PUT /api/templates/{id}`,
+`POST /api/templates/{id}/refresh` and `DELETE /api/templates/{id}` need `clients:write`. A request writes
+`entries`, never `allowedIps`. A client names its template in `templateId`; a number the panel does not hold is
+refused with `unknown-template`.
+
+`GET /api/geo/entries?key=geosite:youtube&limit=200` shows what a geo key carries: how many entries and the first
+of them, the ranges of a country or the names of a category, a name written `full:`, `keyword:` or `regexp:` when
+it is matched that way. It needs `state:read`.

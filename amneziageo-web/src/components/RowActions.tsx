@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { MouseEvent } from "react"
-import { card, quiet } from "@/components/styles"
+import { card, primary, quiet } from "@/components/styles"
 
 export interface RowAction {
   label: string
@@ -10,7 +10,7 @@ export interface RowAction {
 
 const width = 176
 
-export function RowActions({ title, actions }: { title: string; actions: RowAction[] }) {
+export function RowActions({ title, actions, trigger }: { title: string; actions: RowAction[]; trigger?: string }) {
   const [spot, setSpot] = useState<{ top: number; left: number } | null>(null)
 
   function toggle(event: MouseEvent<HTMLButtonElement>) {
@@ -31,9 +31,15 @@ export function RowActions({ title, actions }: { title: string; actions: RowActi
 
   return (
     <div className="flex justify-end">
-      <button type="button" title={title} aria-label={title} onClick={toggle} className={quiet}>
-        <Kebab />
-      </button>
+      {trigger === undefined ? (
+        <button type="button" title={title} aria-label={title} onClick={toggle} className={quiet}>
+          <Kebab />
+        </button>
+      ) : (
+        <button type="button" onClick={toggle} className={primary}>
+          {trigger}
+        </button>
+      )}
 
       {spot && (
         <>

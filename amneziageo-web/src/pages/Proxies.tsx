@@ -42,8 +42,6 @@ export function Proxies() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">{t("nav.proxies")}</h1>
-
       {bare && (alone || proxies.data?.length === 0) && (
         <div className="mt-3 text-sm text-alarm">{t("error.noCertificate")}</div>
       )}

@@ -19,6 +19,8 @@ export function Line({
   wide = false,
   placeholder = "",
   hint = "",
+  fault = "",
+  after,
 }: {
   id: string
   caption: string
@@ -27,21 +29,52 @@ export function Line({
   wide?: boolean
   placeholder?: string
   hint?: string
+  fault?: string
+  after?: ReactNode
 }) {
+  const input = (
+    <input
+      id={id}
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      className={after === undefined ? `mt-1 ${field}` : `min-w-0 flex-1 ${field}`}
+    />
+  )
+
   return (
     <div className={wide ? "col-span-2" : ""}>
       <label className={label} htmlFor={id}>
         {caption}
       </label>
-      <input
-        id={id}
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className={`mt-1 ${field}`}
-      />
+      {after === undefined ? (
+        input
+      ) : (
+        <div className="mt-1 flex gap-2">
+          {input}
+          {after}
+        </div>
+      )}
       {hint.length > 0 && <div className={note}>{hint}</div>}
+      {fault.length > 0 && <div className="mt-1 text-xs text-alarm">{fault}</div>}
     </div>
+  )
+}
+
+export function Regenerate({ title, onClick }: { title: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className="flex shrink-0 items-center rounded border border-line px-2.5 text-muted hover:bg-hover hover:text-ink"
+    >
+      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M20 12a8 8 0 1 1-2.34-5.66L20 8" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M20 3v5h-5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
   )
 }
 
@@ -53,6 +86,7 @@ export function Pick({
   children,
   wide = false,
   hint = "",
+  disabled = false,
 }: {
   id: string
   caption: string
@@ -61,13 +95,20 @@ export function Pick({
   children: ReactNode
   wide?: boolean
   hint?: string
+  disabled?: boolean
 }) {
   return (
     <div className={wide ? "col-span-2" : ""}>
       <label className={label} htmlFor={id}>
         {caption}
       </label>
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={`mt-1 ${field}`}>
+      <select
+        id={id}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className={`mt-1 ${field}`}
+      >
         {children}
       </select>
       {hint.length > 0 && <div className={note}>{hint}</div>}
@@ -110,13 +151,15 @@ export function Flag({
   caption,
   value,
   onChange,
+  hint = "",
 }: {
   id: string
   caption: string
   value: boolean
   onChange: (value: boolean) => void
+  hint?: string
 }) {
-  return (
+  const box = (
     <label className="flex items-center gap-2 text-sm text-muted" htmlFor={id}>
       <input
         id={id}
@@ -127,6 +170,15 @@ export function Flag({
       />
       {caption}
     </label>
+  )
+
+  return hint.length > 0 ? (
+    <div>
+      {box}
+      <div className={note}>{hint}</div>
+    </div>
+  ) : (
+    box
   )
 }
 

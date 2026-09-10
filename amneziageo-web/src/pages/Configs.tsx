@@ -39,8 +39,6 @@ export function Configs() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">{t("nav.configs")}</h1>
-
       <div className={`mt-4 ${card}`}>
         {may && (
           <div className="flex justify-end border-b border-line px-4 py-3">

@@ -52,7 +52,8 @@ What the panel listens on is in [docs/serving.md](docs/serving.md), how accounts
 and the language of the interface are in [docs/appearance.md](docs/appearance.md), what the overview
 of the host reads is in [docs/overview.md](docs/overview.md), what a server endpoint carries is in
 [docs/configs.md](docs/configs.md), what the clients of an endpoint carry is in
-[docs/clients.md](docs/clients.md), what the geo databases carry is in [docs/geo.md](docs/geo.md),
+[docs/clients.md](docs/clients.md), what a client template sets is in [docs/templates.md](docs/templates.md),
+what the geo databases carry is in [docs/geo.md](docs/geo.md),
 how traffic leaves the host is in [docs/outbounds.md](docs/outbounds.md), how it is spread over the
 ways out is in [docs/balancers.md](docs/balancers.md), where it is sent is in
 [docs/rules.md](docs/rules.md), how the names of the clients are answered is in

@@ -46,6 +46,21 @@ public class ClientStoreTests
     }
 
     [Fact]
+    public async Task ANameAnotherEndpointCarriesIsTakenWhateverTheCase()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+        var other = await OtherAsync(bench);
+        await bench.Clients.AddAsync(Fresh(endpoint, "milena"), CancellationToken.None);
+
+        var again = await bench.Clients.AddAsync(
+            Fresh(other, "Milena") with { Address = ["10.9.0.2/32"] },
+            CancellationToken.None);
+
+        Assert.Equal(ClientOutcome.NameTaken, again.Outcome);
+    }
+
+    [Fact]
     public async Task AnAddressAnotherClientCarriesIsRefused()
     {
         using var bench = new Bench();
@@ -55,6 +70,23 @@ public class ClientStoreTests
         var again = await bench.Clients.AddAsync(Fresh(endpoint, "bogdan"), CancellationToken.None);
 
         Assert.Equal(ClientOutcome.AddressTaken, again.Outcome);
+    }
+
+    [Fact]
+    public async Task AnAddressOutsideTheEndpointOrReservedIsRefused()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+
+        var outside = await bench.Clients.AddAsync(
+            Fresh(endpoint, "milena") with { Address = ["10.9.0.2/32"] },
+            CancellationToken.None);
+        var own = await bench.Clients.AddAsync(
+            Fresh(endpoint, "bogdan") with { Address = ["10.8.0.1/32"] },
+            CancellationToken.None);
+
+        Assert.Equal("client-address-outside", outside.Code);
+        Assert.Equal("client-address-reserved", own.Code);
     }
 
     [Fact]
@@ -110,15 +142,33 @@ public class ClientStoreTests
     }
 
     [Fact]
-    public async Task AFreeNameSkipsTheOnesTheEndpointCarries()
+    public async Task AFreeNameSkipsTheOnesThePanelCarries()
     {
         using var bench = new Bench();
         var endpoint = await EndpointAsync(bench);
+        var other = await OtherAsync(bench);
         await bench.Clients.AddAsync(Fresh(endpoint, "client"), CancellationToken.None);
+        await bench.Clients.AddAsync(Fresh(other, "Client-2") with { Address = ["10.9.0.2/32"] }, CancellationToken.None);
 
-        var free = await bench.Clients.FreeNameAsync(endpoint, "client", CancellationToken.None);
+        var free = await bench.Clients.FreeNameAsync("client", CancellationToken.None);
 
-        Assert.Equal("client-2", free);
+        Assert.Equal("client-3", free);
+    }
+
+    [Fact]
+    public async Task AnImportTakesAFreeNameAndPassesAHeldKeyOver()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+        await bench.Clients.AddAsync(Fresh(endpoint, "milena"), CancellationToken.None);
+        var carried = Fresh(endpoint, "milena") with { Address = ["10.20.0.5/32"] };
+
+        var taken = await bench.Clients.ImportAsync(carried, CancellationToken.None);
+        var again = await bench.Clients.ImportAsync(carried, CancellationToken.None);
+
+        Assert.True(taken.IsOk, taken.Message);
+        Assert.Equal("milena-2", taken.Record!.Name);
+        Assert.Equal(ClientOutcome.KeyTaken, again.Outcome);
     }
 
     [Fact]
@@ -147,9 +197,32 @@ public class ClientStoreTests
         Assert.Equal(["10.8.0.2/32", "fd00::cafe:2/128"], taken);
     }
 
+    [Fact]
+    public async Task AClientWithATemplateThePanelDoesNotHoldIsRefused()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+
+        var added = await bench.Clients.AddAsync(Fresh(endpoint, "milena") with { TemplateId = 9 }, CancellationToken.None);
+
+        Assert.Equal(ClientOutcome.UnknownTemplate, added.Outcome);
+        Assert.Equal("unknown-template", added.Code);
+    }
+
     private static async Task<long> EndpointAsync(Bench bench)
     {
-        var added = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), CancellationToken.None);
+        var added = await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24", "fd00::cafe:1/112"] },
+            CancellationToken.None);
+
+        return added.Record!.Id;
+    }
+
+    private static async Task<long> OtherAsync(Bench bench)
+    {
+        var added = await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg2") with { ListenPort = 51821, Address = ["10.9.0.1/24"] },
+            CancellationToken.None);
 
         return added.Record!.Id;
     }

@@ -9,7 +9,6 @@ import {
   useChangeRule,
   useMoveRule,
   useRemoveRule,
-  useRuleset,
   useRules,
   useSwitchRule,
 } from "@/api/rules"
@@ -32,8 +31,6 @@ export function Rules() {
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Rule | null>(null)
   const [removing, setRemoving] = useState<Rule | null>(null)
-  const [showing, setShowing] = useState(false)
-  const ruleset = useRuleset(showing)
   const add = useAddRule()
   const change = useChangeRule()
   const remove = useRemoveRule()
@@ -45,14 +42,9 @@ export function Rules() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">{t("nav.rules")}</h1>
-
       <div className={`mt-4 ${card}`}>
         {may && (
           <div className="flex justify-end gap-2 border-b border-line px-4 py-3">
-            <button type="button" onClick={() => setShowing(true)} className={secondary}>
-              {t("rules.ruleset")}
-            </button>
             <button
               type="button"
               onClick={() => void apply.mutateAsync()}
@@ -182,23 +174,6 @@ export function Rules() {
           }
         >
           <div className="text-sm text-muted">{removing.targets.join(", ")}</div>
-        </Modal>
-      )}
-
-      {showing && (
-        <Modal
-          title={t("rules.ruleset")}
-          wide
-          onClose={() => setShowing(false)}
-          footer={
-            <button type="button" onClick={() => setShowing(false)} className={secondary}>
-              {t("rules.close")}
-            </button>
-          }
-        >
-          <pre className="max-h-[60vh] overflow-auto rounded border border-line bg-canvas p-3 font-mono text-xs text-ink">
-            {ruleset.data ?? ""}
-          </pre>
         </Modal>
       )}
     </div>

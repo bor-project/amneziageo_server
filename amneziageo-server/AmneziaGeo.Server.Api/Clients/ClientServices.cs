@@ -21,6 +21,7 @@ public static class ClientServices
         services.AddSingleton(options);
         services.AddSingleton<InterfaceFile>();
         services.AddSingleton<ClientHost>();
+        services.AddScoped<TemplateRefresher>();
         services.AddHostedService<ClientBoot>();
 
         return services;
