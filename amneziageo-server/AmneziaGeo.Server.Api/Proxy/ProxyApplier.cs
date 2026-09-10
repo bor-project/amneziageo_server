@@ -1,3 +1,4 @@
+using System.Globalization;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Dal;
@@ -63,6 +64,11 @@ public sealed class ProxyApplier
 
         var certificate = await CertificateAsync(proxy, ct).ConfigureAwait(false);
         var ports = await PortsAsync(ct).ConfigureAwait(false);
+        var refused = await FirewallAsync(ct).ConfigureAwait(false);
+        if (refused.Length > 0 && proxy.Sources.Count > 0)
+        {
+            return new ProxyState(false, refused);
+        }
 
         return await _host.ApplyAsync(proxy, ports, certificate.Chain, certificate.Key, ct).ConfigureAwait(false);
     }
@@ -75,15 +81,33 @@ public sealed class ProxyApplier
         ArgumentNullException.ThrowIfNull(proxy);
 
         return proxy.IsEnabled
-            ? await _host.StateAsync(proxy.Name, ct).ConfigureAwait(false)
+            ? await _host.StateAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false)
             : ProxyState.Down;
     }
 
     /// <summary>
     /// Takes a proxy off the host.
     /// </summary>
-    public async Task<ProxyState> WithdrawAsync(string name, CancellationToken ct) =>
-        await _host.WithdrawAsync(name, ct).ConfigureAwait(false);
+    public async Task<ProxyState> WithdrawAsync(string name, string kind, CancellationToken ct)
+    {
+        var gone = await _host.WithdrawAsync(name, kind, ct).ConfigureAwait(false);
+        await FirewallAsync(ct).ConfigureAwait(false);
+
+        return gone;
+    }
+
+    /// <summary>
+    /// Returns a proxy the panel has not seen yet, carrying what either kind takes.
+    /// </summary>
+    public async Task<ProxyConfig> FreshAsync(string name, string? kind, CancellationToken ct)
+    {
+        var draft = ProxyDefaults.Fresh(name, kind) with { Path = ProxyDefaults.Secret() };
+        var ports = await PortsAsync(ct).ConfigureAwait(false);
+
+        return ports.Length == 0
+            ? draft
+            : draft with { Target = $"{ProxyDefaults.Loopback}:{ports[0].ToString(CultureInfo.InvariantCulture)}" };
+    }
 
     /// <summary>
     /// Returns the certificate a proxy takes: its own, then the one of the panel.
@@ -108,6 +132,9 @@ public sealed class ProxyApplier
             ? new ProxyCertificate(panel.Certificate, panel.CertificateKey)
             : new ProxyCertificate(_options.Certificate, _options.CertificateKey);
     }
+
+    private async Task<string> FirewallAsync(CancellationToken ct) =>
+        await _host.FirewallAsync(await _store.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
 
     private async Task<int[]> PortsAsync(CancellationToken ct)
     {

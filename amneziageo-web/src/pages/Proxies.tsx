@@ -5,6 +5,7 @@ import {
   useChangeProxy,
   useFreshProxy,
   useProxies,
+  useProxyAddresses,
   useProxyCertificate,
   useRemoveProxy,
   useSwitchProxy,
@@ -24,6 +25,7 @@ export function Proxies() {
   const user = useAppSelector((s) => s.auth.user)
   const proxies = useProxies()
   const tls = useProxyCertificate()
+  const local = useProxyAddresses()
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Proxy | null>(null)
   const [removing, setRemoving] = useState<Proxy | null>(null)
@@ -34,7 +36,9 @@ export function Proxies() {
   const turn = useSwitchProxy()
   const may = holds(user, scopes.manageRouting)
   const bare = tls.data !== undefined && (tls.data.chain.length === 0 || tls.data.key.length === 0)
-  const alone = (proxies.data ?? []).some((one) => one.certificate.length === 0 || one.certificateKey.length === 0)
+  const alone = (proxies.data ?? []).some(
+    (one) => one.kind === "ws" && (one.certificate.length === 0 || one.certificateKey.length === 0),
+  )
 
   return (
     <div>
@@ -61,8 +65,9 @@ export function Proxies() {
               <thead className="text-xs text-muted">
                 <tr>
                   <th className="px-4 py-2 font-normal">{t("proxies.name")}</th>
+                  <th className="px-4 py-2 font-normal">{t("proxies.kind")}</th>
                   <th className="px-4 py-2 font-normal">{t("proxies.port")}</th>
-                  <th className="px-4 py-2 font-normal">{t("proxies.path")}</th>
+                  <th className="px-4 py-2 font-normal">{t("proxies.address")}</th>
                   <th className="px-4 py-2 font-normal">{t("proxies.state")}</th>
                   <th className="px-4 py-2" />
                 </tr>
@@ -74,8 +79,13 @@ export function Proxies() {
                       {proxy.name}
                       {!proxy.isEnabled && <span className="ml-2 text-xs text-muted">{t("proxies.off")}</span>}
                     </td>
+                    <td className="px-4 py-2 text-muted">
+                      {proxy.kind === "wg" ? t("proxies.kindWg") : t("proxies.kindWs")}
+                    </td>
                     <td className="px-4 py-2 text-muted">{proxy.port}</td>
-                    <td className="px-4 py-2 text-muted">/{proxy.path}</td>
+                    <td className="px-4 py-2 text-muted">
+                      {proxy.kind === "wg" ? proxy.target : `/${proxy.path}`}
+                    </td>
                     <td className="px-4 py-2">
                       <State proxy={proxy} running={t("proxies.running")} stopped={t("proxies.stopped")} />
                     </td>
@@ -107,6 +117,7 @@ export function Proxies() {
           title={t("proxies.newTitle")}
           start={draftOf(fresh.data)}
           panel={tls.data}
+          addresses={local.data ?? []}
           pending={add.isPending}
           error={add.error}
           onSave={(draft) => void add.mutateAsync(draft).then(() => setAdding(false))}
@@ -119,6 +130,7 @@ export function Proxies() {
           title={t("proxies.editTitle", { name: editing.name })}
           start={draftOf(editing)}
           panel={tls.data}
+          addresses={local.data ?? []}
           pending={change.isPending}
           error={change.error}
           onSave={(draft) => void change.mutateAsync({ id: editing.id, draft }).then(() => setEditing(null))}
@@ -148,8 +160,7 @@ export function Proxies() {
         >
           <div className="text-sm text-muted">
             {removing.port}
-            {" /"}
-            {removing.path}
+            {removing.kind === "wg" ? ` ${removing.target}` : ` /${removing.path}`}
           </div>
         </Modal>
       )}

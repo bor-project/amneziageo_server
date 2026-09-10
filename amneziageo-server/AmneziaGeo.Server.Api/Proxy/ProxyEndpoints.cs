@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Dal;
@@ -21,9 +22,10 @@ public static class ProxyEndpoints
         var reading = routes.MapGroup("/api/proxies").RequireScope(Scopes.ReadState);
         reading.MapGet("/", ListAsync);
         reading.MapGet("/certificate", CertificateAsync);
+        reading.MapGet("/addresses", Addresses);
 
         var writing = routes.MapGroup("/api/proxies").RequireScope(Scopes.ManageRouting);
-        writing.MapGet("/draft", Draft);
+        writing.MapGet("/draft", DraftAsync);
         writing.MapPost("/", AddAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapPost("/{id:long}/switch", SwitchAsync);
@@ -48,10 +50,19 @@ public static class ProxyEndpoints
     private static async Task<IResult> CertificateAsync(ProxyApplier applier, CancellationToken ct) =>
         Results.Ok(await applier.PanelCertificateAsync(ct).ConfigureAwait(false));
 
-    private static IResult Draft(string? name) =>
-        Results.Ok(ProxyAnswers.Proxy(
-            ProxyDefaults.Fresh(string.IsNullOrWhiteSpace(name) ? ProxyDefaults.FirstName : name.Trim()),
-            ProxyState.Down));
+    private static IResult Addresses() => Results.Ok(PanelChoices.Addresses());
+
+    private static async Task<IResult> DraftAsync(
+        string? name,
+        string? kind,
+        ProxyApplier applier,
+        CancellationToken ct)
+    {
+        var taken = string.IsNullOrWhiteSpace(name) ? ProxyDefaults.FirstName : name.Trim();
+        var draft = await applier.FreshAsync(taken, kind, ct).ConfigureAwait(false);
+
+        return Results.Ok(ProxyAnswers.Proxy(draft, ProxyState.Down));
+    }
 
     private static async Task<IResult> AddAsync(
         ProxyRequest request,
@@ -96,9 +107,9 @@ public static class ProxyEndpoints
             return Explain(result);
         }
 
-        if (held is not null && !string.Equals(held.Name, result.Record.Name, StringComparison.Ordinal))
+        if (held is not null && Moved(held, result.Record))
         {
-            await applier.WithdrawAsync(held.Name, ct).ConfigureAwait(false);
+            await applier.WithdrawAsync(held.Name, held.Kind, ct).ConfigureAwait(false);
         }
 
         var state = await applier.ApplyAsync(result.Record, ct).ConfigureAwait(false);
@@ -113,6 +124,14 @@ public static class ProxyEndpoints
         ProxyApplier applier,
         CancellationToken ct)
     {
+        var held = await store.FindAsync(id, ct).ConfigureAwait(false);
+        if (held is not null
+            && request.On
+            && await ReadyAsync(held with { IsEnabled = true }, applier, ct).ConfigureAwait(false) is { } missing)
+        {
+            return missing;
+        }
+
         var result = await store.SwitchAsync(id, request.On, ct).ConfigureAwait(false);
         if (!result.IsOk || result.Record is null)
         {
@@ -136,10 +155,14 @@ public static class ProxyEndpoints
             return Explain(result);
         }
 
-        await applier.WithdrawAsync(result.Record.Name, ct).ConfigureAwait(false);
+        await applier.WithdrawAsync(result.Record.Name, result.Record.Kind, ct).ConfigureAwait(false);
 
         return Results.NoContent();
     }
+
+    private static bool Moved(ProxyConfig held, ProxyConfig now) =>
+        !string.Equals(held.Name, now.Name, StringComparison.Ordinal)
+        || !string.Equals(held.Kind, now.Kind, StringComparison.Ordinal);
 
     private static async Task<IResult?> ReadyAsync(ProxyConfig draft, ProxyApplier applier, CancellationToken ct)
     {

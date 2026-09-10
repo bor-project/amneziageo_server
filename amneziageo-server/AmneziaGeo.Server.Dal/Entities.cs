@@ -359,11 +359,17 @@ public sealed class ProxyEntity
 
     public string Name { get; set; } = string.Empty;
 
+    public string Kind { get; set; } = string.Empty;
+
     public bool IsEnabled { get; set; }
 
     public int Port { get; set; }
 
     public string Path { get; set; } = string.Empty;
+
+    public string Target { get; set; } = string.Empty;
+
+    public string Sources { get; set; } = string.Empty;
 
     public string Certificate { get; set; } = string.Empty;
 

@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Routing.Proxy;
 
@@ -9,9 +10,12 @@ namespace AmneziaGeo.Server.Api.Proxy;
 public sealed record ProxyResponse(
     long Id,
     string Name,
+    string Kind,
     bool IsEnabled,
     int Port,
     string Path,
+    string Target,
+    IReadOnlyList<string> Sources,
     string Certificate,
     string CertificateKey,
     bool IsRunning,
@@ -22,9 +26,12 @@ public sealed record ProxyResponse(
 /// </summary>
 public sealed record ProxyRequest(
     string? Name,
+    string? Kind,
     bool IsEnabled,
     int Port,
     string? Path,
+    string? Target,
+    IReadOnlyList<string>? Sources,
     string? Certificate,
     string? CertificateKey);
 
@@ -49,9 +56,12 @@ public static class ProxyAnswers
         return new ProxyResponse(
             proxy.Id,
             proxy.Name,
+            proxy.Kind,
             proxy.IsEnabled,
             proxy.Port,
             proxy.Path,
+            proxy.Target,
+            proxy.Sources,
             proxy.Certificate,
             proxy.CertificateKey,
             state.IsRunning,
@@ -68,9 +78,12 @@ public static class ProxyAnswers
         return new ProxyConfig
         {
             Name = Trim(request.Name),
+            Kind = Trim(request.Kind),
             IsEnabled = request.IsEnabled,
             Port = request.Port,
             Path = Trim(request.Path).Trim('/'),
+            Target = Trim(request.Target),
+            Sources = PanelList.Of(request.Sources),
             Certificate = Trim(request.Certificate),
             CertificateKey = Trim(request.CertificateKey),
         };

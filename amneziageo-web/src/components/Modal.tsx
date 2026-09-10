@@ -7,12 +7,14 @@ export function Modal({
   onClose,
   children,
   footer,
+  head,
   wide = false,
 }: {
   title: string
   onClose: () => void
   children: ReactNode
   footer: ReactNode
+  head?: ReactNode
   wide?: boolean
 }) {
   useEffect(() => {
@@ -36,7 +38,10 @@ export function Modal({
         className={`w-full ${wide ? "max-w-3xl" : "max-w-md"} p-5 shadow-xl ${card}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="text-base font-semibold text-ink">{title}</div>
+        <div className="flex items-center justify-between gap-4">
+          <div className="text-base font-semibold text-ink">{title}</div>
+          {head}
+        </div>
         <div className="mt-4 flex max-h-[70vh] flex-col gap-3 overflow-y-auto">{children}</div>
         <div className="mt-5 flex justify-end gap-2">{footer}</div>
       </div>

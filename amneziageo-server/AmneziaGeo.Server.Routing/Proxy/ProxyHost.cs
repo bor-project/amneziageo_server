@@ -4,7 +4,7 @@ using AmneziaGeo.Server.Routing.Host;
 namespace AmneziaGeo.Server.Routing.Proxy;
 
 /// <summary>
-/// Holds the websocket proxies of the host: writes what each may reach and runs its service.
+/// Holds the proxies of the host: writes what each may reach and runs its service.
 /// </summary>
 public sealed class ProxyHost
 {
@@ -12,21 +12,29 @@ public sealed class ProxyHost
 
     private readonly IHostCommands _commands;
 
+    private readonly IHostNetwork _network;
+
     private readonly string _directory;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public ProxyHost(IHostCommands commands, string? directory = null)
+    public ProxyHost(IHostCommands commands, IHostNetwork network, string? directory = null)
     {
         _commands = commands;
+        _network = network;
         _directory = string.IsNullOrWhiteSpace(directory) ? ProxyDefaults.Directory : directory;
     }
 
     /// <summary>
-    /// Returns the service a proxy runs as.
+    /// Returns the service a proxy of a kind runs as.
     /// </summary>
-    public static string Unit(string name) => $"{ProxyDefaults.Service}@{name}";
+    public static string Unit(string name, string? kind = null)
+    {
+        var service = ProxyKind.HasTarget(kind) ? ProxyDefaults.RelayService : ProxyDefaults.Service;
+
+        return $"{service}@{name}";
+    }
 
     /// <summary>
     /// Returns the file the allowed targets of a proxy are written to.
@@ -55,7 +63,7 @@ public sealed class ProxyHost
         {
             if (!proxy.IsEnabled)
             {
-                return await StopAsync(proxy.Name, ct).ConfigureAwait(false);
+                return await StopAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
             }
 
             var written = await WriteAsync(proxy, ports, certificate, key, ct).ConfigureAwait(false);
@@ -64,17 +72,19 @@ public sealed class ProxyHost
                 return new ProxyState(false, written);
             }
 
-            var enabled = await RunAsync(["enable", Unit(proxy.Name)], ProxyState.Down, ct).ConfigureAwait(false);
+            var enabled = await RunAsync(["enable", Unit(proxy.Name, proxy.Kind)], ProxyState.Down, ct)
+                .ConfigureAwait(false);
             if (enabled.Message.Length > 0)
             {
                 return enabled;
             }
 
-            var started = await RunAsync(["restart", Unit(proxy.Name)], ProxyState.Up, ct).ConfigureAwait(false);
+            var started = await RunAsync(["restart", Unit(proxy.Name, proxy.Kind)], ProxyState.Up, ct)
+                .ConfigureAwait(false);
 
             return started.Message.Length > 0
                 ? started
-                : await StateAsync(proxy.Name, ct).ConfigureAwait(false);
+                : await StateAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
         }
         catch (HostNetworkException ex)
         {
@@ -85,11 +95,11 @@ public sealed class ProxyHost
     /// <summary>
     /// Takes the service of a proxy down and clears its files.
     /// </summary>
-    public async Task<ProxyState> WithdrawAsync(string name, CancellationToken ct)
+    public async Task<ProxyState> WithdrawAsync(string name, string kind, CancellationToken ct)
     {
         try
         {
-            var stopped = await StopAsync(name, ct).ConfigureAwait(false);
+            var stopped = await StopAsync(name, kind, ct).ConfigureAwait(false);
             Clear(name);
 
             return stopped;
@@ -101,13 +111,33 @@ public sealed class ProxyHost
     }
 
     /// <summary>
+    /// Lays the rules that hold every proxy to the sources it names.
+    /// </summary>
+    public async Task<string> FirewallAsync(IReadOnlyList<ProxyConfig> proxies, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(proxies);
+
+        try
+        {
+            await _network.FirewallAsync(ProxyRuleset.Text(proxies), ct).ConfigureAwait(false);
+
+            return string.Empty;
+        }
+        catch (HostNetworkException ex)
+        {
+            return ex.Message;
+        }
+    }
+
+    /// <summary>
     /// Returns whether the service of a proxy is up.
     /// </summary>
-    public async Task<ProxyState> StateAsync(string name, CancellationToken ct)
+    public async Task<ProxyState> StateAsync(string name, string kind, CancellationToken ct)
     {
         try
         {
-            var active = await _commands.RunAsync(Tool, ["is-active", Unit(name)], null, ct).ConfigureAwait(false);
+            var active = await _commands.RunAsync(Tool, ["is-active", Unit(name, kind)], null, ct)
+                .ConfigureAwait(false);
 
             return active.IsOk ? ProxyState.Up : new ProxyState(false, active.Complaint);
         }
@@ -117,8 +147,8 @@ public sealed class ProxyHost
         }
     }
 
-    private async Task<ProxyState> StopAsync(string name, CancellationToken ct) =>
-        await RunAsync(["disable", "--now", Unit(name)], ProxyState.Down, ct).ConfigureAwait(false);
+    private async Task<ProxyState> StopAsync(string name, string kind, CancellationToken ct) =>
+        await RunAsync(["disable", "--now", Unit(name, kind)], ProxyState.Down, ct).ConfigureAwait(false);
 
     private async Task<ProxyState> RunAsync(string[] arguments, ProxyState done, CancellationToken ct)
     {
@@ -138,7 +168,11 @@ public sealed class ProxyHost
         {
             Directory.CreateDirectory(_directory);
             var rules = RulesPath(proxy.Name);
-            await File.WriteAllTextAsync(rules, ProxyFile.Whitelist(proxy.Path, ports), ct).ConfigureAwait(false);
+            if (ProxyKind.HasPath(proxy.Kind))
+            {
+                await File.WriteAllTextAsync(rules, ProxyFile.Whitelist(proxy.Path, ports), ct).ConfigureAwait(false);
+            }
+
             await File.WriteAllTextAsync(
                     ArgumentsPath(proxy.Name),
                     ProxyFile.Line(proxy, certificate, key, rules),

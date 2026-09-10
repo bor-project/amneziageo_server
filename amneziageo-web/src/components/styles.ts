@@ -15,3 +15,5 @@ export const danger =
 export const quiet = "rounded px-2 py-1 text-sm text-muted hover:bg-hover hover:text-brand-ink"
 
 export const label = "block text-sm text-muted"
+
+export const note = "mt-1 text-xs text-muted"

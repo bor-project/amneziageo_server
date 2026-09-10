@@ -27,6 +27,7 @@ fi
 install -m 644 "$here/amneziageo-server.service" /etc/systemd/system/amneziageo-server.service
 install -m 755 "$here/wstunnel" /usr/local/bin/wstunnel
 install -m 644 "$here/amneziageo-proxy@.service" /etc/systemd/system/amneziageo-proxy@.service
+install -m 644 "$here/amneziageo-relay@.service" /etc/systemd/system/amneziageo-relay@.service
 systemctl daemon-reload
 systemctl enable amneziageo-server
 

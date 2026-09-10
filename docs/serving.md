@@ -80,6 +80,22 @@ by default.
 The chain is read again whenever the file behind it changes, so a renewed certificate is taken without a
 restart. A certificate the settings name and the host does not carry stops the server at start.
 
+Saving a pair in the panel reads both files and refuses one that does not load, with a code that names the
+file: `certificate-` for the chain, `certificate-key-` for the key.
+
+| Code | Means |
+|---|---|
+| `certificate-no-folder`, `certificate-key-no-folder` | the folder of the file does not exist |
+| `certificate-not-found`, `certificate-key-not-found` | the file is not there |
+| `certificate-is-folder`, `certificate-key-is-folder` | the path names a folder, not a file |
+| `certificate-denied`, `certificate-key-denied` | the panel has no access to the file |
+| `certificate-unreadable`, `certificate-key-unreadable` | the file does not read |
+| `certificate-empty`, `certificate-key-empty` | the file is empty |
+| `certificate-invalid` | the file holds no valid certificate |
+| `certificate-key-invalid` | the file holds no valid private key |
+| `certificate-key-encrypted` | the private key is locked by a password |
+| `certificate-key-mismatch` | the private key belongs to another certificate |
+
 ## Running it
 
 ```

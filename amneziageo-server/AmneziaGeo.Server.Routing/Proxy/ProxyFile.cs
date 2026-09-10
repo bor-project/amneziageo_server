@@ -66,6 +66,11 @@ public static class ProxyFile
     {
         ArgumentNullException.ThrowIfNull(proxy);
 
+        if (ProxyKind.HasTarget(proxy.Kind))
+        {
+            return Relay(proxy);
+        }
+
         var tls = certificate.Length > 0 && key.Length > 0;
         var scheme = tls ? "wss" : "ws";
         var text = new StringBuilder();
@@ -80,5 +85,13 @@ public static class ProxyFile
         text.Append('\n');
 
         return text.ToString();
+    }
+
+    private static string Relay(ProxyConfig proxy)
+    {
+        var port = proxy.Port.ToString(CultureInfo.InvariantCulture);
+        var idle = ProxyDefaults.Idle.ToString(CultureInfo.InvariantCulture);
+
+        return $"{Variable}=--listen 0.0.0.0:{port} --target {proxy.Target} --idle {idle}\n";
     }
 }

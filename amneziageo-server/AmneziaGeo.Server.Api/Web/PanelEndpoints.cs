@@ -53,9 +53,20 @@ public static class PanelEndpoints
         PanelRequest request,
         PanelStore store,
         WebOptions options,
+        ILoggerFactory loggers,
         CancellationToken ct)
     {
-        var result = await store.SaveAsync(PanelAnswers.Draft(request), ct).ConfigureAwait(false);
+        var draft = PanelAnswers.Draft(request);
+        var logger = loggers.CreateLogger(typeof(PanelEndpoints));
+        var fault = PanelRules.Check(draft) is null
+            ? CertificateFiles.Check(draft.Certificate, draft.CertificateKey, logger)
+            : null;
+        if (fault is not null)
+        {
+            return Results.Json(new Failure(fault.Code, fault.Message), statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var result = await store.SaveAsync(draft, ct).ConfigureAwait(false);
         if (!result.IsOk || result.Record is null)
         {
             return Results.Json(new Failure(result.Code, result.Message), statusCode: StatusCodes.Status400BadRequest);

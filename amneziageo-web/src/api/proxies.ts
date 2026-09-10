@@ -1,11 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
 
+export type ProxyKind = "ws" | "wg"
+
 export interface ProxyDraft {
   name: string
+  kind: ProxyKind
   isEnabled: boolean
   port: number
   path: string
+  target: string
+  sources: string[]
   certificate: string
   certificateKey: string
 }
@@ -25,6 +30,13 @@ export function useProxyCertificate() {
   return useQuery({
     queryKey: ["proxies", "certificate"],
     queryFn: async () => (await client.get<ProxyCertificate>("/proxies/certificate")).data,
+  })
+}
+
+export function useProxyAddresses() {
+  return useQuery({
+    queryKey: ["proxies", "addresses"],
+    queryFn: async () => (await client.get<string[]>("/proxies/addresses")).data,
   })
 }
 
@@ -62,9 +74,12 @@ export function useRemoveProxy() {
 export function draftOf(proxy: Proxy): ProxyDraft {
   return {
     name: proxy.name,
+    kind: proxy.kind,
     isEnabled: proxy.isEnabled,
     port: proxy.port,
     path: proxy.path,
+    target: proxy.target,
+    sources: proxy.sources,
     certificate: proxy.certificate,
     certificateKey: proxy.certificateKey,
   }

@@ -112,11 +112,13 @@ public class ProxyTests
     [Fact]
     public void EveryProxyCarriesFilesAndAServiceOfItsOwn()
     {
-        var host = new ProxyHost(new Tools(), "/etc/amneziageo-server");
+        var host = new ProxyHost(new Tools(), new Ledger(), "/etc/amneziageo-server");
 
         Assert.Equal("/etc/amneziageo-server/proxy-a.yaml", host.RulesPath("a"));
         Assert.Equal("/etc/amneziageo-server/proxy-b.env", host.ArgumentsPath("b"));
         Assert.Equal("amneziageo-proxy@a", ProxyHost.Unit("a"));
+        Assert.Equal("amneziageo-proxy@a", ProxyHost.Unit("a", ProxyKind.Ws));
+        Assert.Equal("amneziageo-relay@a", ProxyHost.Unit("a", ProxyKind.Wg));
     }
 
     [Fact]
@@ -124,7 +126,7 @@ public class ProxyTests
     {
         var tools = new Tools();
         var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        var host = new ProxyHost(tools, directory);
+        var host = new ProxyHost(tools, new Ledger(), directory);
 
         try
         {
@@ -155,7 +157,7 @@ public class ProxyTests
     {
         var tools = new Tools();
         var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        var host = new ProxyHost(tools, directory);
+        var host = new ProxyHost(tools, new Ledger(), directory);
 
         var state = await host.ApplyAsync(Fresh(), [], string.Empty, string.Empty, CancellationToken.None);
 
@@ -170,7 +172,7 @@ public class ProxyTests
     {
         var tools = new Tools();
         var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        var host = new ProxyHost(tools, directory);
+        var host = new ProxyHost(tools, new Ledger(), directory);
 
         try
         {
@@ -181,7 +183,7 @@ public class ProxyTests
                 "/tls/key.pem",
                 CancellationToken.None);
 
-            await host.WithdrawAsync("proxy0", CancellationToken.None);
+            await host.WithdrawAsync("proxy0", ProxyKind.Ws, CancellationToken.None);
 
             Assert.True(tools.Called("systemctl disable --now amneziageo-proxy@proxy0"));
             Assert.False(File.Exists(host.RulesPath("proxy0")));
@@ -199,7 +201,7 @@ public class ProxyTests
         var tools = new Tools();
         tools.Answers["systemctl restart"] = new CommandResult(1, string.Empty, "port 443 is taken");
         var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        var host = new ProxyHost(tools, directory);
+        var host = new ProxyHost(tools, new Ledger(), directory);
 
         try
         {
@@ -217,6 +219,179 @@ public class ProxyTests
         {
             Directory.Delete(directory, true);
         }
+    }
+
+    [Fact]
+    public void AFreshWireguardProxyCarriesATargetAndNoPath()
+    {
+        var proxy = ProxyDefaults.Fresh("proxy0", ProxyKind.Wg) with { Target = "127.0.0.1:51820" };
+
+        Assert.Equal(ProxyKind.Wg, proxy.Kind);
+        Assert.Empty(proxy.Path);
+        Assert.Null(ProxyRules.Check(proxy));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("http")]
+    [InlineData("WG")]
+    public void AKindThePanelDoesNotKnowIsRefused(string kind)
+    {
+        Assert.Equal("bad-kind", ProxyRules.Check(Fresh() with { Kind = kind })?.Code);
+    }
+
+    [Fact]
+    public void WhatOneKindCarriesTheOtherRefuses()
+    {
+        var relay = ProxyDefaults.Fresh("proxy0", ProxyKind.Wg);
+
+        Assert.Equal("bad-target", ProxyRules.Check(relay)?.Code);
+        Assert.Equal("bad-path", ProxyRules.Check(relay with { Target = "127.0.0.1:51820", Path = "v1" })?.Code);
+        Assert.Equal("bad-target", ProxyRules.Check(Fresh() with { Target = "127.0.0.1:51820" })?.Code);
+        Assert.Equal(
+            "bad-certificate",
+            ProxyRules.Check(relay with
+            {
+                Target = "127.0.0.1:51820",
+                Certificate = "/tls/chain.pem",
+                CertificateKey = "/tls/key.pem",
+            })?.Code);
+    }
+
+    [Theory]
+    [InlineData("127.0.0.1:51820", "127.0.0.1", 51820)]
+    [InlineData("proxy.example.net:443", "proxy.example.net", 443)]
+    [InlineData("[2001:db8::1]:51820", "2001:db8::1", 51820)]
+    public void ATargetIsReadIntoAHostAndAPort(string text, string host, int port)
+    {
+        Assert.True(ProxyRules.Target(text, out var read, out var number));
+        Assert.Equal(host, read);
+        Assert.Equal(port, number);
+    }
+
+    [Theory]
+    [InlineData("127.0.0.1")]
+    [InlineData("127.0.0.1:")]
+    [InlineData(":51820")]
+    [InlineData("127.0.0.1:0")]
+    [InlineData("127.0.0.1:70000")]
+    [InlineData("../secret:53")]
+    public void ATargetTheRelayCannotReachIsRefused(string text)
+    {
+        Assert.False(ProxyRules.Target(text, out _, out _));
+    }
+
+    [Fact]
+    public void AWireguardProxyIsTurnedOnWithoutACertificate()
+    {
+        var relay = ProxyDefaults.Fresh("proxy0", ProxyKind.Wg) with
+        {
+            IsEnabled = true,
+            Target = "127.0.0.1:51820",
+        };
+
+        Assert.Null(ProxyRules.CheckReady(relay, string.Empty, string.Empty));
+        Assert.Equal("no-certificate", ProxyRules.CheckReady(Fresh() with { IsEnabled = true }, string.Empty, string.Empty)?.Code);
+    }
+
+    [Fact]
+    public void TheArgumentsOfAWireguardProxyNameTheListenerAndTheTarget()
+    {
+        var relay = ProxyDefaults.Fresh("proxy0", ProxyKind.Wg) with { Port = 443, Target = "10.0.0.2:51820" };
+        var line = ProxyFile.Line(relay, string.Empty, string.Empty, "/etc/proxy-proxy0.yaml");
+
+        Assert.StartsWith("PROXY_ARGS=--listen 0.0.0.0:443", line, StringComparison.Ordinal);
+        Assert.Contains("--target 10.0.0.2:51820", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("--restrict-config", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AWireguardProxyRunsItsOwnServiceAndWritesNoWhitelist()
+    {
+        var tools = new Tools();
+        var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var host = new ProxyHost(tools, new Ledger(), directory);
+
+        try
+        {
+            var state = await host.ApplyAsync(
+                ProxyDefaults.Fresh("proxy0", ProxyKind.Wg) with { IsEnabled = true, Target = "127.0.0.1:51820" },
+                [51820],
+                string.Empty,
+                string.Empty,
+                CancellationToken.None);
+
+            Assert.True(state.IsRunning);
+            Assert.True(tools.Called("systemctl restart amneziageo-relay@proxy0"));
+            Assert.False(File.Exists(host.RulesPath("proxy0")));
+            Assert.Contains(
+                "--target 127.0.0.1:51820",
+                await File.ReadAllTextAsync(host.ArgumentsPath("proxy0")),
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("1.2.3")]
+    [InlineData("10.0.0.0/33")]
+    [InlineData("10.1.2.3/8")]
+    [InlineData("one.two")]
+    public void ASourceThatIsNeitherAnAddressNorANetworkIsRefused(string source)
+    {
+        Assert.Equal("bad-source", ProxyRules.Check(Fresh() with { Sources = [source] })?.Code);
+    }
+
+    [Fact]
+    public void ASourceIsTakenAsAnAddressAndAsANetwork()
+    {
+        Assert.Null(ProxyRules.Check(Fresh() with { Sources = ["10.1.0.0/16", "203.0.113.7", "2001:db8::/32"] }));
+    }
+
+    [Fact]
+    public void TheRulesetDropsWhatReachesAProxyFromASourceItDoesNotName()
+    {
+        var proxy = Fresh() with { IsEnabled = true, Sources = ["10.1.0.0/16", "203.0.113.7"] };
+
+        var text = ProxyRuleset.Text([proxy]);
+
+        Assert.Contains(
+            "tcp dport 443 ip saddr != { 10.1.0.0/16, 203.0.113.7/32 } drop",
+            text,
+            StringComparison.Ordinal);
+        Assert.Contains("tcp dport 443 meta nfproto ipv6 drop", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheRulesetHoldsARelayByTheDatagramsItTakes()
+    {
+        var proxy = ProxyDefaults.Fresh("relay0", ProxyKind.Wg) with
+        {
+            IsEnabled = true,
+            Port = 51821,
+            Target = "127.0.0.1:51820",
+            Sources = ["2001:db8::/32"],
+        };
+
+        var text = ProxyRuleset.Text([proxy]);
+
+        Assert.Contains("udp dport 51821 meta nfproto ipv4 drop", text, StringComparison.Ordinal);
+        Assert.Contains("udp dport 51821 ip6 saddr != { 2001:db8::/32 } drop", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AProxyThatNamesNoSourceAndOneThatIsOffAreLeftOpen()
+    {
+        var open = Fresh() with { IsEnabled = true };
+        var off = ProxyDefaults.Fresh("proxy1") with { Port = 8443, Sources = ["10.1.0.0/16"] };
+
+        var text = ProxyRuleset.Text([open, off]);
+
+        Assert.Contains("table inet amneziageo_proxy", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("dport", text, StringComparison.Ordinal);
     }
 
     private static ProxyConfig Fresh() => ProxyDefaults.Fresh(ProxyDefaults.FirstName);

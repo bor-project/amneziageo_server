@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Core.Proxy;
 using Microsoft.EntityFrameworkCore;
 
@@ -185,7 +186,7 @@ public sealed class ProxyStore
         }
 
         var port = await _db.Set<ProxyEntity>()
-            .AnyAsync(row => row.Id != id && row.Port == draft.Port, ct)
+            .AnyAsync(row => row.Id != id && row.Port == draft.Port && row.Kind == draft.Kind, ct)
             .ConfigureAwait(false);
 
         return port
@@ -200,9 +201,12 @@ public sealed class ProxyStore
     {
         Id = row.Id,
         Name = row.Name,
+        Kind = row.Kind,
         IsEnabled = row.IsEnabled,
         Port = row.Port,
         Path = row.Path,
+        Target = row.Target,
+        Sources = PanelList.Split(row.Sources),
         Certificate = row.Certificate,
         CertificateKey = row.CertificateKey,
     };
@@ -210,9 +214,12 @@ public sealed class ProxyStore
     private static void Write(ProxyEntity row, ProxyConfig proxy)
     {
         row.Name = proxy.Name.Trim();
+        row.Kind = proxy.Kind;
         row.IsEnabled = proxy.IsEnabled;
         row.Port = proxy.Port;
         row.Path = proxy.Path.Trim('/');
+        row.Target = proxy.Target.Trim();
+        row.Sources = PanelList.Line(PanelList.Of(proxy.Sources));
         row.Certificate = proxy.Certificate;
         row.CertificateKey = proxy.CertificateKey;
     }

@@ -26,6 +26,7 @@ cp "$root/wstunnel/wstunnel/target/release/wstunnel" "$out/"
 
 cp "$root/deploy/amneziageo-server.service" "$out/"
 cp "$root/deploy/amneziageo-proxy@.service" "$out/"
+cp "$root/deploy/amneziageo-relay@.service" "$out/"
 cp "$root/deploy/install.sh" "$out/"
 chmod +x "$out/install.sh"
 

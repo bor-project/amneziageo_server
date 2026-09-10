@@ -151,11 +151,13 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
         builder.Entity<ProxyEntity>(entity =>
         {
             entity.Property(row => row.Name).HasMaxLength(ProxyRules.MaxNameLength);
+            entity.Property(row => row.Kind).HasMaxLength(8);
             entity.Property(row => row.Path).HasMaxLength(ProxyRules.MaxPathLength);
+            entity.Property(row => row.Target).HasMaxLength(ProxyRules.MaxTargetLength);
             entity.Property(row => row.Certificate).HasMaxLength(ProxyRules.MaxFileLength);
             entity.Property(row => row.CertificateKey).HasMaxLength(ProxyRules.MaxFileLength);
             entity.HasIndex(row => row.Name).IsUnique();
-            entity.HasIndex(row => row.Port).IsUnique();
+            entity.HasIndex(row => new { row.Kind, row.Port }).IsUnique();
         });
 
         builder.Entity<BalancerEntity>(entity =>

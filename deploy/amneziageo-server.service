@@ -13,7 +13,7 @@ Environment=Web__Listen__0=127.0.0.1:8443
 Environment=Endpoints__Directory=/etc/amnezia/amneziawg
 Environment=Geo__Path=/var/lib/amneziageo-server/geo
 EnvironmentFile=-/etc/amneziageo-server/server.env
-Restart=on-failure
+Restart=always
 RestartSec=3
 
 [Install]

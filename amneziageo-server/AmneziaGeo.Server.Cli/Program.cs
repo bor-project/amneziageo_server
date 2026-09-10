@@ -14,6 +14,11 @@ if (arguments.At(0) == "device")
     return DeviceCommands.Run(arguments);
 }
 
+if (arguments.At(0) == "relay")
+{
+    return await RelayCommands.RunAsync(arguments, ct).ConfigureAwait(false);
+}
+
 using var context = Context.Open(arguments.Value("db"));
 
 return arguments.At(0) switch
@@ -44,6 +49,7 @@ static int Usage()
           amneziageo-server-cli family [name]              resolve a netlink family
           amneziageo-server-cli device list                 name the amneziawg interfaces
           amneziageo-server-cli device show [name]          read an interface with its peers
+          amneziageo-server-cli relay --listen <address:port> --target <host:port>
         """);
 
     return 2;

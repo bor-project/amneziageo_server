@@ -38,7 +38,10 @@ public static class ProxyServices
 
         services.AddSingleton(options);
         services.AddSingleton(provider =>
-            new ProxyHost(provider.GetRequiredService<IHostCommands>(), options.Directory));
+            new ProxyHost(
+                provider.GetRequiredService<IHostCommands>(),
+                provider.GetRequiredService<IHostNetwork>(),
+                options.Directory));
         services.AddScoped<ProxyApplier>();
 
         return services;

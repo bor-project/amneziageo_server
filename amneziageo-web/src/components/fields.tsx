@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
-import { card, field, label } from "@/components/styles"
+import { card, field, label, note } from "@/components/styles"
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -18,6 +18,7 @@ export function Line({
   onChange,
   wide = false,
   placeholder = "",
+  hint = "",
 }: {
   id: string
   caption: string
@@ -25,6 +26,7 @@ export function Line({
   onChange: (value: string) => void
   wide?: boolean
   placeholder?: string
+  hint?: string
 }) {
   return (
     <div className={wide ? "col-span-2" : ""}>
@@ -38,6 +40,7 @@ export function Line({
         onChange={(e) => onChange(e.target.value)}
         className={`mt-1 ${field}`}
       />
+      {hint.length > 0 && <div className={note}>{hint}</div>}
     </div>
   )
 }
@@ -49,6 +52,7 @@ export function Pick({
   onChange,
   children,
   wide = false,
+  hint = "",
 }: {
   id: string
   caption: string
@@ -56,6 +60,7 @@ export function Pick({
   onChange: (value: string) => void
   children: ReactNode
   wide?: boolean
+  hint?: string
 }) {
   return (
     <div className={wide ? "col-span-2" : ""}>
@@ -65,6 +70,7 @@ export function Pick({
       <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={`mt-1 ${field}`}>
         {children}
       </select>
+      {hint.length > 0 && <div className={note}>{hint}</div>}
     </div>
   )
 }
@@ -74,11 +80,13 @@ export function Count({
   caption,
   value,
   onChange,
+  hint = "",
 }: {
   id: string
   caption: string
   value: number
   onChange: (value: number) => void
+  hint?: string
 }) {
   return (
     <div>
@@ -92,6 +100,7 @@ export function Count({
         onChange={(e) => onChange(Number(e.target.value))}
         className={`mt-1 ${field}`}
       />
+      {hint.length > 0 && <div className={note}>{hint}</div>}
     </div>
   )
 }
@@ -121,6 +130,38 @@ export function Flag({
   )
 }
 
+
+export function Switch({
+  id,
+  caption,
+  value,
+  onChange,
+}: {
+  id: string
+  caption: string
+  value: boolean
+  onChange: (value: boolean) => void
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <label className="text-sm text-ink" htmlFor={id}>
+        {caption}
+      </label>
+      <button
+        id={id}
+        type="button"
+        role="switch"
+        aria-checked={value}
+        onClick={() => onChange(!value)}
+        className={`relative h-5 w-9 shrink-0 rounded-full ${value ? "bg-brand" : "bg-line"}`}
+      >
+        <span
+          className={`absolute top-[2px] size-4 rounded-full bg-surface ${value ? "left-[18px]" : "left-[2px]"}`}
+        />
+      </button>
+    </div>
+  )
+}
 
 export function Row({ id, caption, children }: { id: string; caption: string; children: ReactNode }) {
   return (

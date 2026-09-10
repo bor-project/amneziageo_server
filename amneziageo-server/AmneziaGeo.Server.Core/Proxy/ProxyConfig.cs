@@ -1,7 +1,7 @@
 namespace AmneziaGeo.Server.Core.Proxy;
 
 /// <summary>
-/// A websocket proxy the interfaces of the host are reachable through.
+/// A proxy the interfaces of the host are reachable through.
 /// </summary>
 public sealed record ProxyConfig
 {
@@ -14,6 +14,11 @@ public sealed record ProxyConfig
     /// The name of the proxy, which its service and its files are named after.
     /// </summary>
     public string Name { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The way the proxy takes tunnels in.
+    /// </summary>
+    public string Kind { get; init; } = ProxyKind.Ws;
 
     /// <summary>
     /// Whether the host runs the proxy.
@@ -29,6 +34,16 @@ public sealed record ProxyConfig
     /// The path a tunnel names to reach the proxy.
     /// </summary>
     public string Path { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Where the proxy passes the datagrams on, as host and port.
+    /// </summary>
+    public string Target { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The addresses and the networks the proxy takes, empty for any.
+    /// </summary>
+    public IReadOnlyList<string> Sources { get; init; } = [];
 
     /// <summary>
     /// The certificate chain the proxy answers under, empty for the one of the panel.
