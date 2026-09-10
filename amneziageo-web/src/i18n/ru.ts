@@ -25,7 +25,7 @@ export const ru: Dictionary = {
   "dns.blockDot": "Запрещать DNS через TLS",
   "dns.blockDoh": "Запрещать DNS через HTTPS",
   "dns.save": "Сохранить",
-  "dns.restart": "Перезапустить",
+  "dns.cancel": "Отмена",
   "dns.running": "Работает",
   "dns.stopped": "Остановлен",
   "dns.listening": "Слушает",
@@ -177,10 +177,11 @@ export const ru: Dictionary = {
   "settings.certificate": "Путь к сертификату",
   "settings.certificateKey": "Путь к ключу",
   "settings.save": "Сохранить",
-  "settings.restart": "Перезапустить",
+  "settings.cancel": "Отмена",
 
   "layout.nav": "Меню",
   "layout.signOut": "Выйти",
+  "layout.restart": "Перезапустить",
 
   "boot.loading": "загрузка",
 

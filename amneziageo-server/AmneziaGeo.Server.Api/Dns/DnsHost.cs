@@ -59,41 +59,12 @@ public sealed class DnsHost : BackgroundService
     /// <summary>
     /// Takes the settings anew and starts the resolver over.
     /// </summary>
-    public async Task RestartAsync(CancellationToken ct)
-    {
-        await _turn.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            _server?.Stop();
-            _server = null;
-            _sets.Forget();
-            using var scope = _scopes.CreateScope();
-            _settings = await scope.ServiceProvider.GetRequiredService<DnsStore>().ReadAsync(ct).ConfigureAwait(false);
-            if (!_settings.IsEnabled)
-            {
-                _state.Stopped();
-                return;
-            }
+    public Task RestartAsync(CancellationToken ct) => StartAsync(true, ct);
 
-            if (_plans.Held is null)
-            {
-                await scope.ServiceProvider.GetRequiredService<RouteApplier>().BuildAsync(ct).ConfigureAwait(false);
-            }
-
-            var addresses = await AddressesAsync(scope.ServiceProvider, _settings, ct).ConfigureAwait(false);
-            if (addresses.Count == 0)
-            {
-                _state.Stopped("there is no address to answer the clients on");
-                return;
-            }
-
-            Serve(addresses);
-        }
-        finally
-        {
-            _turn.Release();
-        }
-    }
+    /// <summary>
+    /// Starts the resolver over on the addresses of the configurations with the settings it runs with.
+    /// </summary>
+    public Task RebindAsync(CancellationToken ct) => StartAsync(false, ct);
 
     /// <inheritdoc/>
     public override async Task StopAsync(CancellationToken ct)
@@ -118,6 +89,45 @@ public sealed class DnsHost : BackgroundService
         }
         catch (OperationCanceledException)
         {
+        }
+    }
+
+    private async Task StartAsync(bool anew, CancellationToken ct)
+    {
+        await _turn.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            _server?.Stop();
+            _server = null;
+            _sets.Forget();
+            using var scope = _scopes.CreateScope();
+            _settings = anew || _state.Settings is null
+                ? await scope.ServiceProvider.GetRequiredService<DnsStore>().ReadAsync(ct).ConfigureAwait(false)
+                : _state.Settings;
+            _state.Took(_settings);
+            if (!_settings.IsEnabled)
+            {
+                _state.Stopped();
+                return;
+            }
+
+            if (_plans.Held is null)
+            {
+                await scope.ServiceProvider.GetRequiredService<RouteApplier>().BuildAsync(ct).ConfigureAwait(false);
+            }
+
+            var addresses = await AddressesAsync(scope.ServiceProvider, _settings, ct).ConfigureAwait(false);
+            if (addresses.Count == 0)
+            {
+                _state.Stopped("there is no address to answer the clients on");
+                return;
+            }
+
+            Serve(addresses);
+        }
+        finally
+        {
+            _turn.Release();
         }
     }
 

@@ -1,10 +1,11 @@
 import { configureStore } from "@reduxjs/toolkit"
 import auth from "./authSlice"
+import drafts from "./draftSlice"
 import { remember } from "./preferences"
 import ui from "./uiSlice"
 
 export const store = configureStore({
-  reducer: { auth, ui },
+  reducer: { auth, drafts, ui },
 })
 
 let kept = store.getState().ui

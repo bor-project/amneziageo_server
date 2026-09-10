@@ -15,6 +15,8 @@ public sealed class DnsState
 
     private string? _fault;
 
+    private DnsSettings? _settings;
+
     /// <summary>
     /// Whether the resolver takes questions.
     /// </summary>
@@ -36,6 +38,11 @@ public sealed class DnsState
     public string? Fault => Volatile.Read(ref _fault);
 
     /// <summary>
+    /// The settings the resolver was last started with, or null before its first start.
+    /// </summary>
+    public DnsSettings? Settings => Volatile.Read(ref _settings);
+
+    /// <summary>
     /// How many questions the clients asked.
     /// </summary>
     public long Questions => Interlocked.Read(ref _questions);
@@ -49,6 +56,11 @@ public sealed class DnsState
     /// How many questions no name server answered.
     /// </summary>
     public long Failed => Interlocked.Read(ref _failed);
+
+    /// <summary>
+    /// Keeps the settings the resolver starts with.
+    /// </summary>
+    public void Took(DnsSettings settings) => Volatile.Write(ref _settings, settings);
 
     /// <summary>
     /// Marks the resolver as running on the addresses it took.

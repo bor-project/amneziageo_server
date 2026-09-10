@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
-import { draftOf, usePanel, useRestartPanel, useSavePanel } from "@/api/panel"
+import { draftOf, usePanel, useSavePanel } from "@/api/panel"
 import type { Panel, PanelDraft } from "@/api/panel"
 import { scopes } from "@/api/scopes"
 import { Multi, Row } from "@/components/fields"
@@ -8,7 +8,8 @@ import { card, field, primary, secondary } from "@/components/styles"
 import { languageNames, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
-import { useAppSelector } from "@/store/hooks"
+import { panelDrafted, same } from "@/store/draftSlice"
+import { useAppDispatch, useAppSelector } from "@/store/hooks"
 
 const own = "*"
 
@@ -29,14 +30,17 @@ export function Settings() {
 
 function Editor({ settings, may }: { settings: Panel; may: boolean }) {
   const t = useText()
-  const [draft, setDraft] = useState<PanelDraft>(() => draftOf(settings))
+  const dispatch = useAppDispatch()
+  const kept = useAppSelector((s) => s.drafts.panel)
   const [fault, setFault] = useState<TextKey | null>(null)
   const save = useSavePanel()
-  const restart = useRestartPanel()
+  const saved = draftOf(settings)
+  const draft = kept ?? saved
   const domain = domainOf(draft, settings.certificateRoot)
 
   function set(part: Partial<PanelDraft>) {
-    setDraft({ ...draft, ...part })
+    const next = { ...draft, ...part }
+    dispatch(panelDrafted(same(next, saved) ? null : next))
   }
 
   function pickDomain(picked: string) {
@@ -60,9 +64,15 @@ function Editor({ settings, may }: { settings: Panel; may: boolean }) {
     setFault(null)
     try {
       await save.mutateAsync(draft)
+      dispatch(panelDrafted(null))
     } catch (error) {
       setFault(complaint(error))
     }
+  }
+
+  function drop() {
+    setFault(null)
+    dispatch(panelDrafted(null))
   }
 
   return (
@@ -145,16 +155,16 @@ function Editor({ settings, may }: { settings: Panel; may: boolean }) {
       </Row>
 
       <div className="flex items-center gap-2 border-t border-line py-3">
-        <button type="button" className={primary} disabled={!may || save.isPending} onClick={() => void keep()}>
-          {t("settings.save")}
-        </button>
         <button
           type="button"
-          className={secondary}
-          disabled={!may || restart.isPending}
-          onClick={() => restart.mutate()}
+          className={primary}
+          disabled={!may || kept === null || save.isPending}
+          onClick={() => void keep()}
         >
-          {t("settings.restart")}
+          {t("settings.save")}
+        </button>
+        <button type="button" className={secondary} disabled={kept === null || save.isPending} onClick={drop}>
+          {t("settings.cancel")}
         </button>
         {fault !== null && <span className="text-sm text-alarm">{t(fault)}</span>}
       </div>

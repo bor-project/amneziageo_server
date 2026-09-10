@@ -32,6 +32,13 @@ A port under 1024 needs `CAP_NET_BIND_SERVICE`: under an ordinary account the re
 `Permission denied` and takes no address. An address that is not on the host is skipped, and the
 resolver answers on the rest.
 
+`Save` writes the settings down, and the resolver and the rules take them at `Restart`, the button that
+shows in the header while saved settings wait for it. It calls `POST /api/dns/restart`, or starts the whole
+panel over when its own settings wait too. `Cancel` drops what is not saved yet, and an edit left unsaved
+stays while other pages are opened. `GET /api/dns` carries `pending`, true while the saved settings differ
+from the ones the resolver runs with. A change of the configurations starts the resolver over on their
+addresses with the settings it runs with.
+
 ## What the host gets
 
 The ruleset the rules build carries two more things once the resolver runs.

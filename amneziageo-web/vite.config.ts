@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
 const root = import.meta.dirname
+const panel = process.env.AMNEZIAGEO_PANEL ?? 'http://localhost:8443'
 
 export default defineConfig({
   base: './',
@@ -19,7 +20,7 @@ export default defineConfig({
     host: true,
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:8443', changeOrigin: true },
+      '/api': { target: panel, changeOrigin: true, secure: false },
     },
   },
 })

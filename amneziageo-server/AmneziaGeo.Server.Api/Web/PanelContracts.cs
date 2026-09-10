@@ -15,7 +15,8 @@ public sealed record PanelResponse(
     string Language,
     IReadOnlyList<string> Certificates,
     IReadOnlyList<string> Addresses,
-    string CertificateRoot);
+    string CertificateRoot,
+    bool Pending);
 
 /// <summary>
 /// The settings the panel is changed with.
@@ -35,11 +36,12 @@ public sealed record PanelRequest(
 public static class PanelAnswers
 {
     /// <summary>
-    /// Returns the settings with what the host offers to pick from.
+    /// Returns the settings with what the host offers to pick from and whether they wait for a restart.
     /// </summary>
-    public static PanelResponse Panel(PanelSettings settings, WebOptions options)
+    public static PanelResponse Panel(PanelSettings settings, PanelSettings running, WebOptions options)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(running);
         ArgumentNullException.ThrowIfNull(options);
 
         return new PanelResponse(
@@ -52,7 +54,8 @@ public static class PanelAnswers
             settings.Language,
             PanelChoices.Domains(options.CertificateRoot),
             PanelChoices.Addresses(),
-            options.CertificateRoot);
+            options.CertificateRoot,
+            settings.Differs(running));
     }
 
     /// <summary>

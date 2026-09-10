@@ -42,10 +42,9 @@ public static class DnsEndpoints
     private static async Task<IResult> SaveAsync(
         DnsRequest request,
         DnsStore store,
-        DnsHost host,
-        RouteApplier applier,
         DnsState state,
         DnsSets sets,
+        RoutePlans plans,
         CancellationToken ct)
     {
         var result = await store.SaveAsync(DnsAnswers.Draft(request), ct).ConfigureAwait(false);
@@ -54,23 +53,21 @@ public static class DnsEndpoints
             return Results.Json(new Failure(result.Code, result.Message), statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var plan = await applier.SettleAsync(ct).ConfigureAwait(false);
-        await host.RestartAsync(ct).ConfigureAwait(false);
-
-        return Results.Ok(DnsAnswers.Resolver(result.Record, state, sets, plan));
+        return Results.Ok(DnsAnswers.Resolver(result.Record, state, sets, plans.Held));
     }
 
     private static async Task<IResult> RestartAsync(
         DnsStore store,
         DnsHost host,
+        RouteApplier applier,
         DnsState state,
         DnsSets sets,
-        RoutePlans plans,
         CancellationToken ct)
     {
         await host.RestartAsync(ct).ConfigureAwait(false);
+        var plan = await applier.SettleAsync(ct).ConfigureAwait(false);
         var settings = await store.ReadAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(DnsAnswers.Resolver(settings, state, sets, plans.Held));
+        return Results.Ok(DnsAnswers.Resolver(settings, state, sets, plan));
     }
 }

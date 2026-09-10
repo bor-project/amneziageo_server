@@ -29,14 +29,15 @@ export interface DnsDraft {
 }
 
 export interface Resolver extends DnsDraft {
+  pending: boolean
   state: DnsState
 }
 
-export function useResolver() {
+export function useResolver(poll = true) {
   return useQuery({
     queryKey: ["dns"],
     queryFn: async () => (await client.get<Resolver>("/dns")).data,
-    refetchInterval: 5000,
+    refetchInterval: poll ? 5000 : false,
   })
 }
 

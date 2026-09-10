@@ -90,7 +90,7 @@ public static class ConfigEndpoints
 
         await RaiseAsync(store, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
-        await resolver.RestartAsync(ct).ConfigureAwait(false);
+        await resolver.RebindAsync(ct).ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Created($"/api/configs/{result.Record!.Id}", ConfigAnswers.Config(result.Record, true));
@@ -120,7 +120,7 @@ public static class ConfigEndpoints
 
         await RaiseAsync(store, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
-        await resolver.RestartAsync(ct).ConfigureAwait(false);
+        await resolver.RebindAsync(ct).ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(ConfigAnswers.Config(result.Record!, true));
@@ -144,7 +144,7 @@ public static class ConfigEndpoints
         await host.WithdrawAsync(result.Record!.Name, ct).ConfigureAwait(false);
         await host.FirewallAsync(await store.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
-        await resolver.RestartAsync(ct).ConfigureAwait(false);
+        await resolver.RebindAsync(ct).ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.NoContent();

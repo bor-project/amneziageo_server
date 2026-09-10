@@ -33,6 +33,7 @@ public sealed record DnsResponse(
     bool Intercept,
     bool BlockDot,
     bool BlockDoh,
+    bool Pending,
     DnsStateBody State);
 
 /// <summary>
@@ -79,6 +80,7 @@ public static class DnsAnswers
             settings.Intercept,
             settings.BlockDot,
             settings.BlockDoh,
+            state.Settings is { } running && settings.Differs(running),
             new DnsStateBody(
                 state.IsRunning,
                 state.Listening,

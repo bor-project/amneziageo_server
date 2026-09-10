@@ -62,6 +62,21 @@ public sealed record PanelSettings
         }
     }
 
+    /// <summary>
+    /// Tells whether the panel has to start over to answer as the other settings say.
+    /// </summary>
+    public bool Differs(PanelSettings other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return !Listen.SequenceEqual(other.Listen, StringComparer.Ordinal)
+            || !Domains.SequenceEqual(other.Domains, StringComparer.OrdinalIgnoreCase)
+            || Port != other.Port
+            || !string.Equals(Prefix, other.Prefix, StringComparison.Ordinal)
+            || !string.Equals(Certificate, other.Certificate, StringComparison.Ordinal)
+            || !string.Equals(CertificateKey, other.CertificateKey, StringComparison.Ordinal);
+    }
+
     private const string Any = "*";
 
     private static string Bind(string address) =>

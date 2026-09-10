@@ -2,6 +2,7 @@ using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Geo.Files;
+using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Route;
 
@@ -42,6 +43,8 @@ public sealed class RouteApplier
 
     private readonly DnsStore _dns;
 
+    private readonly DnsState _resolver;
+
     private readonly IGeoFileStore _files;
 
     private readonly RouteHost _host;
@@ -60,6 +63,7 @@ public sealed class RouteApplier
         ConfigStore configs,
         GeoStore geo,
         DnsStore dns,
+        DnsState resolver,
         IGeoFileStore files,
         RouteHost host,
         RoutePlans plans,
@@ -71,6 +75,7 @@ public sealed class RouteApplier
         _configs = configs;
         _geo = geo;
         _dns = dns;
+        _resolver = resolver;
         _files = files;
         _host = host;
         _plans = plans;
@@ -87,7 +92,7 @@ public sealed class RouteApplier
         var balancers = await _balancers.ListAsync(ct).ConfigureAwait(false);
         var configs = await _configs.ListAsync(ct).ConfigureAwait(false);
         var sources = await _geo.ListAsync(ct).ConfigureAwait(false);
-        var resolver = await _dns.ReadAsync(ct).ConfigureAwait(false);
+        var resolver = _resolver.Settings ?? await _dns.ReadAsync(ct).ConfigureAwait(false);
         var plan = RoutePlan.Build(
             rules,
             outbounds,

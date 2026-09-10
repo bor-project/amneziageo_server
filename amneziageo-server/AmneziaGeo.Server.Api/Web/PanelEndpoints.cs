@@ -42,16 +42,21 @@ public static class PanelEndpoints
         return routes;
     }
 
-    private static async Task<IResult> ReadAsync(PanelStore store, WebOptions options, CancellationToken ct)
+    private static async Task<IResult> ReadAsync(
+        PanelStore store,
+        PanelSettings running,
+        WebOptions options,
+        CancellationToken ct)
     {
         var settings = await store.ReadAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(PanelAnswers.Panel(settings, options));
+        return Results.Ok(PanelAnswers.Panel(settings, running, options));
     }
 
     private static async Task<IResult> SaveAsync(
         PanelRequest request,
         PanelStore store,
+        PanelSettings running,
         WebOptions options,
         ILoggerFactory loggers,
         CancellationToken ct)
@@ -72,7 +77,7 @@ public static class PanelEndpoints
             return Results.Json(new Failure(result.Code, result.Message), statusCode: StatusCodes.Status400BadRequest);
         }
 
-        return Results.Ok(PanelAnswers.Panel(result.Record, options));
+        return Results.Ok(PanelAnswers.Panel(result.Record, running, options));
     }
 
     private static IResult Restart(IHostApplicationLifetime life, ILoggerFactory loggers)

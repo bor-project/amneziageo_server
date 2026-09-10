@@ -12,6 +12,8 @@
   --color-brand-soft: var(--brand-soft);
   --color-alarm: var(--alarm);
   --color-alarm-soft: var(--alarm-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
 }
 
 :root {
@@ -27,6 +29,8 @@
   --brand-soft: #E8EEF9;
   --alarm: #B91C1C;
   --alarm-soft: #FEF2F2;
+  --warn: #B45309;
+  --warn-soft: #FFF7E6;
 }
 
 .dark {
@@ -42,6 +46,8 @@
   --brand-soft: #172C52;
   --alarm: #F2A3A3;
   --alarm-soft: #3A1A1D;
+  --warn: #F0B35A;
+  --warn-soft: #36270F;
 }
 
 html,

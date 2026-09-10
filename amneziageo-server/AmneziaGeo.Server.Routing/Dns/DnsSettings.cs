@@ -64,4 +64,24 @@ public sealed record DnsSettings
     /// How long an answered address stays in the set of a rule.
     /// </summary>
     public TimeSpan NameLifetime => TimeSpan.FromMinutes(NameMinutes);
+
+    /// <summary>
+    /// Tells whether the other settings ask anything else of the resolver.
+    /// </summary>
+    public bool Differs(DnsSettings other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return IsEnabled != other.IsEnabled
+            || Port != other.Port
+            || !Upstreams.SequenceEqual(other.Upstreams, StringComparer.Ordinal)
+            || !Listen.SequenceEqual(other.Listen, StringComparer.Ordinal)
+            || NameMinutes != other.NameMinutes
+            || CacheSize != other.CacheSize
+            || MinTtl != other.MinTtl
+            || MaxTtl != other.MaxTtl
+            || Intercept != other.Intercept
+            || BlockDot != other.BlockDot
+            || BlockDoh != other.BlockDoh;
+    }
 }

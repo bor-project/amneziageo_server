@@ -7,6 +7,7 @@ import { scopes } from "@/api/scopes"
 import { queryClient } from "@/api/queryClient"
 import { LanguagePicker } from "@/components/LanguagePicker"
 import { PasswordDialog } from "@/components/PasswordDialog"
+import { RestartButton } from "@/components/RestartButton"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { card } from "@/components/styles"
 import { isLanguageChoice, useText } from "@/i18n"
@@ -86,6 +87,7 @@ export function Layout() {
             <Bars />
           </button>
           <div className="ml-auto flex items-center gap-2">
+            <RestartButton />
             <ThemeToggle />
             <UserMenu />
           </div>

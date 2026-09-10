@@ -109,9 +109,38 @@ public class PanelTests
     {
         var settings = PanelDefaults.Settings with { Path = "panel" };
 
-        var answer = PanelAnswers.Panel(settings, new WebOptions());
+        var answer = PanelAnswers.Panel(settings, settings, new WebOptions());
 
         Assert.Equal("/panel/", answer.Path);
+        Assert.False(answer.Pending);
+    }
+
+    [Fact]
+    public void AnotherPortWaitsForARestart()
+    {
+        var running = PanelDefaults.Settings;
+
+        var answer = PanelAnswers.Panel(running with { Port = 9443 }, running, new WebOptions());
+
+        Assert.True(answer.Pending);
+    }
+
+    [Fact]
+    public void TheLanguageTakesNoRestart()
+    {
+        var running = PanelDefaults.Settings with { Language = "en" };
+
+        Assert.False((running with { Language = "ru" }).Differs(running));
+    }
+
+    [Fact]
+    public void SettingsAreComparedByWhatTheyHold()
+    {
+        var running = PanelDefaults.Settings with { Listen = ["127.0.0.1"], Domains = ["panel.example"], Path = "panel" };
+        var saved = running with { Listen = ["127.0.0.1"], Domains = ["PANEL.example"], Path = "/panel/" };
+
+        Assert.False(saved.Differs(running));
+        Assert.True((saved with { Listen = ["10.8.0.1"] }).Differs(running));
     }
 
     [Fact]

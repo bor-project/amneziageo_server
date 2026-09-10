@@ -1,7 +1,9 @@
 # Where the panel answers
 
-The panel holds where it answers itself, on the **Settings** page. What it holds is taken at start, so a
-change needs `Restart` next to `Save`.
+The panel holds where it answers itself, on the **Settings** page. What it holds is taken at start: `Save`
+writes a change down, and it takes hold after `Restart`, the button that shows in the header while a saved
+change waits for it. `Cancel` drops what is not saved yet, and an edit left unsaved stays while other pages
+are opened. The language takes hold at once.
 
 | Setting | What it does |
 |---|---|
@@ -14,7 +16,8 @@ change needs `Restart` next to `Save`.
 | Certificate key path | the key of that chain, taken together with it |
 | Language | the language the panel opens in, until the browser is told otherwise |
 
-`POST /api/panel/restart` stops the server, systemd starts it again.
+`POST /api/panel/restart` stops the server, systemd starts it again. `GET /api/panel` carries `pending`,
+true while the saved settings differ from the ones the panel started under; the language does not count.
 
 The page of the panel carries the path in its `base` tag, so the interface and `/api` follow the panel
 wherever it sits.

@@ -23,7 +23,7 @@ export const en = {
   "dns.blockDot": "Stop DNS over TLS",
   "dns.blockDoh": "Stop DNS over HTTPS",
   "dns.save": "Save",
-  "dns.restart": "Restart",
+  "dns.cancel": "Cancel",
   "dns.running": "Running",
   "dns.stopped": "Stopped",
   "dns.listening": "Listening on",
@@ -175,10 +175,11 @@ export const en = {
   "settings.certificate": "Certificate path",
   "settings.certificateKey": "Certificate key path",
   "settings.save": "Save",
-  "settings.restart": "Restart",
+  "settings.cancel": "Cancel",
 
   "layout.nav": "Menu",
   "layout.signOut": "Sign out",
+  "layout.restart": "Restart",
 
   "boot.loading": "loading",
 

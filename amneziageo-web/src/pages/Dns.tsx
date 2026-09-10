@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { draftOf, useResolver, useRestartResolver, useSaveResolver } from "@/api/dns"
+import { draftOf, useResolver, useSaveResolver } from "@/api/dns"
 import type { DnsDraft, DnsState, Resolver as ResolverSettings } from "@/api/dns"
 import { complaint } from "@/api/auth"
 import { scopes } from "@/api/scopes"
@@ -8,7 +8,8 @@ import { card, primary, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
-import { useAppSelector } from "@/store/hooks"
+import { dnsDrafted, same } from "@/store/draftSlice"
+import { useAppDispatch, useAppSelector } from "@/store/hooks"
 
 export function Dns() {
   const t = useText()
@@ -56,22 +57,31 @@ function Watch({ state }: { state: DnsState }) {
 
 function Editor({ settings, may }: { settings: ResolverSettings; may: boolean }) {
   const t = useText()
-  const [draft, setDraft] = useState<DnsDraft>(() => draftOf(settings))
+  const dispatch = useAppDispatch()
+  const kept = useAppSelector((s) => s.drafts.dns)
   const [fault, setFault] = useState<TextKey | null>(null)
   const save = useSaveResolver()
-  const restart = useRestartResolver()
+  const saved = draftOf(settings)
+  const draft = kept ?? saved
 
   function set(part: Partial<DnsDraft>) {
-    setDraft({ ...draft, ...part })
+    const next = { ...draft, ...part }
+    dispatch(dnsDrafted(same(next, saved) ? null : next))
   }
 
   async function keep() {
     setFault(null)
     try {
       await save.mutateAsync(draft)
+      dispatch(dnsDrafted(null))
     } catch (error) {
       setFault(complaint(error))
     }
+  }
+
+  function drop() {
+    setFault(null)
+    dispatch(dnsDrafted(null))
   }
 
   return (
@@ -127,15 +137,15 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
 
       {may && (
         <div className="flex justify-end gap-2 border-t border-line pt-3">
+          <button type="button" onClick={drop} disabled={kept === null || save.isPending} className={secondary}>
+            {t("dns.cancel")}
+          </button>
           <button
             type="button"
-            onClick={() => void restart.mutateAsync()}
-            disabled={restart.isPending}
-            className={secondary}
+            onClick={() => void keep()}
+            disabled={kept === null || save.isPending}
+            className={primary}
           >
-            {t("dns.restart")}
-          </button>
-          <button type="button" onClick={() => void keep()} disabled={save.isPending} className={primary}>
             {t("dns.save")}
           </button>
         </div>
