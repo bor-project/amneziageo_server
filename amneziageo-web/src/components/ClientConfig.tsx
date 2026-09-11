@@ -1,10 +1,12 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { useClientConfig } from "@/api/clients"
 import { Modal } from "@/components/Modal"
+import { TextBlock } from "@/components/TextBlock"
 import { primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
+import { selectsAll, selectText } from "@/select"
 
 type Kind = "file" | "link" | "subscription"
 
@@ -27,6 +29,21 @@ export function ClientConfig({ id, title, onClose }: { id: number; title: string
   const t = useText()
   const config = useClientConfig(id)
   const [picked, setPicked] = useState<Kind | null>(null)
+  const text = useRef<HTMLPreElement>(null)
+
+  useEffect(() => {
+    const selectOwn = (event: KeyboardEvent) => {
+      if (selectsAll(event) && text.current) {
+        event.preventDefault()
+        selectText(text.current)
+      }
+    }
+
+    window.addEventListener("keydown", selectOwn)
+
+    return () => window.removeEventListener("keydown", selectOwn)
+  }, [])
+
   const words: Record<Kind, string> = {
     file: config.data?.text ?? "",
     link: config.data?.link ?? "",
@@ -103,11 +120,12 @@ export function ClientConfig({ id, title, onClose }: { id: number; title: string
           )}
         </div>
 
-        <pre
+        <TextBlock
+          ref={text}
           className={`max-h-80 overflow-auto rounded border border-line bg-canvas p-3 text-xs text-ink ${kind === "file" ? "" : "break-all whitespace-pre-wrap"}`}
         >
           {words[kind]}
-        </pre>
+        </TextBlock>
       </div>
     </Modal>
   )

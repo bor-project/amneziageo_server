@@ -36,6 +36,11 @@ public static class DnsDefaults
     public static readonly TimeSpan Wait = TimeSpan.FromSeconds(4);
 
     /// <summary>
+    /// How long an answer waits for its new addresses to reach the sets of the rules.
+    /// </summary>
+    public static readonly TimeSpan Landing = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
     /// The name servers the questions are passed to.
     /// </summary>
     public static readonly string[] Upstreams = ["1.1.1.1", "8.8.8.8"];

@@ -19,6 +19,8 @@ public sealed class DnsResolver
 
     private readonly DnsState _state;
 
+    private readonly Func<CancellationToken, Task> _land;
+
     private readonly Lock _sync = new();
 
     private RoutePlan? _seen;
@@ -34,7 +36,8 @@ public sealed class DnsResolver
         DnsSets sets,
         Func<RoutePlan?> plan,
         DnsSettings settings,
-        DnsState state)
+        DnsState state,
+        Func<CancellationToken, Task> land)
     {
         _upstream = upstream;
         _cache = cache;
@@ -42,6 +45,7 @@ public sealed class DnsResolver
         _plan = plan;
         _settings = settings;
         _state = state;
+        _land = land;
     }
 
     /// <summary>
@@ -60,7 +64,7 @@ public sealed class DnsResolver
         if (held is not null)
         {
             _state.Held();
-            Spread(DnsMessage.Read(held));
+            await LandAsync(DnsMessage.Read(held), ct).ConfigureAwait(false);
 
             return held;
         }
@@ -77,7 +81,7 @@ public sealed class DnsResolver
         if (read is { Code: 0 })
         {
             _cache.Keep(read.Question, read.Type, answer, Lifetime(read));
-            Spread(read);
+            await LandAsync(read, ct).ConfigureAwait(false);
         }
 
         return answer;
@@ -95,33 +99,52 @@ public sealed class DnsResolver
         return TimeSpan.FromSeconds(seconds);
     }
 
-    private void Spread(DnsMessage? answer)
+    private async Task LandAsync(DnsMessage? answer, CancellationToken ct)
+    {
+        if (!Spread(answer))
+        {
+            return;
+        }
+
+        try
+        {
+            await _land(ct).WaitAsync(DnsDefaults.Landing, ct).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+        }
+    }
+
+    private bool Spread(DnsMessage? answer)
     {
         if (answer is null || answer.Answers.Count == 0)
         {
-            return;
+            return false;
         }
 
         var names = Names();
         if (names.Count == 0)
         {
-            return;
+            return false;
         }
 
         var addresses = answer.Addresses.ToArray();
         if (addresses.Length == 0)
         {
-            return;
+            return false;
         }
 
+        var queued = false;
         var rules = Rules(names, answer);
         foreach (var rule in rules)
         {
             foreach (var address in addresses)
             {
-                _sets.Add(rule, address, _settings.NameLifetime);
+                queued |= _sets.Add(rule, address, _settings.NameLifetime);
             }
         }
+
+        return queued;
     }
 
     private static IReadOnlyList<long> Rules(DnsNames names, DnsMessage answer)

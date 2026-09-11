@@ -24,6 +24,17 @@ public class OutboundHostTests
     }
 
     [Fact]
+    public async Task ATunnelTakesItsAddressAloneWhateverTheMaskItCameWith()
+    {
+        var ledger = new Ledger();
+        var host = new OutboundHost(ledger, new Kernel(), new Clock(Now));
+
+        await host.ApplyAsync(Tunnel() with { Address = ["10.9.0.2/24", "fd00::2/64"] }, CancellationToken.None);
+
+        Assert.Contains("address awgbor 10.9.0.2/32 fd00::2/128", ledger.Steps);
+    }
+
+    [Fact]
     public async Task AnInterfaceTheHostAlreadyCarriesIsNotAddedTwice()
     {
         var ledger = new Ledger();

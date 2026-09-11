@@ -46,6 +46,7 @@ public sealed record OutboundResponse(
     int Keepalive,
     string Probe,
     int ProbeEvery,
+    bool ClosePrivate,
     long Mark,
     int Table,
     ObfuscationBody Obfuscation,
@@ -72,6 +73,7 @@ public sealed record OutboundRequest(
     int Keepalive,
     string? Probe,
     int ProbeEvery,
+    bool? ClosePrivate,
     ObfuscationBody? Obfuscation);
 
 /// <summary>
@@ -120,6 +122,7 @@ public static class OutboundAnswers
             outbound.Keepalive,
             outbound.Probe,
             outbound.ProbeEvery,
+            outbound.ClosePrivate,
             outbound.Mark,
             outbound.Table,
             ConfigAnswers.Obfuscation(outbound.Obfuscation),
@@ -177,6 +180,7 @@ public static class OutboundAnswers
             Keepalive = request.Keepalive,
             Probe = (request.Probe ?? string.Empty).Trim(),
             ProbeEvery = request.ProbeEvery,
+            ClosePrivate = request.ClosePrivate ?? true,
             Obfuscation = ConfigAnswers.Settings(request.Obfuscation),
         };
     }

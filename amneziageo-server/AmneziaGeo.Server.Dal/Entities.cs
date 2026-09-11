@@ -239,6 +239,8 @@ public sealed class OutboundEntity
 
     public int ProbeEvery { get; set; }
 
+    public bool ClosePrivate { get; set; }
+
     public long Mark { get; set; }
 
     public int Table { get; set; }

@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Api.Outbounds;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Routing.Host;
@@ -199,6 +200,86 @@ public class OutboundTests
         Assert.Null(OutboundRules.Check(outbound));
         Assert.Null(OutboundDevice.Update(outbound, new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, outbound.Port)).Obfuscation);
     }
+
+    [Fact]
+    public void ATunnelLetsBackOnlyWhatAnswersTheHost()
+    {
+        var text = OutboundRuleset.Text([OutboundDefaults.Direct(), Tunnel()], "eth0");
+
+        Assert.Equal(2, Times(text, "iifname { \"awgbor\" } ct state established,related accept"));
+        Assert.Equal(2, Times(text, "iifname { \"awgbor\" } drop"));
+        Assert.True(
+            text.IndexOf("iifname { \"awgbor\" } ct state", StringComparison.Ordinal)
+            < text.IndexOf("iifname { \"awgbor\" } drop", StringComparison.Ordinal));
+        Assert.DoesNotContain("iifname { \"eth0\"", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NothingGoesBackOutTheUplinkItCameIn()
+    {
+        var text = OutboundRuleset.Text([OutboundDefaults.Direct(), Tunnel() with { IsEnabled = false }], "eth0");
+
+        Assert.Contains("iifname \"eth0\" oifname \"eth0\" drop", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("iifname {", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("reject", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATunnelClosesThePrivateNetworksBehindItUnlessToldOtherwise()
+    {
+        var closed = OutboundRuleset.Text([Tunnel()], "eth0");
+        var open = OutboundRuleset.Text([Tunnel() with { ClosePrivate = false }], "eth0");
+
+        Assert.Contains(
+            "oifname \"awgbor\" ct state new ip daddr { 10.0.0.0/8, 100.64.0.0/10, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 } reject",
+            closed,
+            StringComparison.Ordinal);
+        Assert.Contains("oifname \"awgbor\" ct state new ip6 daddr { fc00::/7, fe80::/10 } reject", closed, StringComparison.Ordinal);
+        Assert.DoesNotContain("reject", open, StringComparison.Ordinal);
+        Assert.Contains("iifname { \"awgbor\" } drop", open, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ANewTunnelClosesThePrivateNetworks()
+    {
+        Assert.True(OutboundDefaults.Fresh("awgbor").ClosePrivate);
+        Assert.True(OutboundImport.Read(Sample, "awgbor").Outbound!.ClosePrivate);
+    }
+
+    [Fact]
+    public void TheInterfaceTakesEachAddressAlone()
+    {
+        Assert.Equal(["10.9.0.2/32", "fd00::2/128"], OutboundDevice.Hosts(["10.9.0.2/24", "fd00::2/64"]));
+        Assert.Equal(["10.8.1.5/32"], OutboundDevice.Hosts(["10.8.1.5/32"]));
+    }
+
+    [Fact]
+    public void AnOutboundSentWithoutTheFlagClosesThePrivateNetworks()
+    {
+        Assert.True(OutboundAnswers.Draft(Asked(null)).ClosePrivate);
+        Assert.False(OutboundAnswers.Draft(Asked(false)).ClosePrivate);
+    }
+
+    private static OutboundRequest Asked(bool? closePrivate) => new(
+        Name: "awgbor",
+        Kind: OutboundKind.Wg,
+        IsEnabled: true,
+        Host: "bor.sytes.net",
+        Port: 51821,
+        Proxy: null,
+        PrivateKey: null,
+        PeerKey: null,
+        PresharedKey: null,
+        Address: ["10.8.1.5/32"],
+        Dns: [],
+        Mtu: 1380,
+        Keepalive: 25,
+        Probe: null,
+        ProbeEvery: 30,
+        ClosePrivate: closePrivate,
+        Obfuscation: null);
+
+    private static int Times(string text, string part) => text.Split(part).Length - 1;
 
     private static OutboundConfig Tunnel() => new()
     {

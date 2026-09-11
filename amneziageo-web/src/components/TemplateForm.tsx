@@ -4,6 +4,7 @@ import { useTemplateDefaults } from "@/api/templates"
 import type { Template, TemplateDraft } from "@/api/templates"
 import { EntryList } from "@/components/EntryList"
 import { Modal } from "@/components/Modal"
+import { TextBlock } from "@/components/TextBlock"
 import { Line } from "@/components/fields"
 import { field, label, primary, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
@@ -82,9 +83,9 @@ export function TemplateForm({
         {held !== undefined && held.entries.length > 0 && (
           <div className="col-span-2">
             <div className={label}>{t("templates.resolved")}</div>
-            <pre className="mt-1 max-h-40 overflow-auto rounded border border-line bg-canvas p-3 text-xs text-ink">
+            <TextBlock className="mt-1 max-h-40 overflow-auto rounded border border-line bg-canvas p-3 text-xs text-ink">
               {held.allowedIps.join("\n")}
-            </pre>
+            </TextBlock>
             <div className="mt-1 text-xs text-muted">
               {t("templates.resolvedLine", {
                 count: String(held.allowedIps.length),

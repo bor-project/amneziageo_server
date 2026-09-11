@@ -69,9 +69,13 @@ The sets `doh4` and `doh6` hold the addresses of the public name servers that an
 
 Every rule that matches by name has the sets `n<id>v4` and `n<id>v6` with a timeout of its own. The
 resolver reads the answer, takes the name of the question and the name of every record in it, asks the
-rules which of them match, and queues the addresses. The queue goes to the host twice a second, up to
+rules which of them match, and queues the addresses. An answer that brings an address the sets do not hold
+yet goes back to the client once the address is in the set, so the first connection to it already takes the
+rule; it waits for that half a second at most. The rest of the queue goes to the host twice a second, up to
 512 addresses in one command, and an address already there is not sent again until half its life has
-passed. Addresses of a rule that is gone or turned off are dropped instead of sent.
+passed. Addresses of a rule that is gone or turned off are dropped instead of sent. The rules go to the host as
+a whole table, so the sets come back empty every time the rules are laid anew; right after that the panel puts
+back every address whose time has not run out, with the time it has left.
 
 ## What the panel shows
 

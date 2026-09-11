@@ -53,6 +53,8 @@ public sealed class RouteApplier
 
     private readonly BalanceLive _live;
 
+    private readonly DnsSets _sets;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -67,7 +69,8 @@ public sealed class RouteApplier
         IGeoFileStore files,
         RouteHost host,
         RoutePlans plans,
-        BalanceLive live)
+        BalanceLive live,
+        DnsSets sets)
     {
         _rules = rules;
         _outbounds = outbounds;
@@ -80,6 +83,7 @@ public sealed class RouteApplier
         _host = host;
         _plans = plans;
         _live = live;
+        _sets = sets;
     }
 
     /// <summary>
@@ -120,6 +124,7 @@ public sealed class RouteApplier
     {
         var plan = await BuildAsync(ct).ConfigureAwait(false);
         await _host.ApplyAsync(plan, ct).ConfigureAwait(false);
+        await _sets.RestoreAsync(plan, ct).ConfigureAwait(false);
 
         return plan;
     }
@@ -133,6 +138,7 @@ public sealed class RouteApplier
         try
         {
             await _host.ApplyAsync(plan, ct).ConfigureAwait(false);
+            await _sets.RestoreAsync(plan, ct).ConfigureAwait(false);
         }
         catch (HostNetworkException)
         {

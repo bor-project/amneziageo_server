@@ -33,7 +33,9 @@ public sealed class DnsSets
 
     private readonly ConcurrentQueue<DnsEntry> _waiting = new();
 
-    private readonly ConcurrentDictionary<string, DateTimeOffset> _held = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Held> _held = new(StringComparer.Ordinal);
+
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
     private readonly IHostNetwork _network;
 
@@ -61,21 +63,24 @@ public sealed class DnsSets
     public long Added => Interlocked.Read(ref _added);
 
     /// <summary>
-    /// Takes an address the resolver answered with.
+    /// Takes an address the resolver answered with, telling whether it has to go to the host.
     /// </summary>
-    public void Add(long rule, IPAddress address, TimeSpan lifetime)
+    public bool Add(long rule, IPAddress address, TimeSpan lifetime)
     {
         ArgumentNullException.ThrowIfNull(address);
 
         var key = rule.ToString(CultureInfo.InvariantCulture) + "|" + address;
         var now = _time.GetUtcNow();
-        if (_held.TryGetValue(key, out var until) && until > now)
+        if (_held.TryGetValue(key, out var held) && held.Again > now)
         {
-            return;
+            return false;
         }
 
-        _held[key] = now + (lifetime > TimeSpan.Zero ? lifetime / 2 : TimeSpan.Zero);
-        _waiting.Enqueue(new DnsEntry(rule, address));
+        var entry = new DnsEntry(rule, address);
+        _held[key] = new Held(entry, now + (lifetime > TimeSpan.Zero ? lifetime / 2 : TimeSpan.Zero), now + lifetime);
+        _waiting.Enqueue(entry);
+
+        return true;
     }
 
     /// <summary>
@@ -83,35 +88,62 @@ public sealed class DnsSets
     /// </summary>
     public async Task<int> FlushAsync(RoutePlan? plan, TimeSpan lifetime, CancellationToken ct)
     {
-        var live = Live(plan);
-        var batch = new List<DnsEntry>(MaxBatch);
-        while (batch.Count < MaxBatch && _waiting.TryDequeue(out var entry))
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            if (live.Contains(entry.Rule))
+            if (_waiting.IsEmpty)
             {
-                batch.Add(entry);
+                return 0;
             }
-        }
 
-        if (batch.Count == 0)
+            var taken = Take(Live(plan));
+            foreach (var batch in taken.Chunk(MaxBatch))
+            {
+                await _network.FirewallAsync(Text(batch, lifetime), ct).ConfigureAwait(false);
+                Interlocked.Add(ref _added, batch.Length);
+            }
+
+            return taken.Count;
+        }
+        finally
         {
-            return 0;
+            _gate.Release();
         }
-
-        await _network.FirewallAsync(Text(batch, lifetime), ct).ConfigureAwait(false);
-        Interlocked.Add(ref _added, batch.Count);
-
-        return batch.Count;
     }
 
     /// <summary>
-    /// Drops what waits and what is known to be on the host.
+    /// Puts back the addresses whose time has not run out into the sets of a plan laid anew.
     /// </summary>
-    public void Forget()
+    public async Task<int> RestoreAsync(RoutePlan? plan, CancellationToken ct)
     {
-        _held.Clear();
-        while (_waiting.TryDequeue(out _))
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
+            var now = _time.GetUtcNow();
+            var live = Live(plan);
+            var kept = new List<(DnsEntry Entry, int Seconds)>();
+            foreach (var pair in _held)
+            {
+                if (pair.Value.Until <= now)
+                {
+                    _held.TryRemove(pair.Key, out _);
+                }
+                else if (live.Contains(pair.Value.Entry.Rule))
+                {
+                    kept.Add((pair.Value.Entry, Seconds(pair.Value.Until - now)));
+                }
+            }
+
+            foreach (var batch in kept.Chunk(MaxBatch))
+            {
+                await _network.FirewallAsync(Write(batch), ct).ConfigureAwait(false);
+            }
+
+            return kept.Count;
+        }
+        finally
+        {
+            _gate.Release();
         }
     }
 
@@ -122,14 +154,19 @@ public sealed class DnsSets
     {
         ArgumentNullException.ThrowIfNull(entries);
 
-        var seconds = (int)Math.Max(1, lifetime.TotalSeconds);
+        var seconds = Seconds(lifetime);
+
+        return Write([.. entries.Select(entry => (entry, seconds))]);
+    }
+
+    private static string Write(IReadOnlyList<(DnsEntry Entry, int Seconds)> items)
+    {
         var text = new StringBuilder();
-        foreach (var group in entries.GroupBy(entry => (entry.Rule, entry.IsSix)))
+        foreach (var group in items.GroupBy(item => (item.Entry.Rule, item.Entry.IsSix)))
         {
             var elements = group
-                .Select(entry => entry.Address.ToString())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Select(address => $"{address} timeout {seconds}s");
+                .GroupBy(item => item.Entry.Address.ToString(), StringComparer.OrdinalIgnoreCase)
+                .Select(same => $"{same.Key} timeout {same.Max(item => item.Seconds)}s");
 
             text.Append("add element inet ").Append(RouteRuleset.TableName).Append(' ');
             text.Append(RouteRuleset.NameSet(group.Key.Rule, group.Key.IsSix));
@@ -139,8 +176,27 @@ public sealed class DnsSets
         return text.ToString();
     }
 
+    private static int Seconds(TimeSpan lifetime) => (int)Math.Max(1, Math.Ceiling(lifetime.TotalSeconds));
+
+    private List<DnsEntry> Take(HashSet<long> live)
+    {
+        var taken = new List<DnsEntry>();
+        var left = _waiting.Count;
+        while (left-- > 0 && _waiting.TryDequeue(out var entry))
+        {
+            if (live.Contains(entry.Rule))
+            {
+                taken.Add(entry);
+            }
+        }
+
+        return taken;
+    }
+
     private static HashSet<long> Live(RoutePlan? plan) =>
         plan is null
             ? []
             : [.. plan.Legs.Where(leg => leg.IsLive && leg.Domains.Count > 0).Select(leg => leg.Rule.Id)];
+
+    private sealed record Held(DnsEntry Entry, DateTimeOffset Again, DateTimeOffset Until);
 }

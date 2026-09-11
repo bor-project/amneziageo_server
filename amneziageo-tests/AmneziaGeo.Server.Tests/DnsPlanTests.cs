@@ -176,9 +176,96 @@ public class DnsPlanTests
         Assert.Contains("timeout 15m", text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AnAnswerGoesBackOnceItsAddressesAreInTheSets()
+    {
+        var host = new Ledger();
+        var sets = new DnsSets(host);
+        var plan = Plan(Rule("youtube.com"));
+        var resolver = Resolver(sets, plan, ct => sets.FlushAsync(plan, On.NameLifetime, ct));
+
+        var answer = await resolver.AnswerAsync(DnsBuilder.Question(3, "www.youtube.com"), false, CancellationToken.None);
+
+        Assert.NotNull(answer);
+        Assert.Equal(0, sets.Waiting);
+        Assert.Contains("add element inet amneziageo_rt n1v4 { 1.2.3.4 timeout 3600s }", host.Ruleset, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnAddressAlreadyInTheSetsDoesNotHoldTheAnswer()
+    {
+        var host = new Ledger();
+        var sets = new DnsSets(host);
+        var plan = Plan(Rule("youtube.com"));
+        var resolver = Resolver(sets, plan, ct => sets.FlushAsync(plan, On.NameLifetime, ct));
+
+        await resolver.AnswerAsync(DnsBuilder.Question(3, "www.youtube.com"), false, CancellationToken.None);
+        await resolver.AnswerAsync(DnsBuilder.Question(4, "www.youtube.com"), false, CancellationToken.None);
+
+        Assert.Equal(1, host.Steps.Count(step => step == "firewall"));
+    }
+
+    [Fact]
+    public async Task AnAnswerWaitsForTheSetsNoLongerThanHalfASecond()
+    {
+        var sets = new DnsSets(new Ledger());
+        var resolver = Resolver(sets, Plan(Rule("youtube.com")), _ => new TaskCompletionSource().Task);
+
+        var answer = await resolver
+            .AnswerAsync(DnsBuilder.Question(3, "www.youtube.com"), false, CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.NotNull(answer);
+    }
+
+    [Fact]
+    public async Task TheAddressesComeBackOnceTheRulesAreLaidAnew()
+    {
+        var clock = new Clock(new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero));
+        var host = new Ledger();
+        var sets = new DnsSets(host, clock);
+        var plan = Plan(Rule("youtube.com"));
+        sets.Add(1, IPAddress.Parse("1.2.3.4"), TimeSpan.FromMinutes(60));
+        await sets.FlushAsync(plan, TimeSpan.FromMinutes(60), CancellationToken.None);
+
+        clock.Pass(TimeSpan.FromMinutes(10));
+
+        Assert.Equal(1, await sets.RestoreAsync(plan, CancellationToken.None));
+        Assert.Contains("add element inet amneziageo_rt n1v4 { 1.2.3.4 timeout 3000s }", host.Ruleset, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnAddressWhoseTimeRanOutOrWhoseRuleIsGoneDoesNotComeBack()
+    {
+        var clock = new Clock(new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero));
+        var host = new Ledger();
+        var sets = new DnsSets(host, clock);
+        sets.Add(1, IPAddress.Parse("1.2.3.4"), TimeSpan.FromMinutes(60));
+        sets.Add(9, IPAddress.Parse("5.6.7.8"), TimeSpan.FromMinutes(600));
+
+        clock.Pass(TimeSpan.FromMinutes(61));
+
+        Assert.Equal(0, await sets.RestoreAsync(Plan(Rule("youtube.com")), CancellationToken.None));
+        Assert.DoesNotContain("firewall", host.Steps);
+    }
+
     private static RouteRule Rule(string target) =>
         RouteDefaults.Fresh("rule") with { Id = 1, Action = RouteAction.Out, Outbound = "direct", Targets = [target] };
 
     private static RoutePlan Plan(RouteRule rule, DnsSettings? dns = null) =>
         RoutePlan.Build([rule], Ways, GeoIndex.Load([], new MemoryGeoFiles()), ["awg1"], dns);
+
+    private static DnsResolver Resolver(DnsSets sets, RoutePlan plan, Func<CancellationToken, Task> land) =>
+        new(new Book("1.2.3.4"), new DnsCache(16), sets, () => plan, On, new DnsState(), land);
+
+    private sealed class Book(string address) : IDnsUpstream
+    {
+        public Task<byte[]?> AskAsync(ReadOnlyMemory<byte> question, bool stream, CancellationToken ct)
+        {
+            var asked = DnsMessage.Read(question.Span)!;
+            var told = new Told(asked.Question, asked.Type, 300, address);
+
+            return Task.FromResult<byte[]?>(DnsBuilder.Answer(asked.Id, asked.Question, asked.Type, told));
+        }
+    }
 }

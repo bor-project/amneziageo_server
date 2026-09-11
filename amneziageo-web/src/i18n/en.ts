@@ -575,6 +575,7 @@ export const en = {
   "outbounds.dns": "Name servers",
   "outbounds.mtu": "MTU",
   "outbounds.keepalive": "Keepalive",
+  "outbounds.closePrivate": "Close private networks",
   "outbounds.probe": "Reachability check",
   "outbounds.probeServer": "Name server",
   "outbounds.probeEvery": "Every, seconds",

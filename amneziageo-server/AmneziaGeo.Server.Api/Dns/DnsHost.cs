@@ -99,7 +99,6 @@ public sealed class DnsHost : BackgroundService
         {
             _server?.Stop();
             _server = null;
-            _sets.Forget();
             using var scope = _scopes.CreateScope();
             _settings = anew || _state.Settings is null
                 ? await scope.ServiceProvider.GetRequiredService<DnsStore>().ReadAsync(ct).ConfigureAwait(false)
@@ -139,7 +138,8 @@ public sealed class DnsHost : BackgroundService
             _sets,
             () => _plans.Held,
             _settings,
-            _state);
+            _state,
+            FlushAsync);
 
         var server = new DnsServer(resolver);
         var taken = default(IReadOnlyList<IPAddress>);
@@ -161,11 +161,6 @@ public sealed class DnsHost : BackgroundService
 
     private async Task FlushAsync(CancellationToken ct)
     {
-        if (_sets.Waiting == 0)
-        {
-            return;
-        }
-
         try
         {
             await _sets.FlushAsync(_plans.Held, _settings.NameLifetime, ct).ConfigureAwait(false);

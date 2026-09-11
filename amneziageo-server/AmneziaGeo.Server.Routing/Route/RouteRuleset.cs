@@ -51,10 +51,11 @@ public static class RouteRuleset
 
         text.Append("\tchain prerouting {\n");
         text.Append("\t\ttype filter hook prerouting priority mangle; policy accept;\n");
-        text.Append("\t\tct mark != 0x00000000 meta mark set ct mark accept\n");
         if (plan.Inbound.Count > 0)
         {
             text.Append("\t\tiifname != { ").Append(Quoted(plan.Inbound)).Append(" } accept\n");
+            text.Append("\t\tct mark != 0x00000000 meta mark set ct mark accept\n");
+            text.Append("\t\tct state != new accept\n");
             text.Append("\t\tjump decide\n");
             text.Append("\t\tmeta mark != 0x00000000 ct mark set meta mark\n");
         }

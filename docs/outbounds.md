@@ -62,6 +62,7 @@ the carrier down. Every other setting is the one a `wg` outbound carries.
 | Interface address | the ranges the interface carries, as the server handed them out |
 | Name servers | the servers reachable through the tunnel |
 | MTU, Keepalive | the packet size and how often the path is held open |
+| Close private networks | whether a client is kept out of the private ranges behind the tunnel, on for a new tunnel |
 | Private key | the key of the interface; the public one is derived from it |
 | Server public key | the key the server is known by |
 | Preshared key | the key added on top of the handshake, when the server asks for one |
@@ -103,10 +104,34 @@ up. A `local` outbound looks the way out up in the main table instead. What land
   keeps going the way it went before;
 - `default dev <name> table <table>` for a tunnel;
 - one firewall table, `inet amneziageo_out`, that masquerades what leaves through every outbound that is
-  on and holds a TCP segment down to what the path carries.
+  on, holds a TCP segment down to what the path carries and filters what comes out of the tunnels.
 
 The interface itself is given no mark: the mark is what sends a packet into the tunnel, not what the
-tunnel puts on its own packets, so there is no loop to break.
+tunnel puts on its own packets, so there is no loop to break. The interface takes each of its addresses
+alone, as `/32` or `/128`, whatever mask the server handed it with, so the network behind the tunnel is
+reached through the rules and never through a route of the main table.
+
+## What a tunnel lets back
+
+The server at the other end of a tunnel is trusted with what the host sends into it and with nothing
+else. Out of a tunnel the host takes only what answers a connection it made or passed on: a new
+connection that comes out of a tunnel is dropped, both on its way to the host and on its way through it.
+Nor does the host pass on what came in on the uplink and would leave through it again, so the
+masquerading of a `local` outbound covers the clients and the host alone.
+
+```
+chain input {
+    type filter hook input priority filter; policy accept;
+    iifname { "awgbor" } ct state established,related accept
+    iifname { "awgbor" } drop
+}
+```
+
+A tunnel with **Close private networks** on also rejects a new connection a client opens through it to
+a private range: `10.0.0.0/8`, `100.64.0.0/10`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`,
+`fc00::/7` and `fe80::/10`, which is where the tunnel network of the server and whatever stands behind it
+live. With it off, a rule that sends such a range into the tunnel takes the client there, under the
+address of the tunnel.
 
 ## Putting it on the host
 

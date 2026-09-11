@@ -577,6 +577,7 @@ export const ru: Dictionary = {
   "outbounds.dns": "Серверы имён",
   "outbounds.mtu": "MTU",
   "outbounds.keepalive": "Keepalive",
+  "outbounds.closePrivate": "Закрыть частные сети",
   "outbounds.probe": "Проверка доступности",
   "outbounds.probeServer": "Сервер имён",
   "outbounds.probeEvery": "Период, с",

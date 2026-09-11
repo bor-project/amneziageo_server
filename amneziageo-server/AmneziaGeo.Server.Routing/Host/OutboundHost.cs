@@ -174,7 +174,7 @@ public sealed class OutboundHost
         }
 
         _devices.Apply(OutboundDevice.Update(outbound, server));
-        await _network.AddressAsync(outbound.Name, outbound.Address, ct).ConfigureAwait(false);
+        await _network.AddressAsync(outbound.Name, OutboundDevice.Hosts(outbound.Address), ct).ConfigureAwait(false);
         await _network.UpAsync(outbound.Name, outbound.Mtu, ct).ConfigureAwait(false);
         await _network.RouteAsync(outbound.Name, outbound.Table, ct).ConfigureAwait(false);
     }

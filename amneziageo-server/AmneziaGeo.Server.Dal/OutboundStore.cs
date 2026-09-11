@@ -306,6 +306,7 @@ public sealed class OutboundStore
         Keepalive = entity.Keepalive,
         Probe = entity.Probe,
         ProbeEvery = entity.ProbeEvery,
+        ClosePrivate = entity.ClosePrivate,
         Mark = (uint)entity.Mark,
         Table = entity.Table,
         CreatedUtc = entity.CreatedUtc,
@@ -359,6 +360,7 @@ public sealed class OutboundStore
         entity.Keepalive = outbound.Keepalive;
         entity.Probe = outbound.Probe.Trim();
         entity.ProbeEvery = outbound.ProbeEvery;
+        entity.ClosePrivate = outbound.ClosePrivate;
         entity.Mark = outbound.Mark;
         entity.Table = outbound.Table;
         entity.Jc = outbound.Obfuscation.Jc;

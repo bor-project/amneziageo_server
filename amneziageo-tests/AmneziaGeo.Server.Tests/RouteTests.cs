@@ -194,6 +194,18 @@ public class RouteTests
     }
 
     [Fact]
+    public void OnlyANewConnectionOfAClientIsAskedTheRules()
+    {
+        var text = RouteRuleset.Text(Plan(Out("awgbor") with { Targets = ["geoip:ru"] }));
+        var clients = text.IndexOf("iifname != { \"awg1\", \"awg2\" } accept", StringComparison.Ordinal);
+        var mark = text.IndexOf("ct mark != 0x00000000 meta mark set ct mark accept", StringComparison.Ordinal);
+        var fresh = text.IndexOf("ct state != new accept", StringComparison.Ordinal);
+        var decide = text.IndexOf("jump decide", StringComparison.Ordinal);
+
+        Assert.True(clients >= 0 && clients < mark && mark < fresh && fresh < decide, text);
+    }
+
+    [Fact]
     public void ARuleThatIsOffLeavesNothingOnTheHost()
     {
         var text = RouteRuleset.Text(Plan(Out("awgbor") with { Targets = ["geoip:ru"], IsEnabled = false }));
@@ -206,8 +218,10 @@ public class RouteTests
     public void WithoutAnEndpointNothingIsMarkedAtAll()
     {
         var plan = RoutePlan.Build([Out("awgbor")], Ways, Index(), []);
+        var text = RouteRuleset.Text(plan);
 
-        Assert.DoesNotContain("jump decide", RouteRuleset.Text(plan), StringComparison.Ordinal);
+        Assert.DoesNotContain("jump decide", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ct mark", text, StringComparison.Ordinal);
     }
 
     [Fact]

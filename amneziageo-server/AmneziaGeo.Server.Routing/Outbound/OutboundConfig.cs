@@ -88,6 +88,11 @@ public sealed record OutboundConfig
     public int Keepalive { get; init; }
 
     /// <summary>
+    /// Whether the clients are kept out of the private networks behind the tunnel.
+    /// </summary>
+    public bool ClosePrivate { get; init; } = true;
+
+    /// <summary>
     /// The name server the probe asks, empty when the outbound is not probed.
     /// </summary>
     public string Probe { get; init; } = string.Empty;

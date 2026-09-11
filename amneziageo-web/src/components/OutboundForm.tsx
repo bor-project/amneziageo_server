@@ -185,6 +185,12 @@ export function OutboundForm({
             value={draft.keepalive}
             onChange={(value) => put({ keepalive: value })}
           />
+          <Flag
+            id="outbound-close-private"
+            caption={t("outbounds.closePrivate")}
+            value={draft.closePrivate}
+            onChange={(value) => put({ closePrivate: value })}
+          />
         </Section>
       )}
 

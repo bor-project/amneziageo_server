@@ -50,15 +50,20 @@ host swaps one ruleset for the next in a single step. The table carries:
   databases;
 - one timeout set per rule and family, named `n<id>v4` and `n<id>v6`, that the resolver fills with the
   addresses the names of the rule answered with;
-- a `prerouting` chain at mangle priority that restores the mark of a connection that already has one,
-  leaves alone anything that did not arrive on an endpoint of the panel, and hands the rest to the
-  decision chain;
+- a `prerouting` chain at mangle priority that leaves alone anything that did not arrive on an endpoint of
+  the panel, restores the mark of a connection that already has one, and hands only a new connection to
+  the decision chain;
 - a `decide` chain that carries the rules themselves.
 
-A rule that sends traffic out sets the mark of its outbound, and the mark is kept on the connection, so
-a connection stays on the path it was given even after the rules change. The mark itself is what the
-`ip rule` of the outbound looks up: the routing tables and the marks come from the outbounds and are
-described in [outbounds.md](outbounds.md). A rule that blocks drops the packet.
+The rules decide once, on the first packet of a connection. A rule that sends traffic out sets the mark of
+its outbound and the mark is kept on the connection; a connection no rule took goes on the way the host
+picked for it. Either way a connection stays on its path even after the rules change or its address reaches
+the set of a rule later. The mark itself is what the `ip rule` of the outbound looks up: the routing tables
+and the marks come from the outbounds and are described in [outbounds.md](outbounds.md). A rule that blocks
+drops a new connection; one that was open before the rule came goes on until it ends.
+
+The mark comes back only to what the clients send. An answer that returns through an outbound carries no
+mark, so the host finds the client in its own tables instead of sending the answer back into the outbound.
 
 Traffic that matches no rule carries no mark and takes the way out the host itself picks.
 

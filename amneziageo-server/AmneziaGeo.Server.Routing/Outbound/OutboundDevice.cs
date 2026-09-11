@@ -54,6 +54,22 @@ public static class OutboundDevice
     }
 
     /// <summary>
+    /// Returns the addresses of the interface, each standing alone without its network.
+    /// </summary>
+    public static IReadOnlyList<string> Hosts(IReadOnlyList<string> address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        return
+        [
+            .. address
+                .Select(one => AwgAllowedIp.TryParse(one, out var found) ? found : null)
+                .OfType<AwgAllowedIp>()
+                .Select(found => new AwgAllowedIp(found.Address, found.IsSix ? (byte)128 : (byte)32).ToString()),
+        ];
+    }
+
+    /// <summary>
     /// Returns what the host holds for an outbound, reading it off the interface.
     /// </summary>
     public static OutboundState State(OutboundConfig outbound, AwgDevice? device, DateTimeOffset now)

@@ -2,6 +2,7 @@ import { useState } from "react"
 import type { KeyboardEvent } from "react"
 import { useGeoEntries, useGeoKeys } from "@/api/geo"
 import type { GeoKeys } from "@/api/geo"
+import { TextBlock } from "@/components/TextBlock"
 import { card, field } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -147,7 +148,7 @@ function Inside({ token }: { token: string }) {
         {data === undefined ? t("templates.loading") : summary(t, data.total, data.entries.length)}
       </div>
       {data !== undefined && data.entries.length > 0 && (
-        <pre className="mt-1 max-h-40 overflow-auto rounded bg-canvas p-2 text-xs text-ink">{data.entries.join("\n")}</pre>
+        <TextBlock className="mt-1 max-h-40 overflow-auto rounded bg-canvas p-2 text-xs text-ink">{data.entries.join("\n")}</TextBlock>
       )}
     </div>
   )

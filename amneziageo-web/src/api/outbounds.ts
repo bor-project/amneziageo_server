@@ -41,6 +41,7 @@ export interface Outbound {
   keepalive: number
   probe: string
   probeEvery: number
+  closePrivate: boolean
   mark: number
   table: number
   obfuscation: Obfuscation
@@ -65,6 +66,7 @@ export interface OutboundDraft {
   keepalive: number
   probe: string
   probeEvery: number
+  closePrivate: boolean
   obfuscation: Obfuscation
 }
 
@@ -144,6 +146,7 @@ export function draftOf(outbound: Outbound): OutboundDraft {
     keepalive: outbound.keepalive,
     probe: outbound.probe,
     probeEvery: outbound.probeEvery,
+    closePrivate: outbound.closePrivate,
     obfuscation: outbound.obfuscation,
   }
 }
