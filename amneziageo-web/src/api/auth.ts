@@ -95,6 +95,7 @@ const complaints: Record<string, TextKey> = {
   "bad-mark": "error.badMark",
   "bad-table": "error.badTable",
   "bad-import": "error.badImport",
+  "bad-client-import": "error.badClientImport",
   "no-mark": "error.noMark",
   "unknown-outbound": "error.unknownOutbound",
   "host-refused": "error.hostRefused",
@@ -150,6 +151,12 @@ const complaints: Record<string, TextKey> = {
   "role-in-use": "error.roleInUse",
   "last-admin": "error.lastAdmin",
   self: "error.self",
+  "bad-token-name": "error.badTokenName",
+  "bad-token-lifetime": "error.badTokenLifetime",
+  "unknown-token": "error.unknownToken",
+  "unknown-route": "error.unknownRoute",
+  "token-name-taken": "error.tokenNameTaken",
+  "role-has-tokens": "error.roleHasTokens",
 }
 
 export async function signIn(user: string, password: string): Promise<Session> {

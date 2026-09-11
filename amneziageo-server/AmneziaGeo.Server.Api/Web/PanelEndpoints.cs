@@ -33,11 +33,17 @@ public static class PanelEndpoints
     {
         ArgumentNullException.ThrowIfNull(routes);
 
-        routes.MapFallback(async (HttpContext context, PanelIndex index) =>
-        {
-            context.Response.ContentType = "text/html; charset=utf-8";
-            await context.Response.WriteAsync(index.Text()).ConfigureAwait(false);
-        });
+        routes
+            .MapFallback("/api/{**rest}", () => Results.Json(new Failure("unknown-route", "there is no such route"), statusCode: StatusCodes.Status404NotFound))
+            .ExcludeFromDescription();
+
+        routes
+            .MapFallback(async (HttpContext context, PanelIndex index) =>
+            {
+                context.Response.ContentType = "text/html; charset=utf-8";
+                await context.Response.WriteAsync(index.Text()).ConfigureAwait(false);
+            })
+            .ExcludeFromDescription();
 
         return routes;
     }

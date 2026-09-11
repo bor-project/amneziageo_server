@@ -29,6 +29,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
 
+    public DbSet<ApiTokenEntity> ApiTokens => Set<ApiTokenEntity>();
+
     public DbSet<AuditEntity> AuditEntries => Set<AuditEntity>();
 
     public DbSet<ConfigEntity> Configs => Set<ConfigEntity>();
@@ -90,6 +92,16 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(token => token.TokenHash).IsUnique();
+        });
+
+        builder.Entity<ApiTokenEntity>(entity =>
+        {
+            entity.Property(token => token.Name).HasMaxLength(ApiTokenRules.MaxNameLength);
+            entity.Property(token => token.Role).HasMaxLength(256);
+            entity.Property(token => token.LastAddress).HasMaxLength(64);
+            entity.HasIndex(token => token.Name).IsUnique();
+            entity.HasIndex(token => token.TokenHash).IsUnique();
+            entity.HasIndex(token => token.Role);
         });
 
         builder.Entity<AuditEntity>(entity =>

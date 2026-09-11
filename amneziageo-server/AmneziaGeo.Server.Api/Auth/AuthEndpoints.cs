@@ -37,7 +37,7 @@ public static class AuthEndpoints
         }
 
         var result = await login
-            .PasswordAsync(request.User, request.Password, Address(http), Agent(http), ct)
+            .PasswordAsync(request.User, request.Password, http.Address(), Agent(http), ct)
             .ConfigureAwait(false);
 
         return await AnswerAsync(result, accounts, options, ct).ConfigureAwait(false);
@@ -74,6 +74,11 @@ public static class AuthEndpoints
     private static async Task<IResult> MeAsync(HttpContext http, AccountManager accounts, CancellationToken ct)
     {
         var caller = http.Caller()!;
+        if (caller.Scheme == AuthScheme.ApiToken)
+        {
+            return Results.Ok(AuthAnswers.Token(caller));
+        }
+
         var view = await accounts.FindAsync(caller.Name, ct).ConfigureAwait(false);
         if (view is null || !view.Record.IsEnabled)
         {
@@ -117,7 +122,7 @@ public static class AuthEndpoints
         }
 
         var result = await login
-            .PasswordAsync(caller.Name, request.Next, Address(http), Agent(http), ct)
+            .PasswordAsync(caller.Name, request.Next, http.Address(), Agent(http), ct)
             .ConfigureAwait(false);
 
         return await AnswerAsync(result, accounts, options, ct).ConfigureAwait(false);
@@ -155,8 +160,6 @@ public static class AuthEndpoints
 
     private static IResult Refuse(int status, string error, string message) =>
         Results.Json(new Failure(error, message), statusCode: status);
-
-    private static string? Address(HttpContext http) => http.Connection.RemoteIpAddress?.ToString();
 
     private static string? Agent(HttpContext http) =>
         http.Request.Headers.UserAgent.ToString() is { Length: > 0 } agent ? agent : null;

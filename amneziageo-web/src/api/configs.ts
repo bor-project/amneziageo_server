@@ -131,6 +131,13 @@ export function useKeyPair() {
   })
 }
 
+export function useImportConfig() {
+  return useMutation({
+    mutationFn: async ({ name, text }: { name: string; text: string }) =>
+      (await client.post<Config>("/configs/import", { name, text })).data,
+  })
+}
+
 export function draftOf(config: Config): ConfigDraft {
   return {
     name: config.name,

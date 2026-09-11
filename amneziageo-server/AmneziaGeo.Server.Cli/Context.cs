@@ -42,6 +42,7 @@ public sealed class Context : IDisposable
         Roles = scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();
         Accounts = scope.ServiceProvider.GetRequiredService<AccountManager>();
         Catalog = scope.ServiceProvider.GetRequiredService<RoleCatalog>();
+        Tokens = scope.ServiceProvider.GetRequiredService<ApiTokenManager>();
         Login = scope.ServiceProvider.GetRequiredService<LoginService>();
         Configs = scope.ServiceProvider.GetRequiredService<ConfigStore>();
         Clients = scope.ServiceProvider.GetRequiredService<ClientStore>();
@@ -58,6 +59,8 @@ public sealed class Context : IDisposable
     public AccountManager Accounts { get; }
 
     public RoleCatalog Catalog { get; }
+
+    public ApiTokenManager Tokens { get; }
 
     public LoginService Login { get; }
 

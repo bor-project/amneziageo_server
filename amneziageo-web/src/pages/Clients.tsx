@@ -15,6 +15,7 @@ import { scopes } from "@/api/scopes"
 import { useTemplates } from "@/api/templates"
 import { ClientConfig } from "@/components/ClientConfig"
 import { ClientForm } from "@/components/ClientForm"
+import { ClientImport } from "@/components/ClientImport"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
 import { card, danger, field, primary, secondary } from "@/components/styles"
@@ -36,6 +37,7 @@ export function Clients() {
   const [editing, setEditing] = useState<Client | null>(null)
   const [removing, setRemoving] = useState<Client | null>(null)
   const [showing, setShowing] = useState<Client | null>(null)
+  const [importing, setImporting] = useState(false)
   const change = useChangeClient()
   const remove = useRemoveClient()
   const turn = useSwitchClient()
@@ -87,14 +89,24 @@ export function Clients() {
           </select>
 
           {may && (
-            <button
-              type="button"
-              onClick={() => setAdding(picked)}
-              disabled={(configs.data?.length ?? 0) === 0}
-              className={primary}
-            >
-              {t("clients.add")}
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setImporting(true)}
+                disabled={(configs.data?.length ?? 0) === 0}
+                className={secondary}
+              >
+                {t("clients.import")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdding(picked)}
+                disabled={(configs.data?.length ?? 0) === 0}
+                className={primary}
+              >
+                {t("clients.add")}
+              </button>
+            </div>
           )}
         </div>
 
@@ -147,6 +159,8 @@ export function Clients() {
       </div>
 
       {adding !== null && <Adding configId={adding} onClose={() => setAdding(null)} />}
+
+      {importing && <ClientImport configs={configs.data ?? []} start={picked} onClose={() => setImporting(false)} />}
 
       {editing && (
         <ClientForm

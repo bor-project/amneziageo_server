@@ -27,6 +27,7 @@ builder.Services.AddResolver();
 builder.Services.AddPanel();
 builder.Services.AddProxies(builder.Configuration);
 builder.Services.AddSubscriptions();
+builder.Services.AddApiDescription();
 
 var app = builder.Build();
 
@@ -52,6 +53,7 @@ app.MapOverview();
 app.MapAuth();
 app.MapUsers();
 app.MapRoles();
+app.MapTokens();
 app.MapConfigs();
 app.MapClients();
 app.MapTemplates();
@@ -65,6 +67,7 @@ app.MapPanel();
 app.MapSubscriptions();
 app.MapProxies();
 app.MapDiagnostics();
+app.MapApiDescription();
 app.MapControllers();
 app.MapPanelPage();
 

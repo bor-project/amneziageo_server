@@ -3,9 +3,12 @@
 Two ways in: a panel account with a password, and a host account of the server itself. Both end in the same
 pair of tokens, and past that point the code no longer knows which one was used.
 
+Scripts and other services come in by a long lived token that acts by a role, see [API tokens](#api-tokens),
+and the routes they call are gathered in [The HTTP API](api.md).
+
 Accounts, roles and claims are kept by ASP.NET Core Identity over EF Core on SQLite: `AspNetUsers`,
 `AspNetRoles`, `AspNetUserRoles`, `AspNetRoleClaims`, `AspNetUserClaims`, beside the tables the server adds of
-its own (`Sessions`, `RefreshTokens`, `AuditEntries`). The schema is carried by EF migrations in
+its own (`Sessions`, `RefreshTokens`, `ApiTokens`, `AuditEntries`). The schema is carried by EF migrations in
 `AmneziaGeo.Server.Dal/Migrations` and applied on start.
 
 ## Roles and rights
@@ -18,6 +21,7 @@ account may do is the claims of its role plus the claims given to the account it
 | `state:read` | reading the state |
 | `clients:write` | managing clients |
 | `interfaces:write` | managing interfaces |
+| `routing:write` | managing routing |
 | `access:write` | managing accounts and roles |
 
 The server carries one role of its own, `admin`, and it is the one every right belongs to. It is neither
@@ -98,6 +102,35 @@ token, so the interface can only take its holder to the password screen.
 Signing in as the host account itself works only in the console utility, where the server reads the account
 the process runs as. Over HTTP such an account signs in by the password of the panel it was given.
 
+## API tokens
+
+A script or another service signs in by a long lived token instead of a password. A token is minted for a role
+and acts with the rights the role carries at the moment of the call, so a change of the rights of the role
+reaches its tokens at once. A token belongs to no account: switching accounts off or removing them leaves it
+alone, and only revoking it or the end of its lifetime stops it. It holds no `password:change` and has no
+session, so `POST /api/auth/password` refuses it, `POST /api/auth/logout` does nothing, and `GET /api/auth/me`
+answers with the name and the role of the token. A role that tokens act by stays until they are revoked.
+
+The token is `agt_` and 32 random bytes in base64url. It travels in the same header as an access token,
+`Authorization: Bearer agt_...`, and the server tells the two apart by the prefix. Only its SHA-256 hash is
+kept, so the secret is shown once, when it is minted. A token lives the number of days it is minted with, from
+1 to 3650, or has no end. The panel notes when and from which address a token was last used, at most once a
+minute or on a new address.
+
+Tokens live on the `Tokens` table of `Settings -> Users and roles`, and these routes ask for `access:write`.
+
+| Route | What it does |
+|---|---|
+| `GET /api/tokens` | every token with its role, lifetime and last use |
+| `POST /api/tokens` | `{ name, role, days }` mints a token and hands its secret back once |
+| `DELETE /api/tokens/{id}` | revokes a token |
+
+`ApiTokenManager` holds the rules, so the console and the panel refuse the same things: a name outside 1 to 64
+characters (`bad-token-name`), a name another token carries (`token-name-taken`), a lifetime outside 1 to 3650
+days (`bad-token-lifetime`), a role that is not there (`unknown-role`), a token that is not there
+(`unknown-token`). Minting and revoking go to the audit trail as `token.mint` and `token.revoke`, without the
+secret.
+
 ## Configuration
 
 | Variable | What it moves |
@@ -126,6 +159,9 @@ amneziageo-server-cli role list
 amneziageo-server-cli role add <name> [--title <title>] <right>...
 amneziageo-server-cli role set <name> [--title <title>] [<right>...]
 amneziageo-server-cli role remove <name> [--yes]
+amneziageo-server-cli token list
+amneziageo-server-cli token add <name> --role <role> [--days <n>]
+amneziageo-server-cli token revoke <id> [--yes]
 ```
 
 The last enabled account that holds `access:write` cannot be demoted, disabled or removed.
@@ -160,8 +196,8 @@ Roles live on the `Roles` tab of the same page, and these routes ask for `access
 | `GET /api/roles` | every role with its rights and the number of accounts, and the rights the server knows |
 | `POST /api/roles` | adds a role carrying the rights it is given |
 | `PATCH /api/roles/{name}` | replaces the name shown, the rights, or both |
-| `DELETE /api/roles/{name}` | removes a role no account holds |
+| `DELETE /api/roles/{name}` | removes a role no account and no token holds |
 
 `RoleCatalog` holds the rules: a name of the wrong shape (`bad-name`), a name already taken (`name-taken`),
 a right the server does not know (`unknown-scope`), the built in role (`builtin-role`), and a role that is
-still given to accounts (`role-in-use`).
+still given to accounts (`role-in-use`) or carried by tokens (`role-has-tokens`).

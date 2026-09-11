@@ -172,6 +172,31 @@ public class ClientStoreTests
     }
 
     [Fact]
+    public async Task AnImportOfManyCountsWhatItTookHeldRenamedAndRefused()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+        var held = Fresh(endpoint, "milena");
+        await bench.Clients.AddAsync(held, CancellationToken.None);
+
+        var report = await bench.Clients.ImportAllAsync(
+            [
+                held with { Name = "copy", Address = ["10.20.0.4/32"] },
+                Fresh(endpoint, "milena") with { Address = ["10.20.0.5/32"] },
+                Fresh(endpoint, "anna") with { Address = ["10.20.0.6/32"] },
+                Fresh(endpoint, "broken") with { PrivateKey = string.Empty, PublicKey = "nope", Address = ["10.20.0.7/32"] },
+            ],
+            CancellationToken.None);
+
+        Assert.Equal(2, report.Taken);
+        Assert.Equal(1, report.Held);
+        Assert.Equal(new[] { new ClientRename("milena", "milena-2") }, report.Renamed);
+        var refused = Assert.Single(report.Refused);
+        Assert.Equal("broken", refused.Name);
+        Assert.Equal("bad-client-key", refused.Error);
+    }
+
+    [Fact]
     public async Task TheClientsOfAnEndpointGoWithIt()
     {
         using var bench = new Bench();

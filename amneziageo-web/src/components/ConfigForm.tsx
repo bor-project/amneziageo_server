@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
-import { useKeyPair, usePresharedKey } from "@/api/configs"
+import { useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import { Modal } from "@/components/Modal"
 import { ObfuscationFields } from "@/components/Obfuscation"
@@ -18,6 +18,7 @@ export function ConfigForm({
   error,
   onSave,
   onClose,
+  importable = false,
 }: {
   title: string
   start: ConfigDraft
@@ -26,12 +27,15 @@ export function ConfigForm({
   error: unknown
   onSave: (draft: ConfigDraft) => void
   onClose: () => void
+  importable?: boolean
 }) {
   const t = useText()
   const keys = useKeyPair()
   const shared = usePresharedKey()
   const [draft, setDraft] = useState(start)
   const [shown, setShown] = useState(publicKey)
+  const read = useImportConfig()
+  const [text, setText] = useState("")
 
   function put(change: Partial<ConfigDraft>) {
     setDraft({ ...draft, ...change })
@@ -50,6 +54,19 @@ export function ConfigForm({
   async function secret() {
     const made = await shared.mutateAsync()
     put({ presharedKey: made.key })
+  }
+
+  async function take() {
+    const found = await read.mutateAsync({ name: draft.name, text })
+    setDraft({
+      ...draft,
+      listenPort: found.listenPort,
+      address: found.address,
+      mtu: found.mtu,
+      privateKey: found.privateKey ?? "",
+      obfuscation: found.obfuscation,
+    })
+    setShown(found.publicKey)
   }
 
   return (
@@ -174,6 +191,36 @@ export function ConfigForm({
       <Section title={t("configs.obfuscation")}>
         <ObfuscationFields id="config" cover={draft.obfuscation} onChange={twist} />
       </Section>
+
+      {importable && (
+        <Section title={t("configs.import")}>
+          <div className="col-span-2">
+            <label className={label} htmlFor="config-file">
+              {t("configs.paste")}
+            </label>
+            <textarea
+              id="config-file"
+              value={text}
+              rows={5}
+              onChange={(e) => setText(e.target.value)}
+              className={`mt-1 font-mono text-xs ${field}`}
+            />
+          </div>
+          <div className="col-span-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => void take()}
+              disabled={read.isPending || text.trim().length === 0}
+              className={secondary}
+            >
+              {t("configs.read")}
+            </button>
+          </div>
+          {read.error !== null && read.error !== undefined && (
+            <div className="col-span-2 text-sm text-alarm">{t(complaint(read.error) as TextKey)}</div>
+          )}
+        </Section>
+      )}
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>

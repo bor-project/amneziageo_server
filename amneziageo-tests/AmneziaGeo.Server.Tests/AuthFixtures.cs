@@ -104,6 +104,8 @@ public sealed class Bench : IDisposable
         RefreshTokens = _scope.ServiceProvider.GetRequiredService<IRefreshTokens>();
         Audit = _scope.ServiceProvider.GetRequiredService<IAuditLog>();
         Login = _scope.ServiceProvider.GetRequiredService<LoginService>();
+        Tokens = _scope.ServiceProvider.GetRequiredService<ApiTokenManager>();
+        TokenStore = _scope.ServiceProvider.GetRequiredService<IApiTokens>();
     }
 
     public AuthOptions Options { get; }
@@ -153,6 +155,10 @@ public sealed class Bench : IDisposable
     public TokenIssuer Issuer { get; }
 
     public LoginService Login { get; }
+
+    public ApiTokenManager Tokens { get; }
+
+    public IApiTokens TokenStore { get; }
 
     /// <summary>
     /// Adds an account with a password and returns it.

@@ -44,6 +44,12 @@ public static class AuthAnswers
         new(view.Record.Name, view.Record.DisplayName, view.Role, scheme.ToString(), [.. scopes.Order(StringComparer.Ordinal)]);
 
     /// <summary>
+    /// Describes a long lived token the way the interface reads an account.
+    /// </summary>
+    public static AccountResponse Token(Principal caller) =>
+        new(caller.Name, caller.Name, caller.Role, caller.Scheme.ToString(), [.. caller.Scopes.Order(StringComparer.Ordinal)]);
+
+    /// <summary>
     /// Describes a session as the interface reads it.
     /// </summary>
     public static SessionResponse Session(LoginResult result, AccountView view, AuthOptions options) =>

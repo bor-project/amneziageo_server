@@ -16,6 +16,7 @@ public enum RoleOutcome
     InUse = 5,
     UnknownScope = 6,
     Failed = 7,
+    HasTokens = 8,
 }
 
 /// <summary>
@@ -55,16 +56,24 @@ public sealed class RoleCatalog
 
     private readonly AccessResolver _access;
 
+    private readonly IApiTokens _tokens;
+
     private readonly TimeProvider _time;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public RoleCatalog(RoleManager<AppRole> roles, UserManager<AppUser> users, AccessResolver access, TimeProvider? time = null)
+    public RoleCatalog(
+        RoleManager<AppRole> roles,
+        UserManager<AppUser> users,
+        AccessResolver access,
+        IApiTokens tokens,
+        TimeProvider? time = null)
     {
         _roles = roles;
         _users = users;
         _access = access;
+        _tokens = tokens;
         _time = time ?? TimeProvider.System;
     }
 
@@ -171,7 +180,7 @@ public sealed class RoleCatalog
     }
 
     /// <summary>
-    /// Removes a role no account is given.
+    /// Removes a role no account and no token is given.
     /// </summary>
     public async Task<RoleResult> RemoveAsync(string name, CancellationToken ct)
     {
@@ -190,6 +199,12 @@ public sealed class RoleCatalog
         if (held.Count > 0)
         {
             return RoleResult.No(RoleOutcome.InUse, $"the role '{role.Name}' is given to {held.Count} accounts");
+        }
+
+        var tokens = await _tokens.CountAsync(role.Name!, ct).ConfigureAwait(false);
+        if (tokens > 0)
+        {
+            return RoleResult.No(RoleOutcome.HasTokens, $"the role '{role.Name}' carries {tokens} tokens");
         }
 
         var removed = await _roles.DeleteAsync(role).ConfigureAwait(false);

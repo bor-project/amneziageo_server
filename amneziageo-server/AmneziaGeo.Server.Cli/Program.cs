@@ -30,6 +30,7 @@ return arguments.At(0) switch
     "whoami" => await LoginCommands.WhoAsync(context, ct).ConfigureAwait(false),
     "user" => await UserCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     "role" => await RoleCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
+    "token" => await TokenCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     "import" => await ImportCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     _ => Usage(),
 };
@@ -45,6 +46,7 @@ static int Usage()
           amneziageo-server-cli whoami                     what the panel makes of this host account
           amneziageo-server-cli user list | add | passwd | role | enable | disable | remove
           amneziageo-server-cli role list | add | set | remove
+          amneziageo-server-cli token list | add | revoke
           amneziageo-server-cli import endpoint | peers | clients
           amneziageo-server-cli family [name]              resolve a netlink family
           amneziageo-server-cli device list                 name the amneziawg interfaces

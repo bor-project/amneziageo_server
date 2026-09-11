@@ -13,6 +13,7 @@ intent in SQLite; the kernel is the fact, and the two are brought together separ
 | `GET /api/configs/draft?name=` | `interfaces:write` |
 | `POST /api/configs/keys` | `interfaces:write` |
 | `POST /api/configs/preshared` | `interfaces:write` |
+| `POST /api/configs/import` | `interfaces:write` |
 | `POST /api/configs` | `interfaces:write` |
 | `PUT /api/configs/{id}` | `interfaces:write` |
 | `POST /api/configs/apply` | `interfaces:write` |
@@ -62,6 +63,15 @@ the first free name of the `awgN` shape.
 
 The draft is never written down; it reaches the database only when the endpoint is added.
 
+## Taking an interface file
+
+`POST /api/configs/import` takes `{ name, text }`, the interface file of a host, and answers with an endpoint that
+is not saved yet: the private key, the addresses, the port, the packet size and the obfuscation come from the file,
+the rest from the defaults. The form of a new interface reads it under `Interface file`, and saving it is the
+ordinary `POST /api/configs`, so the checks and the raise on the host are the same; a script sends the answer on to
+`POST /api/configs` as it is. The peers of the same file become clients through `POST /api/clients/import`, see
+[clients.md](clients.md).
+
 ## What is refused
 
 A refusal comes back as `{ error, message }`. The code names the setting behind it, and the panel turns
@@ -88,6 +98,7 @@ the code into a phrase of its own language.
 | `name-taken` | the panel already carries an endpoint under this name |
 | `port-taken` | the panel already listens on this port |
 | `unknown-config` | there is no endpoint under this number |
+| `bad-import` | the interface file carries no private key, or nothing at all |
 
 `S1 + 56 == S2` is refused because it makes an initiation and a response the same size. Nothing keeps
 two endpoints from carrying the same address range: they meet only on the host, and the ranges of one

@@ -1,8 +1,6 @@
-using System.Globalization;
 using System.Text.Json;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
-using AmneziaGeo.Server.Dal;
 
 namespace AmneziaGeo.Server.Cli.Commands;
 
@@ -130,70 +128,11 @@ public static class ImportCommands
                 continue;
             }
 
-            var clients = Read(section.Value, endpoint.Id, prefix);
+            var clients = ClientImport.Clients(section.Value, endpoint.Id, prefix);
             code |= await TakeAsync(context, clients, name, ct).ConfigureAwait(false);
         }
 
         return code;
-    }
-
-    /// <summary>
-    /// Returns the address a client carries in a range of the second family.
-    /// </summary>
-    public static string Sixth(string prefix, string address)
-    {
-        ArgumentNullException.ThrowIfNull(prefix);
-        ArgumentNullException.ThrowIfNull(address);
-
-        var bare = address.Split('/')[0];
-        var mark = bare.LastIndexOf('.');
-        if (mark < 0 || !int.TryParse(bare[(mark + 1)..], out var last))
-        {
-            return string.Empty;
-        }
-
-        return $"{prefix}:{last.ToString("x", CultureInfo.InvariantCulture)}/128";
-    }
-
-    private static IReadOnlyList<TunnelClient> Read(JsonElement section, long configId, string? prefix)
-    {
-        var clients = new List<TunnelClient>();
-        var number = 0;
-        foreach (var record in section.EnumerateObject())
-        {
-            number++;
-            var body = record.Value;
-            var key = Text(body, "publicKey");
-            if (key.Length == 0)
-            {
-                continue;
-            }
-
-            var addresses = new List<string>();
-            if (body.TryGetProperty("allowedIPs", out var ranges) && ranges.ValueKind == JsonValueKind.Array)
-            {
-                addresses.AddRange(ranges.EnumerateArray().Select(one => one.GetString() ?? string.Empty));
-            }
-
-            if (prefix is { Length: > 0 })
-            {
-                addresses.AddRange(
-                    addresses.ToArray().Select(one => Sixth(prefix, one)).Where(one => one.Length > 0));
-            }
-
-            clients.Add(new TunnelClient
-            {
-                ConfigId = configId,
-                Name = ClientImport.Name(Text(body, "email") is { Length: > 0 } email ? email : record.Name, number),
-                PrivateKey = Text(body, "privateKey"),
-                PublicKey = key,
-                PresharedKey = Text(body, "preSharedKey"),
-                Address = [.. addresses.Where(one => one.Length > 0)],
-                IsEnabled = !body.TryGetProperty("enable", out var enabled) || enabled.ValueKind != JsonValueKind.False,
-            });
-        }
-
-        return clients;
     }
 
     private static async Task<int> TakeAsync(
@@ -202,37 +141,20 @@ public static class ImportCommands
         string name,
         CancellationToken ct)
     {
-        var added = 0;
-        var held = 0;
-        var refused = 0;
-        foreach (var client in clients)
+        var report = await context.Clients.ImportAllAsync(clients, ct).ConfigureAwait(false);
+        foreach (var renamed in report.Renamed)
         {
-            var result = await context.Clients.ImportAsync(client, ct).ConfigureAwait(false);
-            if (result.IsOk)
-            {
-                added++;
-                if (!string.Equals(result.Record!.Name, client.Name.Trim(), StringComparison.Ordinal))
-                {
-                    Terminal.Say($"{name}: {client.Name} taken as {result.Record.Name}");
-                }
-
-                continue;
-            }
-
-            if (result.Outcome is ClientOutcome.KeyTaken)
-            {
-                held++;
-
-                continue;
-            }
-
-            refused++;
-            Terminal.Say($"{name}: {client.Name} refused, {result.Message}");
+            Terminal.Say($"{name}: {renamed.From} taken as {renamed.To}");
         }
 
-        Terminal.Say($"{name}: {added} taken, {held} already held, {refused} refused");
+        foreach (var refused in report.Refused)
+        {
+            Terminal.Say($"{name}: {refused.Name} refused, {refused.Message}");
+        }
 
-        return refused > 0 ? 1 : 0;
+        Terminal.Say($"{name}: {report.Taken} taken, {report.Held} already held, {report.Refused.Count} refused");
+
+        return report.Refused.Count > 0 ? 1 : 0;
     }
 
     private static async Task<ServerConfig?> FindAsync(Context context, string name, CancellationToken ct)
@@ -241,11 +163,6 @@ public static class ImportCommands
 
         return held.FirstOrDefault(config => string.Equals(config.Name, name, StringComparison.Ordinal));
     }
-
-    private static string Text(JsonElement body, string name) =>
-        body.TryGetProperty(name, out var found) && found.ValueKind == JsonValueKind.String
-            ? found.GetString() ?? string.Empty
-            : string.Empty;
 
     private static IReadOnlyList<string> Parts(string? text) =>
         text is null ? [] : ConfigLines.Parts(text);

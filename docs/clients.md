@@ -14,6 +14,7 @@ interface file the host boots from carries them too.
 | `GET /api/clients/{id}/config` | `clients:write` |
 | `POST /api/clients` | `clients:write` |
 | `POST /api/clients/apply` | `clients:write` |
+| `POST /api/clients/import` | `clients:write` |
 | `PUT /api/clients/{id}` | `clients:write` |
 | `POST /api/clients/{id}/switch` | `clients:write` |
 | `POST /api/clients/{id}/devices` | `clients:write` |
@@ -105,6 +106,14 @@ A name another client already carries gets a number after it (`milena-2`), and t
 addresses are taken as the host has them, without the range checks the panel makes. Every client taken gets a
 subscription of its own.
 
+Over HTTP the same import takes the text instead of the file. `POST /api/clients/import` takes `{ configId, text,
+prefix }`: the text is either an interface file, whose peers become clients, or the file a host keeps its clients in,
+read from the part named after the endpoint or from its only part, with `prefix` doing what `--v6` does. It answers
+with how many clients it took (`taken`), how many it passed over as already held (`held`), which ones it took under
+another name (`renamed`) and which ones it refused with the code (`refused`), and puts the endpoint on the host
+once. A text with no client of the endpoint is refused as `bad-client-import`. The page of the clients carries the
+same import behind `Import` for an account whose role holds `clients:write`.
+
 ## When something is refused
 
 | Code | Means |
@@ -113,6 +122,7 @@ subscription of its own.
 | `bad-client-key` | the pair of the client is not 32 bytes in base64 |
 | `bad-client-preshared` | the preshared key is not 32 bytes in base64 |
 | `bad-client-address` | the client carries no address, too many, one that is not a single address or two in one range |
+| `bad-client-import` | the text carries neither peers of an interface file nor clients of the endpoint in the file a host keeps them in |
 | `client-address-outside` | an address lies outside the ranges of the endpoint |
 | `client-address-reserved` | an address is the network, the broadcast or the address of the endpoint |
 | `client-name-taken` | another client already carries this name, whatever the case |

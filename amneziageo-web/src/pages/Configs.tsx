@@ -100,6 +100,7 @@ export function Configs() {
           error={add.error}
           onSave={(draft) => void add.mutateAsync(draft).then(() => setAdding(false))}
           onClose={() => setAdding(false)}
+          importable
         />
       )}
 

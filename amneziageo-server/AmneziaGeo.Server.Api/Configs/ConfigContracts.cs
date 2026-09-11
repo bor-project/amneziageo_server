@@ -82,6 +82,11 @@ public sealed record ConfigRequest(
 public sealed record ConfigSyncResponse(string Name, bool IsDone, string Message);
 
 /// <summary>
+/// The interface file an endpoint is read from.
+/// </summary>
+public sealed record ConfigImportRequest(string? Name, string? Text);
+
+/// <summary>
 /// A key pair as the interface reads it.
 /// </summary>
 public sealed record KeyPairResponse(string PrivateKey, string PublicKey);

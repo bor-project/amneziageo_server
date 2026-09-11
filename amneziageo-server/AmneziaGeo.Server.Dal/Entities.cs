@@ -51,6 +51,28 @@ public sealed class RefreshTokenEntity
 }
 
 /// <summary>
+/// A long lived token that acts by a role, kept as a hash.
+/// </summary>
+public sealed class ApiTokenEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Role { get; set; } = string.Empty;
+
+    public byte[] TokenHash { get; set; } = [];
+
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset? ExpiresUtc { get; set; }
+
+    public DateTimeOffset? LastUsedUtc { get; set; }
+
+    public string? LastAddress { get; set; }
+}
+
+/// <summary>
 /// One line of the audit trail.
 /// </summary>
 public sealed class AuditEntity

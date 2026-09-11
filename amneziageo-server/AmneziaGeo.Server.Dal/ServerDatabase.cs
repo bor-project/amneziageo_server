@@ -71,8 +71,10 @@ public static class ServerDatabase
         services.AddScoped<TemplateStore>();
         services.AddScoped<SubscriptionStore>();
         services.AddScoped<IRefreshTokens, RefreshTokenStore>();
+        services.AddScoped<IApiTokens, ApiTokenStore>();
         services.AddScoped<IAuditLog, AuditStore>();
         services.AddScoped<LoginService>();
+        services.AddScoped<ApiTokenManager>();
 
         return services;
     }

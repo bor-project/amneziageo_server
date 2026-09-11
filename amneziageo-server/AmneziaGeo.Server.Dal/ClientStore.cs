@@ -244,6 +244,44 @@ public sealed class ClientStore
     }
 
     /// <summary>
+    /// Adds the clients a host already carries one by one, passing over the keys the panel holds.
+    /// </summary>
+    public async Task<ClientImportReport> ImportAllAsync(IReadOnlyList<TunnelClient> drafts, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(drafts);
+
+        var taken = 0;
+        var held = 0;
+        var renamed = new List<ClientRename>();
+        var refused = new List<ClientRefusal>();
+        foreach (var draft in drafts)
+        {
+            var result = await ImportAsync(draft, ct).ConfigureAwait(false);
+            if (result.IsOk)
+            {
+                taken++;
+                if (!string.Equals(result.Record!.Name, draft.Name.Trim(), StringComparison.Ordinal))
+                {
+                    renamed.Add(new ClientRename(draft.Name, result.Record.Name));
+                }
+
+                continue;
+            }
+
+            if (result.Outcome == ClientOutcome.KeyTaken)
+            {
+                held++;
+
+                continue;
+            }
+
+            refused.Add(new ClientRefusal(draft.Name, result.Code, result.Message));
+        }
+
+        return new ClientImportReport(taken, held, renamed, refused);
+    }
+
+    /// <summary>
     /// Replaces the settings of a client, carrying its state, its template and its daily limit over to its devices.
     /// </summary>
     public async Task<ClientResult> ChangeAsync(long id, TunnelClient draft, CancellationToken ct)

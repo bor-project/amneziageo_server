@@ -33,7 +33,7 @@ public sealed class BearerMiddleware
         var header = context.Request.Headers.Authorization.ToString();
         if (header.StartsWith(Prefix, StringComparison.Ordinal))
         {
-            var principal = _issuer.Read(header[Prefix.Length..].Trim(), _time.GetUtcNow());
+            var principal = await ReadAsync(context, header[Prefix.Length..].Trim()).ConfigureAwait(false);
             if (principal is not null)
             {
                 context.Items[Bearer.Item] = principal;
@@ -41,6 +41,20 @@ public sealed class BearerMiddleware
         }
 
         await _next(context).ConfigureAwait(false);
+    }
+
+    private async Task<Principal?> ReadAsync(HttpContext context, string token)
+    {
+        if (!ApiTokenRules.Looks(token))
+        {
+            return _issuer.Read(token, _time.GetUtcNow());
+        }
+
+        var tokens = context.RequestServices.GetRequiredService<IApiTokens>();
+
+        return await tokens
+            .ResolveAsync(token, context.Address(), context.RequestAborted)
+            .ConfigureAwait(false);
     }
 }
 
@@ -64,32 +78,46 @@ public static class Bearer
         context.Items.TryGetValue(Item, out var found) ? found as Principal : null;
 
     /// <summary>
+    /// Returns the address a request came from, in IPv4 form when IPv4 is mapped into IPv6.
+    /// </summary>
+    public static string? Address(this HttpContext context)
+    {
+        var address = context.Connection.RemoteIpAddress;
+
+        return address is { IsIPv4MappedToIPv6: true } ? address.MapToIPv4().ToString() : address?.ToString();
+    }
+
+    /// <summary>
     /// Refuses a request that carries no valid token.
     /// </summary>
     public static TBuilder RequireCaller<TBuilder>(this TBuilder builder)
         where TBuilder : IEndpointConventionBuilder =>
-        builder.AddEndpointFilter(async (context, next) =>
-            context.HttpContext.Caller() is null
-                ? Unauthorized()
-                : await next(context).ConfigureAwait(false));
+        builder
+            .WithMetadata(new CallerRequirement(string.Empty))
+            .AddEndpointFilter(async (context, next) =>
+                context.HttpContext.Caller() is null
+                    ? Unauthorized()
+                    : await next(context).ConfigureAwait(false));
 
     /// <summary>
     /// Refuses a request whose caller does not hold a right.
     /// </summary>
     public static TBuilder RequireScope<TBuilder>(this TBuilder builder, string scope)
         where TBuilder : IEndpointConventionBuilder =>
-        builder.AddEndpointFilter(async (context, next) =>
-        {
-            var caller = context.HttpContext.Caller();
-            if (caller is null)
+        builder
+            .WithMetadata(new CallerRequirement(scope))
+            .AddEndpointFilter(async (context, next) =>
             {
-                return Unauthorized();
-            }
+                var caller = context.HttpContext.Caller();
+                if (caller is null)
+                {
+                    return Unauthorized();
+                }
 
-            return caller.Holds(scope)
-                ? await next(context).ConfigureAwait(false)
-                : Results.Json(new Failure("forbidden", "the account does not hold " + scope), statusCode: StatusCodes.Status403Forbidden);
-        });
+                return caller.Holds(scope)
+                    ? await next(context).ConfigureAwait(false)
+                    : Results.Json(new Failure("forbidden", "the account does not hold " + scope), statusCode: StatusCodes.Status403Forbidden);
+            });
 
     private static IResult Unauthorized() =>
         Results.Json(new Failure("unauthorized", "the request carries no valid access token"), statusCode: StatusCodes.Status401Unauthorized);
@@ -99,3 +127,8 @@ public static class Bearer
 /// A refusal as the interface reads it.
 /// </summary>
 public sealed record Failure(string Error, string Message);
+
+/// <summary>
+/// The right a route asks of its caller, empty when any caller will do.
+/// </summary>
+public sealed record CallerRequirement(string Scope);

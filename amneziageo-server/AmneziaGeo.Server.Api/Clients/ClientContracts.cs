@@ -67,6 +67,11 @@ public sealed record ClientRequest(
 public sealed record ClientSwitchRequest(bool On);
 
 /// <summary>
+/// The text the clients of an endpoint are imported from.
+/// </summary>
+public sealed record ClientImportRequest(long ConfigId, string? Text, string? Prefix = null);
+
+/// <summary>
 /// The configuration a client connects with and the address of its subscription.
 /// </summary>
 public sealed record ClientConfigResponse(string FileName, string Text, string Link, string Subscription);

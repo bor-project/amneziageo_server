@@ -29,6 +29,7 @@ public static class ConfigEndpoints
         writing.MapGet("/draft", DraftAsync);
         writing.MapPost("/keys", Keys);
         writing.MapPost("/preshared", Preshared);
+        writing.MapPost("/import", Import);
         writing.MapPost("/", AddAsync);
         writing.MapPost("/apply", ApplyAllAsync);
         writing.MapPost("/{id:long}/apply", ApplyAsync);
@@ -72,6 +73,16 @@ public static class ConfigEndpoints
 
     private static IResult Preshared() =>
         Results.Ok(new KeyResponse(Convert.ToBase64String(RandomNumberGenerator.GetBytes(Curve25519.KeySize))));
+
+    private static IResult Import(ConfigImportRequest request)
+    {
+        var name = (request.Name ?? string.Empty).Trim();
+        var result = ConfigImport.Read(request.Text, name.Length > 0 ? name : "awg0");
+
+        return result.Config is null
+            ? Refuse(StatusCodes.Status400BadRequest, result.Fault!.Code, result.Fault.Message)
+            : Results.Ok(ConfigAnswers.Config(result.Config, true));
+    }
 
     private static async Task<IResult> AddAsync(
         ConfigRequest request,

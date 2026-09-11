@@ -80,6 +80,7 @@ public static class RoleEndpoints
         RoleOutcome.BadName => Refuse(StatusCodes.Status400BadRequest, "bad-name", result.Message),
         RoleOutcome.Builtin => Refuse(StatusCodes.Status409Conflict, "builtin-role", result.Message),
         RoleOutcome.InUse => Refuse(StatusCodes.Status409Conflict, "role-in-use", result.Message),
+        RoleOutcome.HasTokens => Refuse(StatusCodes.Status409Conflict, "role-has-tokens", result.Message),
         RoleOutcome.UnknownScope => Refuse(StatusCodes.Status400BadRequest, "unknown-scope", result.Message),
         _ => Refuse(StatusCodes.Status400BadRequest, "refused", result.Message),
     };

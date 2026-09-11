@@ -8,7 +8,8 @@ public sealed record Principal(
     string Name,
     AuthScheme Scheme,
     long SessionId,
-    IReadOnlySet<string> Scopes)
+    IReadOnlySet<string> Scopes,
+    string Role = "")
 {
     /// <summary>
     /// Tells whether the caller holds a right.

@@ -176,6 +176,58 @@ public class ClientTests
     }
 
     [Fact]
+    public void TheFileAHostKeepsItsClientsInBecomesClients()
+    {
+        var file = """
+            {
+              "awg1": {
+                "1": {
+                  "email": "home tv",
+                  "privateKey": "kEnCIRhKjNllB2d7J7t5gMAySOXbC9KKrcPwIbkgGUc=",
+                  "publicKey": "eyf4cmoVSwDUFfS+15aWOaz3jYFQ1pPraV/WkHu3zDk=",
+                  "preSharedKey": "Odf24IgTX26F2hpdemxeQffynDs6zAsdKcLMOW1lrl8=",
+                  "allowedIPs": ["10.8.0.26/32"],
+                  "enable": false
+                },
+                "2": { "privateKey": "x" }
+              }
+            }
+            """;
+
+        var read = ClientImport.Read(file, "awg1", 7, "fdcc::cafe");
+
+        Assert.Null(read.Fault);
+        var client = Assert.Single(read.Clients);
+        Assert.Equal("home-tv", client.Name);
+        Assert.Equal(7, client.ConfigId);
+        Assert.Equal("kEnCIRhKjNllB2d7J7t5gMAySOXbC9KKrcPwIbkgGUc=", client.PrivateKey);
+        Assert.Equal(["10.8.0.26/32", "fdcc::cafe:1a/128"], client.Address);
+        Assert.False(client.IsEnabled);
+    }
+
+    [Fact]
+    public void AnImportTellsTheKindOfTextAndThePartOfTheEndpoint()
+    {
+        var peers = """
+            [Interface]
+            PrivateKey = kEnCIRhKjNllB2d7J7t5gMAySOXbC9KKrcPwIbkgGUc=
+
+            [Peer]
+            PublicKey = eyf4cmoVSwDUFfS+15aWOaz3jYFQ1pPraV/WkHu3zDk=
+            AllowedIPs = 10.8.2.10/32
+            """;
+        var only = """{ "awg0": { "a": { "publicKey": "eyf4cmoVSwDUFfS+15aWOaz3jYFQ1pPraV/WkHu3zDk=" } } }""";
+        var two = """{ "awg0": { "a": { "publicKey": "eyf4cmoVSwDUFfS+15aWOaz3jYFQ1pPraV/WkHu3zDk=" } }, "awg2": {} }""";
+
+        Assert.Single(ClientImport.Read(peers, "awg1", 7, null).Clients);
+        Assert.Single(ClientImport.Read(only, "awg1", 7, null).Clients);
+        Assert.Equal("bad-client-import", ClientImport.Read(two, "awg1", 7, null).Fault!.Code);
+        Assert.Equal("bad-client-import", ClientImport.Read("{ broken", "awg1", 7, null).Fault!.Code);
+        Assert.Equal("bad-client-import", ClientImport.Read("  ", "awg1", 7, null).Fault!.Code);
+        Assert.Equal("bad-client-import", ClientImport.Read("[Interface]\nListenPort = 1\n", "awg1", 7, null).Fault!.Code);
+    }
+
+    [Fact]
     public void AnInterfaceFileBecomesAnEndpoint()
     {
         var file = """

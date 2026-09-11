@@ -30,6 +30,7 @@ public static class ClientEndpoints
         writing.MapGet("/{id:long}/config", TextAsync);
         writing.MapPost("/", AddAsync);
         writing.MapPost("/apply", ApplyAsync);
+        writing.MapPost("/import", ImportAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapPost("/{id:long}/switch", SwitchAsync);
         writing.MapPost("/{id:long}/devices", AddDeviceAsync);
@@ -301,6 +302,31 @@ public static class ClientEndpoints
             .ConfigureAwait(false);
 
         return Results.NoContent();
+    }
+
+    private static async Task<IResult> ImportAsync(
+        ClientImportRequest request,
+        ConfigStore configs,
+        ClientStore store,
+        ClientHost host,
+        CancellationToken ct)
+    {
+        var endpoint = await configs.FindAsync(request.ConfigId, ct).ConfigureAwait(false);
+        if (endpoint is null)
+        {
+            return Refuse(StatusCodes.Status404NotFound, "unknown-config", $"there is no endpoint under the number {request.ConfigId}");
+        }
+
+        var read = ClientImport.Read(request.Text, endpoint.Name, endpoint.Id, request.Prefix);
+        if (read.Fault is not null)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, read.Fault.Code, read.Fault.Message);
+        }
+
+        var report = await store.ImportAllAsync(read.Clients, ct).ConfigureAwait(false);
+        await SettleAsync(endpoint.Id, [], configs, store, host, ct).ConfigureAwait(false);
+
+        return Results.Ok(report);
     }
 
     private static async Task<IResult> ApplyAsync(
