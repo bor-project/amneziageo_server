@@ -31,6 +31,7 @@ public static class ClientEndpoints
         writing.MapPost("/apply", ApplyAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapPost("/{id:long}/switch", SwitchAsync);
+        writing.MapPost("/{id:long}/devices", AddDeviceAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
         return routes;
@@ -42,6 +43,7 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        ClientGuard guard,
         CancellationToken ct)
     {
         var endpoints = await configs.ListAsync(ct).ConfigureAwait(false);
@@ -61,7 +63,12 @@ public static class ClientEndpoints
             var states = host.States(endpoint, mine);
             for (var index = 0; index < mine.Length; index++)
             {
-                answers.Add(ClientAnswers.Client(mine[index], endpoint.Name, states[index], secrets));
+                answers.Add(ClientAnswers.Client(
+                    mine[index],
+                    endpoint.Name,
+                    Seen(states[index], endpoint, mine[index], guard),
+                    secrets,
+                    guard.Cut(endpoint.Name, mine[index].PublicKey)));
             }
         }
 
@@ -74,6 +81,7 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        ClientGuard guard,
         CancellationToken ct)
     {
         var client = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -84,7 +92,7 @@ public static class ClientEndpoints
 
         var endpoint = await configs.FindAsync(client.ConfigId, ct).ConfigureAwait(false);
 
-        return Results.Ok(Answer(client, endpoint, host, Secrets(context)));
+        return Results.Ok(Answer(client, endpoint, host, guard, Secrets(context)));
     }
 
     private static async Task<IResult> DraftAsync(
@@ -105,7 +113,7 @@ public static class ClientEndpoints
         var address = await FreeAddressAsync(endpoint, store, ct).ConfigureAwait(false);
         var fresh = ClientDefaults.Fresh(config ?? 0, free) with { Address = address };
 
-        return Results.Ok(ClientAnswers.Client(fresh, endpoint?.Name ?? string.Empty, ClientState.Missing(fresh), true));
+        return Results.Ok(ClientAnswers.Client(fresh, endpoint?.Name ?? string.Empty, ClientState.Missing(fresh), true, []));
     }
 
     private static async Task<IReadOnlyList<string>> FreeAddressAsync(
@@ -167,10 +175,10 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        ClientGuard guard,
         CancellationToken ct)
     {
-        var result = await store.AddAsync(ClientAnswers.Draft(request, ClientDefaults.SubscriptionId()), ct)
-            .ConfigureAwait(false);
+        var result = await store.AddAsync(ClientAnswers.Draft(request, null), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -180,7 +188,28 @@ public static class ClientEndpoints
 
         return Results.Created(
             $"/api/clients/{result.Record.Id}",
-            Answer(result.Record, endpoint, host, true));
+            Answer(result.Record, endpoint, host, guard, true));
+    }
+
+    private static async Task<IResult> AddDeviceAsync(
+        long id,
+        ConfigStore configs,
+        ClientStore store,
+        ClientHost host,
+        ClientGuard guard,
+        CancellationToken ct)
+    {
+        var result = await store.AddDeviceAsync(id, ct).ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
+
+        var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, ct).ConfigureAwait(false);
+
+        return Results.Created(
+            $"/api/clients/{result.Record.Id}",
+            Answer(result.Record, endpoint, host, guard, true));
     }
 
     private static async Task<IResult> ChangeAsync(
@@ -189,6 +218,7 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        ClientGuard guard,
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -197,8 +227,7 @@ public static class ClientEndpoints
             return Refuse(StatusCodes.Status404NotFound, "unknown-client", $"there is no client under the number {id}");
         }
 
-        var result = await store.ChangeAsync(id, ClientAnswers.Draft(request, held.SubscriptionId), ct)
-            .ConfigureAwait(false);
+        var result = await store.ChangeAsync(id, ClientAnswers.Draft(request, held), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -209,7 +238,7 @@ public static class ClientEndpoints
             : [held.PublicKey];
         var endpoint = await SettleAsync(result.Record.ConfigId, gone, configs, store, host, ct).ConfigureAwait(false);
 
-        return Results.Ok(Answer(result.Record, endpoint, host, true));
+        return Results.Ok(Answer(result.Record, endpoint, host, guard, true));
     }
 
     private static async Task<IResult> SwitchAsync(
@@ -218,6 +247,7 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        ClientGuard guard,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -230,7 +260,7 @@ public static class ClientEndpoints
 
         var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, ct).ConfigureAwait(false);
 
-        return Results.Ok(Answer(result.Record, endpoint, host, true));
+        return Results.Ok(Answer(result.Record, endpoint, host, guard, true));
     }
 
     private static async Task<IResult> RemoveAsync(
@@ -240,13 +270,20 @@ public static class ClientEndpoints
         ClientHost host,
         CancellationToken ct)
     {
+        var devices = await store.DevicesAsync(id, ct).ConfigureAwait(false);
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
-        await SettleAsync(result.Record!.ConfigId, [result.Record.PublicKey], configs, store, host, ct)
+        await SettleAsync(
+                result.Record!.ConfigId,
+                [result.Record.PublicKey, .. devices.Select(device => device.PublicKey)],
+                configs,
+                store,
+                host,
+                ct)
             .ConfigureAwait(false);
 
         return Results.NoContent();
@@ -295,12 +332,23 @@ public static class ClientEndpoints
         return endpoint;
     }
 
-    private static ClientResponse Answer(TunnelClient client, ServerConfig? endpoint, ClientHost host, bool secrets)
+    private static ClientResponse Answer(
+        TunnelClient client,
+        ServerConfig? endpoint,
+        ClientHost host,
+        ClientGuard guard,
+        bool secrets)
     {
-        var state = endpoint is null ? ClientState.Missing(client) : host.States(endpoint, [client])[0];
+        var state = endpoint is null
+            ? ClientState.Missing(client)
+            : Seen(host.States(endpoint, [client])[0], endpoint, client, guard);
+        var cut = endpoint is null ? Array.Empty<string>() : guard.Cut(endpoint.Name, client.PublicKey);
 
-        return ClientAnswers.Client(client, endpoint?.Name ?? string.Empty, state, secrets);
+        return ClientAnswers.Client(client, endpoint?.Name ?? string.Empty, state, secrets, cut);
     }
+
+    private static ClientState Seen(ClientState state, ServerConfig endpoint, TunnelClient client, ClientGuard guard) =>
+        guard.Online(endpoint, client.PublicKey) is { } online ? state with { IsOnline = online } : state;
 
     private static bool Secrets(HttpContext context) => context.Caller()?.Holds(Scopes.ManageClients) == true;
 

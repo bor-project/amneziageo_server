@@ -95,6 +95,8 @@ public sealed class ConfigEntity
 
     public int Keepalive { get; set; }
 
+    public int OfflineAfter { get; set; }
+
     public bool IsEnabled { get; set; } = true;
 
     public bool Nat { get; set; } = true;
@@ -458,6 +460,10 @@ public sealed class ClientEntity
     public long? TemplateId { get; set; }
 
     public string SubscriptionId { get; set; } = string.Empty;
+
+    public long? ParentId { get; set; }
+
+    public bool MultiDevice { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; }
 

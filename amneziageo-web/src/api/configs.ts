@@ -39,6 +39,7 @@ export interface Config {
   allowedIps: string[]
   mtu: number
   keepalive: number
+  offlineAfter: number
   isEnabled: boolean
   nat: boolean
   blocked: string[]
@@ -59,6 +60,7 @@ export interface ConfigDraft {
   allowedIps: string[]
   mtu: number
   keepalive: number
+  offlineAfter: number
   isEnabled: boolean
   nat: boolean
   blocked: string[]
@@ -139,6 +141,7 @@ export function draftOf(config: Config): ConfigDraft {
     allowedIps: config.allowedIps,
     mtu: config.mtu,
     keepalive: config.keepalive,
+    offlineAfter: config.offlineAfter,
     isEnabled: config.isEnabled,
     nat: config.nat,
     blocked: config.blocked,

@@ -8,6 +8,7 @@ export interface ClientState {
   rxBytes: number
   txBytes: number
   endpoint: string
+  cut: string[]
 }
 
 export interface Client {
@@ -23,6 +24,8 @@ export interface Client {
   note: string
   templateId: number | null
   subscriptionId: string
+  parentId: number | null
+  multiDevice: boolean
   state: ClientState
   createdUtc: string
   updatedUtc: string
@@ -39,6 +42,7 @@ export interface ClientDraft {
   note: string
   templateId: number | null
   subscriptionId: string
+  multiDevice: boolean
 }
 
 export interface ClientConfig {
@@ -77,6 +81,10 @@ export function useAddClient() {
   return useRefreshing((draft: ClientDraft) => client.post("/clients", draft))
 }
 
+export function useAddDevice() {
+  return useRefreshing(async (id: number) => (await client.post<Client>(`/clients/${id}/devices`)).data)
+}
+
 export function useChangeClient() {
   return useRefreshing(({ id, draft }: { id: number; draft: ClientDraft }) => client.put(`/clients/${id}`, draft))
 }
@@ -101,10 +109,11 @@ export function draftOf(one: Client): ClientDraft {
     note: one.note,
     templateId: one.templateId,
     subscriptionId: one.subscriptionId,
+    multiDevice: one.multiDevice,
   }
 }
 
-function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
+function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) {
   const queryClient = useQueryClient()
 
   return useMutation({

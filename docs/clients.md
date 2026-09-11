@@ -16,6 +16,7 @@ interface file the host boots from carries them too.
 | `POST /api/clients/apply` | `clients:write` |
 | `PUT /api/clients/{id}` | `clients:write` |
 | `POST /api/clients/{id}/switch` | `clients:write` |
+| `POST /api/clients/{id}/devices` | `clients:write` |
 | `DELETE /api/clients/{id}` | `clients:write` |
 
 The private key of a client is written out only to a caller that holds `clients:write`.
@@ -30,6 +31,7 @@ The private key of a client is written out only to a caller that holds `clients:
 | On | whether the interface takes the client |
 | Note | a line of your own, up to 255 characters |
 | Subscription | the subscription that hands the client out, see [subscriptions.md](subscriptions.md) |
+| Several devices | whether the client takes devices of its own, each with its keys and address, see [devices.md](devices.md) |
 
 `GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair, a subscription of its own and
 a name no other client carries. With `?config=<id>` it also carries the first number free in every range of the
@@ -116,6 +118,9 @@ subscription of its own.
 | `client-key-taken` | another client already carries this public key |
 | `client-address-taken` | another client of the endpoint already carries this address |
 | `bad-client-subscription` | the subscription takes letters the rules do not or is longer than 64 characters |
+| `client-single-device` | the client has **Several devices** off, see [devices.md](devices.md) |
+| `client-is-device` | a device takes no devices of its own |
+| `client-has-devices` | **Several devices** stays on while the client carries devices |
 | `unknown-client` | the panel holds no client under this number |
 | `unknown-config` | the panel holds no endpoint under this number |
 

@@ -117,6 +117,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(client => client.TemplateId);
             entity.HasIndex(client => client.SubscriptionId);
+            entity.HasIndex(client => client.ParentId);
         });
 
         builder.Entity<TemplateEntity>(entity =>

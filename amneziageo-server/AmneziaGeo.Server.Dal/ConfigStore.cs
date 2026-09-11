@@ -200,6 +200,7 @@ public sealed class ConfigStore
         AllowedIps = Parts(entity.AllowedIps),
         Mtu = entity.Mtu,
         Keepalive = entity.Keepalive,
+        OfflineAfter = entity.OfflineAfter,
         IsEnabled = entity.IsEnabled,
         Nat = entity.Nat,
         Blocked = Parts(entity.Blocked),
@@ -248,6 +249,7 @@ public sealed class ConfigStore
         entity.AllowedIps = string.Join(", ", config.AllowedIps);
         entity.Mtu = config.Mtu;
         entity.Keepalive = config.Keepalive;
+        entity.OfflineAfter = config.OfflineAfter;
         entity.IsEnabled = config.IsEnabled;
         entity.Nat = config.Nat;
         entity.Blocked = string.Join(", ", config.Blocked);

@@ -112,6 +112,20 @@ public sealed class ClientStore
     }
 
     /// <summary>
+    /// Returns the devices of a client.
+    /// </summary>
+    public async Task<IReadOnlyList<TunnelClient>> DevicesAsync(long parentId, CancellationToken ct)
+    {
+        var found = await _db.Clients.AsNoTracking()
+            .Where(client => client.ParentId == parentId)
+            .OrderBy(client => client.Name)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return [.. found.Select(Read)];
+    }
+
+    /// <summary>
     /// Returns one client, or null when the panel holds none under the number.
     /// </summary>
     public async Task<TunnelClient?> FindAsync(long id, CancellationToken ct)
@@ -171,6 +185,46 @@ public sealed class ClientStore
     }
 
     /// <summary>
+    /// Adds a device to a client that takes several, with keys, an address and a subscription of its own.
+    /// </summary>
+    public async Task<ClientResult> AddDeviceAsync(long parentId, CancellationToken ct)
+    {
+        var parent = await FindAsync(parentId, ct).ConfigureAwait(false);
+        if (parent is null)
+        {
+            return Missing(parentId);
+        }
+
+        if (parent.ParentId is not null)
+        {
+            return ClientResult.No(ClientOutcome.Invalid, "client-is-device", "a device takes no devices of its own");
+        }
+
+        if (!parent.MultiDevice)
+        {
+            return ClientResult.No(ClientOutcome.Invalid, "client-single-device", "the client is kept to one device");
+        }
+
+        var ranges = Parts(await _db.Configs.AsNoTracking()
+            .Where(config => config.Id == parent.ConfigId)
+            .Select(config => config.Address)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false) ?? string.Empty);
+        var taken = await AddressesAsync(parent.ConfigId, ct).ConfigureAwait(false);
+        var name = await FreeNameAsync(parent.Name, ct).ConfigureAwait(false);
+        var device = ClientDefaults.Fresh(parent.ConfigId, name) with
+        {
+            Address = ClientPool.Free(ranges, [.. taken, .. ranges]),
+            PresharedKey = parent.PresharedKey,
+            TemplateId = parent.TemplateId,
+            IsEnabled = parent.IsEnabled,
+            ParentId = parent.Id,
+        };
+
+        return await InsertAsync(Whole(device), fit: true, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Adds a client a host already carries, under a free name, with the addresses the host gave it and a subscription.
     /// </summary>
     public async Task<ClientResult> ImportAsync(TunnelClient draft, CancellationToken ct)
@@ -189,7 +243,7 @@ public sealed class ClientStore
     }
 
     /// <summary>
-    /// Replaces the settings of a client.
+    /// Replaces the settings of a client, carrying its state and its template over to its devices.
     /// </summary>
     public async Task<ClientResult> ChangeAsync(long id, TunnelClient draft, CancellationToken ct)
     {
@@ -201,21 +255,34 @@ public sealed class ClientStore
             return Missing(id);
         }
 
-        var wanted = Whole(draft) with { ConfigId = entity.ConfigId };
+        var wanted = Whole(draft) with
+        {
+            ConfigId = entity.ConfigId,
+            ParentId = entity.ParentId,
+            MultiDevice = entity.ParentId is null && draft.MultiDevice,
+        };
+        if (entity.MultiDevice && !wanted.MultiDevice
+            && await _db.Clients.AnyAsync(client => client.ParentId == id, ct).ConfigureAwait(false))
+        {
+            return ClientResult.No(ClientOutcome.Invalid, "client-has-devices", "the client still carries devices");
+        }
+
         if (await Refusal(wanted, id, fit: true, ct).ConfigureAwait(false) is { } refusal)
         {
             return refusal;
         }
 
+        var now = _time.GetUtcNow();
         Write(entity, wanted);
-        entity.UpdatedUtc = _time.GetUtcNow();
+        entity.UpdatedUtc = now;
+        await FollowAsync(id, wanted.IsEnabled, wanted.TemplateId, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ClientResult.Done(Read(entity));
     }
 
     /// <summary>
-    /// Turns a client on or off.
+    /// Turns a client on or off together with its devices.
     /// </summary>
     public async Task<ClientResult> SwitchAsync(long id, bool on, CancellationToken ct)
     {
@@ -225,15 +292,17 @@ public sealed class ClientStore
             return Missing(id);
         }
 
+        var now = _time.GetUtcNow();
         entity.IsEnabled = on;
-        entity.UpdatedUtc = _time.GetUtcNow();
+        entity.UpdatedUtc = now;
+        await FollowAsync(id, on, entity.TemplateId, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ClientResult.Done(Read(entity));
     }
 
     /// <summary>
-    /// Removes a client.
+    /// Removes a client together with its devices.
     /// </summary>
     public async Task<ClientResult> RemoveAsync(long id, CancellationToken ct)
     {
@@ -244,10 +313,23 @@ public sealed class ClientStore
         }
 
         var gone = Read(entity);
+        var devices = await _db.Clients.Where(client => client.ParentId == id).ToListAsync(ct).ConfigureAwait(false);
+        _db.Clients.RemoveRange(devices);
         _db.Clients.Remove(entity);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ClientResult.Done(gone);
+    }
+
+    private async Task FollowAsync(long parentId, bool on, long? template, DateTimeOffset now, CancellationToken ct)
+    {
+        var devices = await _db.Clients.Where(client => client.ParentId == parentId).ToListAsync(ct).ConfigureAwait(false);
+        foreach (var device in devices)
+        {
+            device.IsEnabled = on;
+            device.TemplateId = template;
+            device.UpdatedUtc = now;
+        }
     }
 
     private async Task<ClientResult> InsertAsync(TunnelClient wanted, bool fit, CancellationToken ct)
@@ -359,6 +441,8 @@ public sealed class ClientStore
         Note = entity.Note,
         TemplateId = entity.TemplateId,
         SubscriptionId = entity.SubscriptionId,
+        ParentId = entity.ParentId,
+        MultiDevice = entity.MultiDevice,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
     };
@@ -374,6 +458,8 @@ public sealed class ClientStore
         entity.Note = client.Note.Trim();
         entity.TemplateId = client.TemplateId;
         entity.SubscriptionId = client.SubscriptionId.Trim();
+        entity.ParentId = client.ParentId;
+        entity.MultiDevice = client.MultiDevice;
     }
 
     private static TunnelClient Whole(TunnelClient draft) => draft with

@@ -1,16 +1,45 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
+using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Core.Panel;
+using AmneziaGeo.Server.Dal;
 
 namespace AmneziaGeo.Server.Api.Subscriptions;
+
+/// <summary>
+/// The configuration a device asks to hold.
+/// </summary>
+public sealed record HoldRequest(string? Key);
+
+/// <summary>
+/// Until when a device holds a configuration, in unix seconds.
+/// </summary>
+public sealed record HoldBody(long Until);
+
+/// <summary>
+/// Why a device is not let in and since when another one holds the configuration, in unix seconds.
+/// </summary>
+public sealed record BusyBody(string Error, string Message, long Since);
 
 /// <summary>
 /// Answers the clients that read a subscription and names where they read it.
 /// </summary>
 public static class SubscriptionAnswer
 {
+    /// <summary>
+    /// The header a device names itself in.
+    /// </summary>
+    public const string DeviceHeader = "X-Hwid";
+
+    private const string HoldTail = "/hold";
+
+    private const int MaxDevice = 128;
+
     private const int PlainPort = 80;
 
     private const int SecurePort = 443;
@@ -35,13 +64,34 @@ public static class SubscriptionAnswer
     }
 
     /// <summary>
-    /// Writes the subscription a request asks for, 404 when no client carries it.
+    /// Returns the subscription a hold is asked of, null for a path that is not one.
+    /// </summary>
+    public static string? AskedHold(PathString path, SubscriptionSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var text = path.Value ?? string.Empty;
+
+        return text.EndsWith(HoldTail, StringComparison.Ordinal)
+            ? Asked(new PathString(text[..^HoldTail.Length]), settings)
+            : null;
+    }
+
+    /// <summary>
+    /// Writes the subscription or the hold a request asks for, 404 when no client carries it.
     /// </summary>
     public static async Task WriteAsync(HttpContext context, SubscriptionSettings settings, IServiceScopeFactory scopes)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(scopes);
+
+        if (AskedHold(context.Request.Path, settings) is { } holding)
+        {
+            await HoldAsync(context, settings, scopes, holding).ConfigureAwait(false);
+
+            return;
+        }
 
         var id = Asked(context.Request.Path, settings);
         if (id is null || !HttpMethods.IsGet(context.Request.Method) || !Named(context, settings.Domains))
@@ -98,6 +148,96 @@ public static class SubscriptionAnswer
 
         return (secure ? "https://" : "http://") + Bracketed(Name(settings, panel, host)) + port + settings.Prefix + id;
     }
+
+    private static async Task HoldAsync(HttpContext context, SubscriptionSettings settings, IServiceScopeFactory scopes, string id)
+    {
+        var taking = HttpMethods.IsPost(context.Request.Method);
+        if ((!taking && !HttpMethods.IsDelete(context.Request.Method)) || !Named(context, settings.Domains))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+
+            return;
+        }
+
+        var device = context.Request.Headers[DeviceHeader].ToString().Trim();
+        if (device.Length is 0 or > MaxDevice)
+        {
+            await RefuseAsync(context, "no-device", $"the request names no device in {DeviceHeader}").ConfigureAwait(false);
+
+            return;
+        }
+
+        var key = await KeyAsync(context).ConfigureAwait(false);
+        if (key is null)
+        {
+            await RefuseAsync(context, "bad-key", "the body names no public key of a configuration").ConfigureAwait(false);
+
+            return;
+        }
+
+        using var scope = scopes.CreateScope();
+        var services = scope.ServiceProvider;
+        var members = await services.GetRequiredService<ClientStore>()
+            .SubscribedAsync(id, context.RequestAborted)
+            .ConfigureAwait(false);
+        if (!members.Any(member => string.Equals(member.PublicKey, key, StringComparison.Ordinal)))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+
+            return;
+        }
+
+        var holds = services.GetRequiredService<DeviceHolds>();
+        if (!taking)
+        {
+            holds.Drop(key, device);
+            context.Response.StatusCode = StatusCodes.Status204NoContent;
+
+            return;
+        }
+
+        var now = (services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow();
+        var answer = holds.Take(key, device, now);
+        if (answer.IsHeld)
+        {
+            await context.Response.WriteAsJsonAsync(new HoldBody(answer.Until.ToUnixTimeSeconds()), context.RequestAborted)
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status409Conflict;
+        await context.Response
+            .WriteAsJsonAsync(new BusyBody("config-busy", Busy(context), answer.Since.ToUnixTimeSeconds()), context.RequestAborted)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task<string?> KeyAsync(HttpContext context)
+    {
+        try
+        {
+            var body = await context.Request.ReadFromJsonAsync<HoldRequest>(context.RequestAborted).ConfigureAwait(false);
+            var key = body?.Key?.Trim();
+
+            return Curve25519.IsKey(key) ? key : null;
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static Task RefuseAsync(HttpContext context, string code, string message)
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+
+        return context.Response.WriteAsJsonAsync(new Failure(code, message), context.RequestAborted);
+    }
+
+    private static string Busy(HttpContext context) =>
+        context.Request.Headers.AcceptLanguage.ToString().StartsWith("ru", StringComparison.OrdinalIgnoreCase)
+            ? "Этот конфиг уже подключён на другом устройстве"
+            : "This configuration is already connected on another device";
 
     private static string Name(SubscriptionSettings settings, PanelSettings panel, string host)
     {

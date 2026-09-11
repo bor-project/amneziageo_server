@@ -45,6 +45,7 @@ public sealed record ConfigResponse(
     string[] AllowedIps,
     int Mtu,
     int Keepalive,
+    int OfflineAfter,
     bool IsEnabled,
     bool Nat,
     string[] Blocked,
@@ -72,7 +73,8 @@ public sealed record ConfigRequest(
     string[]? Blocked,
     string? PrivateKey,
     string? PresharedKey,
-    ObfuscationBody? Obfuscation);
+    ObfuscationBody? Obfuscation,
+    int? OfflineAfter = null);
 
 /// <summary>
 /// What putting an endpoint on the host produced, as the interface reads it.
@@ -107,6 +109,7 @@ public static class ConfigAnswers
         [.. config.AllowedIps],
         config.Mtu,
         config.Keepalive,
+        config.OfflineAfter,
         config.IsEnabled,
         config.Nat,
         [.. config.Blocked],
@@ -160,6 +163,7 @@ public static class ConfigAnswers
         AllowedIps = request.AllowedIps ?? [],
         Mtu = request.Mtu,
         Keepalive = request.Keepalive,
+        OfflineAfter = request.OfflineAfter ?? ConfigDefaults.OfflineAfter,
         IsEnabled = request.IsEnabled ?? true,
         Nat = request.Nat ?? true,
         Blocked = request.Blocked ?? [],

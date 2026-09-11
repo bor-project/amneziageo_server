@@ -2,6 +2,7 @@ import { useState } from "react"
 import {
   draftOf,
   useAddClient,
+  useAddDevice,
   useChangeClient,
   useClientDraft,
   useClients,
@@ -38,12 +39,33 @@ export function Clients() {
   const change = useChangeClient()
   const remove = useRemoveClient()
   const turn = useSwitchClient()
+  const addDevice = useAddDevice()
   const may = holds(user, scopes.manageClients)
-  const shown = (clients.data ?? []).filter((one) => picked === 0 || one.configId === picked)
+  const all = clients.data ?? []
+  const shown = ordered(all.filter((one) => picked === 0 || one.configId === picked))
   const names = new Map((templates.data ?? []).map((one): [number, string] => [one.id, one.name]))
 
   function named(one: Client): string {
     return (one.templateId === null ? undefined : names.get(one.templateId)) ?? t("clients.dash")
+  }
+
+  function actionsOf(one: Client) {
+    const actions = [
+      { label: t("clients.config"), onPick: () => setShowing(one) },
+      {
+        label: one.isEnabled ? t("clients.turnOff") : t("clients.turnOn"),
+        onPick: () => void turn.mutateAsync({ id: one.id, on: !one.isEnabled }),
+      },
+    ]
+    if (one.parentId === null && one.multiDevice) {
+      actions.push({ label: t("clients.addDevice"), onPick: () => void addDevice.mutateAsync(one.id).then(setShowing) })
+    }
+
+    if (one.parentId === null) {
+      actions.push({ label: t("clients.edit"), onPick: () => setEditing(one) })
+    }
+
+    return [...actions, { label: t("clients.remove"), onPick: () => setRemoving(one), alarming: true }]
   }
 
   return (
@@ -95,7 +117,7 @@ export function Clients() {
               <tbody>
                 {shown.map((one) => (
                   <tr key={one.id} className="border-t border-line">
-                    <td className="px-4 py-2 font-medium text-ink">
+                    <td className={`py-2 pr-4 font-medium text-ink ${one.parentId === null ? "pl-4" : "pl-10"}`}>
                       {one.name}
                       {!one.isEnabled && <span className="ml-2 text-xs text-muted">{t("clients.off")}</span>}
                     </td>
@@ -111,20 +133,7 @@ export function Clients() {
                       <State one={one} t={t} language={language} />
                     </td>
                     <td className="px-4 py-2">
-                      {may && (
-                        <RowActions
-                          title={t("clients.actions")}
-                          actions={[
-                            { label: t("clients.config"), onPick: () => setShowing(one) },
-                            {
-                              label: one.isEnabled ? t("clients.turnOff") : t("clients.turnOn"),
-                              onPick: () => void turn.mutateAsync({ id: one.id, on: !one.isEnabled }),
-                            },
-                            { label: t("clients.edit"), onPick: () => setEditing(one) },
-                            { label: t("clients.remove"), onPick: () => setRemoving(one), alarming: true },
-                          ]}
-                        />
-                      )}
+                      {may && <RowActions title={t("clients.actions")} actions={actionsOf(one)} />}
                     </td>
                   </tr>
                 ))}
@@ -176,7 +185,14 @@ export function Clients() {
             </>
           }
         >
-          <div className="text-sm text-muted">{removing.address.join(", ")}</div>
+          <div className="flex flex-col gap-1 text-sm text-muted">
+            <div>{removing.address.join(", ")}</div>
+            {all
+              .filter((one) => one.parentId === removing.id)
+              .map((one) => (
+                <div key={one.id}>{`${one.name}: ${one.address.join(", ")}`}</div>
+              ))}
+          </div>
         </Modal>
       )}
     </div>
@@ -209,6 +225,17 @@ function Adding({ configId, onClose }: { configId: number; onClose: () => void }
 }
 
 function State({ one, t, language }: { one: Client; t: Text; language: string }) {
+  return (
+    <>
+      <Seen one={one} t={t} language={language} />
+      {one.state.cut.length > 0 && (
+        <div className="text-xs text-warn">{t("clients.cut", { list: one.state.cut.join(", ") })}</div>
+      )}
+    </>
+  )
+}
+
+function Seen({ one, t, language }: { one: Client; t: Text; language: string }) {
   if (!one.state.isPresent) {
     return <span className="text-muted">{t("clients.notOnHost")}</span>
   }
@@ -222,4 +249,12 @@ function State({ one, t, language }: { one: Client; t: Text; language: string })
       {new Date(one.state.lastHandshake).toLocaleString(language)}
     </span>
   )
+}
+
+function ordered(clients: Client[]): Client[] {
+  const tops = clients.filter((one) => one.parentId === null)
+  const known = new Set(tops.map((one) => one.id))
+  const rows = tops.flatMap((top) => [top, ...clients.filter((one) => one.parentId === top.id)])
+
+  return [...rows, ...clients.filter((one) => one.parentId !== null && !known.has(one.parentId))]
 }

@@ -126,6 +126,13 @@ export function ConfigForm({
           value={draft.keepalive}
           onChange={(value) => put({ keepalive: value })}
         />
+        <Count
+          id="config-online"
+          caption={t("configs.offlineAfter")}
+          value={draft.offlineAfter}
+          onChange={(value) => put({ offlineAfter: value })}
+          hint={t("configs.offlineAfterHint")}
+        />
       </Section>
 
       <Section title={t("configs.keys")}>

@@ -182,6 +182,11 @@ public sealed record ServerConfig
     public int Keepalive { get; init; }
 
     /// <summary>
+    /// How long a device of the endpoint stays silent before it counts as gone, in seconds.
+    /// </summary>
+    public int OfflineAfter { get; init; } = ConfigDefaults.OfflineAfter;
+
+    /// <summary>
     /// Whether the panel raises the interface of the endpoint.
     /// </summary>
     public bool IsEnabled { get; init; } = true;

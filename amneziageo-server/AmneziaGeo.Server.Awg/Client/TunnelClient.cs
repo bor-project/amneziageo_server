@@ -61,6 +61,16 @@ public sealed record TunnelClient
     public string SubscriptionId { get; init; } = string.Empty;
 
     /// <summary>
+    /// The client the device belongs to, null for a client of its own.
+    /// </summary>
+    public long? ParentId { get; init; }
+
+    /// <summary>
+    /// Whether the client takes devices of its own.
+    /// </summary>
+    public bool MultiDevice { get; init; }
+
+    /// <summary>
     /// When the client was added.
     /// </summary>
     public DateTimeOffset CreatedUtc { get; init; }

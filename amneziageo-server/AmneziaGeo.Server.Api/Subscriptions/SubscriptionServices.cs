@@ -8,13 +8,14 @@ namespace AmneziaGeo.Server.Api.Subscriptions;
 public static class SubscriptionServices
 {
     /// <summary>
-    /// Registers the server and the feed of the subscriptions.
+    /// Registers the server, the feed and the holds of the subscriptions.
     /// </summary>
     public static IServiceCollection AddSubscriptions(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<SubscriptionState>();
+        services.AddSingleton<DeviceHolds>();
         services.AddSingleton<SubscriptionServer>();
         services.AddHostedService(provider => provider.GetRequiredService<SubscriptionServer>());
         services.AddScoped<SubscriptionFeed>();
@@ -35,9 +36,10 @@ public static class SubscriptionServices
         app.Use(async (context, next) =>
         {
             var settings = state.Current;
+            var path = context.Request.Path;
             if (settings.IsEnabled
                 && settings.Port == panel.Port
-                && SubscriptionAnswer.Asked(context.Request.Path, settings) is not null)
+                && (SubscriptionAnswer.Asked(path, settings) ?? SubscriptionAnswer.AskedHold(path, settings)) is not null)
             {
                 await SubscriptionAnswer.WriteAsync(context, settings, scopes).ConfigureAwait(false);
 

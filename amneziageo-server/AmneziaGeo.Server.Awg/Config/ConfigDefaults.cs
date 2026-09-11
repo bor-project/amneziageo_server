@@ -46,6 +46,11 @@ public static class ConfigDefaults
         ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "fc00::/7", "fe80::/10"];
 
     /// <summary>
+    /// How long a device of a new endpoint stays silent before it counts as gone, in seconds.
+    /// </summary>
+    public const int OfflineAfter = 60;
+
+    /// <summary>
     /// Returns an endpoint with a key pair and obfuscation of its own.
     /// </summary>
     public static ServerConfig Fresh(string name)
@@ -61,6 +66,7 @@ public static class ConfigDefaults
             AllowedIps = [.. AllowedIps],
             Mtu = Mtu,
             Keepalive = Keepalive,
+            OfflineAfter = OfflineAfter,
             IsEnabled = true,
             Nat = true,
             Blocked = [.. Blocked],

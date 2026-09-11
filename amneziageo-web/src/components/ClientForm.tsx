@@ -184,12 +184,18 @@ export function ClientForm({
 
         <Line id="client-note" caption={t("clients.note")} value={draft.note} onChange={(note) => put({ note })} wide />
 
-        <div className="col-span-2">
+        <div className="col-span-2 flex flex-wrap gap-6">
           <Flag
             id="client-enabled"
             caption={t("clients.enabled")}
             value={draft.isEnabled}
             onChange={(isEnabled) => put({ isEnabled })}
+          />
+          <Flag
+            id="client-devices"
+            caption={t("clients.multiDevice")}
+            value={draft.multiDevice}
+            onChange={(multiDevice) => put({ multiDevice })}
           />
         </div>
       </div>

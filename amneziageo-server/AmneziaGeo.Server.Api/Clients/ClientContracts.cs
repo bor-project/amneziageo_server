@@ -3,7 +3,7 @@ using AmneziaGeo.Server.Awg.Client;
 namespace AmneziaGeo.Server.Api.Clients;
 
 /// <summary>
-/// What the host carries for one client.
+/// What the host carries for one client and the addresses a second device of it is cut off at.
 /// </summary>
 public sealed record ClientStateBody(
     bool IsOnline,
@@ -11,7 +11,8 @@ public sealed record ClientStateBody(
     DateTimeOffset? LastHandshake,
     ulong RxBytes,
     ulong TxBytes,
-    string Endpoint);
+    string Endpoint,
+    IReadOnlyList<string> Cut);
 
 /// <summary>
 /// One client as the panel reads it.
@@ -29,6 +30,8 @@ public sealed record ClientResponse(
     string Note,
     long? TemplateId,
     string SubscriptionId,
+    long? ParentId,
+    bool MultiDevice,
     ClientStateBody State,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc);
@@ -46,7 +49,8 @@ public sealed record ClientRequest(
     bool IsEnabled,
     string? Note,
     long? TemplateId = null,
-    string? SubscriptionId = null);
+    string? SubscriptionId = null,
+    bool? MultiDevice = null);
 
 /// <summary>
 /// Whether a client is on.
@@ -73,10 +77,16 @@ public static class ClientAnswers
     /// <summary>
     /// Returns one client with what the host carries for it.
     /// </summary>
-    public static ClientResponse Client(TunnelClient client, string config, ClientState state, bool secrets)
+    public static ClientResponse Client(
+        TunnelClient client,
+        string config,
+        ClientState state,
+        bool secrets,
+        IReadOnlyList<string> cut)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(cut);
 
         return new ClientResponse(
             client.Id,
@@ -91,24 +101,26 @@ public static class ClientAnswers
             client.Note,
             client.TemplateId,
             secrets ? client.SubscriptionId : string.Empty,
+            client.ParentId,
+            client.MultiDevice,
             new ClientStateBody(
                 state.IsOnline,
                 state.IsPresent,
                 state.LastHandshake,
                 state.RxBytes,
                 state.TxBytes,
-                state.Endpoint),
+                state.Endpoint,
+                cut),
             client.CreatedUtc,
             client.UpdatedUtc);
     }
 
     /// <summary>
-    /// Returns what a request asks a client to become, with the subscription it takes when the request names none.
+    /// Returns what a request asks a client to become, keeping what the client held where the request names nothing.
     /// </summary>
-    public static TunnelClient Draft(ClientRequest request, string subscription)
+    public static TunnelClient Draft(ClientRequest request, TunnelClient? held)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(subscription);
 
         return new TunnelClient
         {
@@ -121,7 +133,8 @@ public static class ClientAnswers
             IsEnabled = request.IsEnabled,
             Note = (request.Note ?? string.Empty).Trim(),
             TemplateId = request.TemplateId,
-            SubscriptionId = request.SubscriptionId is null ? subscription : request.SubscriptionId.Trim(),
+            SubscriptionId = request.SubscriptionId?.Trim() ?? held?.SubscriptionId ?? ClientDefaults.SubscriptionId(),
+            MultiDevice = request.MultiDevice ?? held?.MultiDevice ?? false,
         };
     }
 

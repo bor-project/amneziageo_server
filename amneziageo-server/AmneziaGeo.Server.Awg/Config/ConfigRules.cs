@@ -78,9 +78,35 @@ public static partial class ConfigRules
         ?? CheckServers(config.Dns)
         ?? CheckMtu(config.Mtu)
         ?? CheckKeepalive(config.Keepalive)
+        ?? CheckOfflineAfter(config.OfflineAfter, config.Keepalive)
         ?? CheckKey(config.PrivateKey)
         ?? CheckPreshared(config.PresharedKey)
         ?? CheckObfuscation(config.Obfuscation);
+
+    /// <summary>
+    /// The shortest silence after which a device counts as gone, in seconds.
+    /// </summary>
+    public const int MinOfflineAfter = 10;
+
+    /// <summary>
+    /// The longest silence after which a device counts as gone, in seconds.
+    /// </summary>
+    public const int MaxOfflineAfter = 3600;
+
+    /// <summary>
+    /// Returns why the silence after which a device counts as gone is unusable, or null when it holds.
+    /// </summary>
+    public static ConfigFault? CheckOfflineAfter(int seconds, int keepalive)
+    {
+        if (seconds is < MinOfflineAfter or > MaxOfflineAfter)
+        {
+            return Fault("bad-offline-after", $"the silence is outside {MinOfflineAfter} to {MaxOfflineAfter} seconds");
+        }
+
+        return keepalive > 0 && seconds < keepalive * 2
+            ? Fault("bad-offline-after", "the silence is shorter than two keepalive intervals")
+            : null;
+    }
 
     /// <summary>
     /// Returns why the name of an interface is unusable, or null when it holds.
