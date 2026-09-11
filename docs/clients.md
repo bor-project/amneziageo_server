@@ -32,6 +32,7 @@ The private key of a client is written out only to a caller that holds `clients:
 | Note | a line of your own, up to 255 characters |
 | Subscription | the subscription that hands the client out, see [subscriptions.md](subscriptions.md) |
 | Several devices | whether the client takes devices of its own, each with its keys and address, see [devices.md](devices.md) |
+| Daily limit | how many bytes a day the client moves together with its devices; empty for no limit, see [Traffic](#traffic) |
 
 `GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair, a subscription of its own and
 a name no other client carries. With `?config=<id>` it also carries the first number free in every range of the
@@ -118,6 +119,7 @@ subscription of its own.
 | `client-key-taken` | another client already carries this public key |
 | `client-address-taken` | another client of the endpoint already carries this address |
 | `bad-client-subscription` | the subscription takes letters the rules do not or is longer than 64 characters |
+| `bad-client-limit` | the daily limit is negative or larger than 2^50 bytes |
 | `client-single-device` | the client has **Several devices** off, see [devices.md](devices.md) |
 | `client-is-device` | a device takes no devices of its own |
 | `client-has-devices` | **Several devices** stays on while the client carries devices |
@@ -126,6 +128,33 @@ subscription of its own.
 
 ## What the panel shows
 
-The section lists the clients of every endpoint or of one, with the addresses they carry, what the interface
-counted for them and when they last completed a handshake. A client the interface does not carry is marked
-as such, so a panel that lost `CAP_NET_ADMIN` or an interface that is down is seen at once.
+The section lists the clients of every endpoint or of one, with the addresses they carry, whether they are
+online, how fast they move bytes now, what they made today and when they last completed a handshake. A client
+the interface does not carry is marked as such, so a panel that lost `CAP_NET_ADMIN` or an interface that is
+down is seen at once. The list reads the host every 2 seconds.
+
+## Traffic
+
+The panel reads the counters of every peer each 2 seconds. What a counter grew by since the reading before is
+the traffic of the client, and that growth over the 2 seconds is its speed. A counter starts over when the peer
+or the interface is laid anew; a counter below the one read last is counted whole. The traffic of the day goes
+into the database every 30 seconds and when the panel stops, together with the counters read last, so what the
+peers moved while the panel was down is counted once it is back.
+
+The day is the day of the clock of the host: at midnight of its time zone the traffic of every client starts
+from nothing.
+
+A client is online when its peer sent anything, keepalives included, within the time its interface counts a
+client online (see [devices.md](devices.md)), or, with the guard off, when its last handshake is younger than 3
+minutes.
+
+**Daily limit** is the most a client moves in a day, both ways together; a client with devices moves it
+together with them. Once the traffic of the day reaches it, the panel takes the peers of the client and of its
+devices off the interface and out of the interface file, and the list says the limit is used up. At midnight,
+or once the limit is raised or cleared, the panel lays them back. The counters are read every 2 seconds, so a
+client going at full speed passes the limit by what it moves in that time.
+
+`GET /api/clients` carries the traffic in `state`: `rxRate` and `txRate`, bytes a second taken from and given
+to the client; `todayRx` and `todayTx`, what the client made today; `used`, what it made today together with
+its devices, or with its client and the other devices of it; `isSpent`, whether `used` reached the limit. The
+limit is `dailyLimit` in bytes, 0 for none.

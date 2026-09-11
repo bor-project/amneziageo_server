@@ -3,6 +3,7 @@ using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Awg.Netlink;
+using AmneziaGeo.Server.Routing.Traffic;
 
 namespace AmneziaGeo.Server.Routing.Host;
 
@@ -32,19 +33,28 @@ public sealed class ClientHost
 
     private readonly TimeProvider _time;
 
+    private readonly TrafficLedger? _ledger;
+
     /// <summary>
     /// ctor
     /// </summary>
-    public ClientHost(IHostNetwork network, IAwgDevices devices, InterfaceFile file, TimeProvider? time = null)
+    public ClientHost(
+        IHostNetwork network,
+        IAwgDevices devices,
+        InterfaceFile file,
+        TimeProvider? time = null,
+        TrafficLedger? ledger = null)
     {
         _network = network;
         _devices = devices;
         _file = file;
         _time = time ?? TimeProvider.System;
+        _ledger = ledger;
     }
 
     /// <summary>
-    /// Puts the clients of an endpoint on its interface and into the file the host boots from.
+    /// Puts the clients of an endpoint that are on and within their daily limit on its interface and into the file the
+    /// host boots from.
     /// </summary>
     public async Task<ClientSync> SyncAsync(
         ServerConfig config,
@@ -56,17 +66,18 @@ public sealed class ClientHost
         ArgumentNullException.ThrowIfNull(clients);
         ArgumentNullException.ThrowIfNull(gone);
 
+        var laid = Laid(clients);
         try
         {
-            await _file.WriteAsync(config, clients, ct).ConfigureAwait(false);
+            await _file.WriteAsync(config, laid, ct).ConfigureAwait(false);
             if (!_network.HasLink(config.Name))
             {
                 return new ClientSync(false, $"the host carries no interface called '{config.Name}'");
             }
 
-            var away = clients.Where(client => !client.IsEnabled).Select(client => client.PublicKey).Concat(gone);
+            var away = laid.Where(client => !client.IsEnabled).Select(client => client.PublicKey).Concat(gone);
             _devices.Apply(ClientDevice.Away(config, away));
-            _devices.Apply(ClientDevice.Update(config, clients));
+            _devices.Apply(ClientDevice.Update(config, laid));
 
             return ClientSync.Done;
         }
@@ -108,6 +119,12 @@ public sealed class ClientHost
 
         return peers is null ? [] : ClientDevice.Stale(peers.Keys, clients);
     }
+
+    private TunnelClient[] Laid(IReadOnlyList<TunnelClient> clients) =>
+    [
+        .. clients.Select(client =>
+            client.IsEnabled && _ledger?.IsSpent(client) == true ? client with { IsEnabled = false } : client)
+    ];
 
     private Dictionary<string, AwgPeer>? Peers(ServerConfig config)
     {

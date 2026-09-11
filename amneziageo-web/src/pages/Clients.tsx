@@ -18,7 +18,7 @@ import { ClientForm } from "@/components/ClientForm"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
 import { card, danger, field, primary, secondary } from "@/components/styles"
-import { bytes } from "@/format"
+import { bytes, rate } from "@/format"
 import { useLanguage, useText } from "@/i18n"
 import type { Text } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -109,6 +109,7 @@ export function Clients() {
                   <th className="px-4 py-2 font-normal">{t("clients.endpointName")}</th>
                   <th className="px-4 py-2 font-normal">{t("clients.template")}</th>
                   <th className="px-4 py-2 font-normal">{t("clients.address")}</th>
+                  <th className="px-4 py-2 font-normal">{t("clients.speed")}</th>
                   <th className="px-4 py-2 font-normal">{t("clients.traffic")}</th>
                   <th className="px-4 py-2 font-normal">{t("clients.state")}</th>
                   <th className="px-4 py-2" />
@@ -119,15 +120,17 @@ export function Clients() {
                   <tr key={one.id} className="border-t border-line">
                     <td className={`py-2 pr-4 font-medium text-ink ${one.parentId === null ? "pl-4" : "pl-10"}`}>
                       {one.name}
+                      {one.state.isOnline && <span className="ml-2 text-xs text-brand">{t("clients.online")}</span>}
                       {!one.isEnabled && <span className="ml-2 text-xs text-muted">{t("clients.off")}</span>}
                     </td>
                     <td className="px-4 py-2 text-muted">{one.config}</td>
                     <td className="px-4 py-2 text-muted">{named(one)}</td>
                     <td className="px-4 py-2 text-muted">{one.address.join(", ")}</td>
-                    <td className="px-4 py-2 text-muted">
-                      {one.state.isPresent
-                        ? `${bytes(t, one.state.rxBytes)} / ${bytes(t, one.state.txBytes)}`
-                        : t("clients.dash")}
+                    <td className="px-4 py-2">
+                      <Speed one={one} t={t} />
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-muted">
+                      <Traffic one={one} t={t} />
                     </td>
                     <td className="px-4 py-2">
                       <State one={one} t={t} language={language} />
@@ -224,10 +227,37 @@ function Adding({ configId, onClose }: { configId: number; onClose: () => void }
   )
 }
 
+function Speed({ one, t }: { one: Client; t: Text }) {
+  if (!one.state.isOnline && one.state.rxRate === 0 && one.state.txRate === 0) {
+    return <span className="text-muted">{t("clients.dash")}</span>
+  }
+
+  return (
+    <span className="whitespace-nowrap text-ink">
+      <span title={t("clients.toClient")}>{`↓ ${rate(t, one.state.txRate)}`}</span>
+      <span className="ml-3" title={t("clients.fromClient")}>{`↑ ${rate(t, one.state.rxRate)}`}</span>
+    </span>
+  )
+}
+
+function Traffic({ one, t }: { one: Client; t: Text }) {
+  const used = bytes(t, one.parentId === null ? one.state.used : one.state.todayRx + one.state.todayTx)
+
+  if (one.parentId === null && one.dailyLimit > 0) {
+    return <>{t("clients.usedOf", { used, limit: bytes(t, one.dailyLimit) })}</>
+  }
+
+  return <>{used}</>
+}
+
 function State({ one, t, language }: { one: Client; t: Text; language: string }) {
   return (
     <>
-      <Seen one={one} t={t} language={language} />
+      {one.isEnabled && one.state.isSpent ? (
+        <span className="text-warn">{t("clients.spent")}</span>
+      ) : (
+        <Seen one={one} t={t} language={language} />
+      )}
       {one.state.cut.length > 0 && (
         <div className="text-xs text-warn">{t("clients.cut", { list: one.state.cut.join(", ") })}</div>
       )}

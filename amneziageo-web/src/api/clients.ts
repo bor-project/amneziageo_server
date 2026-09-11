@@ -9,6 +9,12 @@ export interface ClientState {
   txBytes: number
   endpoint: string
   cut: string[]
+  rxRate: number
+  txRate: number
+  todayRx: number
+  todayTx: number
+  used: number
+  isSpent: boolean
 }
 
 export interface Client {
@@ -26,6 +32,7 @@ export interface Client {
   subscriptionId: string
   parentId: number | null
   multiDevice: boolean
+  dailyLimit: number
   state: ClientState
   createdUtc: string
   updatedUtc: string
@@ -43,6 +50,7 @@ export interface ClientDraft {
   templateId: number | null
   subscriptionId: string
   multiDevice: boolean
+  dailyLimit: number
 }
 
 export interface ClientConfig {
@@ -56,7 +64,7 @@ export function useClients() {
   return useQuery({
     queryKey: ["clients"],
     queryFn: async () => (await client.get<Client[]>("/clients")).data,
-    refetchInterval: 15000,
+    refetchInterval: 2000,
   })
 }
 
@@ -110,6 +118,7 @@ export function draftOf(one: Client): ClientDraft {
     templateId: one.templateId,
     subscriptionId: one.subscriptionId,
     multiDevice: one.multiDevice,
+    dailyLimit: one.dailyLimit,
   }
 }
 

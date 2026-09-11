@@ -1,9 +1,10 @@
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Routing.Traffic;
 
 namespace AmneziaGeo.Server.Api.Clients;
 
 /// <summary>
-/// What the host carries for one client and the addresses a second device of it is cut off at.
+/// What the host carries for one client, the addresses a second device of it is cut off at and the traffic it makes.
 /// </summary>
 public sealed record ClientStateBody(
     bool IsOnline,
@@ -12,7 +13,13 @@ public sealed record ClientStateBody(
     ulong RxBytes,
     ulong TxBytes,
     string Endpoint,
-    IReadOnlyList<string> Cut);
+    IReadOnlyList<string> Cut,
+    double RxRate,
+    double TxRate,
+    ulong TodayRx,
+    ulong TodayTx,
+    ulong Used,
+    bool IsSpent);
 
 /// <summary>
 /// One client as the panel reads it.
@@ -32,6 +39,7 @@ public sealed record ClientResponse(
     string SubscriptionId,
     long? ParentId,
     bool MultiDevice,
+    long DailyLimit,
     ClientStateBody State,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc);
@@ -50,7 +58,8 @@ public sealed record ClientRequest(
     string? Note,
     long? TemplateId = null,
     string? SubscriptionId = null,
-    bool? MultiDevice = null);
+    bool? MultiDevice = null,
+    long? DailyLimit = null);
 
 /// <summary>
 /// Whether a client is on.
@@ -75,18 +84,20 @@ public static class ClientAnswers
     private static readonly char[] Breaks = [',', ' ', '\t', '\n', '\r'];
 
     /// <summary>
-    /// Returns one client with what the host carries for it.
+    /// Returns one client with what the host carries for it and the traffic it makes.
     /// </summary>
     public static ClientResponse Client(
         TunnelClient client,
         string config,
         ClientState state,
         bool secrets,
-        IReadOnlyList<string> cut)
+        IReadOnlyList<string> cut,
+        ClientTraffic traffic)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(cut);
+        ArgumentNullException.ThrowIfNull(traffic);
 
         return new ClientResponse(
             client.Id,
@@ -103,6 +114,7 @@ public static class ClientAnswers
             secrets ? client.SubscriptionId : string.Empty,
             client.ParentId,
             client.MultiDevice,
+            client.DailyLimit,
             new ClientStateBody(
                 state.IsOnline,
                 state.IsPresent,
@@ -110,7 +122,13 @@ public static class ClientAnswers
                 state.RxBytes,
                 state.TxBytes,
                 state.Endpoint,
-                cut),
+                cut,
+                Math.Round(traffic.Rate.Rx, 1),
+                Math.Round(traffic.Rate.Tx, 1),
+                traffic.Used.Rx,
+                traffic.Used.Tx,
+                traffic.Group.Total,
+                traffic.IsSpent),
             client.CreatedUtc,
             client.UpdatedUtc);
     }
@@ -135,6 +153,7 @@ public static class ClientAnswers
             TemplateId = request.TemplateId,
             SubscriptionId = request.SubscriptionId?.Trim() ?? held?.SubscriptionId ?? ClientDefaults.SubscriptionId(),
             MultiDevice = request.MultiDevice ?? held?.MultiDevice ?? false,
+            DailyLimit = request.DailyLimit ?? held?.DailyLimit ?? 0,
         };
     }
 

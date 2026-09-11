@@ -7,6 +7,7 @@ using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Host;
+using AmneziaGeo.Server.Routing.Traffic;
 
 namespace AmneziaGeo.Server.Api.Clients;
 
@@ -44,6 +45,7 @@ public static class ClientEndpoints
         ClientStore store,
         ClientHost host,
         ClientGuard guard,
+        TrafficLedger ledger,
         CancellationToken ct)
     {
         var endpoints = await configs.ListAsync(ct).ConfigureAwait(false);
@@ -68,7 +70,8 @@ public static class ClientEndpoints
                     endpoint.Name,
                     Seen(states[index], endpoint, mine[index], guard),
                     secrets,
-                    guard.Cut(endpoint.Name, mine[index].PublicKey)));
+                    guard.Cut(endpoint.Name, mine[index].PublicKey),
+                    ledger.Of(mine[index])));
             }
         }
 
@@ -82,6 +85,7 @@ public static class ClientEndpoints
         ClientStore store,
         ClientHost host,
         ClientGuard guard,
+        TrafficLedger ledger,
         CancellationToken ct)
     {
         var client = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -92,7 +96,7 @@ public static class ClientEndpoints
 
         var endpoint = await configs.FindAsync(client.ConfigId, ct).ConfigureAwait(false);
 
-        return Results.Ok(Answer(client, endpoint, host, guard, Secrets(context)));
+        return Results.Ok(Answer(client, endpoint, host, guard, ledger, Secrets(context)));
     }
 
     private static async Task<IResult> DraftAsync(
@@ -113,7 +117,13 @@ public static class ClientEndpoints
         var address = await FreeAddressAsync(endpoint, store, ct).ConfigureAwait(false);
         var fresh = ClientDefaults.Fresh(config ?? 0, free) with { Address = address };
 
-        return Results.Ok(ClientAnswers.Client(fresh, endpoint?.Name ?? string.Empty, ClientState.Missing(fresh), true, []));
+        return Results.Ok(ClientAnswers.Client(
+            fresh,
+            endpoint?.Name ?? string.Empty,
+            ClientState.Missing(fresh),
+            true,
+            [],
+            ClientTraffic.None));
     }
 
     private static async Task<IReadOnlyList<string>> FreeAddressAsync(
@@ -176,6 +186,7 @@ public static class ClientEndpoints
         ClientStore store,
         ClientHost host,
         ClientGuard guard,
+        TrafficLedger ledger,
         CancellationToken ct)
     {
         var result = await store.AddAsync(ClientAnswers.Draft(request, null), ct).ConfigureAwait(false);
@@ -188,7 +199,7 @@ public static class ClientEndpoints
 
         return Results.Created(
             $"/api/clients/{result.Record.Id}",
-            Answer(result.Record, endpoint, host, guard, true));
+            Answer(result.Record, endpoint, host, guard, ledger, true));
     }
 
     private static async Task<IResult> AddDeviceAsync(
@@ -197,6 +208,7 @@ public static class ClientEndpoints
         ClientStore store,
         ClientHost host,
         ClientGuard guard,
+        TrafficLedger ledger,
         CancellationToken ct)
     {
         var result = await store.AddDeviceAsync(id, ct).ConfigureAwait(false);
@@ -209,7 +221,7 @@ public static class ClientEndpoints
 
         return Results.Created(
             $"/api/clients/{result.Record.Id}",
-            Answer(result.Record, endpoint, host, guard, true));
+            Answer(result.Record, endpoint, host, guard, ledger, true));
     }
 
     private static async Task<IResult> ChangeAsync(
@@ -219,6 +231,7 @@ public static class ClientEndpoints
         ClientStore store,
         ClientHost host,
         ClientGuard guard,
+        TrafficLedger ledger,
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -238,7 +251,7 @@ public static class ClientEndpoints
             : [held.PublicKey];
         var endpoint = await SettleAsync(result.Record.ConfigId, gone, configs, store, host, ct).ConfigureAwait(false);
 
-        return Results.Ok(Answer(result.Record, endpoint, host, guard, true));
+        return Results.Ok(Answer(result.Record, endpoint, host, guard, ledger, true));
     }
 
     private static async Task<IResult> SwitchAsync(
@@ -248,6 +261,7 @@ public static class ClientEndpoints
         ClientStore store,
         ClientHost host,
         ClientGuard guard,
+        TrafficLedger ledger,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -260,7 +274,7 @@ public static class ClientEndpoints
 
         var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, ct).ConfigureAwait(false);
 
-        return Results.Ok(Answer(result.Record, endpoint, host, guard, true));
+        return Results.Ok(Answer(result.Record, endpoint, host, guard, ledger, true));
     }
 
     private static async Task<IResult> RemoveAsync(
@@ -337,6 +351,7 @@ public static class ClientEndpoints
         ServerConfig? endpoint,
         ClientHost host,
         ClientGuard guard,
+        TrafficLedger ledger,
         bool secrets)
     {
         var state = endpoint is null
@@ -344,7 +359,7 @@ public static class ClientEndpoints
             : Seen(host.States(endpoint, [client])[0], endpoint, client, guard);
         var cut = endpoint is null ? Array.Empty<string>() : guard.Cut(endpoint.Name, client.PublicKey);
 
-        return ClientAnswers.Client(client, endpoint?.Name ?? string.Empty, state, secrets, cut);
+        return ClientAnswers.Client(client, endpoint?.Name ?? string.Empty, state, secrets, cut, ledger.Of(client));
     }
 
     private static ClientState Seen(ClientState state, ServerConfig endpoint, TunnelClient client, ClientGuard guard) =>

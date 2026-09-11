@@ -34,6 +34,16 @@ public sealed class Clock : TimeProvider
     /// Moves the clock forward.
     /// </summary>
     public void Pass(TimeSpan span) => Now += span;
+
+    /// <summary>
+    /// The time zone the clock tells the local time in.
+    /// </summary>
+    public TimeZoneInfo Zone { get; set; } = TimeZoneInfo.Utc;
+
+    /// <summary>
+    /// Returns the time zone the clock tells the local time in.
+    /// </summary>
+    public override TimeZoneInfo LocalTimeZone => Zone;
 }
 
 /// <summary>
@@ -137,6 +147,8 @@ public sealed class Bench : IDisposable
     public IRefreshTokens RefreshTokens { get; }
 
     public IAuditLog Audit { get; }
+
+    public IServiceScopeFactory Scopes => _services.GetRequiredService<IServiceScopeFactory>();
 
     public TokenIssuer Issuer { get; }
 

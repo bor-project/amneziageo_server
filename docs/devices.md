@@ -22,8 +22,9 @@ never serves two devices at once: several devices of one person take a configura
 
 A client with **Several devices** on takes devices. **Add device** in the menu of the client creates one with a
 key pair, an address and a subscription of its own, named after the client with a number (`milena-2`), and
-opens its configuration. A device takes the interface, the preshared key and the template of its client;
-turning the client off or on, changing its template and removing it carry over to its devices. A device is
+opens its configuration. A device takes the interface, the preshared key, the template and the daily limit of its client;
+turning the client off or on, changing its template or its limit and removing it carry over to its devices, and
+the limit counts the client together with its devices. A device is
 listed under its client with its own configuration, traffic and handshake, takes no devices of its own and is
 not edited on its own. **Several devices** turns off only once the devices are removed.
 

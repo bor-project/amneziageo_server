@@ -218,6 +218,7 @@ public sealed class ClientStore
             PresharedKey = parent.PresharedKey,
             TemplateId = parent.TemplateId,
             IsEnabled = parent.IsEnabled,
+            DailyLimit = parent.DailyLimit,
             ParentId = parent.Id,
         };
 
@@ -243,7 +244,7 @@ public sealed class ClientStore
     }
 
     /// <summary>
-    /// Replaces the settings of a client, carrying its state and its template over to its devices.
+    /// Replaces the settings of a client, carrying its state, its template and its daily limit over to its devices.
     /// </summary>
     public async Task<ClientResult> ChangeAsync(long id, TunnelClient draft, CancellationToken ct)
     {
@@ -260,6 +261,7 @@ public sealed class ClientStore
             ConfigId = entity.ConfigId,
             ParentId = entity.ParentId,
             MultiDevice = entity.ParentId is null && draft.MultiDevice,
+            DailyLimit = entity.ParentId is null ? draft.DailyLimit : entity.DailyLimit,
         };
         if (entity.MultiDevice && !wanted.MultiDevice
             && await _db.Clients.AnyAsync(client => client.ParentId == id, ct).ConfigureAwait(false))
@@ -275,7 +277,7 @@ public sealed class ClientStore
         var now = _time.GetUtcNow();
         Write(entity, wanted);
         entity.UpdatedUtc = now;
-        await FollowAsync(id, wanted.IsEnabled, wanted.TemplateId, now, ct).ConfigureAwait(false);
+        await FollowAsync(id, wanted.IsEnabled, wanted.TemplateId, wanted.DailyLimit, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ClientResult.Done(Read(entity));
@@ -295,7 +297,7 @@ public sealed class ClientStore
         var now = _time.GetUtcNow();
         entity.IsEnabled = on;
         entity.UpdatedUtc = now;
-        await FollowAsync(id, on, entity.TemplateId, now, ct).ConfigureAwait(false);
+        await FollowAsync(id, on, entity.TemplateId, entity.DailyLimit, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ClientResult.Done(Read(entity));
@@ -321,13 +323,20 @@ public sealed class ClientStore
         return ClientResult.Done(gone);
     }
 
-    private async Task FollowAsync(long parentId, bool on, long? template, DateTimeOffset now, CancellationToken ct)
+    private async Task FollowAsync(
+        long parentId,
+        bool on,
+        long? template,
+        long limit,
+        DateTimeOffset now,
+        CancellationToken ct)
     {
         var devices = await _db.Clients.Where(client => client.ParentId == parentId).ToListAsync(ct).ConfigureAwait(false);
         foreach (var device in devices)
         {
             device.IsEnabled = on;
             device.TemplateId = template;
+            device.DailyLimit = limit;
             device.UpdatedUtc = now;
         }
     }
@@ -443,6 +452,7 @@ public sealed class ClientStore
         SubscriptionId = entity.SubscriptionId,
         ParentId = entity.ParentId,
         MultiDevice = entity.MultiDevice,
+        DailyLimit = entity.DailyLimit,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
     };
@@ -460,6 +470,7 @@ public sealed class ClientStore
         entity.SubscriptionId = client.SubscriptionId.Trim();
         entity.ParentId = client.ParentId;
         entity.MultiDevice = client.MultiDevice;
+        entity.DailyLimit = client.DailyLimit;
     }
 
     private static TunnelClient Whole(TunnelClient draft) => draft with

@@ -467,9 +467,31 @@ public sealed class ClientEntity
 
     public bool MultiDevice { get; set; }
 
+    public long DailyLimit { get; set; }
+
     public DateTimeOffset CreatedUtc { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// The traffic of one client over one day as the database holds it.
+/// </summary>
+public sealed class TrafficEntity
+{
+    public long Id { get; set; }
+
+    public long ClientId { get; set; }
+
+    public DateOnly Day { get; set; }
+
+    public long Rx { get; set; }
+
+    public long Tx { get; set; }
+
+    public long SeenRx { get; set; }
+
+    public long SeenTx { get; set; }
 }
 
 /// <summary>

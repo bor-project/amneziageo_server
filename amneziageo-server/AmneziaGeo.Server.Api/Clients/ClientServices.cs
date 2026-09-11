@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Routing.Host;
+using AmneziaGeo.Server.Routing.Traffic;
 
 namespace AmneziaGeo.Server.Api.Clients;
 
@@ -24,11 +25,13 @@ public static class ClientServices
         services.AddSingleton(options);
         services.AddSingleton(guard);
         services.AddSingleton<InterfaceFile>();
+        services.AddSingleton<TrafficLedger>();
         services.AddSingleton<ClientHost>();
         services.AddScoped<TemplateRefresher>();
         services.AddHostedService<ClientBoot>();
         services.AddSingleton<ClientGuard>();
         services.AddHostedService(provider => provider.GetRequiredService<ClientGuard>());
+        services.AddHostedService<ClientMeter>();
 
         return services;
     }

@@ -60,6 +60,7 @@ public static class ServerDatabase
         services.AddSingleton<IGeoFileStore>(new DiskGeoFiles(geoPath ?? DiskGeoFiles.PathNear(path)));
         services.AddScoped<ConfigStore>();
         services.AddScoped<ClientStore>();
+        services.AddScoped<TrafficStore>();
         services.AddScoped<GeoStore>();
         services.AddScoped<OutboundStore>();
         services.AddScoped<RouteStore>();

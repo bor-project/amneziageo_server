@@ -54,6 +54,7 @@ const complaints: Record<string, TextKey> = {
   "client-address-reserved": "error.clientAddressReserved",
   "unknown-client": "error.unknownClient",
   "bad-client-subscription": "error.badClientSubscription",
+  "bad-client-limit": "error.badClientLimit",
   "client-single-device": "error.clientSingleDevice",
   "client-is-device": "error.clientIsDevice",
   "client-has-devices": "error.clientHasDevices",

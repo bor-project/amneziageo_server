@@ -38,6 +38,7 @@ export function ClientForm({
   const [draft, setDraft] = useState(start)
   const [number, setNumber] = useState<string | null>(null)
   const [text, setText] = useState<string | null>(null)
+  const [limit, setLimit] = useState(gigabytes(start.dailyLimit))
   const spans = spansOf(configs, draft.configId)
   const taken = holders(others, draft.configId)
   const legacy = start.address.length > 0 && carried(spans, start.address) === null
@@ -54,11 +55,13 @@ export function ClientForm({
   const derived = whole ? rest.map((one) => nth(one, BigInt(shown))).join(", ") : ""
   const clash = others.some((one) => one.name.toLowerCase() === draft.name.trim().toLowerCase())
   const misnamed = !/^[A-Za-z0-9_-]{0,64}$/.test(draft.subscriptionId)
+  const allowed = allowanceOf(limit)
   const ready =
     !pending &&
     draft.name.trim().length > 0 &&
     !clash &&
     !misnamed &&
+    allowed !== null &&
     draft.configId > 0 &&
     (legacy ? parts(listed).length > 0 : whole && spans.length > 0 && problem.length === 0)
 
@@ -90,7 +93,7 @@ export function ClientForm({
           </button>
           <button
             type="button"
-            onClick={() => onSave({ ...draft, name: draft.name.trim(), address: addresses() })}
+            onClick={() => onSave({ ...draft, name: draft.name.trim(), address: addresses(), dailyLimit: allowed ?? 0 })}
             disabled={!ready}
             className={primary}
           >
@@ -162,7 +165,6 @@ export function ClientForm({
           caption={t("clients.template")}
           value={draft.templateId === null ? "" : String(draft.templateId)}
           onChange={(value) => put({ templateId: value === "" ? null : Number(value) })}
-          wide
         >
           <option value="">{t("clients.noTemplate")}</option>
           {(templates.data ?? []).map((one) => (
@@ -171,6 +173,15 @@ export function ClientForm({
             </option>
           ))}
         </Pick>
+
+        <Line
+          id="client-limit"
+          caption={t("clients.limit")}
+          value={limit}
+          placeholder={t("clients.noLimit")}
+          onChange={(value) => setLimit(value.trim())}
+          fault={allowed === null ? t("error.badClientLimit") : ""}
+        />
 
         <Line
           id="client-subscription"
@@ -287,6 +298,26 @@ function fault(t: Text, spans: Span[], taken: Map<string, string>, shown: string
   }
 
   return ""
+}
+
+const gibibyte = 1024 ** 3
+
+function gigabytes(value: number): string {
+  return value > 0 ? String(Number((value / gibibyte).toFixed(2))) : ""
+}
+
+function allowanceOf(text: string): number | null {
+  if (text.length === 0) {
+    return 0
+  }
+
+  if (!/^\d+([.,]\d+)?$/.test(text)) {
+    return null
+  }
+
+  const value = Math.round(Number(text.replace(",", ".")) * gibibyte)
+
+  return value > 0 && value <= 2 ** 50 ? value : null
 }
 
 function parts(text: string): string[] {

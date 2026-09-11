@@ -30,6 +30,11 @@ public static partial class ClientRules
     public const int MaxSubscriptionLength = 64;
 
     /// <summary>
+    /// The most bytes a day a client is limited to.
+    /// </summary>
+    public const long MaxDailyLimit = 1L << 50;
+
+    /// <summary>
     /// Returns why the settings of a client are unusable, or null when they hold.
     /// </summary>
     public static ClientFault? Check(TunnelClient client)
@@ -41,7 +46,8 @@ public static partial class ClientRules
             ?? CheckPreshared(client.PresharedKey)
             ?? CheckAddress(client.Address)
             ?? CheckNote(client.Note)
-            ?? CheckSubscription(client.SubscriptionId);
+            ?? CheckSubscription(client.SubscriptionId)
+            ?? CheckLimit(client.DailyLimit);
     }
 
     /// <summary>
@@ -124,6 +130,11 @@ public static partial class ClientRules
         string.IsNullOrEmpty(id) || IsSubscription(id)
             ? null
             : Fault("bad-client-subscription", $"the subscription takes letters, digits, dash and underscore, up to {MaxSubscriptionLength}");
+
+    private static ClientFault? CheckLimit(long limit) =>
+        limit is >= 0 and <= MaxDailyLimit
+            ? null
+            : Fault("bad-client-limit", $"the daily limit lies outside 0 to {MaxDailyLimit} bytes");
 
     private static ClientFault Fault(string code, string message) => new(code, message);
 

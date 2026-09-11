@@ -172,7 +172,7 @@ public class SubscriptionTests
     [Fact]
     public void TheBodyCarriesTheLinksLineByLineInBase64()
     {
-        var feed = new ClientFeed(["vpn://one", "vpn://two"], 10, 20);
+        var feed = new ClientFeed(["vpn://one", "vpn://two"], 10, 20, 0);
 
         Assert.Equal("vpn://one\nvpn://two", Encoding.UTF8.GetString(Convert.FromBase64String(feed.Body)));
         Assert.Equal("upload=10; download=20; total=0; expire=0", feed.Usage);
@@ -193,11 +193,32 @@ public class SubscriptionTests
             Member(2, "dima"),
         };
 
-        var feed = ClientFeed.Of([on, off], members, new Dictionary<long, ClientTemplate>(), Counted);
+        var feed = ClientFeed.Of([on, off], members, new Dictionary<long, ClientTemplate>(), _ => new ClientUsage(5, 7));
 
         Assert.Equal([ClientLink.Link(on, milena)], feed.Links);
         Assert.Equal(5UL, feed.Upload);
         Assert.Equal(7UL, feed.Download);
+    }
+
+    [Fact]
+    public void AFeedCountsAClientWithItsDevicesOnceAndAddsUpTheLimits()
+    {
+        var on = Endpoint(1, "awg1");
+        var owner = Member(1, "milena") with { Id = 1, MultiDevice = true, DailyLimit = 100 };
+        var device = Member(1, "milena-2") with { Id = 2, ParentId = 1, DailyLimit = 100 };
+        var other = Member(1, "bogdan") with { Id = 3, DailyLimit = 50 };
+        var templates = new Dictionary<long, ClientTemplate>();
+
+        var feed = ClientFeed.Of([on], [owner, device, other], templates, Used);
+        var open = ClientFeed.Of([on], [owner, other with { DailyLimit = 0 }], templates, Used);
+
+        Assert.Equal(11UL, feed.Upload);
+        Assert.Equal(22UL, feed.Download);
+        Assert.Equal(150UL, feed.Total);
+        Assert.Equal("upload=11; download=22; total=150; expire=0", feed.Usage);
+        Assert.Equal(0UL, open.Total);
+
+        static ClientUsage Used(TunnelClient client) => client.Id == 3 ? new ClientUsage(1, 2) : new ClientUsage(10, 20);
     }
 
     [Fact]
@@ -296,9 +317,6 @@ public class SubscriptionTests
 
     private static TunnelClient Member(long configId, string name) =>
         ClientDefaults.Fresh(configId, name) with { Address = ["10.8.0.2/32"], SubscriptionId = "family" };
-
-    private static IReadOnlyList<ClientState> Counted(ServerConfig endpoint, IReadOnlyList<TunnelClient> clients) =>
-        [.. clients.Select(one => new ClientState(one.Name, one.PublicKey, true, true, null, 5, 7, string.Empty))];
 
     private static async Task<long> EndpointAsync(Bench bench)
     {

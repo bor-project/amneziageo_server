@@ -71,6 +71,11 @@ public sealed record TunnelClient
     public bool MultiDevice { get; init; }
 
     /// <summary>
+    /// How many bytes a day the client moves together with its devices, 0 for no limit.
+    /// </summary>
+    public long DailyLimit { get; init; }
+
+    /// <summary>
     /// When the client was added.
     /// </summary>
     public DateTimeOffset CreatedUtc { get; init; }

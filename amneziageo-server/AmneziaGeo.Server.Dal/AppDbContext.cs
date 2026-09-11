@@ -35,6 +35,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<ClientEntity> Clients => Set<ClientEntity>();
 
+    public DbSet<TrafficEntity> Traffic => Set<TrafficEntity>();
+
     public DbSet<GeoSourceEntity> GeoSources => Set<GeoSourceEntity>();
 
     public DbSet<OutboundEntity> Outbounds => Set<OutboundEntity>();
@@ -118,6 +120,15 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.HasIndex(client => client.TemplateId);
             entity.HasIndex(client => client.SubscriptionId);
             entity.HasIndex(client => client.ParentId);
+        });
+
+        builder.Entity<TrafficEntity>(entity =>
+        {
+            entity.HasIndex(row => new { row.ClientId, row.Day }).IsUnique();
+            entity.HasOne<ClientEntity>()
+                .WithMany()
+                .HasForeignKey(row => row.ClientId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<TemplateEntity>(entity =>

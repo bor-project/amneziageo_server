@@ -1,6 +1,6 @@
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Dal;
-using AmneziaGeo.Server.Routing.Host;
+using AmneziaGeo.Server.Routing.Traffic;
 
 namespace AmneziaGeo.Server.Api.Subscriptions;
 
@@ -15,17 +15,17 @@ public sealed class SubscriptionFeed
 
     private readonly TemplateStore _templates;
 
-    private readonly ClientHost _host;
+    private readonly TrafficLedger _ledger;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public SubscriptionFeed(ClientStore clients, ConfigStore configs, TemplateStore templates, ClientHost host)
+    public SubscriptionFeed(ClientStore clients, ConfigStore configs, TemplateStore templates, TrafficLedger ledger)
     {
         _clients = clients;
         _configs = configs;
         _templates = templates;
-        _host = host;
+        _ledger = ledger;
     }
 
     /// <summary>
@@ -42,6 +42,6 @@ public sealed class SubscriptionFeed
         var endpoints = await _configs.ListAsync(ct).ConfigureAwait(false);
         var templates = await _templates.ListAsync(ct).ConfigureAwait(false);
 
-        return ClientFeed.Of(endpoints, members, templates.ToDictionary(one => one.Id), _host.States);
+        return ClientFeed.Of(endpoints, members, templates.ToDictionary(one => one.Id), _ledger.Group);
     }
 }
