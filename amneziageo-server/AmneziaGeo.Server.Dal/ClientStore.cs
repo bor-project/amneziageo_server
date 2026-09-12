@@ -137,6 +137,23 @@ public sealed class ClientStore
     }
 
     /// <summary>
+    /// Returns the client that carries a public key, or null when the panel holds none.
+    /// </summary>
+    public async Task<TunnelClient?> FindByKeyAsync(string publicKey, CancellationToken ct)
+    {
+        if (publicKey is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        var found = await _db.Clients.AsNoTracking()
+            .FirstOrDefaultAsync(client => client.PublicKey == publicKey, ct)
+            .ConfigureAwait(false);
+
+        return found is null ? null : Read(found);
+    }
+
+    /// <summary>
     /// Returns the addresses the clients of an endpoint already carry.
     /// </summary>
     public async Task<IReadOnlyList<string>> AddressesAsync(long configId, CancellationToken ct)

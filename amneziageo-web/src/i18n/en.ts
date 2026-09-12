@@ -374,6 +374,7 @@ export const en = {
   "configs.enabled": "Raise the interface",
   "configs.inbound": "Access to the clients",
   "configs.opened": "Open the port in the firewall",
+  "configs.speed": "Speed measured against the server",
   "configs.nat": "NAT for clients",
   "configs.apply": "Apply",
   "configs.applied": "The interface is up",

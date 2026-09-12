@@ -376,6 +376,7 @@ export const ru: Dictionary = {
   "configs.enabled": "Поднимать интерфейс",
   "configs.inbound": "Доступ к клиентам",
   "configs.opened": "Открыть порт в брандмауэре",
+  "configs.speed": "Замер скорости до сервера",
   "configs.nat": "NAT для клиентов",
   "configs.apply": "Применить",
   "configs.applied": "Интерфейс поднят",

@@ -128,6 +128,12 @@ export function ConfigForm({
           value={draft.opened}
           onChange={(value) => put({ opened: value })}
         />
+        <Flag
+          id="config-speed"
+          caption={t("configs.speed")}
+          value={draft.speed}
+          onChange={(value) => put({ speed: value })}
+        />
         <Pick
           id="config-inbound"
           caption={t("configs.inbound")}
