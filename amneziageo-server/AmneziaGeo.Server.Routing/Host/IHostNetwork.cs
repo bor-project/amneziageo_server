@@ -64,4 +64,9 @@ public interface IHostNetwork
     /// Reads a firewall ruleset without putting it on the host.
     /// </summary>
     Task CheckFirewallAsync(string ruleset, CancellationToken ct);
+
+    /// <summary>
+    /// Returns an inet table of the firewall in the JSON of nft, empty when the host holds no such table.
+    /// </summary>
+    Task<string> ReadFirewallAsync(string table, CancellationToken ct);
 }

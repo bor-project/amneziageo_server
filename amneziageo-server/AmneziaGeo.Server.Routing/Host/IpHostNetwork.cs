@@ -1,3 +1,7 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text.Json;
+
 namespace AmneziaGeo.Server.Routing.Host;
 
 /// <summary>
@@ -51,14 +55,22 @@ public sealed class IpHostNetwork : IHostNetwork
         RunAsync([Ip, "link", "del", name], ct);
 
     /// <summary>
-    /// Replaces the address ranges of an interface.
+    /// Replaces the address ranges of an interface, leaving the ones it already carries in place.
     /// </summary>
     public async Task AddressAsync(string name, IReadOnlyList<string> addresses, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(addresses);
 
-        await RunAsync([Ip, "address", "flush", "dev", name], ct).ConfigureAwait(false);
-        foreach (var address in addresses)
+        var wanted = addresses.Select(Canonical).ToHashSet(StringComparer.Ordinal);
+        var held = await AddressesAsync(name, ct).ConfigureAwait(false) ?? await FlushAsync(name, ct).ConfigureAwait(false);
+        var dropped = held.Where(address => !wanted.Contains(address)).ToList();
+        foreach (var address in dropped)
+        {
+            await RunAsync([Ip, "address", "del", address, "dev", name], ct).ConfigureAwait(false);
+        }
+
+        var left = dropped.Count == 0 ? held : await AddressesAsync(name, ct).ConfigureAwait(false) ?? held;
+        foreach (var address in addresses.Where(address => !left.Contains(Canonical(address))))
         {
             await RunAsync([Ip, "address", "add", address, "dev", name], ct).ConfigureAwait(false);
         }
@@ -165,6 +177,17 @@ public sealed class IpHostNetwork : IHostNetwork
     /// </summary>
     public Task CheckFirewallAsync(string ruleset, CancellationToken ct) => NftAsync(ruleset, true, ct);
 
+    /// <summary>
+    /// Returns an inet table of the firewall in the JSON of nft, empty when the host holds no such table.
+    /// </summary>
+    public async Task<string> ReadFirewallAsync(string table, CancellationToken ct)
+    {
+        var result = await _commands.RunAsync(Nft, ["-j", "list", "table", "inet", table], null, ct)
+            .ConfigureAwait(false);
+
+        return result.IsOk ? result.Output : string.Empty;
+    }
+
     private async Task NftAsync(string ruleset, bool dry, CancellationToken ct)
     {
         var arguments = dry ? (string[])["-c", "-f", "-"] : ["-f", "-"];
@@ -183,6 +206,69 @@ public sealed class IpHostNetwork : IHostNetwork
 
         return result.IsOk && result.Output.Contains($"fwmark 0x{mark:x}", StringComparison.OrdinalIgnoreCase);
     }
+
+    private async Task<HashSet<string>?> AddressesAsync(string name, CancellationToken ct)
+    {
+        var result = await _commands.RunAsync(Ip, ["-j", "address", "show", "dev", name], null, ct)
+            .ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(result.Output);
+            var held = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var link in document.RootElement.EnumerateArray())
+            {
+                if (!link.TryGetProperty("addr_info", out var infos))
+                {
+                    continue;
+                }
+
+                foreach (var info in infos.EnumerateArray())
+                {
+                    if (info.TryGetProperty("scope", out var scope) && scope.GetString() == "link")
+                    {
+                        continue;
+                    }
+
+                    held.Add(Canonical($"{info.GetProperty("local").GetString()}/{info.GetProperty("prefixlen").GetInt32()}"));
+                }
+            }
+
+            return held;
+        }
+        catch (Exception ex)
+            when (ex is JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
+        {
+            return null;
+        }
+    }
+
+    private async Task<HashSet<string>> FlushAsync(string name, CancellationToken ct)
+    {
+        await RunAsync([Ip, "address", "flush", "dev", name], ct).ConfigureAwait(false);
+
+        return [];
+    }
+
+    private static string Canonical(string address)
+    {
+        var slash = address.IndexOf('/', StringComparison.Ordinal);
+        var text = slash < 0 ? address.Trim() : address[..slash].Trim();
+        if (!IPAddress.TryParse(text, out var parsed))
+        {
+            return address.Trim();
+        }
+
+        var full = parsed.AddressFamily == AddressFamily.InterNetworkV6 ? 128 : 32;
+
+        return $"{parsed}/{(slash < 0 ? full : Length(address[(slash + 1)..], full))}";
+    }
+
+    private static int Length(string text, int full) => int.TryParse(text.Trim(), out var length) ? length : full;
 
     private async Task RunAsync(IReadOnlyList<string> words, CancellationToken ct)
     {

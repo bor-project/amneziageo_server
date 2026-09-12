@@ -394,6 +394,51 @@ public class ProxyTests
         Assert.DoesNotContain("dport", text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AProxyWhoseFilesStayTheSameIsLeftRunning()
+    {
+        var tools = new Tools();
+        var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var host = new ProxyHost(tools, new Ledger(), directory);
+        var proxy = Fresh() with { IsEnabled = true, Path = "v1" };
+
+        try
+        {
+            await host.ApplyAsync(proxy, [51820], "/tls/chain.pem", "/tls/key.pem", CancellationToken.None);
+            var state = await host.ApplyAsync(proxy, [51820], "/tls/chain.pem", "/tls/key.pem", CancellationToken.None);
+
+            Assert.True(state.IsRunning);
+            Assert.Equal(1, tools.Calls.Count(call => call.StartsWith("systemctl restart", StringComparison.Ordinal)));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
+    public async Task AProxyStartsOverWhenItsFilesChangeOrItsServiceIsDown()
+    {
+        var tools = new Tools();
+        var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var host = new ProxyHost(tools, new Ledger(), directory);
+        var proxy = Fresh() with { IsEnabled = true, Path = "v1" };
+
+        try
+        {
+            await host.ApplyAsync(proxy, [51820], "/tls/chain.pem", "/tls/key.pem", CancellationToken.None);
+            await host.ApplyAsync(proxy, [51820, 443], "/tls/chain.pem", "/tls/key.pem", CancellationToken.None);
+            tools.Answers["systemctl is-active"] = new CommandResult(3, "inactive", string.Empty);
+            await host.ApplyAsync(proxy, [51820, 443], "/tls/chain.pem", "/tls/key.pem", CancellationToken.None);
+
+            Assert.Equal(3, tools.Calls.Count(call => call.StartsWith("systemctl restart", StringComparison.Ordinal)));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
     private static ProxyConfig Fresh() => ProxyDefaults.Fresh(ProxyDefaults.FirstName);
 
     private static int Count(string text, string part)

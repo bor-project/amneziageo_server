@@ -475,6 +475,103 @@ public class ClientTests
         },
     };
 
+    [Fact]
+    public void AForwardIsReadAndWrittenAsProtocolAndPorts()
+    {
+        Assert.True(PortForward.TryParse("tcp:2222:22", out var found));
+        Assert.Equal(new PortForward("tcp", 2222, 22), found);
+        Assert.Equal("udp:5353:53", new PortForward("udp", 5353, 53).ToString());
+        Assert.False(PortForward.TryParse("sctp:1:1", out _));
+        Assert.False(PortForward.TryParse("tcp:0:22", out _));
+        Assert.False(PortForward.TryParse("tcp:65536:22", out _));
+        Assert.False(PortForward.TryParse("tcp:22", out _));
+    }
+
+    [Fact]
+    public void AClientWithABadNetworkOrPortIsRefused()
+    {
+        Assert.Equal(
+            "bad-client-routes",
+            ClientRules.Check(Client() with { Routes = ["not-a-network"] })!.Code);
+        Assert.Equal(
+            "bad-client-routes",
+            ClientRules.Check(Client() with { Routes = ["192.168.88.7/24"] })!.Code);
+        Assert.Equal(
+            "bad-client-forward",
+            ClientRules.Check(Client() with { Forwards = [new PortForward("tcp", 0, 22)] })!.Code);
+        Assert.Equal(
+            "bad-client-forward",
+            ClientRules.Check(Client() with
+            {
+                Forwards = [new PortForward("tcp", 2222, 22), new PortForward("tcp", 2222, 23)],
+            })!.Code);
+        Assert.Equal(
+            "bad-client-inbound",
+            ClientRules.Check(Client() with { Inbound = (ClientInbound)7 })!.Code);
+        Assert.Null(ClientRules.Check(Client() with
+        {
+            Routes = ["192.168.88.0/24"],
+            Forwards = [new PortForward("tcp", 2222, 22), new PortForward("udp", 2222, 22)],
+            Inbound = ClientInbound.Network,
+        }));
+    }
+
+    [Fact]
+    public void TheNetworksBehindAClientGoIntoItsPeer()
+    {
+        var peer = ClientDevice.Peer(Endpoint(), Client() with { Routes = ["192.168.88.0/24"] });
+
+        Assert.Equal(["10.8.0.2/32", "192.168.88.0/24"], peer.AllowedIps!.Select(range => range.ToString()));
+    }
+
+    [Fact]
+    public void TheFileOfAClientNamesWhatItTakesFromTheTunnel()
+    {
+        var client = Client() with { Inbound = ClientInbound.Network, Routes = ["192.168.88.0/24"] };
+
+        var text = ClientText.Text(Endpoint(), client);
+
+        Assert.Contains("# AmneziaGeo Inbound = network\n", text, StringComparison.Ordinal);
+        Assert.Contains("# AmneziaGeo Routes = 192.168.88.0/24\n", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("AmneziaGeo", ClientText.Text(Endpoint(), Client()), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheLinkCarriesWhatTheClientTakesFromTheTunnel()
+    {
+        var client = Client() with { Inbound = ClientInbound.Server, Routes = ["192.168.88.0/24"] };
+
+        using var document = Opened(ClientLink.Link(Endpoint(), client));
+        var reverse = document.RootElement.GetProperty("amneziageo");
+
+        Assert.Equal("server", reverse.GetProperty("inbound").GetString());
+        Assert.Equal("192.168.88.0/24", reverse.GetProperty("routes")[0].GetString());
+    }
+
+    [Fact]
+    public void TheFileOfAClientNamesWhatTheEndpointLetsIn()
+    {
+        var endpoint = Endpoint() with { Inbound = ClientInbound.Network };
+        var client = Client() with { Inbound = ClientInbound.Endpoint };
+
+        var text = ClientText.Text(endpoint, client);
+
+        Assert.Contains("# AmneziaGeo Inbound = network", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("endpoint", text, StringComparison.Ordinal);
+
+        using var document = Opened(ClientLink.Link(endpoint, client));
+
+        Assert.Equal("network", document.RootElement.GetProperty("amneziageo").GetProperty("inbound").GetString());
+    }
+
+    [Fact]
+    public void AnEndpointTakesNoAccessOfItsOwnBeyondTheThree()
+    {
+        Assert.Equal("bad-inbound", ConfigRules.CheckInbound(ClientInbound.Endpoint)!.Code);
+        Assert.Null(ConfigRules.CheckInbound(ClientInbound.Network));
+        Assert.Null(ConfigRules.CheckInbound(ClientInbound.Off));
+    }
+
     private static TunnelClient Client(string name = "milena") => new()
     {
         ConfigId = 1,

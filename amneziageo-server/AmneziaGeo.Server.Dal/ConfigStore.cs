@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using Microsoft.EntityFrameworkCore;
@@ -203,6 +204,7 @@ public sealed class ConfigStore
         OfflineAfter = entity.OfflineAfter,
         IsEnabled = entity.IsEnabled,
         Nat = entity.Nat,
+        Inbound = (ClientInbound)entity.Inbound,
         Blocked = Parts(entity.Blocked),
         PrivateKey = entity.PrivateKey,
         PublicKey = entity.PublicKey,
@@ -252,6 +254,7 @@ public sealed class ConfigStore
         entity.OfflineAfter = config.OfflineAfter;
         entity.IsEnabled = config.IsEnabled;
         entity.Nat = config.Nat;
+        entity.Inbound = (int)config.Inbound;
         entity.Blocked = string.Join(", ", config.Blocked);
         entity.PrivateKey = config.PrivateKey;
         entity.PublicKey = Curve25519.PublicOf(config.PrivateKey);

@@ -139,6 +139,38 @@ public class OutboundHostTests
         Assert.Null(state.LastHandshake);
     }
 
+    [Fact]
+    public async Task AnInterfaceCarryingTheServerAloneKeepsItsPeer()
+    {
+        var ledger = new Ledger();
+        ledger.Links.Add("awgbor");
+        var kernel = new Kernel();
+        kernel.Hold(new AwgDevice { Name = "awgbor", Peers = [new AwgPeer { PublicKey = Tunnel().PeerKey }] });
+        var host = new OutboundHost(ledger, kernel, new Clock(Now));
+
+        await host.ApplyAsync(Tunnel(), CancellationToken.None);
+
+        Assert.False(Assert.Single(kernel.Updates).ReplacePeers);
+    }
+
+    [Fact]
+    public async Task AnInterfaceCarryingAnotherPeerHasItsPeersReplaced()
+    {
+        var ledger = new Ledger();
+        ledger.Links.Add("awgbor");
+        var kernel = new Kernel();
+        kernel.Hold(new AwgDevice
+        {
+            Name = "awgbor",
+            Peers = [new AwgPeer { PublicKey = Tunnel().PeerKey }, new AwgPeer { PublicKey = "IVOnjpSCrj9ctUFhwHTlp9GJo0ixYj8f+4KFqzt9n2Q=" }],
+        });
+        var host = new OutboundHost(ledger, kernel, new Clock(Now));
+
+        await host.ApplyAsync(Tunnel(), CancellationToken.None);
+
+        Assert.True(Assert.Single(kernel.Updates).ReplacePeers);
+    }
+
     private static OutboundConfig Tunnel() => new()
     {
         Name = "awgbor",

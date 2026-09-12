@@ -2,9 +2,10 @@ import { useState } from "react"
 import { complaint } from "@/api/auth"
 import { useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
+import type { Inbound } from "@/api/clients"
 import { Modal } from "@/components/Modal"
 import { ObfuscationFields } from "@/components/Obfuscation"
-import { Count, Flag, Line, Section } from "@/components/fields"
+import { Count, Flag, Line, Pick, Section } from "@/components/fields"
 import { field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
 import { useText } from "@/i18n"
@@ -121,6 +122,17 @@ export function ConfigForm({
           value={draft.nat}
           onChange={(value) => put({ nat: value })}
         />
+        <Pick
+          id="config-inbound"
+          caption={t("configs.inbound")}
+          value={draft.inbound}
+          onChange={(value) => put({ inbound: value as Inbound })}
+          wide
+        >
+          <option value="off">{t("clients.inboundOff")}</option>
+          <option value="server">{t("clients.inboundServer")}</option>
+          <option value="network">{t("clients.inboundNetwork")}</option>
+        </Pick>
       </Section>
 
       <Section title={t("configs.clients")}>

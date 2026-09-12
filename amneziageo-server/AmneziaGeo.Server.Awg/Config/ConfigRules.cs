@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.RegularExpressions;
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Crypto;
 
@@ -81,6 +82,7 @@ public static partial class ConfigRules
         ?? CheckOfflineAfter(config.OfflineAfter, config.Keepalive)
         ?? CheckKey(config.PrivateKey)
         ?? CheckPreshared(config.PresharedKey)
+        ?? CheckInbound(config.Inbound)
         ?? CheckObfuscation(config.Obfuscation);
 
     /// <summary>
@@ -133,6 +135,16 @@ public static partial class ConfigRules
     /// <summary>
     /// Returns why the ranges kept away from clients are unusable, or null when they hold.
     /// </summary>
+    /// <summary>
+    /// Returns why what the clients of an endpoint take from the tunnel is unusable, or null when it holds.
+    /// </summary>
+    public static ConfigFault? CheckInbound(ClientInbound inbound) =>
+        inbound is ClientInbound.Off or ClientInbound.Server or ClientInbound.Network
+            ? null
+            : Fault(
+                "bad-inbound",
+                $"the access to the clients is '{InboundName.Off}', '{InboundName.Server}' or '{InboundName.Network}'");
+
     public static ConfigFault? CheckBlocked(IReadOnlyList<string> ranges)
     {
         ArgumentNullException.ThrowIfNull(ranges);

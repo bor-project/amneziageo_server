@@ -219,7 +219,7 @@ public class DnsPlanTests
     }
 
     [Fact]
-    public async Task TheAddressesComeBackOnceTheRulesAreLaidAnew()
+    public async Task TheAddressesGoToTheHostInTheSameStepAsTheRules()
     {
         var clock = new Clock(new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero));
         var host = new Ledger();
@@ -230,8 +230,9 @@ public class DnsPlanTests
 
         clock.Pass(TimeSpan.FromMinutes(10));
 
-        Assert.Equal(1, await sets.RestoreAsync(plan, CancellationToken.None));
-        Assert.Contains("add element inet amneziageo_rt n1v4 { 1.2.3.4 timeout 3000s }", host.Ruleset, StringComparison.Ordinal);
+        Assert.Equal(1, await sets.LayAsync(RouteRuleset.Text(plan), plan, CancellationToken.None));
+        Assert.StartsWith("table inet amneziageo_rt\n", host.Ruleset, StringComparison.Ordinal);
+        Assert.EndsWith("}\nadd element inet amneziageo_rt n1v4 { 1.2.3.4 timeout 3000s }\n", host.Ruleset, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -245,9 +246,65 @@ public class DnsPlanTests
 
         clock.Pass(TimeSpan.FromMinutes(61));
 
-        Assert.Equal(0, await sets.RestoreAsync(Plan(Rule("youtube.com")), CancellationToken.None));
-        Assert.DoesNotContain("firewall", host.Steps);
+        Assert.Equal(0, await sets.LayAsync("rules\n", Plan(Rule("youtube.com")), CancellationToken.None));
+        Assert.Equal("rules\n", host.Ruleset);
     }
+
+    [Fact]
+    public async Task TheAddressesTheHostHeldComeBackAfterAStart()
+    {
+        var host = new Ledger();
+        host.Tables[RouteRuleset.TableName] = HostSets;
+        var sets = new DnsSets(host, new Clock(new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero)));
+
+        var laid = await sets.LayAsync("rules\n", Plan(Rule("youtube.com")), CancellationToken.None);
+
+        Assert.Equal(2, laid);
+        Assert.Contains("add element inet amneziageo_rt n1v4 { 1.2.3.4 timeout 3000s }", host.Ruleset, StringComparison.Ordinal);
+        Assert.Contains("add element inet amneziageo_rt n1v6 { 2a02:6b8::1 timeout 100s }", host.Ruleset, StringComparison.Ordinal);
+        Assert.DoesNotContain("5.6.7.8", host.Ruleset, StringComparison.Ordinal);
+        Assert.DoesNotContain("9.9.9.0", host.Ruleset, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnAddressTheHostHeldGoesAgainOnceHalfItsLifePassed()
+    {
+        var clock = new Clock(new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero));
+        var host = new Ledger();
+        host.Tables[RouteRuleset.TableName] = HostSets;
+        var sets = new DnsSets(host, clock);
+        await sets.LayAsync("rules\n", Plan(Rule("youtube.com")), CancellationToken.None);
+
+        var early = sets.Add(1, IPAddress.Parse("1.2.3.4"), TimeSpan.FromMinutes(60));
+        clock.Pass(TimeSpan.FromMinutes(21));
+        var late = sets.Add(1, IPAddress.Parse("1.2.3.4"), TimeSpan.FromMinutes(60));
+
+        Assert.False(early);
+        Assert.True(late);
+    }
+
+    [Fact]
+    public async Task TheHostIsReadBackOnceAndAnAnswerItCannotReadIsLeftAside()
+    {
+        var host = new Ledger();
+        host.Tables[RouteRuleset.TableName] = "{ not json";
+        var sets = new DnsSets(host);
+        var plan = Plan(Rule("youtube.com"));
+
+        await sets.LayAsync("rules\n", plan, CancellationToken.None);
+        await sets.LayAsync("rules\n", plan, CancellationToken.None);
+
+        Assert.Equal(1, host.Steps.Count(step => step == "read amneziageo_rt"));
+        Assert.Equal("rules\n", host.Ruleset);
+    }
+
+    private const string HostSets = """
+        {"nftables": [{"metainfo": {"json_schema_version": 1}}, {"table": {"family": "inet", "name": "amneziageo_rt"}},
+        {"set": {"family": "inet", "name": "n1v4", "table": "amneziageo_rt", "type": "ipv4_addr", "flags": ["timeout"], "timeout": 3600, "elem": [{"elem": {"val": "1.2.3.4", "timeout": 3600, "expires": 3000}}]}},
+        {"set": {"family": "inet", "name": "n1v6", "table": "amneziageo_rt", "type": "ipv6_addr", "flags": ["timeout"], "timeout": 3600, "elem": [{"elem": {"val": "2a02:6b8::1", "expires": 100}}]}},
+        {"set": {"family": "inet", "name": "n9v4", "table": "amneziageo_rt", "type": "ipv4_addr", "flags": ["timeout"], "timeout": 3600, "elem": [{"elem": {"val": "5.6.7.8", "timeout": 3600, "expires": 3000}}]}},
+        {"set": {"family": "inet", "name": "r1v4", "table": "amneziageo_rt", "type": "ipv4_addr", "flags": ["interval"], "elem": [{"prefix": {"addr": "9.9.9.0", "len": 24}}]}}]}
+        """;
 
     private static RouteRule Rule(string target) =>
         RouteDefaults.Fresh("rule") with { Id = 1, Action = RouteAction.Out, Outbound = "direct", Targets = [target] };

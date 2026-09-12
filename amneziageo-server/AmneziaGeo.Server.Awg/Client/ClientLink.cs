@@ -54,9 +54,25 @@ public static class ClientLink
             ["defaultContainer"] = Container,
             ["description"] = ClientText.Title(config, client),
             ["hostName"] = config.Host,
+            ["amneziageo"] = Reverse(config, client),
         };
 
         return Scheme + Base64Url.EncodeToString(Packed(Encoding.UTF8.GetBytes(document.ToJsonString(Plain))));
+    }
+
+    private static JsonObject Reverse(ServerConfig config, TunnelClient client)
+    {
+        var routes = new JsonArray();
+        foreach (var route in client.Routes)
+        {
+            routes.Add(route);
+        }
+
+        return new JsonObject
+        {
+            ["inbound"] = InboundName.Of(InboundName.Taken(client.Inbound, config.Inbound)),
+            ["routes"] = routes,
+        };
     }
 
     private static byte[] Packed(byte[] data)

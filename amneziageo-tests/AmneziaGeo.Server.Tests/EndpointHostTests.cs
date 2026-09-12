@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Routing.Host;
@@ -82,30 +83,30 @@ public class EndpointHostTests
         var ledger = new Ledger { Uplink = "ens3" };
         var host = new EndpointHost(ledger, new Kernel());
 
-        await host.SyncAsync([Endpoint()], CancellationToken.None);
+        await host.SyncAsync([Endpoint()], [], CancellationToken.None);
 
         Assert.Contains("ip saddr 10.0.0.0/24 oifname \"ens3\" masquerade", ledger.Ruleset, StringComparison.Ordinal);
         Assert.Contains(
             "ip6 saddr fd42:6d79:7670::cafe:0/112 oifname \"ens3\" masquerade",
             ledger.Ruleset,
             StringComparison.Ordinal);
-        Assert.Contains("iifname \"awg0\" ip daddr 10.0.0.0/24 accept", ledger.Ruleset, StringComparison.Ordinal);
+        Assert.Contains("ct state established,related accept", ledger.Ruleset, StringComparison.Ordinal);
         Assert.Contains("iifname \"awg0\" ip daddr 192.168.0.0/16 reject", ledger.Ruleset, StringComparison.Ordinal);
     }
 
     [Fact]
     public void AnEndpointWithoutNatIsNotMasqueraded()
     {
-        var text = EndpointRuleset.Text([Endpoint() with { Nat = false }], "ens3");
+        var text = EndpointRuleset.Text([Endpoint() with { Nat = false }], [], "ens3");
 
         Assert.DoesNotContain("masquerade", text, StringComparison.Ordinal);
-        Assert.Contains("iifname \"awg0\" ip daddr 10.0.0.0/24 accept", text, StringComparison.Ordinal);
+        Assert.Contains("oifname \"awg0\" drop", text, StringComparison.Ordinal);
     }
 
     [Fact]
     public void AnEndpointThatIsTurnedOffIsLeftOutOfTheRuleset()
     {
-        var text = EndpointRuleset.Text([Endpoint() with { IsEnabled = false }], "ens3");
+        var text = EndpointRuleset.Text([Endpoint() with { IsEnabled = false }], [], "ens3");
 
         Assert.DoesNotContain("awg0", text, StringComparison.Ordinal);
         Assert.Contains("table inet amneziageo_in", text, StringComparison.Ordinal);
@@ -114,12 +115,150 @@ public class EndpointHostTests
     [Fact]
     public void AHostWithNoUplinkMasqueradesNothing()
     {
-        var text = EndpointRuleset.Text([Endpoint()], string.Empty);
+        var text = EndpointRuleset.Text([Endpoint()], [], string.Empty);
 
         Assert.DoesNotContain("masquerade", text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void AClientThatTakesTheTunnelIsReachedWhileTheOthersAreNot()
+    {
+        var text = EndpointRuleset.Text(
+            [Endpoint() with { Id = 7 }],
+            [
+                Client() with { Address = ["10.0.0.5/32"], Inbound = ClientInbound.Network },
+                Client() with { Address = ["10.0.0.6/32"], Inbound = ClientInbound.Server },
+                Client() with { Address = ["10.0.0.7/32"], Inbound = ClientInbound.Off },
+            ],
+            "ens3");
+
+        Assert.Contains("elements = { 10.0.0.5/32 }", text, StringComparison.Ordinal);
+        Assert.Contains("oifname \"awg0\" ip daddr @in7v4 accept", text, StringComparison.Ordinal);
+        Assert.Contains("oifname \"awg0\" drop", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("10.0.0.6", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("10.0.0.7", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheNetworksBehindAClientAreReachedTogetherWithIt()
+    {
+        var text = EndpointRuleset.Text(
+            [Endpoint() with { Id = 7 }],
+            [
+                Client() with
+                {
+                    Address = ["10.0.0.5/32", "fd42:6d79:7670::cafe:5/128"],
+                    Routes = ["192.168.88.0/24"],
+                    Inbound = ClientInbound.Network,
+                },
+            ],
+            "ens3");
+
+        Assert.Contains("elements = { 10.0.0.5/32, 192.168.88.0/24 }", text, StringComparison.Ordinal);
+        Assert.Contains("elements = { fd42:6d79:7670::cafe:5/128 }", text, StringComparison.Ordinal);
+        Assert.Contains("oifname \"awg0\" ip6 daddr @in7v6 accept", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APortOfTheHostIsCarriedToTheClientOverBothFamilies()
+    {
+        var text = EndpointRuleset.Text(
+            [Endpoint() with { Id = 7 }],
+            [
+                Client() with
+                {
+                    Address = ["10.0.0.5/32", "fd42:6d79:7670::cafe:5/128"],
+                    Forwards = [new PortForward("tcp", 2222, 22)],
+                },
+            ],
+            "ens3");
+
+        Assert.Contains(
+            "iifname \"ens3\" meta nfproto ipv4 tcp dport 2222 dnat ip to 10.0.0.5:22",
+            text,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "iifname \"ens3\" meta nfproto ipv6 tcp dport 2222 dnat ip6 to [fd42:6d79:7670::cafe:5]:22",
+            text,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "oifname \"awg0\" ip daddr 10.0.0.5 tcp dport 22 accept",
+            text,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AClientThatIsTurnedOffTakesNeitherTheTunnelNorAPortOfTheHost()
+    {
+        var text = EndpointRuleset.Text(
+            [Endpoint() with { Id = 7 }],
+            [
+                Client() with
+                {
+                    Address = ["10.0.0.5/32"],
+                    Inbound = ClientInbound.Network,
+                    Forwards = [new PortForward("tcp", 2222, 22)],
+                    IsEnabled = false,
+                },
+            ],
+            "ens3");
+
+        Assert.DoesNotContain("10.0.0.5", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("dnat", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AHostWithNoUplinkCarriesNoPortToAClient()
+    {
+        var text = EndpointRuleset.Text(
+            [Endpoint() with { Id = 7 }],
+            [Client() with { Address = ["10.0.0.5/32"], Forwards = [new PortForward("udp", 5353, 53)] }],
+            string.Empty);
+
+        Assert.DoesNotContain("dnat", text, StringComparison.Ordinal);
+        Assert.Contains("oifname \"awg0\" ip daddr 10.0.0.5 udp dport 53 accept", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AClientThatLeavesTheChoiceToTheEndpointTakesWhatItLetsIn()
+    {
+        var open = EndpointRuleset.Text(
+            [Endpoint() with { Id = 7, Inbound = ClientInbound.Network }],
+            [Client() with { Address = ["10.0.0.5/32"], Inbound = ClientInbound.Endpoint }],
+            "ens3");
+        var closed = EndpointRuleset.Text(
+            [Endpoint() with { Id = 7, Inbound = ClientInbound.Off }],
+            [Client() with { Address = ["10.0.0.5/32"], Inbound = ClientInbound.Endpoint }],
+            "ens3");
+
+        Assert.Contains("elements = { 10.0.0.5/32 }", open, StringComparison.Ordinal);
+        Assert.DoesNotContain("10.0.0.5", closed, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AClientOfItsOwnOutweighsTheEndpoint()
+    {
+        var text = EndpointRuleset.Text(
+            [Endpoint() with { Id = 7, Inbound = ClientInbound.Network }],
+            [
+                Client() with { Address = ["10.0.0.5/32"], Inbound = ClientInbound.Off },
+                Client() with { Address = ["10.0.0.6/32"], Inbound = ClientInbound.Network },
+            ],
+            "ens3");
+
+        Assert.Contains("elements = { 10.0.0.6/32 }", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("10.0.0.5", text, StringComparison.Ordinal);
+    }
+
     private const string Key = "6JqDBRc3ZDx6bTcJKKZS0J1yZbSbUKmzS1eJdWQFRVo=";
+
+    private static TunnelClient Client() => new()
+    {
+        ConfigId = 7,
+        Name = "one",
+        PublicKey = "u1u1BRc3ZDx6bTcJKKZS0J1yZbSbUKmzS1eJdWQFRVo=",
+        IsEnabled = true,
+    };
 
     private static ServerConfig Endpoint() => new()
     {

@@ -14,6 +14,7 @@ using AmneziaGeo.Server.Api.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddSystemd();
 builder.AddJournal();
 builder.AddListening();
 builder.Services.AddControllers();

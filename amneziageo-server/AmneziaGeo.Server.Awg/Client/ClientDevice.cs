@@ -53,7 +53,7 @@ public static class ClientDevice
             PublicKey = client.PublicKey,
             PresharedKey = preshared.Length > 0 ? preshared : null,
             ReplaceAllowedIps = true,
-            AllowedIps = [.. client.Address.Select(Range).OfType<AwgAllowedIp>()],
+            AllowedIps = [.. client.Address.Concat(client.Routes).Select(Range).OfType<AwgAllowedIp>()],
         };
     }
 

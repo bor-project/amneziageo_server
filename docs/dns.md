@@ -74,8 +74,9 @@ yet goes back to the client once the address is in the set, so the first connect
 rule; it waits for that half a second at most. The rest of the queue goes to the host twice a second, up to
 512 addresses in one command, and an address already there is not sent again until half its life has
 passed. Addresses of a rule that is gone or turned off are dropped instead of sent. The rules go to the host as
-a whole table, so the sets come back empty every time the rules are laid anew; right after that the panel puts
-back every address whose time has not run out, with the time it has left.
+a whole table, and every address whose time has not run out goes in the same step, with the time it has left,
+so the sets never stand empty. When the server starts, it reads the sets back from the host before it lays the
+rules for the first time, so the addresses outlive a restart too.
 
 ## What the panel shows
 

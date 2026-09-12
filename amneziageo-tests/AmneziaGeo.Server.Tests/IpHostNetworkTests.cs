@@ -4,6 +4,9 @@ namespace AmneziaGeo.Server.Tests;
 
 public class IpHostNetworkTests
 {
+    private const string Carried =
+        """[{"ifname":"awgbor","addr_info":[{"family":"inet","local":"10.9.0.2","prefixlen":24,"scope":"global"},{"family":"inet","local":"10.9.0.3","prefixlen":24,"scope":"global"},{"family":"inet6","local":"fd00::2","prefixlen":112,"scope":"global"},{"family":"inet6","local":"fe80::1","prefixlen":64,"scope":"link"}]}]""";
+
     [Fact]
     public async Task ARuleTheHostAlreadyHoldsIsNotAddedAgain()
     {
@@ -81,7 +84,7 @@ public class IpHostNetworkTests
     }
 
     [Fact]
-    public async Task AnAddressIsReplacedNotAdded()
+    public async Task AnInterfaceThatDoesNotReadIsGivenItsAddressesAnew()
     {
         var tools = new Tools();
         var network = new IpHostNetwork(tools);
@@ -89,7 +92,55 @@ public class IpHostNetworkTests
         await network.AddressAsync("awgbor", ["10.9.0.2/32", "fd00::2/128"], CancellationToken.None);
 
         Assert.Equal(
-            ["ip address flush dev awgbor", "ip address add 10.9.0.2/32 dev awgbor", "ip address add fd00::2/128 dev awgbor"],
+            [
+                "ip -j address show dev awgbor",
+                "ip address flush dev awgbor",
+                "ip address add 10.9.0.2/32 dev awgbor",
+                "ip address add fd00::2/128 dev awgbor",
+            ],
             tools.Calls);
+    }
+
+    [Fact]
+    public async Task TheAddressesAnInterfaceCarriesAreLeftInPlace()
+    {
+        var tools = new Tools();
+        tools.Answers["ip -j address show"] = new CommandResult(0, Carried, string.Empty);
+        var network = new IpHostNetwork(tools);
+
+        await network.AddressAsync("awgbor", ["10.9.0.2/24", "10.9.0.3/24", "fd00:0:0::2/112"], CancellationToken.None);
+
+        Assert.Equal(["ip -j address show dev awgbor"], tools.Calls);
+    }
+
+    [Fact]
+    public async Task OnlyTheAddressesThatDifferAreChanged()
+    {
+        var tools = new Tools();
+        tools.Answers["ip -j address show"] = new CommandResult(0, Carried, string.Empty);
+        var network = new IpHostNetwork(tools);
+
+        await network.AddressAsync("awgbor", ["10.9.0.3/24", "fd00::2/112", "10.9.0.4/24"], CancellationToken.None);
+
+        Assert.Equal(
+            [
+                "ip -j address show dev awgbor",
+                "ip address del 10.9.0.2/24 dev awgbor",
+                "ip -j address show dev awgbor",
+                "ip address add 10.9.0.4/24 dev awgbor",
+            ],
+            tools.Calls);
+    }
+
+    [Fact]
+    public async Task ATableOfTheFirewallIsReadAsTheHostGivesIt()
+    {
+        var tools = new Tools();
+        tools.Answers["nft -j list table inet amneziageo_rt"] = new CommandResult(0, "{\"nftables\": []}", string.Empty);
+        tools.Answers["nft -j list table inet nope"] = new CommandResult(1, string.Empty, "Error: No such file or directory");
+        var network = new IpHostNetwork(tools);
+
+        Assert.Equal("{\"nftables\": []}", await network.ReadFirewallAsync("amneziageo_rt", CancellationToken.None));
+        Assert.Empty(await network.ReadFirewallAsync("nope", CancellationToken.None));
     }
 }

@@ -43,6 +43,9 @@ Saving it writes two files into `/etc/amneziageo-server` and restarts `amneziage
 The list of ports follows the interfaces: adding, changing, applying or removing one writes the whitelist of
 every proxy again. `wstunnel` rereads it on its own, without a restart.
 
+A service is started over only when one of its files changes or it is not running, so the panel starting
+over leaves the tunnels through a proxy alone. `wstunnel` rereads a renewed certificate on its own too.
+
 A client names the proxy as `wss://<host>:<port>/<path>` and the endpoint it wants as the port of the
 interface. The same shape works the other way round, for an outbound of the `ws` kind that leaves through a
 proxy elsewhere, see [outbounds.md](outbounds.md).
@@ -58,7 +61,8 @@ one machine and the interface on another.
 Saving it writes `proxy-<name>.env` into `/etc/amneziageo-server` and restarts `amneziageo-relay@<name>`. The
 service runs `AmneziaGeo.Server.Cli relay --listen 0.0.0.0:<port> --target <target>`, and a client with
 nothing coming through for three minutes is forgotten. There is no whitelist file: the target is the one the
-panel wrote, and a client names no target of its own.
+panel wrote, and a client names no target of its own. As with `ws`, the service is started over only when its
+file changes or it is not running.
 
 ## The sources a proxy takes
 

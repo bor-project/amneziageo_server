@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Awg.Netlink;
@@ -89,6 +90,7 @@ public sealed class EndpointHost
     /// </summary>
     public async Task<IReadOnlyList<EndpointSync>> SyncAsync(
         IReadOnlyList<ServerConfig> configs,
+        IReadOnlyList<TunnelClient> clients,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(configs);
@@ -99,22 +101,26 @@ public sealed class EndpointHost
             done.Add(await ApplyAsync(config, ct).ConfigureAwait(false));
         }
 
-        done.Add(await FirewallAsync(configs, ct).ConfigureAwait(false));
+        done.Add(await FirewallAsync(configs, clients, ct).ConfigureAwait(false));
 
         return done;
     }
 
     /// <summary>
-    /// Lays the rules that masquerade the clients and hold them out of the closed ranges.
+    /// Lays the rules that masquerade the clients, hold them out of the closed ranges and carry what reaches them
+    /// back.
     /// </summary>
-    public async Task<EndpointSync> FirewallAsync(IReadOnlyList<ServerConfig> configs, CancellationToken ct)
+    public async Task<EndpointSync> FirewallAsync(
+        IReadOnlyList<ServerConfig> configs,
+        IReadOnlyList<TunnelClient> clients,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(configs);
 
         try
         {
             var uplink = await _network.UplinkAsync(ct).ConfigureAwait(false);
-            await _network.FirewallAsync(EndpointRuleset.Text(configs, uplink), ct).ConfigureAwait(false);
+            await _network.FirewallAsync(EndpointRuleset.Text(configs, clients, uplink), ct).ConfigureAwait(false);
 
             return EndpointSync.Done(EndpointRuleset.TableName);
         }

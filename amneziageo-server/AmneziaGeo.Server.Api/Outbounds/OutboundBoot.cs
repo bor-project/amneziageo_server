@@ -1,6 +1,7 @@
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Awg.Netlink;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Outbound;
 
@@ -15,15 +16,18 @@ public sealed class OutboundBoot : BackgroundService
 
     private readonly OutboundHost _host;
 
+    private readonly BalanceLive _live;
+
     private readonly ILogger<OutboundBoot> _logger;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public OutboundBoot(IServiceScopeFactory scopes, OutboundHost host, ILogger<OutboundBoot> logger)
+    public OutboundBoot(IServiceScopeFactory scopes, OutboundHost host, BalanceLive live, ILogger<OutboundBoot> logger)
     {
         _scopes = scopes;
         _host = host;
+        _live = live;
         _logger = logger;
     }
 
@@ -39,6 +43,7 @@ public sealed class OutboundBoot : BackgroundService
             var outbounds = await services.GetRequiredService<OutboundStore>().ListAsync(stoppingToken)
                 .ConfigureAwait(false);
             await LayAsync(outbounds, stoppingToken).ConfigureAwait(false);
+            _live.Keep(_host.States(outbounds).Where(state => state.Carries).Select(state => state.Name));
             await services.GetRequiredService<RouteApplier>().SettleAsync(stoppingToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is HostNetworkException or NetlinkException or InvalidOperationException or IOException)

@@ -125,6 +125,8 @@ public sealed class ConfigEntity
 
     public string Blocked { get; set; } = string.Empty;
 
+    public int Inbound { get; set; }
+
     public string PrivateKey { get; set; } = string.Empty;
 
     public string PublicKey { get; set; } = string.Empty;
@@ -490,6 +492,12 @@ public sealed class ClientEntity
     public bool MultiDevice { get; set; }
 
     public long DailyLimit { get; set; }
+
+    public int Inbound { get; set; }
+
+    public string Routes { get; set; } = string.Empty;
+
+    public string Forwards { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedUtc { get; set; }
 

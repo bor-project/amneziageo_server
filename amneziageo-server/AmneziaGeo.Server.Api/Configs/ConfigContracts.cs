@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 
 namespace AmneziaGeo.Server.Api.Configs;
@@ -48,6 +49,7 @@ public sealed record ConfigResponse(
     int OfflineAfter,
     bool IsEnabled,
     bool Nat,
+    string Inbound,
     string[] Blocked,
     string PublicKey,
     string? PrivateKey,
@@ -74,7 +76,8 @@ public sealed record ConfigRequest(
     string? PrivateKey,
     string? PresharedKey,
     ObfuscationBody? Obfuscation,
-    int? OfflineAfter = null);
+    int? OfflineAfter = null,
+    string? Inbound = null);
 
 /// <summary>
 /// What putting an endpoint on the host produced, as the interface reads it.
@@ -117,6 +120,7 @@ public static class ConfigAnswers
         config.OfflineAfter,
         config.IsEnabled,
         config.Nat,
+        InboundName.Of(config.Inbound),
         [.. config.Blocked],
         config.PublicKey,
         secrets ? config.PrivateKey : null,
@@ -171,6 +175,7 @@ public static class ConfigAnswers
         OfflineAfter = request.OfflineAfter ?? ConfigDefaults.OfflineAfter,
         IsEnabled = request.IsEnabled ?? true,
         Nat = request.Nat ?? true,
+        Inbound = InboundName.Read(request.Inbound, ClientInbound.Off),
         Blocked = request.Blocked ?? [],
         PrivateKey = (request.PrivateKey ?? string.Empty).Trim(),
         PresharedKey = (request.PresharedKey ?? string.Empty).Trim(),

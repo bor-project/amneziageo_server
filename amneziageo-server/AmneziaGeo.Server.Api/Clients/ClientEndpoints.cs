@@ -186,6 +186,7 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        EndpointHost endpoints,
         ClientGuard guard,
         TrafficLedger ledger,
         CancellationToken ct)
@@ -196,7 +197,8 @@ public static class ClientEndpoints
             return Explain(result);
         }
 
-        var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, ct).ConfigureAwait(false);
+        var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, endpoints, ct)
+            .ConfigureAwait(false);
 
         return Results.Created(
             $"/api/clients/{result.Record.Id}",
@@ -208,6 +210,7 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        EndpointHost endpoints,
         ClientGuard guard,
         TrafficLedger ledger,
         CancellationToken ct)
@@ -218,7 +221,8 @@ public static class ClientEndpoints
             return Explain(result);
         }
 
-        var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, ct).ConfigureAwait(false);
+        var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, endpoints, ct)
+            .ConfigureAwait(false);
 
         return Results.Created(
             $"/api/clients/{result.Record.Id}",
@@ -231,6 +235,7 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        EndpointHost endpoints,
         ClientGuard guard,
         TrafficLedger ledger,
         CancellationToken ct)
@@ -250,7 +255,8 @@ public static class ClientEndpoints
         var gone = string.Equals(held.PublicKey, result.Record!.PublicKey, StringComparison.Ordinal)
             ? Array.Empty<string>()
             : [held.PublicKey];
-        var endpoint = await SettleAsync(result.Record.ConfigId, gone, configs, store, host, ct).ConfigureAwait(false);
+        var endpoint = await SettleAsync(result.Record.ConfigId, gone, configs, store, host, endpoints, ct)
+            .ConfigureAwait(false);
 
         return Results.Ok(Answer(result.Record, endpoint, host, guard, ledger, true));
     }
@@ -261,6 +267,7 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        EndpointHost endpoints,
         ClientGuard guard,
         TrafficLedger ledger,
         CancellationToken ct)
@@ -273,7 +280,8 @@ public static class ClientEndpoints
             return Explain(result);
         }
 
-        var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, ct).ConfigureAwait(false);
+        var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, endpoints, ct)
+            .ConfigureAwait(false);
 
         return Results.Ok(Answer(result.Record, endpoint, host, guard, ledger, true));
     }
@@ -283,6 +291,7 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        EndpointHost endpoints,
         CancellationToken ct)
     {
         var devices = await store.DevicesAsync(id, ct).ConfigureAwait(false);
@@ -298,6 +307,7 @@ public static class ClientEndpoints
                 configs,
                 store,
                 host,
+                endpoints,
                 ct)
             .ConfigureAwait(false);
 
@@ -309,6 +319,7 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        EndpointHost endpoints,
         CancellationToken ct)
     {
         var endpoint = await configs.FindAsync(request.ConfigId, ct).ConfigureAwait(false);
@@ -324,7 +335,7 @@ public static class ClientEndpoints
         }
 
         var report = await store.ImportAllAsync(read.Clients, ct).ConfigureAwait(false);
-        await SettleAsync(endpoint.Id, [], configs, store, host, ct).ConfigureAwait(false);
+        await SettleAsync(endpoint.Id, [], configs, store, host, endpoints, ct).ConfigureAwait(false);
 
         return Results.Ok(report);
     }
@@ -333,11 +344,12 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        EndpointHost endpoints,
         CancellationToken ct)
     {
-        var endpoints = await configs.ListAsync(ct).ConfigureAwait(false);
-        var answers = new List<ClientApplyBody>(endpoints.Count);
-        foreach (var endpoint in endpoints)
+        var found = await configs.ListAsync(ct).ConfigureAwait(false);
+        var answers = new List<ClientApplyBody>(found.Count);
+        foreach (var endpoint in found)
         {
             var clients = await store.ListAsync(endpoint.Id, ct).ConfigureAwait(false);
             var sync = await host.SyncAsync(endpoint, clients, [], ct).ConfigureAwait(false);
@@ -349,6 +361,8 @@ public static class ClientEndpoints
                 sync.Message));
         }
 
+        await FirewallAsync(configs, store, endpoints, ct).ConfigureAwait(false);
+
         return Results.Ok(answers);
     }
 
@@ -358,6 +372,7 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         ClientHost host,
+        EndpointHost endpoints,
         CancellationToken ct)
     {
         var endpoint = await configs.FindAsync(configId, ct).ConfigureAwait(false);
@@ -368,8 +383,22 @@ public static class ClientEndpoints
 
         var clients = await store.ListAsync(configId, ct).ConfigureAwait(false);
         await host.SyncAsync(endpoint, clients, gone, ct).ConfigureAwait(false);
+        await FirewallAsync(configs, store, endpoints, ct).ConfigureAwait(false);
 
         return endpoint;
+    }
+
+    private static async Task FirewallAsync(
+        ConfigStore configs,
+        ClientStore store,
+        EndpointHost endpoints,
+        CancellationToken ct)
+    {
+        await endpoints.FirewallAsync(
+                await configs.ListAsync(ct).ConfigureAwait(false),
+                await store.ListAsync(ct).ConfigureAwait(false),
+                ct)
+            .ConfigureAwait(false);
     }
 
     private static ClientResponse Answer(

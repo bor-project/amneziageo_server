@@ -49,7 +49,6 @@ public static class OutboundServices
         services.AddSingleton<IProbeLink, ProbeLink>();
         services.AddSingleton<ProbeRunner>();
         services.AddSingleton<OutboundHost>();
-        services.AddSingleton<RouteHost>();
         services.AddSingleton<RoutePlans>();
         services.AddSingleton<BalanceLive>();
         services.AddScoped<RouteApplier>();

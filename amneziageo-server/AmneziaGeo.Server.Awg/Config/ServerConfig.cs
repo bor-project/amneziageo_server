@@ -1,3 +1,5 @@
+using AmneziaGeo.Server.Awg.Client;
+
 namespace AmneziaGeo.Server.Awg.Config;
 
 /// <summary>
@@ -200,6 +202,11 @@ public sealed record ServerConfig
     /// The ranges clients of the endpoint are not let into.
     /// </summary>
     public IReadOnlyList<string> Blocked { get; init; } = [];
+
+    /// <summary>
+    /// What the clients of the endpoint take from the tunnel unless they name it themselves.
+    /// </summary>
+    public ClientInbound Inbound { get; init; }
 
     /// <summary>
     /// The private key of the interface, in base64.

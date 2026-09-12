@@ -3,13 +3,13 @@ import { nth, numberOf, parse, reserved, span, write } from "@/address"
 import type { Span } from "@/address"
 import { complaint } from "@/api/auth"
 import { useClients } from "@/api/clients"
-import type { Client, ClientDraft } from "@/api/clients"
+import type { Client, ClientDraft, Forward, Inbound } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useTemplates } from "@/api/templates"
 import { Modal } from "@/components/Modal"
-import { Flag, Line, Pick, Regenerate } from "@/components/fields"
-import { field, label, primary, secondary } from "@/components/styles"
+import { Flag, Line, Multi, Pick, Regenerate } from "@/components/fields"
+import { field, label, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { randomId, randomKey } from "@/keys"
@@ -56,17 +56,23 @@ export function ClientForm({
   const clash = others.some((one) => one.name.toLowerCase() === draft.name.trim().toLowerCase())
   const misnamed = !/^[A-Za-z0-9_-]{0,64}$/.test(draft.subscriptionId)
   const allowed = allowanceOf(limit)
+  const ported = draft.forwards.every((one) => isPort(one.from) && isPort(one.to))
   const ready =
     !pending &&
     draft.name.trim().length > 0 &&
     !clash &&
     !misnamed &&
     allowed !== null &&
+    ported &&
     draft.configId > 0 &&
     (legacy ? parts(listed).length > 0 : whole && spans.length > 0 && problem.length === 0)
 
   function put(change: Partial<ClientDraft>) {
     setDraft({ ...draft, ...change })
+  }
+
+  function carry(at: number, change: Partial<Forward>) {
+    put({ forwards: draft.forwards.map((one, index) => (index === at ? { ...one, ...change } : one)) })
   }
 
   function pick(configId: number) {
@@ -209,6 +215,83 @@ export function ClientForm({
             onChange={(multiDevice) => put({ multiDevice })}
           />
         </div>
+
+        <Pick
+          id="client-inbound"
+          caption={t("clients.inbound")}
+          value={draft.inbound}
+          onChange={(value) => put({ inbound: value as Inbound })}
+        >
+          <option value="endpoint">{t("clients.inboundEndpoint")}</option>
+          <option value="off">{t("clients.inboundOff")}</option>
+          <option value="server">{t("clients.inboundServer")}</option>
+          <option value="network">{t("clients.inboundNetwork")}</option>
+        </Pick>
+
+        <div className="col-span-2">
+          <label className={label} htmlFor="client-routes">
+            {t("clients.routes")}
+          </label>
+          <div className="mt-1">
+            <Multi
+              id="client-routes"
+              value={draft.routes}
+              offers={[]}
+              placeholder={t("clients.noRoutes")}
+              onChange={(routes) => put({ routes })}
+            />
+          </div>
+        </div>
+
+        <div className="col-span-2">
+          <div className={label}>{t("clients.forwards")}</div>
+          <div className="mt-1 flex flex-col gap-2">
+            {draft.forwards.map((one, at) => (
+              <div key={at} className="flex items-center gap-2">
+                <select
+                  value={one.protocol}
+                  onChange={(e) => carry(at, { protocol: e.target.value as Forward["protocol"] })}
+                  className={`w-24 shrink-0 ${field}`}
+                >
+                  <option value="tcp">tcp</option>
+                  <option value="udp">udp</option>
+                </select>
+                <input
+                  inputMode="numeric"
+                  value={one.from === 0 ? "" : String(one.from)}
+                  placeholder={t("clients.forwardFrom")}
+                  onChange={(e) => carry(at, { from: portOf(e.target.value) })}
+                  className={`w-28 shrink-0 ${field}`}
+                />
+                <span className="text-sm text-muted">{t("clients.forwardTo")}</span>
+                <input
+                  inputMode="numeric"
+                  value={one.to === 0 ? "" : String(one.to)}
+                  placeholder={t("clients.forwardPort")}
+                  onChange={(e) => carry(at, { to: portOf(e.target.value) })}
+                  className={`w-28 shrink-0 ${field}`}
+                />
+                <button
+                  type="button"
+                  className={quiet}
+                  title={t("clients.forwardRemove")}
+                  onClick={() => put({ forwards: draft.forwards.filter((_, index) => index !== at) })}
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+            <div>
+              <button
+                type="button"
+                className={secondary}
+                onClick={() => put({ forwards: [...draft.forwards, { protocol: "tcp", from: 0, to: 0 }] })}
+              >
+                {t("clients.forwardAdd")}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {error !== null && error !== undefined && (
@@ -216,6 +299,16 @@ export function ClientForm({
       )}
     </Modal>
   )
+}
+
+function isPort(value: number): boolean {
+  return Number.isInteger(value) && value > 0 && value <= 65535
+}
+
+function portOf(text: string): number {
+  const digits = text.replace(/\D/g, "")
+
+  return digits.length === 0 ? 0 : Math.min(Number(digits), 65535)
 }
 
 function spansOf(configs: Config[], configId: number): Span[] {

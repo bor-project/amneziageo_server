@@ -87,6 +87,7 @@ public static class ConfigEndpoints
     private static async Task<IResult> AddAsync(
         ConfigRequest request,
         ConfigStore store,
+        ClientStore clients,
         EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
@@ -99,7 +100,7 @@ public static class ConfigEndpoints
             return Explain(result);
         }
 
-        await RaiseAsync(store, host, result.Record!, ct).ConfigureAwait(false);
+        await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
@@ -111,6 +112,7 @@ public static class ConfigEndpoints
         long id,
         ConfigRequest request,
         ConfigStore store,
+        ClientStore clients,
         EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
@@ -129,7 +131,7 @@ public static class ConfigEndpoints
             await host.WithdrawAsync(held.Name, ct).ConfigureAwait(false);
         }
 
-        await RaiseAsync(store, host, result.Record!, ct).ConfigureAwait(false);
+        await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
@@ -140,6 +142,7 @@ public static class ConfigEndpoints
     private static async Task<IResult> RemoveAsync(
         long id,
         ConfigStore store,
+        ClientStore clients,
         EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
@@ -153,7 +156,7 @@ public static class ConfigEndpoints
         }
 
         await host.WithdrawAsync(result.Record!.Name, ct).ConfigureAwait(false);
-        await host.FirewallAsync(await store.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        await FirewallAsync(store, clients, host, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
@@ -164,6 +167,7 @@ public static class ConfigEndpoints
     private static async Task<IResult> ApplyAsync(
         long id,
         ConfigStore store,
+        ClientStore clients,
         EndpointHost host,
         ProxyApplier proxy,
         CancellationToken ct)
@@ -175,7 +179,7 @@ public static class ConfigEndpoints
         }
 
         var sync = await host.ApplyAsync(found, ct).ConfigureAwait(false);
-        await host.FirewallAsync(await store.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        await FirewallAsync(store, clients, host, ct).ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(new ConfigSyncResponse(sync.Name, sync.IsDone, sync.Message));
@@ -183,12 +187,14 @@ public static class ConfigEndpoints
 
     private static async Task<IResult> ApplyAllAsync(
         ConfigStore store,
+        ClientStore clients,
         EndpointHost host,
         ProxyApplier proxy,
         CancellationToken ct)
     {
         var found = await store.ListAsync(ct).ConfigureAwait(false);
-        var done = await host.SyncAsync(found, ct).ConfigureAwait(false);
+        var done = await host.SyncAsync(found, await clients.ListAsync(ct).ConfigureAwait(false), ct)
+            .ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(done.Select(sync => new ConfigSyncResponse(sync.Name, sync.IsDone, sync.Message)).ToArray());
@@ -196,12 +202,26 @@ public static class ConfigEndpoints
 
     private static async Task RaiseAsync(
         ConfigStore store,
+        ClientStore clients,
         EndpointHost host,
         ServerConfig config,
         CancellationToken ct)
     {
         await host.ApplyAsync(config, ct).ConfigureAwait(false);
-        await host.FirewallAsync(await store.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        await FirewallAsync(store, clients, host, ct).ConfigureAwait(false);
+    }
+
+    private static async Task FirewallAsync(
+        ConfigStore store,
+        ClientStore clients,
+        EndpointHost host,
+        CancellationToken ct)
+    {
+        await host.FirewallAsync(
+                await store.ListAsync(ct).ConfigureAwait(false),
+                await clients.ListAsync(ct).ConfigureAwait(false),
+                ct)
+            .ConfigureAwait(false);
     }
 
     private static bool Secrets(HttpContext context) =>

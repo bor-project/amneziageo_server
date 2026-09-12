@@ -47,8 +47,6 @@ public sealed class RouteApplier
 
     private readonly IGeoFileStore _files;
 
-    private readonly RouteHost _host;
-
     private readonly RoutePlans _plans;
 
     private readonly BalanceLive _live;
@@ -67,7 +65,6 @@ public sealed class RouteApplier
         DnsStore dns,
         DnsState resolver,
         IGeoFileStore files,
-        RouteHost host,
         RoutePlans plans,
         BalanceLive live,
         DnsSets sets)
@@ -80,7 +77,6 @@ public sealed class RouteApplier
         _dns = dns;
         _resolver = resolver;
         _files = files;
-        _host = host;
         _plans = plans;
         _live = live;
         _sets = sets;
@@ -123,8 +119,7 @@ public sealed class RouteApplier
     public async Task<RoutePlan> ApplyAsync(CancellationToken ct)
     {
         var plan = await BuildAsync(ct).ConfigureAwait(false);
-        await _host.ApplyAsync(plan, ct).ConfigureAwait(false);
-        await _sets.RestoreAsync(plan, ct).ConfigureAwait(false);
+        await _sets.LayAsync(RouteRuleset.Text(plan), plan, ct).ConfigureAwait(false);
 
         return plan;
     }
@@ -137,8 +132,7 @@ public sealed class RouteApplier
         var plan = await BuildAsync(ct).ConfigureAwait(false);
         try
         {
-            await _host.ApplyAsync(plan, ct).ConfigureAwait(false);
-            await _sets.RestoreAsync(plan, ct).ConfigureAwait(false);
+            await _sets.LayAsync(RouteRuleset.Text(plan), plan, ct).ConfigureAwait(false);
         }
         catch (HostNetworkException)
         {

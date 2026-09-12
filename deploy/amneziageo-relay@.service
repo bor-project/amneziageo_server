@@ -7,7 +7,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 EnvironmentFile=/etc/amneziageo-server/proxy-%i.env
-ExecStart=/opt/amneziageo-server/AmneziaGeo.Server.Cli relay $PROXY_ARGS
+ExecStart=/opt/amneziageo-server/current/AmneziaGeo.Server.Cli relay $PROXY_ARGS
 Restart=on-failure
 RestartSec=3
 

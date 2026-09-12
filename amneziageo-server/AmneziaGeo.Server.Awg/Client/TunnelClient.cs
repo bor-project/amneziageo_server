@@ -76,6 +76,21 @@ public sealed record TunnelClient
     public long DailyLimit { get; init; }
 
     /// <summary>
+    /// What the client takes from the tunnel.
+    /// </summary>
+    public ClientInbound Inbound { get; init; }
+
+    /// <summary>
+    /// The networks the client carries behind it.
+    /// </summary>
+    public IReadOnlyList<string> Routes { get; init; } = [];
+
+    /// <summary>
+    /// The ports of the host carried to the client.
+    /// </summary>
+    public IReadOnlyList<PortForward> Forwards { get; init; } = [];
+
+    /// <summary>
     /// When the client was added.
     /// </summary>
     public DateTimeOffset CreatedUtc { get; init; }

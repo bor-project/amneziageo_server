@@ -26,6 +26,7 @@ public static class ClientDefaults
             PrivateKey = pair.PrivateKey,
             PublicKey = pair.PublicKey,
             SubscriptionId = SubscriptionId(),
+            Inbound = ClientInbound.Endpoint,
         };
     }
 

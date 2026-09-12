@@ -173,11 +173,14 @@ public sealed class OutboundHost
             await _network.AddLinkAsync(outbound.Name, ct).ConfigureAwait(false);
         }
 
-        _devices.Apply(OutboundDevice.Update(outbound, server));
+        _devices.Apply(OutboundDevice.Update(outbound, server, !Holds(outbound)));
         await _network.AddressAsync(outbound.Name, OutboundDevice.Hosts(outbound.Address), ct).ConfigureAwait(false);
         await _network.UpAsync(outbound.Name, outbound.Mtu, ct).ConfigureAwait(false);
         await _network.RouteAsync(outbound.Name, outbound.Table, ct).ConfigureAwait(false);
     }
+
+    private bool Holds(OutboundConfig outbound) =>
+        _devices.Find(outbound.Name)?.Peers.All(peer => peer.PublicKey == outbound.PeerKey) == true;
 
     private async Task<IPEndPoint> ServerAsync(OutboundConfig outbound, CancellationToken ct)
     {

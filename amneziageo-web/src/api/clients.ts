@@ -17,6 +17,14 @@ export interface ClientState {
   isSpent: boolean
 }
 
+export type Inbound = "off" | "server" | "network"
+
+export interface Forward {
+  protocol: "tcp" | "udp"
+  from: number
+  to: number
+}
+
 export interface Client {
   id: number
   configId: number
@@ -33,6 +41,9 @@ export interface Client {
   parentId: number | null
   multiDevice: boolean
   dailyLimit: number
+  inbound: Inbound
+  routes: string[]
+  forwards: Forward[]
   state: ClientState
   createdUtc: string
   updatedUtc: string
@@ -51,6 +62,9 @@ export interface ClientDraft {
   subscriptionId: string
   multiDevice: boolean
   dailyLimit: number
+  inbound: Inbound
+  routes: string[]
+  forwards: Forward[]
 }
 
 export interface ClientConfig {
@@ -138,6 +152,9 @@ export function draftOf(one: Client): ClientDraft {
     subscriptionId: one.subscriptionId,
     multiDevice: one.multiDevice,
     dailyLimit: one.dailyLimit,
+    inbound: one.inbound,
+    routes: one.routes,
+    forwards: one.forwards,
   }
 }
 

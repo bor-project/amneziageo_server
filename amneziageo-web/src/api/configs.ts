@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import type { Inbound } from "./clients"
 import { client } from "./client"
 
 export interface Obfuscation {
@@ -42,6 +43,7 @@ export interface Config {
   offlineAfter: number
   isEnabled: boolean
   nat: boolean
+  inbound: Inbound
   blocked: string[]
   publicKey: string
   privateKey: string | null
@@ -63,6 +65,7 @@ export interface ConfigDraft {
   offlineAfter: number
   isEnabled: boolean
   nat: boolean
+  inbound: Inbound
   blocked: string[]
   privateKey: string
   presharedKey: string
@@ -151,6 +154,7 @@ export function draftOf(config: Config): ConfigDraft {
     offlineAfter: config.offlineAfter,
     isEnabled: config.isEnabled,
     nat: config.nat,
+    inbound: config.inbound,
     blocked: config.blocked,
     privateKey: config.privateKey ?? "",
     presharedKey: config.presharedKey ?? "",

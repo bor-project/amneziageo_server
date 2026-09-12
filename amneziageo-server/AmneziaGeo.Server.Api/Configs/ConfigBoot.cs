@@ -37,7 +37,10 @@ public sealed class ConfigBoot : IHostedService
             return;
         }
 
-        foreach (var sync in await _host.SyncAsync(configs, cancellationToken).ConfigureAwait(false))
+        var clients = await scope.ServiceProvider.GetRequiredService<ClientStore>()
+            .ListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        foreach (var sync in await _host.SyncAsync(configs, clients, cancellationToken).ConfigureAwait(false))
         {
             if (sync.IsDone)
             {

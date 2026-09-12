@@ -29,6 +29,11 @@ public sealed class Ledger : IHostNetwork
     public string Ruleset { get; private set; } = string.Empty;
 
     /// <summary>
+    /// The firewall tables the host holds, in the JSON of nft, by name.
+    /// </summary>
+    public Dictionary<string, string> Tables { get; } = [];
+
+    /// <summary>
     /// What the host refuses, by the first word of the step.
     /// </summary>
     public string Refuses { get; set; } = string.Empty;
@@ -109,6 +114,16 @@ public sealed class Ledger : IHostNetwork
     /// Reads a firewall ruleset without putting it on the host.
     /// </summary>
     public Task CheckFirewallAsync(string ruleset, CancellationToken ct) => Step("check");
+
+    /// <summary>
+    /// Returns an inet table of the firewall in the JSON of nft, empty when the host holds no such table.
+    /// </summary>
+    public Task<string> ReadFirewallAsync(string table, CancellationToken ct)
+    {
+        Steps.Add($"read {table}");
+
+        return Task.FromResult(Tables.GetValueOrDefault(table, string.Empty));
+    }
 
     /// <summary>
     /// Tells whether the host was asked to do a step.

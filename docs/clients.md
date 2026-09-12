@@ -34,6 +34,9 @@ The private key of a client is written out only to a caller that holds `clients:
 | Subscription | the subscription that hands the client out, see [subscriptions.md](subscriptions.md) |
 | Several devices | whether the client takes devices of its own, each with its keys and address, see [devices.md](devices.md) |
 | Daily limit | how many bytes a day the client moves together with its devices; empty for no limit, see [Traffic](#traffic) |
+| Access to the client | what reaches the client from the tunnel: as the interface says, closed, the server alone, or the whole tunnel network, see [The way back](#the-way-back) |
+| Networks behind the client | the ranges the client carries behind it, laid into the `AllowedIPs` of its peer |
+| Port forwarding | ports of the host carried to a port of the client over tcp or udp |
 
 `GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair, a subscription of its own and
 a name no other client carries. With `?config=<id>` it also carries the first number free in every range of the
@@ -43,6 +46,34 @@ The panel adds a client to the interface picked in its form, and the address is 
 of every range comes from the interface and the number goes into each of them, so a client of an interface with
 IPv6 takes the same number in both families. A client whose addresses do not come out of one number is edited as
 a list.
+
+## The way back
+
+A client is reached back through the tunnel only as far as its access says. Closed means the tunnel starts
+nothing towards it, the server alone means the panel and the host reach it while its neighbours do not, and
+the whole tunnel network means every client of the endpoint reaches it as well. A client set to follow the
+interface takes what the endpoint carries under `Access to the clients`, see [configs.md](configs.md), and
+that is what a fresh client starts with; naming an access of its own outweighs the endpoint. The panel lays
+this as
+firewall rules of the endpoint, see [configs.md](configs.md): the address of a client that takes the whole
+network goes into the set of the endpoint, and everything else aimed at the clients is dropped. Clients that
+were already held when the panel took this on take the closed setting.
+
+The networks behind a client go into the `AllowedIPs` of its peer, so the host routes them into the tunnel,
+and they are reached under the same access as the client itself. The device at the far end passes them on
+itself: the panel puts nothing on it.
+
+A port of the host is carried to a client whatever its access says, because naming the port is the
+permission: `tcp:2222:22` takes port 2222 of the host to port 22 of the client. One port of the host is
+carried once per protocol, and a client that carries addresses of both families takes the port in both.
+The client answers only when the ranges it routes into the tunnel cover the address the request came from,
+so a client that routes `0.0.0.0/0` answers everyone and a narrower list answers what it holds.
+
+The file and the `vpn://` link of the client name what it takes from the tunnel, so the application turns
+the flags of its own operating system on without being told twice: the file carries the lines
+`# AmneziaGeo Inbound = <off|server|network>` and `# AmneziaGeo Routes = <ranges>`, and the link carries the
+same under `amneziageo`. A device of a client takes the access of the client it belongs to, while the
+networks behind a client and the ports of the host stay with the record that carries them.
 
 ## What the client is handed
 

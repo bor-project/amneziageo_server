@@ -234,6 +234,46 @@ public class ClientStoreTests
         Assert.Equal("unknown-template", added.Code);
     }
 
+    [Fact]
+    public async Task WhatAClientTakesFromTheTunnelIsReadBackAsItWasSaved()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+
+        var added = await bench.Clients.AddAsync(
+            Fresh(endpoint, "milena") with
+            {
+                Inbound = ClientInbound.Network,
+                Routes = ["192.168.88.0/24", "10.1.0.0/16"],
+                Forwards = [new PortForward("tcp", 2222, 22), new PortForward("udp", 5353, 53)],
+            },
+            CancellationToken.None);
+        var held = await bench.Clients.FindAsync(added.Record!.Id, CancellationToken.None);
+
+        Assert.Equal(ClientInbound.Network, held?.Inbound);
+        Assert.Equal(["192.168.88.0/24", "10.1.0.0/16"], held?.Routes);
+        Assert.Equal(["tcp:2222:22", "udp:5353:53"], held?.Forwards.Select(one => one.ToString()));
+    }
+
+    [Fact]
+    public async Task ADeviceTakesTheAccessOfItsClient()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+        var added = await bench.Clients.AddAsync(
+            Fresh(endpoint, "milena") with { MultiDevice = true },
+            CancellationToken.None);
+        var device = await bench.Clients.AddDeviceAsync(added.Record!.Id, CancellationToken.None);
+
+        await bench.Clients.ChangeAsync(
+            added.Record.Id,
+            added.Record with { MultiDevice = true, Inbound = ClientInbound.Server },
+            CancellationToken.None);
+        var held = await bench.Clients.FindAsync(device.Record!.Id, CancellationToken.None);
+
+        Assert.Equal(ClientInbound.Server, held?.Inbound);
+    }
+
     private static async Task<long> EndpointAsync(Bench bench)
     {
         var added = await bench.Configs.AddAsync(

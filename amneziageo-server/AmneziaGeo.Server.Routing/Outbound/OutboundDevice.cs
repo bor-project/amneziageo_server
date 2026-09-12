@@ -15,9 +15,9 @@ public static class OutboundDevice
     public static readonly string[] AllowedIps = ["0.0.0.0/0", "::/0"];
 
     /// <summary>
-    /// Returns the change that puts the settings of an outbound on its interface.
+    /// Returns the change that puts the settings of an outbound on its interface, dropping the peers it held when told to.
     /// </summary>
-    public static AwgUpdate Update(OutboundConfig outbound, IPEndPoint server)
+    public static AwgUpdate Update(OutboundConfig outbound, IPEndPoint server, bool replacePeers = true)
     {
         ArgumentNullException.ThrowIfNull(outbound);
         ArgumentNullException.ThrowIfNull(server);
@@ -26,7 +26,7 @@ public static class OutboundDevice
         {
             Name = outbound.Name,
             PrivateKey = outbound.PrivateKey,
-            ReplacePeers = true,
+            ReplacePeers = replacePeers,
             Obfuscation = OutboundRules.IsPlain(outbound.Obfuscation)
                 ? null
                 : ConfigDevice.Obfuscation(outbound.Obfuscation),

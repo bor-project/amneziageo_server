@@ -14,7 +14,11 @@ On the machine the code lives on:
 ```
 
 It builds the panel, publishes the server and the console for `linux-x64` with the runtime inside them and
-writes `out/amneziageo-server.tar.gz`, about 50 MB. The server needs no .NET installed.
+writes `out/amneziageo-server.tar.gz`, about 50 MB. The server needs no .NET installed. `./deploy/publish.sh --ui`
+builds the web interface alone into `out/amneziageo-web.tar.gz`, see [Only the web interface](#only-the-web-interface).
+
+A package is a release named after the time it was built and the commit it was built from, as in
+`20260911-201500-b0c285f`.
 
 ## Put it on the host
 
@@ -25,7 +29,7 @@ tar xzf /root/amneziageo-server.tar.gz -C /root
 /root/amneziageo-server/install.sh
 ```
 
-The script puts the files in `/opt/amneziageo-server`, makes `/var/lib/amneziageo-server` for the database
+The script puts the release under `/opt/amneziageo-server`, makes `/var/lib/amneziageo-server` for the database
 and the geo files, `/etc/amneziageo-server` for the signing key, and installs the service. It does not start
 it: the first administrator comes first.
 
@@ -115,7 +119,7 @@ were.
 
 | Path | Holds |
 |---|---|
-| `/opt/amneziageo-server` | the server, the console and the panel |
+| `/opt/amneziageo-server` | the releases of the server, the console and the panel, see [What the host keeps](#what-the-host-keeps) |
 | `/var/lib/amneziageo-server/server.db` | accounts, endpoints, clients, rules |
 | `/var/lib/amneziageo-server/geo` | the geo databases, when they are used |
 | `/etc/amneziageo-server/signing.pem` | the key the tokens are signed with |
@@ -127,5 +131,75 @@ it does the same job.
 
 ## Keeping it up to date
 
-Build a new package, copy it over and run `install.sh` again: it stops the service, replaces the files and
-leaves the database where it is. Start it back with `systemctl start amneziageo-server`.
+Build a new package, copy it over and run its `install.sh`, the same way as the first time. The interfaces and
+their clients live in the kernel and do not go down with the server, so the clients keep their connections
+through an update.
+
+### The whole panel
+
+The script puts the new release next to the running one, stops the server, copies the database aside, points
+`current` at the new release and starts the server on it. It waits until the server says it is up and watches it
+for five more seconds. A release that does not come up, or falls over in that time, is taken back: the copy of
+the database returns, `current` points at the release before, the server starts on it, and the script ends with
+an error. A server that was stopped before the update stays stopped. A package the host already runs is not put
+on again, unless `--force` says so.
+
+What goes on while the server starts over:
+
+| What | Through the update |
+|---|---|
+| Interfaces and clients | stay in the kernel, with their handshakes and counters |
+| Outbounds | keep their server as a peer, with the handshake and the counters; an outbound through a websocket proxy is carried by the server itself and waits for it |
+| Routing rules and firewall tables | stay on the host and are laid anew in one step at start |
+| Addresses the resolver put into the sets | are read back from the host at start and laid again with the rules |
+| The resolver | answers nothing for the seconds the server takes to start; clients ask again |
+| Proxies | keep running: a proxy is started over only when its files change |
+| Relays | keep running the release they started from, until that release is dropped |
+| The panel and the subscriptions | do not answer while the server starts |
+
+### Only the web interface
+
+```
+./deploy/publish.sh --ui
+scp out/amneziageo-web.tar.gz root@<host>:/root/
+ssh root@<host>
+tar xzf /root/amneziageo-web.tar.gz -C /root
+/root/amneziageo-web/install.sh
+```
+
+The server keeps running: the script puts the web interface next to the one the server serves and points
+`wwwroot` at it, and the next page opened is the new one. A page already open keeps working, since the files it
+may still ask for are copied over from the interface before. The package knows the server it was built for and
+refuses a host that runs another one: an interface that asks for what the server does not have yet needs the
+whole package. `--force` puts it on anyway. `install.sh --ui` of the whole package puts on its web interface
+alone, the same way.
+
+### Going back
+
+```
+/opt/amneziageo-server/current/install.sh --rollback
+```
+
+points `current` back at the release before and starts the server over on it, with the web interface that came
+with that release; the same command again returns to the newer one. The database stays as it is: every update copies it aside first, into
+`/var/lib/amneziageo-server/backup`, which keeps the last five copies. `install.sh --list` shows the releases
+the host keeps.
+
+### What the host keeps
+
+| Path | Holds |
+|---|---|
+| `/opt/amneziageo-server/releases/<release>` | a release of the server and the console |
+| `/opt/amneziageo-server/web/<release>` | a release of the web interface |
+| `/opt/amneziageo-server/current` | the release that runs |
+| `/opt/amneziageo-server/previous` | the release before it, where `--rollback` goes |
+| `/opt/amneziageo-server/wwwroot` | the web interface the server serves |
+| `/var/lib/amneziageo-server/backup` | the database as it was before each of the last five updates |
+
+The host keeps the current release and the one before it, each with its web interface, and the web interface
+served before the last one; the rest goes, a release that did not come up among it. A relay still running from a
+release that goes is started over on the current one first. `AmneziaGeo.Server.Api` and `AmneziaGeo.Server.Cli`
+in `/opt/amneziageo-server` lead to the current release, so the commands above work as they are.
+
+A panel put on before releases kept its files right in `/opt/amneziageo-server`. The first update moves them
+into a release of their own, `legacy-<date>`, and goes on from there.

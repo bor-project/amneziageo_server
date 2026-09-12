@@ -315,7 +315,8 @@ public sealed class ClientStore
         var now = _time.GetUtcNow();
         Write(entity, wanted);
         entity.UpdatedUtc = now;
-        await FollowAsync(id, wanted.IsEnabled, wanted.TemplateId, wanted.DailyLimit, now, ct).ConfigureAwait(false);
+        await FollowAsync(id, wanted.IsEnabled, wanted.TemplateId, wanted.DailyLimit, wanted.Inbound, now, ct)
+            .ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ClientResult.Done(Read(entity));
@@ -335,7 +336,8 @@ public sealed class ClientStore
         var now = _time.GetUtcNow();
         entity.IsEnabled = on;
         entity.UpdatedUtc = now;
-        await FollowAsync(id, on, entity.TemplateId, entity.DailyLimit, now, ct).ConfigureAwait(false);
+        await FollowAsync(id, on, entity.TemplateId, entity.DailyLimit, (ClientInbound)entity.Inbound, now, ct)
+            .ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ClientResult.Done(Read(entity));
@@ -366,6 +368,7 @@ public sealed class ClientStore
         bool on,
         long? template,
         long limit,
+        ClientInbound inbound,
         DateTimeOffset now,
         CancellationToken ct)
     {
@@ -375,6 +378,7 @@ public sealed class ClientStore
             device.IsEnabled = on;
             device.TemplateId = template;
             device.DailyLimit = limit;
+            device.Inbound = (int)inbound;
             device.UpdatedUtc = now;
         }
     }
@@ -491,6 +495,9 @@ public sealed class ClientStore
         ParentId = entity.ParentId,
         MultiDevice = entity.MultiDevice,
         DailyLimit = entity.DailyLimit,
+        Inbound = (ClientInbound)entity.Inbound,
+        Routes = Parts(entity.Routes),
+        Forwards = Carried(entity.Forwards),
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
     };
@@ -509,6 +516,9 @@ public sealed class ClientStore
         entity.ParentId = client.ParentId;
         entity.MultiDevice = client.MultiDevice;
         entity.DailyLimit = client.DailyLimit;
+        entity.Inbound = (int)client.Inbound;
+        entity.Routes = string.Join(", ", client.Routes);
+        entity.Forwards = string.Join(", ", client.Forwards.Select(forward => forward.ToString()));
     }
 
     private static TunnelClient Whole(TunnelClient draft) => draft with
@@ -532,4 +542,11 @@ public sealed class ClientStore
 
     private static IReadOnlyList<string> Parts(string text) =>
         [.. text.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+    private static IReadOnlyList<PortForward> Carried(string text) =>
+    [
+        .. Parts(text)
+            .Select(part => PortForward.TryParse(part, out var found) ? found : null)
+            .OfType<PortForward>()
+    ];
 }

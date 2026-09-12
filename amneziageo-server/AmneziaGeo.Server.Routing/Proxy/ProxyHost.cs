@@ -47,7 +47,7 @@ public sealed class ProxyHost
     public string ArgumentsPath(string name) => Path.Combine(_directory, ProxyFile.Arguments(name));
 
     /// <summary>
-    /// Puts a proxy on the host, and takes its service down when the proxy is turned off.
+    /// Puts a proxy on the host, starting its service over only when its files change or it is down.
     /// </summary>
     public async Task<ProxyState> ApplyAsync(
         ProxyConfig proxy,
@@ -67,9 +67,9 @@ public sealed class ProxyHost
             }
 
             var written = await WriteAsync(proxy, ports, certificate, key, ct).ConfigureAwait(false);
-            if (written.Length > 0)
+            if (written.Fault.Length > 0)
             {
-                return new ProxyState(false, written);
+                return new ProxyState(false, written.Fault);
             }
 
             var enabled = await RunAsync(["enable", Unit(proxy.Name, proxy.Kind)], ProxyState.Down, ct)
@@ -77,6 +77,15 @@ public sealed class ProxyHost
             if (enabled.Message.Length > 0)
             {
                 return enabled;
+            }
+
+            if (!written.IsChanged)
+            {
+                var running = await StateAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
+                if (running.IsRunning)
+                {
+                    return running;
+                }
             }
 
             var started = await RunAsync(["restart", Unit(proxy.Name, proxy.Kind)], ProxyState.Up, ct)
@@ -157,7 +166,7 @@ public sealed class ProxyHost
         return result.IsOk ? done : new ProxyState(false, result.Complaint);
     }
 
-    private async Task<string> WriteAsync(
+    private async Task<Written> WriteAsync(
         ProxyConfig proxy,
         IReadOnlyList<int> ports,
         string certificate,
@@ -168,27 +177,33 @@ public sealed class ProxyHost
         {
             Directory.CreateDirectory(_directory);
             var rules = RulesPath(proxy.Name);
-            if (ProxyKind.HasPath(proxy.Kind))
-            {
-                await File.WriteAllTextAsync(rules, ProxyFile.Whitelist(proxy.Path, ports), ct).ConfigureAwait(false);
-            }
-
-            await File.WriteAllTextAsync(
-                    ArgumentsPath(proxy.Name),
-                    ProxyFile.Line(proxy, certificate, key, rules),
-                    ct)
+            var whitelist = ProxyKind.HasPath(proxy.Kind)
+                && await PutAsync(rules, ProxyFile.Whitelist(proxy.Path, ports), ct).ConfigureAwait(false);
+            var arguments = await PutAsync(ArgumentsPath(proxy.Name), ProxyFile.Line(proxy, certificate, key, rules), ct)
                 .ConfigureAwait(false);
 
-            return string.Empty;
+            return new Written(whitelist || arguments, string.Empty);
         }
         catch (IOException ex)
         {
-            return ex.Message;
+            return new Written(false, ex.Message);
         }
         catch (UnauthorizedAccessException ex)
         {
-            return ex.Message;
+            return new Written(false, ex.Message);
         }
+    }
+
+    private static async Task<bool> PutAsync(string path, string text, CancellationToken ct)
+    {
+        if (File.Exists(path) && await File.ReadAllTextAsync(path, ct).ConfigureAwait(false) == text)
+        {
+            return false;
+        }
+
+        await File.WriteAllTextAsync(path, text, ct).ConfigureAwait(false);
+
+        return true;
     }
 
     private void Clear(string name)
@@ -205,4 +220,6 @@ public sealed class ProxyHost
         {
         }
     }
+
+    private sealed record Written(bool IsChanged, string Fault);
 }

@@ -35,6 +35,7 @@ go only to a caller that holds `interfaces:write`; to anyone else they come back
 | Closed to clients | the ranges clients of the endpoint are not let into |
 | Raise the interface | whether the panel puts the endpoint on the host |
 | NAT for clients | whether what clients send out is masqueraded behind the address of the host |
+| Access to the clients | what reaches the clients of the endpoint from the tunnel unless a client names it itself: closed, the server alone, or the whole tunnel network, see [clients.md](clients.md) |
 | AllowedIPs | the ranges a client sends through the tunnel |
 | DNS | the name servers a client takes |
 | Keepalive | how often a client sends an empty packet, in seconds |
@@ -115,13 +116,25 @@ The rules travel in the `inet amneziageo_in` table, rewritten whenever an endpoi
 
 | Rule | What it does |
 |---|---|
+| `iifname "<uplink>" <tcp\|udp> dport <port> dnat to <client>` | carries a port of the host to a client |
 | `ip saddr <range> oifname "<uplink>" masquerade` | sends clients out behind the address of the host |
-| `iifname "<endpoint>" ip daddr <own range> accept` | lets clients of one endpoint reach each other |
+| `ct state established,related accept` | lets the answers to what a client sent back in |
+| `oifname "<endpoint>" ip daddr <client>  <tcp\|udp> dport <port> accept` | lets a carried port through |
+| `oifname "<endpoint>" ip daddr @in<id>v4 accept` | lets the tunnel reach the clients that take it |
+| `oifname "<endpoint>" drop` | holds everything else off the clients of the endpoint |
 | `iifname "<endpoint>" ip daddr <closed range> reject` | keeps clients out of the ranges the endpoint closes |
 
-Both families travel the same way, and the host is told to pass packets between interfaces in both of them.
+The sets `in<id>v4` and `in<id>v6` carry the addresses of the clients whose access is the whole tunnel
+network, together with the networks behind them, see [clients.md](clients.md). A client that leaves the
+choice to the endpoint takes what the endpoint says; a client that takes nothing from the tunnel is in no
+set, so `drop` holds the other clients off it.
+
+Both families travel the same way, and the host is told to pass packets between interfaces in both of them:
+`net.ipv4.ip_forward` and `net.ipv6.conf.all.forwarding` are set on every raise, so a host that was rebooted
+carries them again as soon as the server starts.
 `POST /api/configs/{id}/apply` puts one endpoint on the host again, `POST /api/configs/apply` all of them.
-Every endpoint is raised once more when the server starts, before the clients are laid on top.
+Every endpoint is raised once more when the server starts, before the clients are laid on top. An interface
+that is already up keeps its peers and the addresses it carries: only the addresses that differ are changed.
 
 ## The keys
 
