@@ -63,6 +63,7 @@ export const en = {
   "proxies.name": "Name",
   "proxies.nameHint": "The name of the proxy service on the server",
   "proxies.port": "Port",
+  "proxies.opened": "Open the port in the firewall",
   "proxies.portHint": "The port the proxy waits for clients on",
   "proxies.path": "Path",
   "proxies.pathHint": "The secret string in the address of the connection",
@@ -261,6 +262,7 @@ export const en = {
 
   "settings.listen": "Listen addresses",
   "settings.port": "Port",
+  "settings.opened": "Open the port in the firewall",
   "settings.path": "Path",
   "settings.domains": "Listen domains",
   "settings.domain": "Certificate domain",
@@ -370,6 +372,7 @@ export const en = {
   "configs.blocked": "Closed to clients",
   "configs.enabled": "Raise the interface",
   "configs.inbound": "Access to the clients",
+  "configs.opened": "Open the port in the firewall",
   "configs.nat": "NAT for clients",
   "configs.apply": "Apply",
   "configs.applied": "The interface is up",

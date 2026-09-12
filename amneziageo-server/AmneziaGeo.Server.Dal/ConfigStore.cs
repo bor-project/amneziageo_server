@@ -204,6 +204,7 @@ public sealed class ConfigStore
         OfflineAfter = entity.OfflineAfter,
         IsEnabled = entity.IsEnabled,
         Nat = entity.Nat,
+        Opened = entity.Opened,
         Inbound = (ClientInbound)entity.Inbound,
         Blocked = Parts(entity.Blocked),
         PrivateKey = entity.PrivateKey,
@@ -254,6 +255,7 @@ public sealed class ConfigStore
         entity.OfflineAfter = config.OfflineAfter;
         entity.IsEnabled = config.IsEnabled;
         entity.Nat = config.Nat;
+        entity.Opened = config.Opened;
         entity.Inbound = (int)config.Inbound;
         entity.Blocked = string.Join(", ", config.Blocked);
         entity.PrivateKey = config.PrivateKey;

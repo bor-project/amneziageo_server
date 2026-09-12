@@ -65,6 +65,7 @@ export const ru: Dictionary = {
   "proxies.name": "Имя",
   "proxies.nameHint": "Имя службы прокси на сервере",
   "proxies.port": "Порт",
+  "proxies.opened": "Открыть порт в брандмауэре",
   "proxies.portHint": "Порт, на котором прокси ждёт клиентов",
   "proxies.path": "Путь",
   "proxies.pathHint": "Секретная строка в адресе подключения",
@@ -263,6 +264,7 @@ export const ru: Dictionary = {
 
   "settings.listen": "Слушать на адресах",
   "settings.port": "Порт",
+  "settings.opened": "Открыть порт в брандмауэре",
   "settings.path": "Путь",
   "settings.domains": "Отвечать доменам",
   "settings.domain": "Домен сертификата",
@@ -372,6 +374,7 @@ export const ru: Dictionary = {
   "configs.blocked": "Закрыто для клиентов",
   "configs.enabled": "Поднимать интерфейс",
   "configs.inbound": "Доступ к клиентам",
+  "configs.opened": "Открыть порт в брандмауэре",
   "configs.nat": "NAT для клиентов",
   "configs.apply": "Применить",
   "configs.applied": "Интерфейс поднят",

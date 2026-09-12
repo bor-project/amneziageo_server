@@ -29,6 +29,7 @@ says why. `Cancel` drops what is not saved yet.
 | Listen addresses | the addresses of the host the subscriptions bind, empty for every address |
 | Listen domains | the names the subscriptions answer to, empty for any; the first one goes into the address a client is handed |
 | Port | 2096 by default; the port of the panel puts the subscriptions next to it, under its certificate |
+| Open the port in the firewall | whether the panel holds the port of the subscriptions open in the firewall of the host, see [firewall.md](firewall.md) |
 | Base path | what follows the port and goes before the path of a subscription, `/sub/` by default |
 | Certificate | the chain and the key the subscriptions answer under, empty for the certificate of the panel |
 | Update interval | how often a client reads the subscription again, 12 hours by default, 1 to 720 |

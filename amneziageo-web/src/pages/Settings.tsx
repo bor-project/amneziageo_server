@@ -112,6 +112,16 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
             />
           </Row>
 
+          <Row id="panel-opened" caption={t("settings.opened")}>
+            <input
+              id="panel-opened"
+              type="checkbox"
+              checked={draft.opened}
+              onChange={(e) => set({ opened: e.target.checked })}
+              className="size-4 accent-brand"
+            />
+          </Row>
+
           <Row id="panel-path" caption={t("settings.path")}>
             <input id="panel-path" className={field} value={draft.path} onChange={(e) => set({ path: e.target.value })} />
           </Row>

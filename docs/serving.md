@@ -12,6 +12,7 @@ hold without a restart, see [subscriptions.md](subscriptions.md).
 | Listen addresses | the addresses of the host the panel binds, empty for every address it carries |
 | Listen domains | the names the panel answers to, empty for any; a request carrying another name answers 404, a caller from the loopback is let through |
 | Port | the port the panel binds, 8443 when nothing is set |
+| Open the port in the firewall | whether the panel holds its own port open in the firewall of the host, see [firewall.md](firewall.md) |
 | Path | what follows the port, `/` for the root: `/panel/` puts the panel there and everything outside it answers 404 |
 | Certificate domain | a directory of `/etc/letsencrypt/live`, picking one fills the two paths below it |
 | Certificate path | the chain in PEM, empty for the certificate the configuration names |

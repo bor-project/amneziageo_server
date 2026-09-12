@@ -199,6 +199,11 @@ public sealed record ServerConfig
     public bool Nat { get; init; } = true;
 
     /// <summary>
+    /// Whether the panel holds the port of the endpoint open in the firewall of the host.
+    /// </summary>
+    public bool Opened { get; init; }
+
+    /// <summary>
     /// The ranges clients of the endpoint are not let into.
     /// </summary>
     public IReadOnlyList<string> Blocked { get; init; } = [];

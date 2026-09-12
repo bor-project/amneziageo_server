@@ -31,6 +31,11 @@ public sealed record ProxyConfig
     public int Port { get; init; } = ProxyDefaults.Port;
 
     /// <summary>
+    /// Whether the panel holds the port of the proxy open in the firewall of the host.
+    /// </summary>
+    public bool Opened { get; init; }
+
+    /// <summary>
     /// The path a tunnel names to reach the proxy.
     /// </summary>
     public string Path { get; init; } = string.Empty;

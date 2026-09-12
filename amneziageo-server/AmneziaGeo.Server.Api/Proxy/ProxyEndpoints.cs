@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Core.Proxy;
@@ -68,6 +69,7 @@ public static class ProxyEndpoints
         ProxyRequest request,
         ProxyStore store,
         ProxyApplier applier,
+        FirewallApplier firewall,
         CancellationToken ct)
     {
         var draft = ProxyAnswers.Draft(request);
@@ -83,6 +85,7 @@ public static class ProxyEndpoints
         }
 
         var state = await applier.ApplyAsync(result.Record, ct).ConfigureAwait(false);
+        await firewall.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Created($"/api/proxies/{result.Record.Id}", ProxyAnswers.Proxy(result.Record, state));
     }
@@ -92,6 +95,7 @@ public static class ProxyEndpoints
         ProxyRequest request,
         ProxyStore store,
         ProxyApplier applier,
+        FirewallApplier firewall,
         CancellationToken ct)
     {
         var draft = ProxyAnswers.Draft(request);
@@ -113,6 +117,7 @@ public static class ProxyEndpoints
         }
 
         var state = await applier.ApplyAsync(result.Record, ct).ConfigureAwait(false);
+        await firewall.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(ProxyAnswers.Proxy(result.Record, state));
     }
@@ -122,6 +127,7 @@ public static class ProxyEndpoints
         ProxySwitchRequest request,
         ProxyStore store,
         ProxyApplier applier,
+        FirewallApplier firewall,
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -139,6 +145,7 @@ public static class ProxyEndpoints
         }
 
         var state = await applier.ApplyAsync(result.Record, ct).ConfigureAwait(false);
+        await firewall.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(ProxyAnswers.Proxy(result.Record, state));
     }
@@ -147,6 +154,7 @@ public static class ProxyEndpoints
         long id,
         ProxyStore store,
         ProxyApplier applier,
+        FirewallApplier firewall,
         CancellationToken ct)
     {
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
@@ -156,6 +164,7 @@ public static class ProxyEndpoints
         }
 
         await applier.WithdrawAsync(result.Record.Name, result.Record.Kind, ct).ConfigureAwait(false);
+        await firewall.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.NoContent();
     }

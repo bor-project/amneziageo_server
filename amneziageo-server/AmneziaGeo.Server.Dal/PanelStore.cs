@@ -152,6 +152,7 @@ public sealed class PanelStore
         Listen = PanelList.Split(row.Listen),
         Domains = PanelList.Split(row.Domains),
         Port = row.Port,
+        Opened = row.Opened,
         Path = row.Path,
         Certificate = row.Certificate,
         CertificateKey = row.CertificateKey,
@@ -163,6 +164,7 @@ public sealed class PanelStore
         row.Listen = PanelList.Line(settings.Listen);
         row.Domains = PanelList.Line(settings.Domains);
         row.Port = settings.Port;
+        row.Opened = settings.Opened;
         row.Path = settings.Path;
         row.Certificate = settings.Certificate;
         row.CertificateKey = settings.CertificateKey;

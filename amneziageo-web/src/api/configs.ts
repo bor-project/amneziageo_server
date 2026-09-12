@@ -43,6 +43,7 @@ export interface Config {
   offlineAfter: number
   isEnabled: boolean
   nat: boolean
+  opened: boolean
   inbound: Inbound
   blocked: string[]
   publicKey: string
@@ -65,6 +66,7 @@ export interface ConfigDraft {
   offlineAfter: number
   isEnabled: boolean
   nat: boolean
+  opened: boolean
   inbound: Inbound
   blocked: string[]
   privateKey: string
@@ -154,6 +156,7 @@ export function draftOf(config: Config): ConfigDraft {
     offlineAfter: config.offlineAfter,
     isEnabled: config.isEnabled,
     nat: config.nat,
+    opened: config.opened,
     inbound: config.inbound,
     blocked: config.blocked,
     privateKey: config.privateKey ?? "",

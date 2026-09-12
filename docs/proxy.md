@@ -16,6 +16,7 @@ A proxy comes in one of two kinds, picked when it is added:
 | Kind | both | Which of the two the proxy is |
 | Port | both | The port the proxy listens on, 443 by default |
 | Enabled | both | Whether the host runs the service of the proxy |
+| Open the port in the firewall | both | Whether the panel holds the port of the proxy open in the firewall of the host, see [firewall.md](firewall.md) |
 | Allowed from | both | The addresses and the networks the proxy takes, empty for any |
 | Path | `ws` | The path a client names to reach the proxy |
 | Path to the certificate, Path to the key | `ws` | The certificate the proxy answers under, empty for the one of the panel |

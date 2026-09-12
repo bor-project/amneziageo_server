@@ -123,6 +123,8 @@ public sealed class ConfigEntity
 
     public bool Nat { get; set; } = true;
 
+    public bool Opened { get; set; }
+
     public string Blocked { get; set; } = string.Empty;
 
     public int Inbound { get; set; }
@@ -367,6 +369,8 @@ public sealed class PanelEntity
 
     public int Port { get; set; }
 
+    public bool Opened { get; set; }
+
     public string Path { get; set; } = string.Empty;
 
     public string Certificate { get; set; } = string.Empty;
@@ -392,6 +396,8 @@ public sealed class ProxyEntity
     public bool IsEnabled { get; set; }
 
     public int Port { get; set; }
+
+    public bool Opened { get; set; }
 
     public string Path { get; set; } = string.Empty;
 
@@ -538,6 +544,8 @@ public sealed class SubscriptionEntity
     public string Domains { get; set; } = string.Empty;
 
     public int Port { get; set; }
+
+    public bool Opened { get; set; }
 
     public string Path { get; set; } = string.Empty;
 

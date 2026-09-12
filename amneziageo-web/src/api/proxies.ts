@@ -8,6 +8,7 @@ export interface ProxyDraft {
   kind: ProxyKind
   isEnabled: boolean
   port: number
+  opened: boolean
   path: string
   target: string
   sources: string[]
@@ -77,6 +78,7 @@ export function draftOf(proxy: Proxy): ProxyDraft {
     kind: proxy.kind,
     isEnabled: proxy.isEnabled,
     port: proxy.port,
+    opened: proxy.opened,
     path: proxy.path,
     target: proxy.target,
     sources: proxy.sources,

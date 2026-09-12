@@ -204,6 +204,7 @@ public sealed class ProxyStore
         Kind = row.Kind,
         IsEnabled = row.IsEnabled,
         Port = row.Port,
+        Opened = row.Opened,
         Path = row.Path,
         Target = row.Target,
         Sources = PanelList.Split(row.Sources),
@@ -217,6 +218,7 @@ public sealed class ProxyStore
         row.Kind = proxy.Kind;
         row.IsEnabled = proxy.IsEnabled;
         row.Port = proxy.Port;
+        row.Opened = proxy.Opened;
         row.Path = proxy.Path.Trim('/');
         row.Target = proxy.Target.Trim();
         row.Sources = PanelList.Line(PanelList.Of(proxy.Sources));

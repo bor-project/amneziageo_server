@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Core.Panel;
@@ -43,6 +44,7 @@ public static class SubscriptionEndpoints
         SubscriptionState state,
         PanelSettings panel,
         WebOptions options,
+        FirewallApplier firewall,
         ILoggerFactory loggers,
         CancellationToken ct)
     {
@@ -62,6 +64,7 @@ public static class SubscriptionEndpoints
         }
 
         var saved = await store.SaveAsync(draft, ct).ConfigureAwait(false);
+        await firewall.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(SubscriptionAnswers.Settings(saved, state.Fault, options));
     }

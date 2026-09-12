@@ -28,6 +28,11 @@ public sealed record PanelSettings
     public string Path { get; init; } = string.Empty;
 
     /// <summary>
+    /// Whether the panel holds its own port open in the firewall of the host.
+    /// </summary>
+    public bool Opened { get; init; }
+
+    /// <summary>
     /// The certificate chain the panel answers under, empty for the one the configuration names.
     /// </summary>
     public string Certificate { get; init; } = string.Empty;

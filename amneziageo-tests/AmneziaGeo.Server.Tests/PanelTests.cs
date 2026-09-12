@@ -97,7 +97,7 @@ public class PanelTests
     public void NamesInARequestArriveAsAList()
     {
         var asked = PanelAnswers.Draft(
-            new PanelRequest(["127.0.0.1"], ["panel.example; vpn.example"], 8443, "/panel/", null, null, "ru"));
+            new PanelRequest(["127.0.0.1"], ["panel.example; vpn.example"], 8443, false, "/panel/", null, null, "ru"));
 
         Assert.Equal(["127.0.0.1"], asked.Listen);
         Assert.Equal(["panel.example", "vpn.example"], asked.Domains);

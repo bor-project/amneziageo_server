@@ -6,6 +6,7 @@ export interface SubscriptionDraft {
   listen: string[]
   domains: string[]
   port: number
+  opened: boolean
   path: string
   certificate: string
   certificateKey: string
@@ -45,6 +46,7 @@ export function draftOf(one: Subscription): SubscriptionDraft {
     listen: one.listen,
     domains: one.domains,
     port: one.port,
+    opened: one.opened,
     path: one.path,
     certificate: one.certificate,
     certificateKey: one.certificateKey,

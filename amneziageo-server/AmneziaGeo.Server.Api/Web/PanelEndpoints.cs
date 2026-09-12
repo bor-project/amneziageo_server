@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
@@ -64,6 +65,7 @@ public static class PanelEndpoints
         PanelStore store,
         PanelSettings running,
         WebOptions options,
+        FirewallApplier firewall,
         ILoggerFactory loggers,
         CancellationToken ct)
     {
@@ -82,6 +84,8 @@ public static class PanelEndpoints
         {
             return Results.Json(new Failure(result.Code, result.Message), statusCode: StatusCodes.Status400BadRequest);
         }
+
+        await firewall.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(PanelAnswers.Panel(result.Record, running, options));
     }

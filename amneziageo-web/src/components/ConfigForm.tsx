@@ -122,6 +122,12 @@ export function ConfigForm({
           value={draft.nat}
           onChange={(value) => put({ nat: value })}
         />
+        <Flag
+          id="config-opened"
+          caption={t("configs.opened")}
+          value={draft.opened}
+          onChange={(value) => put({ opened: value })}
+        />
         <Pick
           id="config-inbound"
           caption={t("configs.inbound")}

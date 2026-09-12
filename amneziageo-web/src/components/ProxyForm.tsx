@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
 import type { ProxyCertificate, ProxyDraft, ProxyKind } from "@/api/proxies"
-import { Count, Line, Multi, Pick, Section, Switch } from "@/components/fields"
+import { Count, Flag, Line, Multi, Pick, Section, Switch } from "@/components/fields"
 import { Modal } from "@/components/Modal"
 import { label, note, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
@@ -89,6 +89,12 @@ export function ProxyForm({
             value={draft.port}
             onChange={(v) => put({ port: v })}
             hint={t("proxies.portHint")}
+          />
+          <Flag
+            id="proxy-opened"
+            caption={t("proxies.opened")}
+            value={draft.opened}
+            onChange={(v) => put({ opened: v })}
           />
           {draft.kind === "ws" && (
             <Line

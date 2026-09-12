@@ -111,6 +111,16 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
         />
       </Row>
 
+      <Row id="subscription-opened" caption={t("settings.opened")}>
+        <input
+          id="subscription-opened"
+          type="checkbox"
+          checked={draft.opened}
+          onChange={(e) => set({ opened: e.target.checked })}
+          className="size-4 accent-brand"
+        />
+      </Row>
+
       <Row id="subscription-path" caption={t("subscription.path")}>
         <input
           id="subscription-path"

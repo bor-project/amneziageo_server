@@ -33,6 +33,11 @@ public sealed record SubscriptionSettings
     public string Path { get; init; } = SubscriptionDefaults.Path;
 
     /// <summary>
+    /// Whether the panel holds the port of the subscriptions open in the firewall of the host.
+    /// </summary>
+    public bool Opened { get; init; }
+
+    /// <summary>
     /// The certificate chain the subscriptions answer under, empty for the one of the panel.
     /// </summary>
     public string Certificate { get; init; } = string.Empty;
