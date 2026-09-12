@@ -17,6 +17,7 @@ public enum AccountOutcome
     UnknownRole = 7,
     Self = 8,
     Failed = 9,
+    BadKey = 10,
 }
 
 /// <summary>
@@ -105,14 +106,20 @@ public sealed class AccountManager
     /// <summary>
     /// Returns why a name cannot be taken, or null when it can.
     /// </summary>
-    public async Task<AccountResult?> WhyNotAsync(string name, CancellationToken ct)
+    public async Task<AccountResult?> WhyNotAsync(string name, CancellationToken ct) =>
+        await WhyNotAsync(name, false, ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// Returns why a name cannot be taken, leaving the users of the host to a privileged account.
+    /// </summary>
+    public async Task<AccountResult?> WhyNotAsync(string name, bool host, CancellationToken ct)
     {
         if (AccountRules.CheckName(name) is { } shape)
         {
             return AccountResult.No(AccountOutcome.BadName, shape);
         }
 
-        if (LocalUsers.Find(name) is not null)
+        if (!host && LocalUsers.Find(name) is not null)
         {
             return AccountResult.No(AccountOutcome.HostName, $"the host carries a user called '{name}', that name is left to it");
         }
@@ -140,11 +147,30 @@ public sealed class AccountManager
         string? role,
         string password,
         bool mustChange,
+        CancellationToken ct) =>
+        await AddAsync(name, displayName, role, password, mustChange, false, null, ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// Adds an account of the panel, standing for a user of the host when it is a privileged one.
+    /// </summary>
+    public async Task<AccountResult> AddAsync(
+        string name,
+        string? displayName,
+        string? role,
+        string password,
+        bool mustChange,
+        bool host,
+        string? key,
         CancellationToken ct)
     {
-        if (await WhyNotAsync(name, ct).ConfigureAwait(false) is { } refusal)
+        if (await WhyNotAsync(name, host, ct).ConfigureAwait(false) is { } refusal)
         {
             return refusal;
+        }
+
+        if (host && key is { Length: > 0 } && !HostUserPlan.IsKey(key))
+        {
+            return AccountResult.No(AccountOutcome.BadKey, "the public key is not one the host takes");
         }
 
         if (AccountRules.CheckPassword(password, _options.MinimumPasswordLength) is { } complaint)
@@ -161,11 +187,14 @@ public sealed class AccountManager
         {
             UserName = name,
             DisplayName = string.IsNullOrWhiteSpace(displayName) ? name : displayName.Trim(),
-            Kind = PrincipalKind.Local,
+            Kind = host ? PrincipalKind.Host : PrincipalKind.Local,
             IsEnabled = true,
             MustChangePassword = mustChange,
             CreatedUtc = _time.GetUtcNow(),
             PasswordChangedUtc = _time.GetUtcNow(),
+            HostUserName = host ? name : null,
+            HostUid = host ? (long?)LocalUsers.Find(name)?.Uid : null,
+            HostKey = host && key is { Length: > 0 } ? key.Trim() : null,
         };
 
         var created = await _users.CreateAsync(user, password).ConfigureAwait(false);
@@ -271,6 +300,34 @@ public sealed class AccountManager
         }
 
         return AccountResult.Done(user);
+    }
+
+    /// <summary>
+    /// Writes the public key a privileged account signs in to the host with.
+    /// </summary>
+    public async Task<AccountResult> SetHostKeyAsync(string name, string key, CancellationToken ct)
+    {
+        var user = await _users.FindByNameAsync(name).ConfigureAwait(false);
+        if (user is null)
+        {
+            return Missing(name);
+        }
+
+        if (user.HostUserName is not { Length: > 0 })
+        {
+            return AccountResult.No(AccountOutcome.BadKey, $"'{name}' is no user of the host");
+        }
+
+        if (!HostUserPlan.IsKey(key))
+        {
+            return AccountResult.No(AccountOutcome.BadKey, "the public key is not one the host takes");
+        }
+
+        user.HostKey = key.Trim();
+
+        var saved = await _users.UpdateAsync(user).ConfigureAwait(false);
+
+        return saved.Succeeded ? AccountResult.Done(user) : Failed(saved);
     }
 
     /// <summary>

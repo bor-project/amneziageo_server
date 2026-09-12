@@ -59,6 +59,7 @@ const complaints: Record<string, TextKey> = {
   "bad-client-forward": "error.badClientForward",
   "bad-client-inbound": "error.badClientInbound",
   "bad-inbound": "error.badInbound",
+  "bad-host-key": "error.badHostKey",
   "client-single-device": "error.clientSingleDevice",
   "client-is-device": "error.clientIsDevice",
   "client-has-devices": "error.clientHasDevices",

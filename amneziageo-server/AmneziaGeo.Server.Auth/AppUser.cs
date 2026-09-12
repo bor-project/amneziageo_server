@@ -67,6 +67,11 @@ public sealed class AppUser : IdentityUser<long>
     public DateTimeOffset? HostSeenUtc { get; set; }
 
     /// <summary>
+    /// The public key the host user signs in with.
+    /// </summary>
+    public string? HostKey { get; set; }
+
+    /// <summary>
     /// The name the account signs in with.
     /// </summary>
     public string Name => UserName ?? string.Empty;

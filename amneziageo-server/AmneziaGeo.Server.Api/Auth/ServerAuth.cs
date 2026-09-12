@@ -1,5 +1,6 @@
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Api.Auth;
 
@@ -25,6 +26,10 @@ public static class ServerAuth
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ITokenIssuer>(_ => TokenIssuer.Open(options));
         services.AddServerDatabase(path, options, configuration["Geo:Path"]);
+        services.AddScoped(provider => new HostUsers(
+            provider.GetRequiredService<IHostCommands>(),
+            options,
+            path));
 
         return services;
     }

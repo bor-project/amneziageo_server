@@ -65,6 +65,33 @@ A host account signs in over HTTP only by a password of the panel, since a reque
 browser runs as. An administrator sets one with `user passwd <name>`; the account keeps its role and its host
 login as they were.
 
+## Privileged accounts
+
+An account of the panel is a user of the host as well when it is added with `User of the system`. The panel
+gives the host what it needs and keeps the two together:
+
+| Step | What the host takes |
+|---|---|
+| Groups | `amneziageo`, which reaches the files of the panel, and `amneziageo-<role>`, which carries the role |
+| The user | `useradd` with a home and `/bin/bash` where the host carries no such user, `usermod --append` where it does |
+| The key | the public key of the account written to `~/.ssh/authorized_keys`, owned by the user, `600` under a `700` directory |
+| The files | the database and the signing key handed to `amneziageo` at `0660`, their directory at `2770` |
+
+No password of the host is set: the user signs in to the host by its key alone. The panel keeps the public key
+beside the account and writes it again whenever it is replaced; `bad-host-key` refuses a line the host does not
+take.
+
+Switching the account off closes the way in (`usermod --lock --expiredate 1`) and takes the user out of both
+groups, switching it on opens them again. Removing the account takes the user out of the groups and leaves the
+user of the host where it is, with its home and its files.
+
+Changing the role moves the user between the groups of the roles. The role of the panel is what the account
+holds, so a host login of such a user carries its role even where `Auth:HostGroups` names no group.
+
+The service runs under `UMask=0002`, so the files SQLite makes beside the database stay open to the group. A
+member of `amneziageo` runs `AmneziaGeo.Server.Cli` without `sudo`; putting interfaces on the host still asks
+for root.
+
 ## Passwords
 
 Hashed by the Identity hasher: PBKDF2-HMAC-SHA512, 210 000 iterations, a salt per password. Ten wrong answers

@@ -109,9 +109,19 @@ function AddDialog({ onClose }: { onClose: () => void }) {
   const [role, setRole] = useState("")
   const [password, setPassword] = useState("")
   const [mustChange, setMustChange] = useState(true)
+  const [host, setHost] = useState(false)
+  const [publicKey, setPublicKey] = useState("")
 
   async function save() {
-    await add.mutateAsync({ name: name.trim(), displayName: displayName.trim(), role, password, mustChangePassword: mustChange })
+    await add.mutateAsync({
+      name: name.trim(),
+      displayName: displayName.trim(),
+      role,
+      password,
+      mustChangePassword: mustChange,
+      host,
+      publicKey: publicKey.trim(),
+    })
     onClose()
   }
 
@@ -169,6 +179,26 @@ function AddDialog({ onClose }: { onClose: () => void }) {
         onMustChange={setMustChange}
       />
 
+      <label className="flex items-center gap-2 text-sm text-muted">
+        <input type="checkbox" checked={host} onChange={(e) => setHost(e.target.checked)} />
+        {t("users.host")}
+      </label>
+
+      {host && (
+        <div>
+          <label className={label} htmlFor="new-key">
+            {t("users.key")}
+          </label>
+          <textarea
+            id="new-key"
+            rows={3}
+            value={publicKey}
+            onChange={(e) => setPublicKey(e.target.value)}
+            className={`mt-1 ${field}`}
+          />
+        </div>
+      )}
+
       <Complaint error={add.error} />
     </Modal>
   )
@@ -179,9 +209,14 @@ function EditDialog({ user, onClose }: { user: User; onClose: () => void }) {
   const change = useChangeUser()
   const [role, setRole] = useState(user.role)
   const [enabled, setEnabled] = useState(user.enabled)
+  const [publicKey, setPublicKey] = useState("")
 
   async function save() {
-    await change.mutateAsync({ name: user.name, change: { role, enabled } })
+    const key = publicKey.trim()
+    await change.mutateAsync({
+      name: user.name,
+      change: key.length > 0 ? { role, enabled, publicKey: key } : { role, enabled },
+    })
     onClose()
   }
 
@@ -211,6 +246,22 @@ function EditDialog({ user, onClose }: { user: User; onClose: () => void }) {
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         {t("users.on")}
       </label>
+
+      {user.hostUser.length > 0 && (
+        <div>
+          <label className={label} htmlFor="edit-key">
+            {t("users.key")}
+          </label>
+          <textarea
+            id="edit-key"
+            rows={3}
+            value={publicKey}
+            onChange={(e) => setPublicKey(e.target.value)}
+            placeholder={user.hasKey ? t("users.keyHeld") : ""}
+            className={`mt-1 ${field}`}
+          />
+        </div>
+      )}
 
       <Complaint error={change.error} />
     </Modal>

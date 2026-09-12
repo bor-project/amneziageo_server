@@ -33,6 +33,8 @@ public static class UserEndpoints
     private static async Task<IResult> AddAsync(
         UserCreateRequest request,
         AccountManager accounts,
+        RoleCatalog roles,
+        HostUsers hosts,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrEmpty(request.Password))
@@ -40,19 +42,37 @@ public static class UserEndpoints
             return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a new account needs a name and a password");
         }
 
+        var name = request.Name.Trim();
         var result = await accounts
             .AddAsync(
-                request.Name.Trim(),
+                name,
                 request.DisplayName,
                 request.Role,
                 request.Password,
                 request.MustChangePassword,
+                request.Host,
+                request.PublicKey,
                 ct)
             .ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
 
-        return result.IsOk
-            ? Results.Created($"/api/users/{result.Record!.Name}", await AnswerAsync(result.Record, accounts).ConfigureAwait(false))
-            : Explain(result);
+        if (request.Host)
+        {
+            var carried = await hosts
+                .CarryAsync(name, request.Role, request.PublicKey, await NamesAsync(roles, ct).ConfigureAwait(false), ct)
+                .ConfigureAwait(false);
+            if (!carried.IsDone)
+            {
+                await accounts.RemoveAsync(name, 0, ct).ConfigureAwait(false);
+
+                return Refuse(StatusCodes.Status400BadRequest, "host-refused", carried.Message);
+            }
+        }
+
+        return Results.Created($"/api/users/{result.Record!.Name}", await AnswerAsync(result.Record, accounts).ConfigureAwait(false));
     }
 
     private static async Task<IResult> PatchAsync(
@@ -60,6 +80,8 @@ public static class UserEndpoints
         UserPatchRequest request,
         HttpContext http,
         AccountManager accounts,
+        RoleCatalog roles,
+        HostUsers hosts,
         CancellationToken ct)
     {
         var actor = http.Caller()!.Id;
@@ -74,12 +96,33 @@ public static class UserEndpoints
             }
         }
 
+        if (request.PublicKey is { Length: > 0 } key)
+        {
+            result = await accounts.SetHostKeyAsync(name, key, ct).ConfigureAwait(false);
+            if (!result.IsOk)
+            {
+                return Explain(result);
+            }
+        }
+
         if (request.Enabled is { } enabled)
         {
             result = await accounts.SetEnabledAsync(name, enabled, actor, ct).ConfigureAwait(false);
             if (!result.IsOk)
             {
                 return Explain(result);
+            }
+        }
+
+        if (result?.Record is { HostUserName: { Length: > 0 } host } record)
+        {
+            var known = await NamesAsync(roles, ct).ConfigureAwait(false);
+            var sync = record.IsEnabled
+                ? await hosts.CarryAsync(host, await RoleOfAsync(accounts, record, ct).ConfigureAwait(false), record.HostKey, known, ct).ConfigureAwait(false)
+                : await hosts.ShutAsync(host, known, ct).ConfigureAwait(false);
+            if (!sync.IsDone)
+            {
+                return Refuse(StatusCodes.Status400BadRequest, "host-refused", sync.Message);
             }
         }
 
@@ -115,12 +158,30 @@ public static class UserEndpoints
         string name,
         HttpContext http,
         AccountManager accounts,
+        RoleCatalog roles,
+        HostUsers hosts,
         CancellationToken ct)
     {
+        var held = await accounts.FindAsync(name, ct).ConfigureAwait(false);
         var result = await accounts.RemoveAsync(name, http.Caller()!.Id, ct).ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
 
-        return result.IsOk ? Results.NoContent() : Explain(result);
+        if (held?.Record.HostUserName is { Length: > 0 } host)
+        {
+            await hosts.ReleaseAsync(host, await NamesAsync(roles, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        }
+
+        return Results.NoContent();
     }
+
+    private static async Task<IReadOnlyList<string>> NamesAsync(RoleCatalog roles, CancellationToken ct) =>
+        [.. (await roles.ListAsync(ct).ConfigureAwait(false)).Select(role => role.Record.Name ?? string.Empty)];
+
+    private static async Task<string?> RoleOfAsync(AccountManager accounts, AppUser user, CancellationToken ct) =>
+        (await accounts.ViewAsync(user).ConfigureAwait(false)).Role;
 
     private static async Task<UserResponse> AnswerAsync(AppUser user, AccountManager accounts) =>
         UserAnswers.User(await accounts.ViewAsync(user).ConfigureAwait(false));
@@ -133,6 +194,7 @@ public static class UserEndpoints
         AccountOutcome.BadName => Refuse(StatusCodes.Status400BadRequest, "bad-name", result.Message),
         AccountOutcome.Weak => Refuse(StatusCodes.Status400BadRequest, "weak", result.Message),
         AccountOutcome.UnknownRole => Refuse(StatusCodes.Status400BadRequest, "unknown-role", result.Message),
+        AccountOutcome.BadKey => Refuse(StatusCodes.Status400BadRequest, "bad-host-key", result.Message),
         AccountOutcome.LastAdmin => Refuse(StatusCodes.Status409Conflict, "last-admin", result.Message),
         AccountOutcome.Self => Refuse(StatusCodes.Status409Conflict, "self", result.Message),
         _ => Refuse(StatusCodes.Status400BadRequest, "refused", result.Message),

@@ -5,6 +5,59 @@ namespace AmneziaGeo.Server.Tests;
 public class AccountManagerTests
 {
     [Fact]
+    public async Task APrivilegedAccountStandsForAUserOfTheHost()
+    {
+        using var bench = new Bench();
+
+        var result = await bench.Accounts.AddAsync(
+            "milena",
+            null,
+            Roles.Admin,
+            "long-enough",
+            mustChange: false,
+            host: true,
+            key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKm5 milena@work",
+            CancellationToken.None);
+
+        Assert.True(result.IsOk);
+        Assert.Equal(PrincipalKind.Host, result.Record!.Kind);
+        Assert.Equal("milena", result.Record.HostUserName);
+        Assert.StartsWith("ssh-ed25519 ", result.Record.HostKey, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AKeyTheHostDoesNotTakeIsRefused()
+    {
+        using var bench = new Bench();
+
+        var result = await bench.Accounts.AddAsync(
+            "milena",
+            null,
+            Roles.Admin,
+            "long-enough",
+            mustChange: false,
+            host: true,
+            key: "not a key at all",
+            CancellationToken.None);
+
+        Assert.Equal(AccountOutcome.BadKey, result.Outcome);
+    }
+
+    [Fact]
+    public async Task AnAccountOfThePanelTakesNoKeyOfTheHost()
+    {
+        using var bench = new Bench();
+        await bench.Accounts.AddAsync("web", null, Roles.Admin, "long-enough", mustChange: false, CancellationToken.None);
+
+        var result = await bench.Accounts.SetHostKeyAsync(
+            "web",
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKm5 web@work",
+            CancellationToken.None);
+
+        Assert.Equal(AccountOutcome.BadKey, result.Outcome);
+    }
+
+    [Fact]
     public async Task AnAccountIsAddedWithItsPassword()
     {
         using var bench = new Bench();

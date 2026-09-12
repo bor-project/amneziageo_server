@@ -9,6 +9,8 @@ export interface User {
   enabled: boolean
   hasPassword: boolean
   scopes: string[]
+  hostUser: string
+  hasKey: boolean
 }
 
 export interface UserDraft {
@@ -17,11 +19,14 @@ export interface UserDraft {
   role: string
   password: string
   mustChangePassword: boolean
+  host: boolean
+  publicKey: string
 }
 
 export interface UserChange {
   role?: string
   enabled?: boolean
+  publicKey?: string
 }
 
 export function useUsers(enabled: boolean) {

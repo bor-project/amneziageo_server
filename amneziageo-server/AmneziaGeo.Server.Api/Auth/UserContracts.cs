@@ -12,7 +12,9 @@ public sealed record UserResponse(
     string Role,
     bool Enabled,
     bool HasPassword,
-    string[] Scopes);
+    string[] Scopes,
+    string HostUser,
+    bool HasKey);
 
 /// <summary>
 /// A new account as the interface sends it.
@@ -22,12 +24,14 @@ public sealed record UserCreateRequest(
     string? DisplayName,
     string? Role,
     string? Password,
-    bool MustChangePassword = true);
+    bool MustChangePassword = true,
+    bool Host = false,
+    string? PublicKey = null);
 
 /// <summary>
 /// The parts of an account the interface changes.
 /// </summary>
-public sealed record UserPatchRequest(string? Role, bool? Enabled);
+public sealed record UserPatchRequest(string? Role, bool? Enabled, string? PublicKey = null);
 
 /// <summary>
 /// A password an administrator sets on an account.
@@ -49,5 +53,7 @@ public static class UserAnswers
         view.Role,
         view.Record.IsEnabled,
         view.HasPassword,
-        [.. view.Scopes.Order(StringComparer.Ordinal)]);
+        [.. view.Scopes.Order(StringComparer.Ordinal)],
+        view.Record.HostUserName ?? string.Empty,
+        view.Record.HostKey is { Length: > 0 });
 }

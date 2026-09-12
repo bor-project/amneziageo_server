@@ -8,6 +8,7 @@ Wants=network-online.target
 Type=notify
 WorkingDirectory=/opt/amneziageo-server/current
 ExecStart=/opt/amneziageo-server/current/AmneziaGeo.Server.Api
+UMask=0002
 Environment=DOTNET_NOLOGO=1
 Environment=ASPNETCORE_WEBROOT=/opt/amneziageo-server/wwwroot
 Environment=Web__Listen__0=127.0.0.1:8443
