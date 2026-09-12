@@ -27,12 +27,15 @@ import { BalancerForm } from "@/components/BalancerForm"
 import { Modal } from "@/components/Modal"
 import { OutboundForm } from "@/components/OutboundForm"
 import { RowActions } from "@/components/RowActions"
+import { Rows } from "@/components/Rows"
 import { card, danger, secondary } from "@/components/styles"
 import { bytes } from "@/format"
 import { useLanguage, useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
+
+type Line = { kind: "channel"; channel: Outbound } | { kind: "group"; group: Balancer }
 
 export function Channels() {
   const t = useText()
@@ -62,6 +65,10 @@ export function Channels() {
   const channels = outbounds.data ?? []
   const groups = balancers.data ?? []
   const last = channels.length - 1
+  const lines: Line[] = [
+    ...channels.map((channel): Line => ({ kind: "channel", channel })),
+    ...groups.map((group): Line => ({ kind: "group", group })),
+  ]
   const loaded = outbounds.data !== undefined && balancers.data !== undefined
 
   return (
@@ -85,104 +92,132 @@ export function Channels() {
         )}
 
         {channels.length + groups.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-2 font-normal">{t("outbounds.name")}</th>
-                  <th className="px-4 py-2 font-normal">{t("outbounds.kind")}</th>
-                  <th className="px-4 py-2 font-normal">{t("outbounds.server")}</th>
-                  <th className="px-4 py-2 font-normal">{t("outbounds.mark")}</th>
-                  <th className="px-4 py-2 font-normal">{t("outbounds.state")}</th>
-                  <th className="px-4 py-2 font-normal">{t("outbounds.traffic")}</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {channels.map((outbound, at) => (
-                  <tr key={`channel-${outbound.id}`} className="border-t border-line">
-                    <td className="px-4 py-2 font-medium text-ink">
-                      {outbound.name}
-                      {!outbound.isEnabled && <span className="ml-2 text-xs text-muted">{t("outbounds.off")}</span>}
-                    </td>
-                    <td className="px-4 py-2 text-muted">{t(kindKey(outbound.kind))}</td>
-                    <td className="px-4 py-2 text-muted">
-                      {outbound.kind === "local" ? "" : `${outbound.host}:${outbound.port}`}
-                    </td>
-                    <td className="px-4 py-2 text-muted">
-                      {outbound.mark} / {outbound.table}
-                    </td>
-                    <td className="px-4 py-2">
-                      <ChannelState outbound={outbound} t={t} language={language} />
-                    </td>
-                    <td className="px-4 py-2 text-muted">
-                      {outbound.state !== null && outbound.state.hasLink && outbound.kind !== "local"
-                        ? `${bytes(t, outbound.state.rxBytes)} / ${bytes(t, outbound.state.txBytes)}`
-                        : ""}
-                    </td>
-                    <td className="px-4 py-2">
-                      {may && (
-                        <RowActions
-                          title={t("outbounds.actions")}
-                          actions={[
-                            { label: t("outbounds.apply"), onPick: () => void apply.mutateAsync(outbound.id) },
-                            { label: t("outbounds.probeNow"), onPick: () => void probe.mutateAsync(outbound.id) },
-                            {
-                              label: outbound.isEnabled ? t("outbounds.turnOff") : t("outbounds.turnOn"),
-                              onPick: () => void turn.mutateAsync({ id: outbound.id, on: !outbound.isEnabled }),
-                            },
-                            { label: t("outbounds.edit"), onPick: () => setEditing(outbound) },
-                            ...(at > 0
-                              ? [{ label: t("outbounds.up"), onPick: () => void move.mutateAsync({ id: outbound.id, up: true }) }]
-                              : []),
-                            ...(at < last
-                              ? [{ label: t("outbounds.down"), onPick: () => void move.mutateAsync({ id: outbound.id, up: false }) }]
-                              : []),
-                            { label: t("outbounds.remove"), onPick: () => setRemoving(outbound), alarming: true },
-                          ]}
-                        />
+          <Rows
+            items={lines}
+            keyOf={(line) => (line.kind === "channel" ? `channel-${line.channel.id}` : `group-${line.group.id}`)}
+            columns={[
+              {
+                key: "name",
+                caption: t("outbounds.name"),
+                lead: true,
+                body: "font-medium text-ink",
+                cell: (line) =>
+                  line.kind === "channel" ? (
+                    <>
+                      {line.channel.name}
+                      {!line.channel.isEnabled && (
+                        <span className="ml-2 text-xs text-muted">{t("outbounds.off")}</span>
                       )}
-                    </td>
-                  </tr>
-                ))}
-
-                {groups.map((balancer) => (
-                  <tr key={`group-${balancer.id}`} className="border-t border-line">
-                    <td className="px-4 py-2 font-medium text-ink">
-                      {balancer.name}
-                      {!balancer.isEnabled && <span className="ml-2 text-xs text-muted">{t("balancers.off")}</span>}
-                    </td>
-                    <td className="px-4 py-2 text-muted">
-                      {t("outbounds.group")} · {t(strategy(balancer))}
-                    </td>
-                    <td className="px-4 py-2">
-                      <Members members={balancer.state.members} />
-                    </td>
-                    <td className="px-4 py-2" />
-                    <td className="px-4 py-2">
-                      <GroupState balancer={balancer} t={t} />
-                    </td>
-                    <td className="px-4 py-2" />
-                    <td className="px-4 py-2">
-                      {may && (
-                        <RowActions
-                          title={t("balancers.actions")}
-                          actions={[
-                            {
-                              label: balancer.isEnabled ? t("balancers.turnOff") : t("balancers.turnOn"),
-                              onPick: () => void turnGroup.mutateAsync({ id: balancer.id, on: !balancer.isEnabled }),
-                            },
-                            { label: t("balancers.edit"), onPick: () => setRegrouping(balancer) },
-                            { label: t("balancers.remove"), onPick: () => setUngrouping(balancer), alarming: true },
-                          ]}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </>
+                  ) : (
+                    <>
+                      {line.group.name}
+                      {!line.group.isEnabled && <span className="ml-2 text-xs text-muted">{t("balancers.off")}</span>}
+                    </>
+                  ),
+              },
+              {
+                key: "kind",
+                caption: t("outbounds.kind"),
+                body: "text-muted",
+                cell: (line) =>
+                  line.kind === "channel"
+                    ? t(kindKey(line.channel.kind))
+                    : `${t("outbounds.group")} · ${t(strategy(line.group))}`,
+              },
+              {
+                key: "server",
+                caption: t("outbounds.server"),
+                body: "text-muted",
+                cell: (line) =>
+                  line.kind === "group" ? (
+                    <Members members={line.group.state.members} />
+                  ) : line.channel.kind === "local" ? (
+                    ""
+                  ) : (
+                    `${line.channel.host}:${line.channel.port}`
+                  ),
+              },
+              {
+                key: "mark",
+                caption: t("outbounds.mark"),
+                body: "text-muted",
+                cell: (line) => (line.kind === "channel" ? `${line.channel.mark} / ${line.channel.table}` : ""),
+              },
+              {
+                key: "state",
+                caption: t("outbounds.state"),
+                cell: (line) =>
+                  line.kind === "channel" ? (
+                    <ChannelState outbound={line.channel} t={t} language={language} />
+                  ) : (
+                    <GroupState balancer={line.group} t={t} />
+                  ),
+              },
+              {
+                key: "traffic",
+                caption: t("outbounds.traffic"),
+                body: "text-muted",
+                cell: (line) =>
+                  line.kind === "channel" &&
+                  line.channel.state !== null &&
+                  line.channel.state.hasLink &&
+                  line.channel.kind !== "local"
+                    ? `${bytes(t, line.channel.state.rxBytes)} / ${bytes(t, line.channel.state.txBytes)}`
+                    : "",
+              },
+              {
+                key: "actions",
+                caption: t("outbounds.actions"),
+                tail: true,
+                cell: (line, at) =>
+                  may &&
+                  (line.kind === "channel" ? (
+                    <RowActions
+                      title={t("outbounds.actions")}
+                      actions={[
+                        { label: t("outbounds.apply"), onPick: () => void apply.mutateAsync(line.channel.id) },
+                        { label: t("outbounds.probeNow"), onPick: () => void probe.mutateAsync(line.channel.id) },
+                        {
+                          label: line.channel.isEnabled ? t("outbounds.turnOff") : t("outbounds.turnOn"),
+                          onPick: () => void turn.mutateAsync({ id: line.channel.id, on: !line.channel.isEnabled }),
+                        },
+                        { label: t("outbounds.edit"), onPick: () => setEditing(line.channel) },
+                        ...(at > 0
+                          ? [
+                              {
+                                label: t("outbounds.up"),
+                                onPick: () => void move.mutateAsync({ id: line.channel.id, up: true }),
+                              },
+                            ]
+                          : []),
+                        ...(at < last
+                          ? [
+                              {
+                                label: t("outbounds.down"),
+                                onPick: () => void move.mutateAsync({ id: line.channel.id, up: false }),
+                              },
+                            ]
+                          : []),
+                        { label: t("outbounds.remove"), onPick: () => setRemoving(line.channel), alarming: true },
+                      ]}
+                    />
+                  ) : (
+                    <RowActions
+                      title={t("balancers.actions")}
+                      actions={[
+                        {
+                          label: line.group.isEnabled ? t("balancers.turnOff") : t("balancers.turnOn"),
+                          onPick: () => void turnGroup.mutateAsync({ id: line.group.id, on: !line.group.isEnabled }),
+                        },
+                        { label: t("balancers.edit"), onPick: () => setRegrouping(line.group) },
+                        { label: t("balancers.remove"), onPick: () => setUngrouping(line.group), alarming: true },
+                      ]}
+                    />
+                  )),
+              },
+            ]}
+          />
         )}
       </div>
 

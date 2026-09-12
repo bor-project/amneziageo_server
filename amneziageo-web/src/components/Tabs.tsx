@@ -11,7 +11,7 @@ export interface Tab {
   end?: boolean
 }
 
-const tab = "-mb-px border-b-2 px-1 pb-2 text-sm"
+const tab = "-mb-px shrink-0 border-b-2 px-1 pb-2 text-sm"
 const chosen = "border-brand font-medium text-brand-ink"
 const plain = "border-transparent text-muted hover:text-brand-ink"
 
@@ -23,7 +23,7 @@ export function Tabbed({ title, tabs }: { title: TextKey; tabs: Tab[] }) {
     <div>
       <h1 className="text-xl font-semibold">{t(title)}</h1>
 
-      <div className="mt-4 flex gap-6 border-b border-line">
+      <div className="mt-4 flex gap-4 overflow-x-auto border-b border-line sm:gap-6">
         {tabs
           .filter((one) => holds(user, one.scope))
           .map((one) => (

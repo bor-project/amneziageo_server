@@ -84,7 +84,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
   return (
     <div className={`mt-4 flex flex-col gap-4 px-4 py-4 ${card}`}>
       <Section title={t("dns.serving")}>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Flag id="dns-on" caption={t("dns.enabled")} value={draft.isEnabled} onChange={(v) => set({ isEnabled: v })} />
         </div>
         <Count id="dns-port" caption={t("dns.port")} value={draft.port} onChange={(v) => set({ port: v })} />
@@ -118,7 +118,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
       </Section>
 
       <Section title={t("dns.clients")}>
-        <div className="col-span-2 flex flex-col gap-2">
+        <div className="sm:col-span-2 flex flex-col gap-2">
           <Flag
             id="dns-intercept"
             caption={t("dns.intercept")}

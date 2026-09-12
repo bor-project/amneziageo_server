@@ -2,6 +2,7 @@ import { createSlice } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
 import type { LanguageChoice } from '@/i18n'
 import type { ThemeChoice } from '@/theme/theme'
+import { above, wideQuery } from '@/theme/width'
 import { storedLanguage, storedTheme } from './preferences'
 
 interface UiState {
@@ -12,7 +13,7 @@ interface UiState {
 }
 
 const initialState: UiState = {
-  sidebarOpen: true,
+  sidebarOpen: above(wideQuery),
   theme: storedTheme(),
   language: storedLanguage(),
   served: 'auto',

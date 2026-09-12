@@ -6,6 +6,7 @@ import { useRoles } from "@/api/roles"
 import type { Role } from "@/api/roles"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
+import { Rows } from "@/components/Rows"
 import { TextBlock } from "@/components/TextBlock"
 import { Line, Pick } from "@/components/fields"
 import { card, danger, note, primary, secondary } from "@/components/styles"
@@ -36,54 +37,71 @@ export function ApiTokens() {
       {tokens.data?.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("apiTokens.empty")}</div>}
 
       {tokens.data && tokens.data.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs text-muted">
-              <tr>
-                <th className="px-4 py-2 font-normal">{t("apiTokens.name")}</th>
-                <th className="px-4 py-2 font-normal">{t("apiTokens.role")}</th>
-                <th className="px-4 py-2 font-normal">{t("apiTokens.created")}</th>
-                <th className="px-4 py-2 font-normal">{t("apiTokens.expires")}</th>
-                <th className="px-4 py-2 font-normal">{t("apiTokens.used")}</th>
-                <th className="px-4 py-2 font-normal">{t("apiTokens.state")}</th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {tokens.data.map((token) => (
-                <tr key={token.id} className="border-t border-line">
-                  <td className="px-4 py-2 font-medium text-ink">{token.name}</td>
-                  <td className="px-4 py-2 text-muted">{titleOf(catalog.data?.roles ?? [], token.role)}</td>
-                  <td className="px-4 py-2 whitespace-nowrap text-muted">{stamp(token.createdUtc)}</td>
-                  <td className="px-4 py-2 whitespace-nowrap text-muted">
-                    {token.expiresUtc === null ? t("apiTokens.forever") : stamp(token.expiresUtc)}
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap text-muted">
-                    {token.lastUsedUtc === null ? (
-                      t("apiTokens.never")
-                    ) : (
-                      <>
-                        <div>{stamp(token.lastUsedUtc)}</div>
-                        {token.lastAddress !== null && <div className="text-xs">{token.lastAddress}</div>}
-                      </>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    <span className={token.isExpired ? "text-alarm" : "text-brand-ink"}>
-                      {t(token.isExpired ? "apiTokens.expired" : "apiTokens.active")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2">
-                    <RowActions
-                      title={t("apiTokens.actions")}
-                      actions={[{ label: t("apiTokens.revoke"), onPick: () => setRevoking(token), alarming: true }]}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Rows
+          items={tokens.data}
+          keyOf={(token) => token.id}
+          columns={[
+            {
+              key: "name",
+              caption: t("apiTokens.name"),
+              lead: true,
+              body: "font-medium text-ink",
+              cell: (token) => token.name,
+            },
+            {
+              key: "role",
+              caption: t("apiTokens.role"),
+              body: "text-muted",
+              cell: (token) => titleOf(catalog.data?.roles ?? [], token.role),
+            },
+            {
+              key: "created",
+              caption: t("apiTokens.created"),
+              body: "whitespace-nowrap text-muted",
+              cell: (token) => stamp(token.createdUtc),
+            },
+            {
+              key: "expires",
+              caption: t("apiTokens.expires"),
+              body: "whitespace-nowrap text-muted",
+              cell: (token) => (token.expiresUtc === null ? t("apiTokens.forever") : stamp(token.expiresUtc)),
+            },
+            {
+              key: "used",
+              caption: t("apiTokens.used"),
+              body: "whitespace-nowrap text-muted",
+              cell: (token) =>
+                token.lastUsedUtc === null ? (
+                  t("apiTokens.never")
+                ) : (
+                  <>
+                    <div>{stamp(token.lastUsedUtc)}</div>
+                    {token.lastAddress !== null && <div className="text-xs">{token.lastAddress}</div>}
+                  </>
+                ),
+            },
+            {
+              key: "state",
+              caption: t("apiTokens.state"),
+              cell: (token) => (
+                <span className={token.isExpired ? "text-alarm" : "text-brand-ink"}>
+                  {t(token.isExpired ? "apiTokens.expired" : "apiTokens.active")}
+                </span>
+              ),
+            },
+            {
+              key: "actions",
+              caption: t("apiTokens.actions"),
+              tail: true,
+              cell: (token) => (
+                <RowActions
+                  title={t("apiTokens.actions")}
+                  actions={[{ label: t("apiTokens.revoke"), onPick: () => setRevoking(token), alarming: true }]}
+                />
+              ),
+            },
+          ]}
+        />
       )}
 
       {adding && <MintDialog onClose={() => setAdding(false)} />}

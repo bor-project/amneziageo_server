@@ -31,6 +31,48 @@ A component names only these, never a `slate-*` or a `dark:` variant, and both t
 `index.html` sets the class on the root element before the first paint, so a dark browser opens the panel
 dark with no flash of white.
 
+## Widths
+
+`src/index.css` names the breakpoints, and they are the ones Bootstrap uses.
+
+| Name | From |
+|---|---|
+| `sm` | 576px |
+| `md` | 768px |
+| `lg` | 992px |
+| `xl` | 1200px |
+| `2xl` | 1400px |
+
+`src/theme/width.ts` reads the same widths in code: `useAbove(roomyQuery)` holds from `md`, `useAbove(wideQuery)`
+from `lg`, and both follow the window as it changes.
+
+| Width | Menu | Lists | Fields of a form |
+|---|---|---|---|
+| under `sm` | over the page | cards | one column |
+| `sm` to `md` | over the page | cards | two columns |
+| `md` to `lg` | over the page | tables | two columns |
+| `lg` and wider | a column of its own | tables | two columns |
+
+The menu over the page closes on a pick, on a press outside it and on Escape.
+
+## Lists
+
+`src/components/Rows.tsx` prints a list: a table on a wide screen, a card for every row on a narrow one. A column
+carries its caption and its cell; `lead` names the column that heads the card, `tail` the one that sits in its
+corner, `head` and `body` add classes to the cells of the table. A cell that comes out empty is left out of the card.
+
+```tsx
+<Rows
+  items={clients}
+  keyOf={(one) => one.id}
+  columns={[
+    { key: "name", caption: t("clients.name"), lead: true, cell: (one) => one.name },
+    { key: "address", caption: t("clients.address"), body: "text-muted", cell: (one) => one.address.join(", ") },
+    { key: "actions", caption: t("clients.actions"), tail: true, cell: (one) => <RowActions title={...} actions={...} /> },
+  ]}
+/>
+```
+
 ## Words
 
 `src/i18n/en.ts` holds every line of the interface and, through `keyof typeof en`, the list of keys. A line

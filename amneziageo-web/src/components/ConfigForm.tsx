@@ -184,7 +184,7 @@ export function ConfigForm({
           onChange={(value) => put({ privateKey: value.trim() })}
           wide
         />
-        <div className="col-span-2 flex items-end gap-3">
+        <div className="sm:col-span-2 flex items-end gap-3">
           <div className="min-w-0 flex-1">
             <span className={label}>{t("configs.public")}</span>
             <div className={`mt-1 truncate ${field}`}>{shown}</div>
@@ -194,7 +194,7 @@ export function ConfigForm({
           </button>
         </div>
 
-        <div className="col-span-2 flex items-end gap-3">
+        <div className="sm:col-span-2 flex items-end gap-3">
           <div className="min-w-0 flex-1">
             <label className={label} htmlFor="config-preshared">
               {t("configs.preshared")}
@@ -218,7 +218,7 @@ export function ConfigForm({
 
       {importable && (
         <Section title={t("configs.import")}>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className={label} htmlFor="config-file">
               {t("configs.paste")}
             </label>
@@ -230,7 +230,7 @@ export function ConfigForm({
               className={`mt-1 font-mono text-xs ${field}`}
             />
           </div>
-          <div className="col-span-2 flex justify-end">
+          <div className="sm:col-span-2 flex justify-end">
             <button
               type="button"
               onClick={() => void take()}
@@ -241,7 +241,7 @@ export function ConfigForm({
             </button>
           </div>
           {read.error !== null && read.error !== undefined && (
-            <div className="col-span-2 text-sm text-alarm">{t(complaint(read.error) as TextKey)}</div>
+            <div className="text-sm text-alarm sm:col-span-2">{t(complaint(read.error) as TextKey)}</div>
           )}
         </Section>
       )}

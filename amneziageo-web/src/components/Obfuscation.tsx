@@ -15,7 +15,7 @@ export function ObfuscationFields({
 
   return (
     <>
-      <div className="col-span-2 grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-3">
         <Count
           id={`${id}-jc`}
           caption={t("configs.jc")}
@@ -39,7 +39,7 @@ export function ObfuscationFields({
         />
       </div>
 
-      <div className="col-span-2 grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-4">
         <Count
           id={`${id}-s1`}
           caption={t("configs.s1")}
@@ -98,7 +98,7 @@ export function ObfuscationFields({
         />
       </div>
 
-      <div className="col-span-2 grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-3">
         <Line
           id={`${id}-padding`}
           caption={t("configs.padding")}

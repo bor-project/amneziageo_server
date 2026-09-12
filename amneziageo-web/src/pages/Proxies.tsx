@@ -15,6 +15,7 @@ import { scopes } from "@/api/scopes"
 import { ProxyForm } from "@/components/ProxyForm"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
+import { Rows } from "@/components/Rows"
 import { card, danger, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -58,55 +59,63 @@ export function Proxies() {
         {proxies.data?.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("proxies.empty")}</div>}
 
         {proxies.data && proxies.data.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-2 font-normal">{t("proxies.name")}</th>
-                  <th className="px-4 py-2 font-normal">{t("proxies.kind")}</th>
-                  <th className="px-4 py-2 font-normal">{t("proxies.port")}</th>
-                  <th className="px-4 py-2 font-normal">{t("proxies.address")}</th>
-                  <th className="px-4 py-2 font-normal">{t("proxies.state")}</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {proxies.data.map((proxy) => (
-                  <tr key={proxy.id} className="border-t border-line">
-                    <td className="px-4 py-2 font-medium text-ink">
-                      {proxy.name}
-                      {!proxy.isEnabled && <span className="ml-2 text-xs text-muted">{t("proxies.off")}</span>}
-                    </td>
-                    <td className="px-4 py-2 text-muted">
-                      {proxy.kind === "wg" ? t("proxies.kindWg") : t("proxies.kindWs")}
-                    </td>
-                    <td className="px-4 py-2 text-muted">{proxy.port}</td>
-                    <td className="px-4 py-2 text-muted">
-                      {proxy.kind === "wg" ? proxy.target : `/${proxy.path}`}
-                    </td>
-                    <td className="px-4 py-2">
-                      <State proxy={proxy} running={t("proxies.running")} stopped={t("proxies.stopped")} />
-                    </td>
-                    <td className="px-4 py-2">
-                      {may && (
-                        <RowActions
-                          title={t("proxies.actions")}
-                          actions={[
-                            {
-                              label: proxy.isEnabled ? t("proxies.turnOff") : t("proxies.turnOn"),
-                              onPick: () => void turn.mutateAsync({ id: proxy.id, on: !proxy.isEnabled }),
-                            },
-                            { label: t("proxies.edit"), onPick: () => setEditing(proxy) },
-                            { label: t("proxies.remove"), onPick: () => setRemoving(proxy), alarming: true },
-                          ]}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Rows
+            items={proxies.data}
+            keyOf={(proxy) => proxy.id}
+            columns={[
+              {
+                key: "name",
+                caption: t("proxies.name"),
+                lead: true,
+                body: "font-medium text-ink",
+                cell: (proxy) => (
+                  <>
+                    {proxy.name}
+                    {!proxy.isEnabled && <span className="ml-2 text-xs text-muted">{t("proxies.off")}</span>}
+                  </>
+                ),
+              },
+              {
+                key: "kind",
+                caption: t("proxies.kind"),
+                body: "text-muted",
+                cell: (proxy) => (proxy.kind === "wg" ? t("proxies.kindWg") : t("proxies.kindWs")),
+              },
+              { key: "port", caption: t("proxies.port"), body: "text-muted", cell: (proxy) => proxy.port },
+              {
+                key: "address",
+                caption: t("proxies.address"),
+                body: "text-muted",
+                cell: (proxy) => (proxy.kind === "wg" ? proxy.target : `/${proxy.path}`),
+              },
+              {
+                key: "state",
+                caption: t("proxies.state"),
+                cell: (proxy) => (
+                  <State proxy={proxy} running={t("proxies.running")} stopped={t("proxies.stopped")} />
+                ),
+              },
+              {
+                key: "actions",
+                caption: t("proxies.actions"),
+                tail: true,
+                cell: (proxy) =>
+                  may && (
+                    <RowActions
+                      title={t("proxies.actions")}
+                      actions={[
+                        {
+                          label: proxy.isEnabled ? t("proxies.turnOff") : t("proxies.turnOn"),
+                          onPick: () => void turn.mutateAsync({ id: proxy.id, on: !proxy.isEnabled }),
+                        },
+                        { label: t("proxies.edit"), onPick: () => setEditing(proxy) },
+                        { label: t("proxies.remove"), onPick: () => setRemoving(proxy), alarming: true },
+                      ]}
+                    />
+                  ),
+              },
+            ]}
+          />
         )}
       </div>
 

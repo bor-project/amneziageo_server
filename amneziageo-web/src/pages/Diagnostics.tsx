@@ -5,6 +5,7 @@ import { useHealth } from "@/api/health"
 import { useOverview } from "@/api/overview"
 import { card, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
+import { roomyQuery, useAbove } from "@/theme/width"
 
 const loud = new Set(["Warning", "Error", "Critical"])
 
@@ -15,6 +16,7 @@ export function Diagnostics() {
   const overview = useOverview()
   const versions = useVersions()
   const journal = useJournal()
+  const roomy = useAbove(roomyQuery)
   const tunnel = overview.data?.tunnel
   const known = versions.data
 
@@ -53,15 +55,38 @@ export function Diagnostics() {
 
         {journal.data && journal.data.length > 0 && (
           <div className="max-h-[60vh] overflow-auto">
-            <table className="w-full text-left text-xs">
-              <tbody>
-                {journal.data.map((entry, at) => (
-                  <Record key={at} entry={entry} language={language} />
-                ))}
-              </tbody>
-            </table>
+            {roomy ? (
+              <table className="w-full text-left text-xs">
+                <tbody>
+                  {journal.data.map((entry, at) => (
+                    <Record key={at} entry={entry} language={language} />
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              journal.data.map((entry, at) => <Note key={at} entry={entry} language={language} />)
+            )}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function Note({ entry, language }: { entry: JournalEntry; language: string }) {
+  const tone = loud.has(entry.level) ? "text-alarm" : "text-muted"
+  const source = entry.category.split(".").at(-1) ?? entry.category
+
+  return (
+    <div className="border-t border-line px-4 py-2 text-xs first:border-t-0">
+      <div className="flex flex-wrap items-center gap-2 text-muted">
+        <span>{new Date(entry.time).toLocaleString(language)}</span>
+        <span className={tone}>{entry.level}</span>
+        <span title={entry.category}>{source}</span>
+      </div>
+      <div className="mt-1 break-all text-ink">
+        {entry.message}
+        {entry.fault.length > 0 && <div className="text-alarm">{entry.fault}</div>}
       </div>
     </div>
   )

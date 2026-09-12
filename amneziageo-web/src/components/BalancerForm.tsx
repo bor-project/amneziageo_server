@@ -59,7 +59,7 @@ export function BalancerForm({
         </>
       }
     >
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Line
           id="balancer-name"
           caption={t("balancers.name")}
@@ -83,7 +83,7 @@ export function BalancerForm({
           </select>
         </div>
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <span className={label}>{t("balancers.members")}</span>
           <div className="mt-1 rounded border border-line">
             {draft.members.map((name, at) => (
@@ -140,7 +140,7 @@ export function BalancerForm({
           </div>
         </div>
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Flag
             id="balancer-enabled"
             caption={t("balancers.enabled")}

@@ -203,7 +203,7 @@ export function OutboundForm({
             onChange={(value) => put({ privateKey: value.trim() })}
             wide
           />
-          <div className="col-span-2 flex items-end gap-3">
+          <div className="sm:col-span-2 flex items-end gap-3">
             <div className="min-w-0 flex-1">
               <span className={label}>{t("outbounds.public")}</span>
               <div className={`mt-1 truncate ${field}`}>{shown}</div>
@@ -237,7 +237,7 @@ export function OutboundForm({
 
       {tunnel && (
         <Section title={t("outbounds.import")}>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className={label} htmlFor="outbound-config">
               {t("outbounds.paste")}
             </label>
@@ -249,7 +249,7 @@ export function OutboundForm({
               className={`mt-1 font-mono text-xs ${field}`}
             />
           </div>
-          <div className="col-span-2 flex justify-end">
+          <div className="sm:col-span-2 flex justify-end">
             <button
               type="button"
               onClick={() => void take()}
@@ -260,7 +260,7 @@ export function OutboundForm({
             </button>
           </div>
           {read.error !== null && read.error !== undefined && (
-            <div className="col-span-2 text-sm text-alarm">{t(complaint(read.error) as TextKey)}</div>
+            <div className="text-sm text-alarm sm:col-span-2">{t(complaint(read.error) as TextKey)}</div>
           )}
         </Section>
       )}

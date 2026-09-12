@@ -57,7 +57,7 @@ export function TemplateForm({
         </>
       }
     >
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Line
           id="template-name"
           caption={t("templates.name")}
@@ -66,7 +66,7 @@ export function TemplateForm({
           wide
         />
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className={label} htmlFor="template-entries">
             {t("templates.allowed")}
           </label>
@@ -81,7 +81,7 @@ export function TemplateForm({
         </div>
 
         {held !== undefined && held.entries.length > 0 && (
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <div className={label}>{t("templates.resolved")}</div>
             <TextBlock className="mt-1 max-h-40 overflow-auto rounded border border-line bg-canvas p-3 text-xs text-ink">
               {held.allowedIps.join("\n")}

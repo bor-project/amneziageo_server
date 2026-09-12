@@ -13,6 +13,7 @@ import { scopes } from "@/api/scopes"
 import { ConfigForm } from "@/components/ConfigForm"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
+import { Rows } from "@/components/Rows"
 import { card, danger, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -51,43 +52,54 @@ export function Configs() {
         {configs.data?.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("configs.empty")}</div>}
 
         {configs.data && configs.data.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-2 font-normal">{t("configs.name")}</th>
-                  <th className="px-4 py-2 font-normal">{t("configs.endpoint")}</th>
-                  <th className="px-4 py-2 font-normal">{t("configs.address")}</th>
-                  <th className="px-4 py-2 font-normal">{t("configs.public")}</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {configs.data.map((config) => (
-                  <tr key={config.id} className="border-t border-line">
-                    <td className="px-4 py-2 font-medium text-ink">{config.name}</td>
-                    <td className="px-4 py-2 text-muted">
-                      {config.host.length > 0 ? `${config.host}:${config.listenPort}` : config.listenPort}
-                    </td>
-                    <td className="px-4 py-2 text-muted">{config.address.join(", ")}</td>
-                    <td className="max-w-56 truncate px-4 py-2 text-muted">{config.publicKey}</td>
-                    <td className="px-4 py-2">
-                      {may && (
-                        <RowActions
-                          title={t("configs.actions")}
-                          actions={[
-                            { label: t("configs.edit"), onPick: () => setEditing(config) },
-                            { label: t("configs.apply"), onPick: () => void apply.mutateAsync(config.id) },
-                            { label: t("configs.remove"), onPick: () => setRemoving(config), alarming: true },
-                          ]}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Rows
+            items={configs.data}
+            keyOf={(config) => config.id}
+            columns={[
+              {
+                key: "name",
+                caption: t("configs.name"),
+                lead: true,
+                body: "font-medium text-ink",
+                cell: (config) => config.name,
+              },
+              {
+                key: "endpoint",
+                caption: t("configs.endpoint"),
+                body: "text-muted",
+                cell: (config) =>
+                  config.host.length > 0 ? `${config.host}:${config.listenPort}` : config.listenPort,
+              },
+              {
+                key: "address",
+                caption: t("configs.address"),
+                body: "text-muted",
+                cell: (config) => config.address.join(", "),
+              },
+              {
+                key: "public",
+                caption: t("configs.public"),
+                body: "max-w-56 text-muted",
+                cell: (config) => <span className="block truncate">{config.publicKey}</span>,
+              },
+              {
+                key: "actions",
+                caption: t("configs.actions"),
+                tail: true,
+                cell: (config) =>
+                  may && (
+                    <RowActions
+                      title={t("configs.actions")}
+                      actions={[
+                        { label: t("configs.edit"), onPick: () => setEditing(config) },
+                        { label: t("configs.apply"), onPick: () => void apply.mutateAsync(config.id) },
+                        { label: t("configs.remove"), onPick: () => setRemoving(config), alarming: true },
+                      ]}
+                    />
+                  ),
+              },
+            ]}
+          />
         )}
       </div>
 

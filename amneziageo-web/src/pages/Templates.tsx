@@ -15,6 +15,7 @@ import type { Template } from "@/api/templates"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
+import { Rows } from "@/components/Rows"
 import { TemplateForm } from "@/components/TemplateForm"
 import { card, danger, primary, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
@@ -94,49 +95,75 @@ export function Templates() {
         {list.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("templates.empty")}</div>}
 
         {list.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-2 font-normal">{t("templates.name")}</th>
-                  <th className="px-4 py-2 font-normal">{t("templates.allowed")}</th>
-                  <th className="px-4 py-2 font-normal">{t("templates.resolved")}</th>
-                  <th className="px-4 py-2 font-normal">{t("templates.dns")}</th>
-                  <th className="px-4 py-2 font-normal">{t("templates.mtu")}</th>
-                  <th className="px-4 py-2 font-normal">{t("templates.keepalive")}</th>
-                  <th className="px-4 py-2 font-normal">{t("templates.clients")}</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((one) => (
-                  <tr key={one.id} className="border-t border-line">
-                    <td className="px-4 py-2 font-medium text-ink">{one.name}</td>
-                    <td className="max-w-52 truncate px-4 py-2 text-muted" title={one.entries.join(", ")}>
-                      {entries(t, one.entries, allowed)}
-                    </td>
-                    <td
-                      className="px-4 py-2 text-muted"
-                      title={
-                        one.refreshedUtc === null
-                          ? undefined
-                          : t("templates.refreshed", { time: new Date(one.refreshedUtc).toLocaleString(language) })
-                      }
-                    >
-                      {resolved(one)}
-                    </td>
-                    <td className="px-4 py-2 text-muted">{listed(one.dns, defaults?.dns)}</td>
-                    <td className="px-4 py-2 text-muted">{one.mtu ?? defaults?.mtu}</td>
-                    <td className="px-4 py-2 text-muted">{one.keepalive ?? defaults?.keepalive}</td>
-                    <td className="px-4 py-2 text-muted">{one.clients}</td>
-                    <td className="px-4 py-2">
-                      {may && <RowActions title={t("templates.actions")} actions={actions(one)} />}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Rows
+            items={list}
+            keyOf={(one) => one.id}
+            columns={[
+              {
+                key: "name",
+                caption: t("templates.name"),
+                lead: true,
+                body: "font-medium text-ink",
+                cell: (one) => one.name,
+              },
+              {
+                key: "allowed",
+                caption: t("templates.allowed"),
+                body: "max-w-52 text-muted",
+                cell: (one) => (
+                  <span className="block truncate" title={one.entries.join(", ")}>
+                    {entries(t, one.entries, allowed)}
+                  </span>
+                ),
+              },
+              {
+                key: "resolved",
+                caption: t("templates.resolved"),
+                body: "text-muted",
+                cell: (one) => (
+                  <span
+                    title={
+                      one.refreshedUtc === null
+                        ? undefined
+                        : t("templates.refreshed", { time: new Date(one.refreshedUtc).toLocaleString(language) })
+                    }
+                  >
+                    {resolved(one)}
+                  </span>
+                ),
+              },
+              {
+                key: "dns",
+                caption: t("templates.dns"),
+                body: "text-muted",
+                cell: (one) => listed(one.dns, defaults?.dns),
+              },
+              {
+                key: "mtu",
+                caption: t("templates.mtu"),
+                body: "text-muted",
+                cell: (one) => one.mtu ?? defaults?.mtu,
+              },
+              {
+                key: "keepalive",
+                caption: t("templates.keepalive"),
+                body: "text-muted",
+                cell: (one) => one.keepalive ?? defaults?.keepalive,
+              },
+              {
+                key: "clients",
+                caption: t("templates.clients"),
+                body: "text-muted",
+                cell: (one) => one.clients,
+              },
+              {
+                key: "actions",
+                caption: t("templates.actions"),
+                tail: true,
+                cell: (one) => may && <RowActions title={t("templates.actions")} actions={actions(one)} />,
+              },
+            ]}
+          />
         )}
       </div>
 

@@ -116,7 +116,7 @@ export function ProxyForm({
               wide
             />
           )}
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className={label} htmlFor="proxy-sources">
               {t("proxies.sources")}
             </label>

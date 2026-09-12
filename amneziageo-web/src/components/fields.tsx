@@ -6,7 +6,7 @@ export function Section({ title, children }: { title: string; children: ReactNod
   return (
     <div className="border-t border-line pt-3 first:border-t-0 first:pt-0">
       <div className="text-xs font-medium tracking-wide text-muted uppercase">{title}</div>
-      <div className="mt-2 grid grid-cols-2 gap-3">{children}</div>
+      <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>
     </div>
   )
 }
@@ -43,7 +43,7 @@ export function Line({
   )
 
   return (
-    <div className={wide ? "col-span-2" : ""}>
+    <div className={wide ? "sm:col-span-2" : ""}>
       <label className={label} htmlFor={id}>
         {caption}
       </label>
@@ -98,7 +98,7 @@ export function Pick({
   disabled?: boolean
 }) {
   return (
-    <div className={wide ? "col-span-2" : ""}>
+    <div className={wide ? "sm:col-span-2" : ""}>
       <label className={label} htmlFor={id}>
         {caption}
       </label>

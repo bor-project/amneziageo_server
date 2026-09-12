@@ -15,6 +15,7 @@ import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
+import { Rows } from "@/components/Rows"
 import { RuleForm } from "@/components/RuleForm"
 import { card, danger, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
@@ -57,67 +58,83 @@ export function Rules() {
         {rules.data?.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("rules.empty")}</div>}
 
         {rules.data && rules.data.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-2 font-normal">{t("rules.name")}</th>
-                  <th className="px-4 py-2 font-normal">{t("rules.action")}</th>
-                  <th className="px-4 py-2 font-normal">{t("rules.targets")}</th>
-                  <th className="px-4 py-2 font-normal">{t("rules.sources")}</th>
-                  <th className="px-4 py-2 font-normal">{t("rules.traffic")}</th>
-                  <th className="px-4 py-2 font-normal">{t("rules.ranges")}</th>
-                  <th className="px-4 py-2 font-normal">{t("rules.state")}</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {rules.data.map((rule, at) => (
-                  <tr key={rule.id} className="border-t border-line">
-                    <td className="px-4 py-2 font-medium text-ink">
-                      {rule.name}
-                      {!rule.isEnabled && <span className="ml-2 text-xs text-muted">{t("rules.off")}</span>}
-                    </td>
-                    <td className="px-4 py-2 text-muted">
-                      {rule.action === "block" ? t("rules.actionBlock") : rule.outbound}
-                    </td>
-                    <td className="max-w-72 truncate px-4 py-2 text-muted" title={rule.targets.join(", ")}>
-                      {rule.targets.length > 0 ? rule.targets.join(", ") : t("rules.anything")}
-                    </td>
-                    <td className="max-w-48 truncate px-4 py-2 text-muted" title={rule.sources.join(", ")}>
-                      {rule.sources.length > 0 ? rule.sources.join(", ") : t("rules.anyone")}
-                    </td>
-                    <td className="px-4 py-2 text-muted">{traffic(rule, t)}</td>
-                    <td className="px-4 py-2 text-muted">{rule.state.ranges} / {rule.state.names}</td>
-                    <td className="px-4 py-2">
-                      <State rule={rule} t={t} />
-                    </td>
-                    <td className="px-4 py-2">
-                      {may && (
-                        <RowActions
-                          title={t("rules.actions")}
-                          actions={[
-                            {
-                              label: rule.isEnabled ? t("rules.turnOff") : t("rules.turnOn"),
-                              onPick: () => void turn.mutateAsync({ id: rule.id, on: !rule.isEnabled }),
-                            },
-                            { label: t("rules.edit"), onPick: () => setEditing(rule) },
-                            ...(at > 0
-                              ? [{ label: t("rules.up"), onPick: () => void move.mutateAsync({ id: rule.id, up: true }) }]
-                              : []),
-                            ...(at < last
-                              ? [{ label: t("rules.down"), onPick: () => void move.mutateAsync({ id: rule.id, up: false }) }]
-                              : []),
-                            { label: t("rules.remove"), onPick: () => setRemoving(rule), alarming: true },
-                          ]}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Rows
+            items={rules.data}
+            keyOf={(rule) => rule.id}
+            columns={[
+              {
+                key: "name",
+                caption: t("rules.name"),
+                lead: true,
+                body: "font-medium text-ink",
+                cell: (rule) => (
+                  <>
+                    {rule.name}
+                    {!rule.isEnabled && <span className="ml-2 text-xs text-muted">{t("rules.off")}</span>}
+                  </>
+                ),
+              },
+              {
+                key: "action",
+                caption: t("rules.action"),
+                body: "text-muted",
+                cell: (rule) => (rule.action === "block" ? t("rules.actionBlock") : rule.outbound),
+              },
+              {
+                key: "targets",
+                caption: t("rules.targets"),
+                body: "max-w-72 text-muted",
+                cell: (rule) => (
+                  <span className="block truncate" title={rule.targets.join(", ")}>
+                    {rule.targets.length > 0 ? rule.targets.join(", ") : t("rules.anything")}
+                  </span>
+                ),
+              },
+              {
+                key: "sources",
+                caption: t("rules.sources"),
+                body: "max-w-48 text-muted",
+                cell: (rule) => (
+                  <span className="block truncate" title={rule.sources.join(", ")}>
+                    {rule.sources.length > 0 ? rule.sources.join(", ") : t("rules.anyone")}
+                  </span>
+                ),
+              },
+              { key: "traffic", caption: t("rules.traffic"), body: "text-muted", cell: (rule) => traffic(rule, t) },
+              {
+                key: "ranges",
+                caption: t("rules.ranges"),
+                body: "text-muted",
+                cell: (rule) => `${rule.state.ranges} / ${rule.state.names}`,
+              },
+              { key: "state", caption: t("rules.state"), cell: (rule) => <State rule={rule} t={t} /> },
+              {
+                key: "actions",
+                caption: t("rules.actions"),
+                tail: true,
+                cell: (rule, at) =>
+                  may && (
+                    <RowActions
+                      title={t("rules.actions")}
+                      actions={[
+                        {
+                          label: rule.isEnabled ? t("rules.turnOff") : t("rules.turnOn"),
+                          onPick: () => void turn.mutateAsync({ id: rule.id, on: !rule.isEnabled }),
+                        },
+                        { label: t("rules.edit"), onPick: () => setEditing(rule) },
+                        ...(at > 0
+                          ? [{ label: t("rules.up"), onPick: () => void move.mutateAsync({ id: rule.id, up: true }) }]
+                          : []),
+                        ...(at < last
+                          ? [{ label: t("rules.down"), onPick: () => void move.mutateAsync({ id: rule.id, up: false }) }]
+                          : []),
+                        { label: t("rules.remove"), onPick: () => setRemoving(rule), alarming: true },
+                      ]}
+                    />
+                  ),
+              },
+            ]}
+          />
         )}
       </div>
 

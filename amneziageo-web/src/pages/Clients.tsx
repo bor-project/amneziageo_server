@@ -18,6 +18,7 @@ import { ClientForm } from "@/components/ClientForm"
 import { ClientImport } from "@/components/ClientImport"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
+import { Rows } from "@/components/Rows"
 import { card, danger, field, primary, secondary } from "@/components/styles"
 import { bytes, rate } from "@/format"
 import { useLanguage, useText } from "@/i18n"
@@ -113,48 +114,56 @@ export function Clients() {
         {shown.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("clients.empty")}</div>}
 
         {shown.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-2 font-normal">{t("clients.name")}</th>
-                  <th className="px-4 py-2 font-normal">{t("clients.endpointName")}</th>
-                  <th className="px-4 py-2 font-normal">{t("clients.template")}</th>
-                  <th className="px-4 py-2 font-normal">{t("clients.address")}</th>
-                  <th className="px-4 py-2 font-normal">{t("clients.speed")}</th>
-                  <th className="px-4 py-2 font-normal">{t("clients.traffic")}</th>
-                  <th className="px-4 py-2 font-normal">{t("clients.state")}</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((one) => (
-                  <tr key={one.id} className="border-t border-line">
-                    <td className={`py-2 pr-4 font-medium text-ink ${one.parentId === null ? "pl-4" : "pl-10"}`}>
-                      {one.name}
-                      {one.state.isOnline && <span className="ml-2 text-xs text-brand">{t("clients.online")}</span>}
-                      {!one.isEnabled && <span className="ml-2 text-xs text-muted">{t("clients.off")}</span>}
-                    </td>
-                    <td className="px-4 py-2 text-muted">{one.config}</td>
-                    <td className="px-4 py-2 text-muted">{named(one)}</td>
-                    <td className="px-4 py-2 text-muted">{one.address.join(", ")}</td>
-                    <td className="px-4 py-2">
-                      <Speed one={one} t={t} />
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-muted">
-                      <Traffic one={one} t={t} />
-                    </td>
-                    <td className="px-4 py-2">
-                      <State one={one} t={t} language={language} />
-                    </td>
-                    <td className="px-4 py-2">
-                      {may && <RowActions title={t("clients.actions")} actions={actionsOf(one)} />}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Rows
+            items={shown}
+            keyOf={(one) => one.id}
+            columns={[
+              {
+                key: "name",
+                caption: t("clients.name"),
+                lead: true,
+                body: "font-medium text-ink",
+                cell: (one) => (
+                  <span className={one.parentId === null ? "" : "pl-6"}>
+                    {one.name}
+                    {one.state.isOnline && <span className="ml-2 text-xs text-brand">{t("clients.online")}</span>}
+                    {!one.isEnabled && <span className="ml-2 text-xs text-muted">{t("clients.off")}</span>}
+                  </span>
+                ),
+              },
+              {
+                key: "config",
+                caption: t("clients.endpointName"),
+                body: "text-muted",
+                cell: (one) => one.config,
+              },
+              { key: "template", caption: t("clients.template"), body: "text-muted", cell: (one) => named(one) },
+              {
+                key: "address",
+                caption: t("clients.address"),
+                body: "text-muted",
+                cell: (one) => one.address.join(", "),
+              },
+              { key: "speed", caption: t("clients.speed"), cell: (one) => <Speed one={one} t={t} /> },
+              {
+                key: "traffic",
+                caption: t("clients.traffic"),
+                body: "whitespace-nowrap text-muted",
+                cell: (one) => <Traffic one={one} t={t} />,
+              },
+              {
+                key: "state",
+                caption: t("clients.state"),
+                cell: (one) => <State one={one} t={t} language={language} />,
+              },
+              {
+                key: "actions",
+                caption: t("clients.actions"),
+                tail: true,
+                cell: (one) => may && <RowActions title={t("clients.actions")} actions={actionsOf(one)} />,
+              },
+            ]}
+          />
         )}
       </div>
 

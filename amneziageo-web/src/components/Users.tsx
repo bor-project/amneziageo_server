@@ -5,6 +5,7 @@ import { fresh, useAddUser, useChangeUser, useRemoveUser, useSetPassword, useUse
 import type { User } from "@/api/users"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
+import { Rows } from "@/components/Rows"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -30,51 +31,61 @@ export function Users() {
       {users.data?.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("users.empty")}</div>}
 
       {users.data && users.data.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs text-muted">
-              <tr>
-                <th className="px-4 py-2 font-normal">{t("users.name")}</th>
-                <th className="px-4 py-2 font-normal">{t("users.kind")}</th>
-                <th className="px-4 py-2 font-normal">{t("users.role")}</th>
-                <th className="px-4 py-2 font-normal">{t("users.state")}</th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {users.data.map((user) => (
-                <tr key={user.name} className="border-t border-line">
-                  <td className="px-4 py-2">
-                    <div className="font-medium text-ink">{user.name}</div>
-                    {user.displayName !== user.name && (
-                      <div className="text-xs text-muted">{user.displayName}</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-muted">{t(`users.kind.${user.kind}` as TextKey)}</td>
-                  <td className="px-4 py-2 text-muted">
-                    {catalog.data?.roles.find((one) => one.name === user.role)?.title ??
-                      (user.role.length > 0 ? user.role : t("role.none"))}
-                  </td>
-                  <td className="px-4 py-2">
-                    <span className={user.enabled ? "text-brand-ink" : "text-alarm"}>
-                      {t(user.enabled ? "users.enabled" : "users.disabled")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2">
-                    <RowActions
-                      title={t("users.actions")}
-                      actions={[
-                        { label: t("users.edit"), onPick: () => setEditing(user) },
-                        { label: t("users.password"), onPick: () => setKeying(user) },
-                        { label: t("users.remove"), onPick: () => setRemoving(user), alarming: true },
-                      ]}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Rows
+          items={users.data}
+          keyOf={(user) => user.name}
+          columns={[
+            {
+              key: "name",
+              caption: t("users.name"),
+              lead: true,
+              cell: (user) => (
+                <>
+                  <div className="font-medium text-ink">{user.name}</div>
+                  {user.displayName !== user.name && <div className="text-xs text-muted">{user.displayName}</div>}
+                </>
+              ),
+            },
+            {
+              key: "kind",
+              caption: t("users.kind"),
+              body: "text-muted",
+              cell: (user) => t(`users.kind.${user.kind}` as TextKey),
+            },
+            {
+              key: "role",
+              caption: t("users.role"),
+              body: "text-muted",
+              cell: (user) =>
+                catalog.data?.roles.find((one) => one.name === user.role)?.title ??
+                (user.role.length > 0 ? user.role : t("role.none")),
+            },
+            {
+              key: "state",
+              caption: t("users.state"),
+              cell: (user) => (
+                <span className={user.enabled ? "text-brand-ink" : "text-alarm"}>
+                  {t(user.enabled ? "users.enabled" : "users.disabled")}
+                </span>
+              ),
+            },
+            {
+              key: "actions",
+              caption: t("users.actions"),
+              tail: true,
+              cell: (user) => (
+                <RowActions
+                  title={t("users.actions")}
+                  actions={[
+                    { label: t("users.edit"), onPick: () => setEditing(user) },
+                    { label: t("users.password"), onPick: () => setKeying(user) },
+                    { label: t("users.remove"), onPick: () => setRemoving(user), alarming: true },
+                  ]}
+                />
+              ),
+            },
+          ]}
+        />
       )}
 
       {adding && <AddDialog onClose={() => setAdding(false)} />}

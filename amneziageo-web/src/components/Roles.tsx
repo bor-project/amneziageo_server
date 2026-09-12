@@ -4,6 +4,7 @@ import { useAddRole, useChangeRole, useRemoveRole, useRoles } from "@/api/roles"
 import type { Role } from "@/api/roles"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
+import { Rows } from "@/components/Rows"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -27,46 +28,50 @@ export function Roles() {
       {catalog.data?.roles.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("roles.empty")}</div>}
 
       {catalog.data && catalog.data.roles.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs text-muted">
-              <tr>
-                <th className="px-4 py-2 font-normal">{t("roles.label")}</th>
-                <th className="px-4 py-2 font-normal">{t("roles.rights")}</th>
-                <th className="px-4 py-2 font-normal">{t("roles.users")}</th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {catalog.data.roles.map((role) => (
-                <tr key={role.name} className="border-t border-line">
-                  <td className="px-4 py-2">
-                    <div className="font-medium text-ink">{role.title.length > 0 ? role.title : role.name}</div>
-                    <div className="text-xs text-muted">
-                      {role.name}
-                      {role.builtin ? ` · ${t("roles.builtin")}` : ""}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2 text-muted">
-                    {role.scopes.length === 0
-                      ? t("roles.none")
-                      : role.scopes.map((scope) => t(`scope.${scope}` as TextKey)).join(", ")}
-                  </td>
-                  <td className="px-4 py-2 text-muted">{role.users}</td>
-                  <td className="px-4 py-2">
-                    <RowActions
-                      title={t("roles.actions")}
-                      actions={[
-                        { label: t("roles.edit"), onPick: () => setEditing(role) },
-                        { label: t("roles.remove"), onPick: () => setRemoving(role), alarming: true },
-                      ]}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Rows
+          items={catalog.data.roles}
+          keyOf={(role) => role.name}
+          columns={[
+            {
+              key: "title",
+              caption: t("roles.label"),
+              lead: true,
+              cell: (role) => (
+                <>
+                  <div className="font-medium text-ink">{role.title.length > 0 ? role.title : role.name}</div>
+                  <div className="text-xs text-muted">
+                    {role.name}
+                    {role.builtin ? ` · ${t("roles.builtin")}` : ""}
+                  </div>
+                </>
+              ),
+            },
+            {
+              key: "rights",
+              caption: t("roles.rights"),
+              body: "text-muted",
+              cell: (role) =>
+                role.scopes.length === 0
+                  ? t("roles.none")
+                  : role.scopes.map((scope) => t(`scope.${scope}` as TextKey)).join(", "),
+            },
+            { key: "users", caption: t("roles.users"), body: "text-muted", cell: (role) => role.users },
+            {
+              key: "actions",
+              caption: t("roles.actions"),
+              tail: true,
+              cell: (role) => (
+                <RowActions
+                  title={t("roles.actions")}
+                  actions={[
+                    { label: t("roles.edit"), onPick: () => setEditing(role) },
+                    { label: t("roles.remove"), onPick: () => setRemoving(role), alarming: true },
+                  ]}
+                />
+              ),
+            },
+          ]}
+        />
       )}
 
       {adding && <AddDialog scopes={catalog.data?.scopes ?? []} onClose={() => setAdding(false)} />}

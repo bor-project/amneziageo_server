@@ -15,6 +15,7 @@ import { scopes } from "@/api/scopes"
 import { GeoForm } from "@/components/GeoForm"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
+import { Rows } from "@/components/Rows"
 import { card, danger, primary, secondary } from "@/components/styles"
 import { bytes } from "@/format"
 import { useLanguage, useText } from "@/i18n"
@@ -69,65 +70,94 @@ export function Geo() {
         {sources.data?.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("geo.empty")}</div>}
 
         {sources.data && sources.data.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-2 font-normal">{t("geo.name")}</th>
-                  <th className="px-4 py-2 font-normal">{t("geo.kind")}</th>
-                  <th className="px-4 py-2 font-normal">{t("geo.url")}</th>
-                  <th className="px-4 py-2 font-normal">{t("geo.entries")}</th>
-                  <th className="px-4 py-2 font-normal">{t("geo.size")}</th>
-                  <th className="px-4 py-2 font-normal">{t("geo.updated")}</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {sources.data.map((source, at) => (
-                  <tr key={source.id} className="border-t border-line">
-                    <td className="px-4 py-2 font-medium text-ink">
-                      {source.name}
-                      {!source.isEnabled && <span className="ml-2 text-xs text-muted">{t("geo.off")}</span>}
-                    </td>
-                    <td className="px-4 py-2 text-muted">
-                      {source.kind === "geoip" ? t("geo.kindIp") : t("geo.kindSite")}
-                    </td>
-                    <td className="max-w-72 truncate px-4 py-2 text-muted" title={source.url}>
-                      {source.url}
-                    </td>
-                    <td className="px-4 py-2 text-muted">{source.entryCount > 0 ? source.entryCount : ""}</td>
-                    <td className="px-4 py-2 text-muted">{source.size > 0 ? bytes(t, source.size) : ""}</td>
-                    <td className="px-4 py-2 text-muted">
-                      {stamp(t, language, source)}
-                      {source.lastError.length > 0 && (
-                        <div className="max-w-72 truncate text-xs text-alarm" title={source.lastError}>
-                          {source.lastError}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-2">
-                      {may && (
-                        <RowActions
-                          title={t("geo.actions")}
-                          actions={[
-                            { label: t("geo.update"), onPick: () => void update.mutateAsync(source.id) },
-                            { label: t("geo.edit"), onPick: () => setEditing(source) },
-                            ...(at > 0
-                              ? [{ label: t("geo.up"), onPick: () => void move.mutateAsync({ id: source.id, up: true }) }]
-                              : []),
-                            ...(at < last
-                              ? [{ label: t("geo.down"), onPick: () => void move.mutateAsync({ id: source.id, up: false }) }]
-                              : []),
-                            { label: t("geo.remove"), onPick: () => setRemoving(source), alarming: true },
-                          ]}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Rows
+            items={sources.data}
+            keyOf={(source) => source.id}
+            columns={[
+              {
+                key: "name",
+                caption: t("geo.name"),
+                lead: true,
+                body: "font-medium text-ink",
+                cell: (source) => (
+                  <>
+                    {source.name}
+                    {!source.isEnabled && <span className="ml-2 text-xs text-muted">{t("geo.off")}</span>}
+                  </>
+                ),
+              },
+              {
+                key: "kind",
+                caption: t("geo.kind"),
+                body: "text-muted",
+                cell: (source) => (source.kind === "geoip" ? t("geo.kindIp") : t("geo.kindSite")),
+              },
+              {
+                key: "url",
+                caption: t("geo.url"),
+                body: "max-w-72 text-muted",
+                cell: (source) => (
+                  <span className="block truncate" title={source.url}>
+                    {source.url}
+                  </span>
+                ),
+              },
+              {
+                key: "entries",
+                caption: t("geo.entries"),
+                body: "text-muted",
+                cell: (source) => (source.entryCount > 0 ? source.entryCount : ""),
+              },
+              {
+                key: "size",
+                caption: t("geo.size"),
+                body: "text-muted",
+                cell: (source) => (source.size > 0 ? bytes(t, source.size) : ""),
+              },
+              {
+                key: "updated",
+                caption: t("geo.updated"),
+                body: "text-muted",
+                cell: (source) => (
+                  <>
+                    {stamp(t, language, source)}
+                    {source.lastError.length > 0 && (
+                      <div className="max-w-72 truncate text-xs text-alarm" title={source.lastError}>
+                        {source.lastError}
+                      </div>
+                    )}
+                  </>
+                ),
+              },
+              {
+                key: "actions",
+                caption: t("geo.actions"),
+                tail: true,
+                cell: (source, at) =>
+                  may && (
+                    <RowActions
+                      title={t("geo.actions")}
+                      actions={[
+                        { label: t("geo.update"), onPick: () => void update.mutateAsync(source.id) },
+                        { label: t("geo.edit"), onPick: () => setEditing(source) },
+                        ...(at > 0
+                          ? [{ label: t("geo.up"), onPick: () => void move.mutateAsync({ id: source.id, up: true }) }]
+                          : []),
+                        ...(at < last
+                          ? [
+                              {
+                                label: t("geo.down"),
+                                onPick: () => void move.mutateAsync({ id: source.id, up: false }),
+                              },
+                            ]
+                          : []),
+                        { label: t("geo.remove"), onPick: () => setRemoving(source), alarming: true },
+                      ]}
+                    />
+                  ),
+              },
+            ]}
+          />
         )}
       </div>
 

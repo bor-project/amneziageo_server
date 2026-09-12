@@ -12,9 +12,10 @@ import { ThemeToggle } from "@/components/ThemeToggle"
 import { card } from "@/components/styles"
 import { isLanguageChoice, useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
+import { useAbove, wideQuery } from "@/theme/width"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { holds, sessionClosed } from "@/store/authSlice"
-import { languageServed, sidebarToggled } from "@/store/uiSlice"
+import { languageServed, sidebarSet, sidebarToggled } from "@/store/uiSlice"
 
 const links: { to: string; label: TextKey; scope: string }[] = [
   { to: "/", label: "nav.overview", scope: scopes.readState },
@@ -26,6 +27,8 @@ const links: { to: string; label: TextKey; scope: string }[] = [
 const item = "rounded px-3 py-2 text-sm"
 const active = "bg-brand-soft font-medium text-brand-ink"
 const idle = "text-muted hover:bg-hover"
+const column = "flex w-56 shrink-0 flex-col border-r border-line bg-surface"
+const drawer = "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-line bg-surface shadow-xl"
 
 export function Layout() {
   const t = useText()
@@ -34,6 +37,7 @@ export function Layout() {
   const dispatch = useAppDispatch()
   const health = useHealth()
   const served = usePanel().data?.language
+  const wide = useAbove(wideQuery)
 
   useEffect(() => {
     if (served !== undefined && isLanguageChoice(served)) {
@@ -41,10 +45,30 @@ export function Layout() {
     }
   }, [dispatch, served])
 
+  useEffect(() => {
+    dispatch(sidebarSet(wide))
+  }, [dispatch, wide])
+
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !wide) {
+        dispatch(sidebarSet(false))
+      }
+    }
+
+    window.addEventListener("keydown", escape)
+
+    return () => window.removeEventListener("keydown", escape)
+  }, [dispatch, wide])
+
   return (
     <div className="flex h-full bg-canvas text-ink">
+      {open && !wide && (
+        <div className="fixed inset-0 z-40 bg-black/50" onMouseDown={() => dispatch(sidebarSet(false))} />
+      )}
+
       {open && (
-        <aside className="flex w-56 shrink-0 flex-col border-r border-line bg-surface">
+        <aside className={wide ? column : drawer}>
           <div className="flex h-13 items-center px-4">
             <span className="text-lg font-semibold text-brand-ink">{t("app.name")}</span>
           </div>
@@ -57,6 +81,7 @@ export function Layout() {
                   key={l.to}
                   to={l.to}
                   end={l.to === "/"}
+                  onClick={() => !wide && dispatch(sidebarSet(false))}
                   className={({ isActive }) => `${item} ${isActive ? active : idle}`}
                 >
                   {t(l.label)}
@@ -86,7 +111,7 @@ export function Layout() {
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-auto p-6">
+        <main className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
           <Outlet />
         </main>
       </div>

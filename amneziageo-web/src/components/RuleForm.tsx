@@ -54,7 +54,7 @@ export function RuleForm({
         </>
       }
     >
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Line id="rule-name" caption={t("rules.name")} value={draft.name} onChange={(name) => put({ name })} />
 
         <div>
@@ -142,7 +142,7 @@ export function RuleForm({
           wide
         />
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Flag
             id="rule-enabled"
             caption={t("rules.enabled")}

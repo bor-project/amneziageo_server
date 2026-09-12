@@ -108,7 +108,7 @@ export function ClientForm({
         </>
       }
     >
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Pick
           id="client-interface"
           caption={t("clients.endpointName")}
@@ -144,7 +144,7 @@ export function ClientForm({
         {legacy ? (
           <Line id="client-address" caption={t("clients.address")} value={listed} onChange={setText} wide />
         ) : (
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className={label} htmlFor="client-address">
               {t("clients.address")}
             </label>
@@ -201,7 +201,7 @@ export function ClientForm({
 
         <Line id="client-note" caption={t("clients.note")} value={draft.note} onChange={(note) => put({ note })} wide />
 
-        <div className="col-span-2 flex flex-wrap gap-6">
+        <div className="sm:col-span-2 flex flex-wrap gap-6">
           <Flag
             id="client-enabled"
             caption={t("clients.enabled")}
@@ -228,7 +228,7 @@ export function ClientForm({
           <option value="network">{t("clients.inboundNetwork")}</option>
         </Pick>
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className={label} htmlFor="client-routes">
             {t("clients.routes")}
           </label>
@@ -243,7 +243,7 @@ export function ClientForm({
           </div>
         </div>
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <div className={label}>{t("clients.forwards")}</div>
           <div className="mt-1 flex flex-col gap-2">
             {draft.forwards.map((one, at) => (
