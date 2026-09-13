@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Firewall;
+using AmneziaGeo.Server.Api.Hello;
 using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Api.Proxy;
 using AmneziaGeo.Server.Api.Rules;
@@ -94,6 +95,7 @@ public static class ConfigEndpoints
         DnsHost resolver,
         ProxyApplier proxy,
         FirewallApplier firewall,
+        HelloServer hello,
         CancellationToken ct)
     {
         var result = await store.AddAsync(ConfigAnswers.Draft(request), ct).ConfigureAwait(false);
@@ -107,6 +109,7 @@ public static class ConfigEndpoints
         await resolver.RebindAsync(ct).ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
+        await hello.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Created($"/api/configs/{result.Record!.Id}", ConfigAnswers.Config(result.Record, true));
     }
@@ -121,6 +124,7 @@ public static class ConfigEndpoints
         DnsHost resolver,
         ProxyApplier proxy,
         FirewallApplier firewall,
+        HelloServer hello,
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -140,6 +144,7 @@ public static class ConfigEndpoints
         await resolver.RebindAsync(ct).ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
+        await hello.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(ConfigAnswers.Config(result.Record!, true));
     }
@@ -153,6 +158,7 @@ public static class ConfigEndpoints
         DnsHost resolver,
         ProxyApplier proxy,
         FirewallApplier firewall,
+        HelloServer hello,
         CancellationToken ct)
     {
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
@@ -167,6 +173,7 @@ public static class ConfigEndpoints
         await resolver.RebindAsync(ct).ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
+        await hello.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.NoContent();
     }
@@ -178,6 +185,7 @@ public static class ConfigEndpoints
         EndpointHost host,
         ProxyApplier proxy,
         FirewallApplier firewall,
+        HelloServer hello,
         CancellationToken ct)
     {
         var found = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -190,6 +198,7 @@ public static class ConfigEndpoints
         await FirewallAsync(store, clients, host, ct).ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
+        await hello.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(new ConfigSyncResponse(sync.Name, sync.IsDone, sync.Message));
     }
@@ -200,6 +209,7 @@ public static class ConfigEndpoints
         EndpointHost host,
         ProxyApplier proxy,
         FirewallApplier firewall,
+        HelloServer hello,
         CancellationToken ct)
     {
         var found = await store.ListAsync(ct).ConfigureAwait(false);
@@ -207,6 +217,7 @@ public static class ConfigEndpoints
             .ConfigureAwait(false);
         await proxy.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
+        await hello.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(done.Select(sync => new ConfigSyncResponse(sync.Name, sync.IsDone, sync.Message)).ToArray());
     }

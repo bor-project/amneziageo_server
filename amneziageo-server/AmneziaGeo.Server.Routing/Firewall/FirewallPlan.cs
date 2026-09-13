@@ -11,7 +11,8 @@ namespace AmneziaGeo.Server.Routing.Firewall;
 /// <param name="Protocol">Whether the port takes tcp or udp.</param>
 /// <param name="Port">The number of the port.</param>
 /// <param name="Note">What the port is open for.</param>
-public sealed record FirewallPort(string Protocol, int Port, string Note);
+/// <param name="Interface">The interface the port is open on, empty for every one.</param>
+public sealed record FirewallPort(string Protocol, int Port, string Note, string Interface = "");
 
 /// <summary>
 /// What the panel holds open in the firewall of the host.
@@ -41,6 +42,11 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
     public const string Subscriptions = "subscriptions";
 
     /// <summary>
+    /// What the port of the point of the server is noted as.
+    /// </summary>
+    public const string Hello = "hello";
+
+    /// <summary>
     /// A plan that holds nothing open.
     /// </summary>
     public static readonly FirewallPlan None = new([], []);
@@ -52,7 +58,8 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         IReadOnlyList<ServerConfig> configs,
         IReadOnlyList<ProxyConfig> proxies,
         PanelSettings panel,
-        SubscriptionSettings subscriptions)
+        SubscriptionSettings subscriptions,
+        int helloPort = 0)
     {
         ArgumentNullException.ThrowIfNull(configs);
         ArgumentNullException.ThrowIfNull(proxies);
@@ -64,6 +71,7 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         foreach (var config in configs.Where(one => one.IsEnabled && one.Opened))
         {
             Take(ports, new FirewallPort(Udp, config.ListenPort, config.Name));
+            Take(ports, new FirewallPort(Tcp, config.HelloPort(helloPort), Hello + " " + config.Name, config.Name));
             interfaces.Add(config.Name);
         }
 
@@ -94,7 +102,8 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         }
 
         if (!ports.Exists(held => held.Port == port.Port
-            && string.Equals(held.Protocol, port.Protocol, StringComparison.Ordinal)))
+            && string.Equals(held.Protocol, port.Protocol, StringComparison.Ordinal)
+            && string.Equals(held.Interface, port.Interface, StringComparison.Ordinal)))
         {
             ports.Add(port);
         }

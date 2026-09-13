@@ -12,7 +12,7 @@ that was set up by hand until a toggle goes on.
 
 | Toggle | What it opens |
 |---|---|
-| An endpoint, see [configs.md](configs.md) | its UDP port, and both ways through its interface, so its clients reach the internet and the ports carried to them arrive |
+| An endpoint, see [configs.md](configs.md) | its UDP port, the TCP port of the point of the server on its interface, see [hello.md](hello.md), and both ways through its interface, so its clients reach the internet and the ports carried to them arrive |
 | A proxy, see [proxy.md](proxy.md) | the port the proxy listens on, TCP for the `ws` kind and UDP for the `wg` kind |
 | The panel, see [serving.md](serving.md) | the port the panel binds, unless it binds the loopback alone |
 | The subscriptions, see [subscriptions.md](subscriptions.md) | the port they are served on, while they are handed out |
@@ -25,6 +25,7 @@ Where the host carries ufw, the panel gives it the rules and marks each one with
 
 ```
 ufw allow 51820/udp comment 'amneziageo awg0'
+ufw allow in on awg0 to any port 51820 proto tcp comment 'amneziageo hello awg0'
 ufw route allow in on awg0 comment 'amneziageo awg0'
 ufw route allow out on awg0 comment 'amneziageo awg0'
 ufw allow 8443/tcp comment 'amneziageo panel'

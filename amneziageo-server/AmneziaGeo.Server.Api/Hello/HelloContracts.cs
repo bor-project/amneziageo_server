@@ -1,3 +1,6 @@
+using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Config;
+
 namespace AmneziaGeo.Server.Api.Hello;
 
 /// <summary>
@@ -13,18 +16,19 @@ public sealed record HelloResponse(string Server, string Version, string Challen
 /// </summary>
 /// <param name="Key">The public key of the client, in base64.</param>
 /// <param name="Challenge">The challenge the server handed out.</param>
+/// <param name="Nonce">The bytes the countersign of the server is bound to, in base64.</param>
 /// <param name="Proof">The answer counted from the private key of the client.</param>
-public sealed record HelloRequest(string? Key, string? Challenge, string? Proof);
+public sealed record HelloRequest(string? Key, string? Challenge, string? Nonce, string? Proof);
 
 /// <summary>
-/// Where the subscriptions of the client are served.
+/// Arguments of the subscription feature.
 /// </summary>
 /// <param name="Url">The address the client reads its subscription from.</param>
 /// <param name="UpdateHours">How often it reads it again.</param>
 public sealed record SubscriptionFeature(string Url, int UpdateHours);
 
 /// <summary>
-/// Where the client measures its speed against the server.
+/// Arguments of the speed feature.
 /// </summary>
 /// <param name="Down">The address the client pulls bytes from.</param>
 /// <param name="Up">The address the client sends bytes to.</param>
@@ -38,16 +42,36 @@ public sealed record SpeedFeature(string Down, string Up, long Limit, DateTimeOf
 /// <param name="Server">The name the panel answers under.</param>
 /// <param name="Version">The version of the server.</param>
 /// <param name="Client">The name of the client behind the key.</param>
-/// <param name="Features">What the server offers this client.</param>
-/// <param name="Subscription">Where the subscription is served, null when it is not offered.</param>
-/// <param name="Speed">Where the speed is measured, null when it is not offered.</param>
+/// <param name="Features">The arguments of every feature offered to this client, by feature name.</param>
 public sealed record FeatureResponse(
     string Server,
     string Version,
     string Client,
-    IReadOnlyList<string> Features,
-    SubscriptionFeature? Subscription,
-    SpeedFeature? Speed);
+    IReadOnlyDictionary<string, object> Features);
+
+/// <summary>
+/// The client that proved its key and the request it asked with.
+/// </summary>
+/// <param name="Client">The client behind the key.</param>
+/// <param name="Endpoint">The endpoint the client connects to.</param>
+/// <param name="Context">The request of the client.</param>
+public sealed record HelloPeer(TunnelClient Client, ServerConfig Endpoint, HttpContext Context);
+
+/// <summary>
+/// One feature the server offers to a client that proved its key.
+/// </summary>
+public interface IHelloFeature
+{
+    /// <summary>
+    /// The key of the feature in the dictionary.
+    /// </summary>
+    string Name { get; }
+
+    /// <summary>
+    /// Returns the arguments of the feature for a peer, or null when it is not offered.
+    /// </summary>
+    ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct);
+}
 
 /// <summary>
 /// The names of what the server offers.

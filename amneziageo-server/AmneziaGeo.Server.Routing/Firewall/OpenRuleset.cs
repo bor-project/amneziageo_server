@@ -28,8 +28,13 @@ public static class OpenRuleset
         text.Append("\t\ttype filter hook input priority filter - 20; policy accept;\n");
         foreach (var port in plan.Ports)
         {
-            text.Append("\t\t").Append(port.Protocol).Append(" dport ").Append(Number(port.Port))
-                .Append(" accept\n");
+            text.Append("\t\t");
+            if (port.Interface.Length > 0)
+            {
+                text.Append("iifname \"").Append(port.Interface).Append("\" ");
+            }
+
+            text.Append(port.Protocol).Append(" dport ").Append(Number(port.Port)).Append(" accept\n");
         }
 
         text.Append("\t}\n\n");

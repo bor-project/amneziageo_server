@@ -84,13 +84,12 @@ public sealed class TunnelAddresses
 }
 
 /// <summary>
-/// Holds the clients of the tunnel to the point of the server: a request that arrives on an address of an
-/// interface reaches nothing else of the panel.
+/// Keeps the clients of the tunnels off the panel.
 /// </summary>
 public static class TunnelGate
 {
     /// <summary>
-    /// Lets a request that arrives inside a tunnel through only to the point of the server.
+    /// Answers nothing to a request that arrives on an address of an interface.
     /// </summary>
     public static WebApplication UseTunnelGate(this WebApplication app)
     {
@@ -99,8 +98,7 @@ public static class TunnelGate
         app.Use(async (context, next) =>
         {
             var addresses = context.RequestServices.GetRequiredService<TunnelAddresses>();
-            if (!Allowed(context.Request.Path)
-                && await addresses.HoldsAsync(context.Connection.LocalIpAddress, context.RequestAborted).ConfigureAwait(false))
+            if (await addresses.HoldsAsync(context.Connection.LocalIpAddress, context.RequestAborted).ConfigureAwait(false))
             {
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
 
@@ -112,8 +110,4 @@ public static class TunnelGate
 
         return app;
     }
-
-    private static bool Allowed(PathString path) =>
-        path.StartsWithSegments(HelloEndpoints.Path, StringComparison.Ordinal)
-        || path.StartsWithSegments(HelloEndpoints.SpeedPath, StringComparison.Ordinal);
 }

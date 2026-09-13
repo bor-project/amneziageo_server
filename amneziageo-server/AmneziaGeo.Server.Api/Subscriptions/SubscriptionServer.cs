@@ -218,14 +218,4 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
         ex is AddressInUseException || ex.InnerException is AddressInUseException
             ? "subscription-port-busy"
             : "subscription-failed";
-
-    /// <summary>
-    /// Leaves the signals of the process to the panel.
-    /// </summary>
-    private sealed class QuietLifetime : IHostLifetime
-    {
-        public Task WaitForStartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    }
 }

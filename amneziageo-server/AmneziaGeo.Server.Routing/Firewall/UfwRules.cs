@@ -66,7 +66,7 @@ public static class UfwRules
         var rules = new List<FirewallRule>();
         foreach (var port in plan.Ports)
         {
-            rules.Add(new FirewallRule(["allow", Point(port)], Note(port.Note)));
+            rules.Add(new FirewallRule(Allow(port), Note(port.Note)));
         }
 
         foreach (var name in plan.Interfaces)
@@ -143,6 +143,10 @@ public static class UfwRules
     }
 
     private static string[] Words(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+    private static string[] Allow(FirewallPort port) => port.Interface.Length > 0
+        ? ["allow", "in", "on", port.Interface, "to", "any", "port", port.Port.ToString(CultureInfo.InvariantCulture), "proto", port.Protocol]
+        : ["allow", Point(port)];
 
     private static string Point(FirewallPort port) =>
         string.Create(CultureInfo.InvariantCulture, $"{port.Port}/{port.Protocol}");

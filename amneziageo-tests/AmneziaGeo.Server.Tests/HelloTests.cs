@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Hello;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 
 namespace AmneziaGeo.Server.Tests;
@@ -87,4 +88,53 @@ public class HelloTests
         tickets.Leave(ticket.Value);
         Assert.True(tickets.Enter(ticket.Value));
     }
+
+    [Fact]
+    public void BothSidesCountTheSameCountersignOfABody()
+    {
+        var server = Curve25519.Create();
+        var client = Curve25519.Create();
+        var nonce = Convert.ToBase64String(new byte[PeerProof.NonceBytes]);
+        var body = "{\"features\":{}}"u8.ToArray();
+
+        var byServer = PeerProof.Countersign(server.PrivateKey, client.PublicKey, nonce, body);
+        var byClient = PeerProof.Countersign(client.PrivateKey, server.PublicKey, nonce, body);
+
+        Assert.Equal(byServer, byClient);
+        Assert.NotEqual(byServer, PeerProof.Countersign(server.PrivateKey, client.PublicKey, nonce, "{}"u8));
+        Assert.NotEqual(byServer, PeerProof.Countersign(server.PrivateKey, client.PublicKey, PeerProof.Challenge(), body));
+        Assert.NotEqual(byServer, PeerProof.Answer(server.PrivateKey, client.PublicKey, nonce));
+    }
+
+    [Fact]
+    public void ANonceIsThirtyTwoBytesInBase64()
+    {
+        Assert.True(PeerProof.IsNonce(Convert.ToBase64String(new byte[32])));
+        Assert.False(PeerProof.IsNonce(Convert.ToBase64String(new byte[16])));
+        Assert.False(PeerProof.IsNonce(Convert.ToBase64String(new byte[33])));
+        Assert.False(PeerProof.IsNonce("not base64"));
+        Assert.False(PeerProof.IsNonce(null));
+    }
+
+    [Fact]
+    public void ThePointAnswersOnTheAddressesOfTheEnabledInterfacesAtTheirPorts()
+    {
+        var one = Endpoint("awg0", 51820, "10.9.0.1/24", "fd00:9::1/64");
+        var two = Endpoint("awg1", 51821, "10.9.1.1/24");
+        var off = Endpoint("awg2", 51822, "10.9.2.1/24") with { IsEnabled = false };
+
+        Assert.Equal(
+            ["10.9.0.1:51820", "[fd00:9::1]:51820", "10.9.1.1:51821"],
+            HelloPoints.Of([one, two, off], 0).Select(point => point.ToString()).ToArray());
+        Assert.Equal(
+            ["10.9.0.1:9443", "[fd00:9::1]:9443", "10.9.1.1:9443"],
+            HelloPoints.Of([one, two, off], 9443).Select(point => point.ToString()).ToArray());
+    }
+
+    private static ServerConfig Endpoint(string name, int port, params string[] address) => new()
+    {
+        Name = name,
+        ListenPort = port,
+        Address = address,
+    };
 }

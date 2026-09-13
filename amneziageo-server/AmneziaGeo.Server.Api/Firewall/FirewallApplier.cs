@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Api.Hello;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Firewall;
 
@@ -18,6 +19,8 @@ public sealed class FirewallApplier
 
     private readonly FirewallHost _host;
 
+    private readonly HelloOptions _hello;
+
     private readonly ILogger<FirewallApplier> _logger;
 
     /// <summary>
@@ -29,6 +32,7 @@ public sealed class FirewallApplier
         PanelStore panel,
         SubscriptionStore subscriptions,
         FirewallHost host,
+        HelloOptions hello,
         ILogger<FirewallApplier> logger)
     {
         _configs = configs;
@@ -36,6 +40,7 @@ public sealed class FirewallApplier
         _panel = panel;
         _subscriptions = subscriptions;
         _host = host;
+        _hello = hello;
         _logger = logger;
     }
 
@@ -48,7 +53,8 @@ public sealed class FirewallApplier
             await _configs.ListAsync(ct).ConfigureAwait(false),
             await _proxies.ListAsync(ct).ConfigureAwait(false),
             await _panel.ReadAsync(ct).ConfigureAwait(false),
-            await _subscriptions.ReadAsync(ct).ConfigureAwait(false));
+            await _subscriptions.ReadAsync(ct).ConfigureAwait(false),
+            _hello.Port);
         var sync = await _host.ApplyAsync(plan, ct).ConfigureAwait(false);
         if (!sync.IsDone)
         {

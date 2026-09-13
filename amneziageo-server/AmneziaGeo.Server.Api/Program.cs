@@ -30,7 +30,7 @@ builder.Services.AddResolver();
 builder.Services.AddPanel();
 builder.Services.AddProxies(builder.Configuration);
 builder.Services.AddFirewall();
-builder.Services.AddHello();
+builder.Services.AddHello(builder.Configuration);
 builder.Services.AddSubscriptions();
 builder.Services.AddApiDescription();
 
@@ -73,7 +73,6 @@ app.MapResolver();
 app.MapPanel();
 app.MapSubscriptions();
 app.MapProxies();
-app.MapHello();
 app.MapDiagnostics();
 app.MapApiDescription();
 app.MapControllers();
