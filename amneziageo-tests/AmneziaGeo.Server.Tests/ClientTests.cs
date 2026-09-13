@@ -533,7 +533,23 @@ public class ClientTests
 
         Assert.Contains("# AmneziaGeo Inbound = network\n", text, StringComparison.Ordinal);
         Assert.Contains("# AmneziaGeo Routes = 192.168.88.0/24\n", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("AmneziaGeo", ClientText.Text(Endpoint(), Client()), StringComparison.Ordinal);
+        Assert.DoesNotContain("AmneziaGeo Inbound", ClientText.Text(Endpoint(), Client()), StringComparison.Ordinal);
+        Assert.DoesNotContain("AmneziaGeo Routes", ClientText.Text(Endpoint(), Client()), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheFileOfAClientNamesWhereThePointOfTheServerAnswersInsideTheTunnel()
+    {
+        var endpoint = Endpoint() with { Address = ["10.8.0.1/24", "fd00::1/64"] };
+
+        Assert.Contains("# AmneziaGeo Api = 10.8.0.1:51820, [fd00::1]:51820\n", ClientText.Text(endpoint, Client()), StringComparison.Ordinal);
+        Assert.Contains("# AmneziaGeo Api = 10.8.0.1:9443, [fd00::1]:9443\n", ClientText.Text(endpoint, Client(), helloPort: 9443), StringComparison.Ordinal);
+        Assert.DoesNotContain("AmneziaGeo Api", ClientText.Text(endpoint with { Address = [] }, Client()), StringComparison.Ordinal);
+
+        using var document = Opened(ClientLink.Link(endpoint, Client(), helloPort: 9443));
+        var api = document.RootElement.GetProperty("amneziageo").GetProperty("api");
+
+        Assert.Equal(["10.8.0.1:9443", "[fd00::1]:9443"], api.EnumerateArray().Select(point => point.GetString()));
     }
 
     [Fact]

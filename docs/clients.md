@@ -72,7 +72,10 @@ so a client that routes `0.0.0.0/0` answers everyone and a narrower list answers
 The file and the `vpn://` link of the client name what it takes from the tunnel, so the application turns
 the flags of its own operating system on without being told twice: the file carries the lines
 `# AmneziaGeo Inbound = <off|server|network>` and `# AmneziaGeo Routes = <ranges>`, and the link carries the
-same under `amneziageo`. A device of a client takes the access of the client it belongs to, while the
+same under `amneziageo`. The line `# AmneziaGeo Api = <address>:<port>, ...` names every address of the
+interface of the endpoint with the port the point of the server answers on there, see [hello.md](hello.md),
+and the link carries it as `api`. A client of another application reads these lines as comments and passes
+them by. A device of a client takes the access of the client it belongs to, while the
 networks behind a client and the ports of the host stay with the record that carries them.
 
 ## What the client is handed

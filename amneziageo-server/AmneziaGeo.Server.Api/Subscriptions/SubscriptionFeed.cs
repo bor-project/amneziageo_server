@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Api.Hello;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Traffic;
@@ -17,15 +18,18 @@ public sealed class SubscriptionFeed
 
     private readonly TrafficLedger _ledger;
 
+    private readonly HelloOptions _hello;
+
     /// <summary>
     /// ctor
     /// </summary>
-    public SubscriptionFeed(ClientStore clients, ConfigStore configs, TemplateStore templates, TrafficLedger ledger)
+    public SubscriptionFeed(ClientStore clients, ConfigStore configs, TemplateStore templates, TrafficLedger ledger, HelloOptions hello)
     {
         _clients = clients;
         _configs = configs;
         _templates = templates;
         _ledger = ledger;
+        _hello = hello;
     }
 
     /// <summary>
@@ -42,6 +46,6 @@ public sealed class SubscriptionFeed
         var endpoints = await _configs.ListAsync(ct).ConfigureAwait(false);
         var templates = await _templates.ListAsync(ct).ConfigureAwait(false);
 
-        return ClientFeed.Of(endpoints, members, templates.ToDictionary(one => one.Id), _ledger.Group);
+        return ClientFeed.Of(endpoints, members, templates.ToDictionary(one => one.Id), _ledger.Group, _hello.Port);
     }
 }

@@ -1,5 +1,7 @@
 using System.Text;
+using AmneziaGeo.Server.Api.Hello;
 using AmneziaGeo.Server.Api.Subscriptions;
+using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
@@ -158,6 +160,22 @@ public class SubscriptionTests
         Assert.Equal(
             "http://[fd00::1]:2096/sub/abc",
             SubscriptionAnswer.Address(plain, PanelDefaults.Settings, false, "[fd00::1]", "abc"));
+    }
+
+    [Fact]
+    public async Task TheServerOffersTheSubscriptionAtTheHostTheClientDials()
+    {
+        var subscriptions = new SubscriptionState { Current = SubscriptionDefaults.Settings with { IsEnabled = true } };
+        var offer = new SubscriptionOffer(subscriptions, PanelDefaults.Settings, new WebOptions());
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("10.8.0.1", 51820);
+        var client = new TunnelClient { Name = "milena", PrivateKey = "qA3cEwnAVQIDQTRPDGmDN6fzrDwARw2mnJ4jswPibnY=", SubscriptionId = "abc" };
+
+        var named = await offer.OfferAsync(new HelloPeer(client, new ServerConfig { Name = "awg1", Host = "bor.sytes.net" }, context), CancellationToken.None);
+        var bare = await offer.OfferAsync(new HelloPeer(client, new ServerConfig { Name = "awg1" }, context), CancellationToken.None);
+
+        Assert.Equal("http://bor.sytes.net:2096/sub/abc", Assert.IsType<SubscriptionFeature>(named).Url);
+        Assert.Equal("http://10.8.0.1:2096/sub/abc", Assert.IsType<SubscriptionFeature>(bare).Url);
     }
 
     [Fact]

@@ -19,6 +19,9 @@ that was set up by hand until a toggle goes on.
 
 Both families are opened together, since ufw takes a rule for each of them.
 
+The TCP port of the point of the server goes with the toggle of its endpoint, so an endpoint whose UDP port
+is opened by hand takes its TCP port by hand as well.
+
 ## How it is opened
 
 Where the host carries ufw, the panel gives it the rules and marks each one with a comment:

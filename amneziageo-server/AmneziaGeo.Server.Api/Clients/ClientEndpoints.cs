@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Hello;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Auth;
@@ -151,6 +152,7 @@ public static class ClientEndpoints
         SubscriptionState subscriptions,
         PanelSettings panel,
         WebOptions options,
+        HelloOptions hello,
         CancellationToken ct)
     {
         var client = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -171,8 +173,8 @@ public static class ClientEndpoints
 
         return Results.Ok(new ClientConfigResponse(
             ClientText.FileName(endpoint, client),
-            ClientText.Text(endpoint, client, template),
-            ClientLink.Link(endpoint, client, template),
+            ClientText.Text(endpoint, client, template, hello.Port),
+            ClientLink.Link(endpoint, client, template, hello.Port),
             SubscriptionAnswer.Address(
                 subscriptions.Current,
                 panel,

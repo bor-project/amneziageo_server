@@ -132,8 +132,9 @@ the port of each endpoint:
 }
 ```
 
-A client asks at the port of the `Endpoint` of its configuration unless its own settings of the configuration
-name another.
+The file of a client names these addresses in `# AmneziaGeo Api`, see [clients.md](clients.md), and the client
+asks there. A file without the line leaves the client to ask the first address of its subnet at the port of its
+`Endpoint`. A port named in the settings of the configuration on the client outranks both.
 
 The listeners follow the endpoints: adding, changing, turning off or removing one binds them again. An
 interface that is not up yet is bound all the same and answers once it carries its address, and an address a

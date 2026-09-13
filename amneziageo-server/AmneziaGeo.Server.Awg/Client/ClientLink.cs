@@ -27,14 +27,14 @@ public static class ClientLink
     /// <summary>
     /// Returns the configuration of a client as an Amnezia vpn:// link.
     /// </summary>
-    public static string Link(ServerConfig config, TunnelClient client, ClientTemplate? template = null)
+    public static string Link(ServerConfig config, TunnelClient client, ClientTemplate? template = null, int helloPort = 0)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
         var last = new JsonObject
         {
-            ["config"] = ClientText.Text(config, client, template),
+            ["config"] = ClientText.Text(config, client, template, helloPort),
             ["hostName"] = config.Host,
             ["port"] = config.ListenPort,
         };
@@ -54,13 +54,13 @@ public static class ClientLink
             ["defaultContainer"] = Container,
             ["description"] = ClientText.Title(config, client),
             ["hostName"] = config.Host,
-            ["amneziageo"] = Reverse(config, client),
+            ["amneziageo"] = Reverse(config, client, helloPort),
         };
 
         return Scheme + Base64Url.EncodeToString(Packed(Encoding.UTF8.GetBytes(document.ToJsonString(Plain))));
     }
 
-    private static JsonObject Reverse(ServerConfig config, TunnelClient client)
+    private static JsonObject Reverse(ServerConfig config, TunnelClient client, int helloPort)
     {
         var routes = new JsonArray();
         foreach (var route in client.Routes)
@@ -68,10 +68,17 @@ public static class ClientLink
             routes.Add(route);
         }
 
+        var api = new JsonArray();
+        foreach (var point in ClientText.ApiPoints(config, helloPort))
+        {
+            api.Add(point);
+        }
+
         return new JsonObject
         {
             ["inbound"] = InboundName.Of(InboundName.Taken(client.Inbound, config.Inbound)),
             ["routes"] = routes,
+            ["api"] = api,
         };
     }
 

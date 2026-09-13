@@ -38,7 +38,7 @@ public sealed class SubscriptionOffer : IHelloFeature
             _subscriptions.Current,
             _panel,
             Listening.Chain(_options, _panel).Length > 0,
-            peer.Context.Request.Host.Host,
+            peer.Endpoint.Host.Length > 0 ? peer.Endpoint.Host : peer.Context.Request.Host.Host,
             peer.Client.PrivateKey.Length > 0 ? peer.Client.SubscriptionId : string.Empty);
 
         return ValueTask.FromResult<object?>(address.Length == 0

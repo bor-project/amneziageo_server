@@ -36,15 +36,18 @@ Each entry is an address or an interface of the host with a port:
 | `127.0.0.1:8443` | that address alone |
 | `[::1]:8443` | an address of the sixth version, in brackets |
 | `lo:8443` | every address the `lo` interface carries |
-| `awg1:8443` | every address the tunnel carries, so the panel answers inside it and nowhere else |
+| `wgadmin:8443` | every address the tunnel carries, so the panel answers inside it and nowhere else |
 
 ```json
 {
   "Web": {
-    "Listen": [ "lo:8443", "awg1:8443" ]
+    "Listen": [ "lo:8443", "wgadmin:8443" ]
   }
 }
 ```
+
+The tunnel is one the panel does not serve. On an address of the interface of an endpoint the panel answers
+404 to every request, see [hello.md](hello.md).
 
 Addresses of an interface are read once, at start. An interface brought up later carries no listener until
 the server is restarted, and one the host does not carry at all is written down in the log and skipped. When
@@ -56,7 +59,7 @@ The same list is moved by environment variables, one per entry:
 
 ```
 Web__Listen__0=lo:8443
-Web__Listen__1=awg1:8443
+Web__Listen__1=wgadmin:8443
 ```
 
 The list becomes the settings the panel starts holding: the port of its first entry and every address behind
