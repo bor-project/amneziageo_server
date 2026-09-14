@@ -61,6 +61,11 @@ public sealed class AuthOptions
     public HostLogin HostLogin { get; set; } = HostLogin.Strict;
 
     /// <summary>
+    /// Whether the accounts of the panel are carried to the users of the host.
+    /// </summary>
+    public bool HostUsers { get; set; } = true;
+
+    /// <summary>
     /// Groups of the host and the role each one grants.
     /// </summary>
     public Dictionary<string, string> HostGroups { get; set; } = new(StringComparer.Ordinal)

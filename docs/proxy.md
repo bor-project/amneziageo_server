@@ -31,7 +31,8 @@ A fresh `ws` proxy comes with a path of 24 random characters. It is the secret o
 any other path is refused before a tunnel is opened. The certificate of the panel stands in the two fields as
 a placeholder, since that is what a proxy takes when it names none of its own. The proxy answers under TLS,
 so turning it on without a certificate of its own and without one on the panel is refused with
-`no-certificate`, and the page says as much above the list.
+`no-certificate`. Such a proxy stands stopped in red in the list, with the reason under the pointer, and its form
+says as much under the certificate.
 
 Saving it writes two files into `/etc/amneziageo-server` and restarts `amneziageo-proxy@<name>`:
 
@@ -46,6 +47,10 @@ every proxy again. `wstunnel` rereads it on its own, without a restart.
 
 A service is started over only when one of its files changes or it is not running, so the panel starting
 over leaves the tunnels through a proxy alone. `wstunnel` rereads a renewed certificate on its own too.
+
+A host that runs no systemd, a container among them, gets no services: the panel runs `wstunnel` and the relay
+itself with the same arguments and starts one again three seconds after it falls over. Such a proxy goes down
+with the panel, see [docker.md](docker.md).
 
 A client names the proxy as `wss://<host>:<port>/<path>` and the endpoint it wants as the port of the
 interface. The same shape works the other way round, for an outbound of the `ws` kind that leaves through a

@@ -49,6 +49,8 @@ public sealed class HostUsers
     /// </summary>
     public static bool IsSupported => LocalUsers.IsSupported;
 
+    private bool Reaches => IsSupported && _options.HostUsers;
+
     /// <summary>
     /// Puts a user of the host behind an account, adding it where the host carries none.
     /// </summary>
@@ -61,7 +63,7 @@ public sealed class HostUsers
     {
         ArgumentNullException.ThrowIfNull(roles);
 
-        if (!IsSupported)
+        if (!Reaches)
         {
             return new HostUserSync(false, "the host keeps no users of its own");
         }
@@ -105,7 +107,7 @@ public sealed class HostUsers
     {
         ArgumentNullException.ThrowIfNull(roles);
 
-        if (!IsSupported || LocalUsers.Find(name) is null)
+        if (!Reaches || LocalUsers.Find(name) is null)
         {
             return HostUserSync.Done;
         }
@@ -123,7 +125,7 @@ public sealed class HostUsers
     {
         ArgumentNullException.ThrowIfNull(roles);
 
-        if (!IsSupported || LocalUsers.Find(name) is null)
+        if (!Reaches || LocalUsers.Find(name) is null)
         {
             return HostUserSync.Done;
         }

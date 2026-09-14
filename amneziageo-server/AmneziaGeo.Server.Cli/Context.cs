@@ -20,6 +20,11 @@ public sealed class Context : IDisposable
     /// </summary>
     public const string PasswordLengthVariable = "AMNEZIAGEO_MIN_PASSWORD";
 
+    /// <summary>
+    /// Environment variable that sets what a host account is allowed to do, as the server reads it.
+    /// </summary>
+    public const string HostLoginVariable = "Auth__HostLogin";
+
     private readonly ServiceProvider _services;
 
     private readonly IServiceScope _scope;
@@ -82,6 +87,11 @@ public sealed class Context : IDisposable
         if (int.TryParse(Environment.GetEnvironmentVariable(PasswordLengthVariable), out var length) && length > 0)
         {
             options.MinimumPasswordLength = length;
+        }
+
+        if (Enum.TryParse<HostLogin>(Environment.GetEnvironmentVariable(HostLoginVariable), true, out var login))
+        {
+            options.HostLogin = login;
         }
 
         var path = databasePath ?? ServerDatabase.DefaultPath();

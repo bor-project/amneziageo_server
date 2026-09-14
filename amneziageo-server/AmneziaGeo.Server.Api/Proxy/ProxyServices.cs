@@ -37,11 +37,15 @@ public static class ProxyServices
         configuration.GetSection(ProxyOptions.Section).Bind(options);
 
         services.AddSingleton(options);
+        services.AddSingleton<IProxyRunner>(provider => SystemdProxies.Runs
+            ? new SystemdProxies(provider.GetRequiredService<IHostCommands>())
+            : new ChildProxies(options.Directory));
         services.AddSingleton(provider =>
             new ProxyHost(
                 provider.GetRequiredService<IHostCommands>(),
                 provider.GetRequiredService<IHostNetwork>(),
-                options.Directory));
+                options.Directory,
+                provider.GetRequiredService<IProxyRunner>()));
         services.AddScoped<ProxyApplier>();
 
         return services;

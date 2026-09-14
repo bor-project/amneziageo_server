@@ -102,6 +102,13 @@ public static class LoginCommands
 
     private static async Task<int> HostAdminAsync(Context context, Arguments args, CancellationToken ct)
     {
+        if (context.Options.HostLogin == HostLogin.Off)
+        {
+            Terminal.Fail("host accounts do not sign in on this server, name the administrator with --user");
+
+            return 1;
+        }
+
         if (!LocalUsers.IsSupported || LocalUsers.Current() is not { } user)
         {
             Terminal.Fail("the host does not know the account this process runs as, name one with --user");

@@ -9,6 +9,7 @@ import {
   useProxyCertificate,
   useRemoveProxy,
   useSwitchProxy,
+  uncertified,
 } from "@/api/proxies"
 import type { Proxy } from "@/api/proxies"
 import { scopes } from "@/api/scopes"
@@ -36,17 +37,9 @@ export function Proxies() {
   const remove = useRemoveProxy()
   const turn = useSwitchProxy()
   const may = holds(user, scopes.manageRouting)
-  const bare = tls.data !== undefined && (tls.data.chain.length === 0 || tls.data.key.length === 0)
-  const alone = (proxies.data ?? []).some(
-    (one) => one.kind === "ws" && (one.certificate.length === 0 || one.certificateKey.length === 0),
-  )
 
   return (
     <div>
-      {bare && (alone || proxies.data?.length === 0) && (
-        <div className="mt-3 text-sm text-alarm">{t("error.noCertificate")}</div>
-      )}
-
       <div className={`mt-4 ${card}`}>
         {may && (
           <div className="flex justify-end gap-2 border-b border-line px-4 py-3">
@@ -92,7 +85,12 @@ export function Proxies() {
                 key: "state",
                 caption: t("proxies.state"),
                 cell: (proxy) => (
-                  <State proxy={proxy} running={t("proxies.running")} stopped={t("proxies.stopped")} />
+                  <State
+                    proxy={proxy}
+                    fault={proxy.message || (uncertified(tls.data, proxy) ? t("error.noCertificate") : "")}
+                    running={t("proxies.running")}
+                    stopped={t("proxies.stopped")}
+                  />
                 ),
               },
               {
@@ -175,10 +173,20 @@ export function Proxies() {
   )
 }
 
-function State({ proxy, running, stopped }: { proxy: Proxy; running: string; stopped: string }) {
-  if (proxy.message.length > 0) {
+function State({
+  proxy,
+  fault,
+  running,
+  stopped,
+}: {
+  proxy: Proxy
+  fault: string
+  running: string
+  stopped: string
+}) {
+  if (fault.length > 0) {
     return (
-      <span className="text-alarm" title={proxy.message}>
+      <span className="text-alarm" title={fault}>
         {stopped}
       </span>
     )

@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/.vs/
+**/.vscode/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.git/
+out/
+tools/
+amneziawg/
+amneziageo-tests/
+amneziageo-server/AmneziaGeo.Server.Api/wwwroot/
+wstunnel/wstunnel/target/
+wstunnel/wstunnel/.git
+deploy/docker/server.env

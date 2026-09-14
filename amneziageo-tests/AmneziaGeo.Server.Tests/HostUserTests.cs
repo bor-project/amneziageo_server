@@ -46,6 +46,20 @@ public class HostUserTests
     }
 
     [Fact]
+    public async Task APanelKeptFromTheUsersOfTheHostCarriesNoAccountThere()
+    {
+        var tools = new Tools();
+        var hosts = new HostUsers(tools, new AuthOptions { HostUsers = false }, "/tmp/amneziageo-tests/server.db");
+
+        var carried = await hosts.CarryAsync("agtest-nobody", "admin", null, ["admin", "operator"], CancellationToken.None);
+        var shut = await hosts.ShutAsync("root", ["admin", "operator"], CancellationToken.None);
+
+        Assert.False(carried.IsDone);
+        Assert.True(shut.IsDone);
+        Assert.Empty(tools.Calls);
+    }
+
+    [Fact]
     public async Task AUserTheHostDoesNotCarryIsAdded()
     {
         var tools = new Tools();

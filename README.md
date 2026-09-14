@@ -61,4 +61,4 @@ ways out is in [docs/balancers.md](docs/balancers.md), where it is sent is in
 [docs/proxy.md](docs/proxy.md), how the ports of the panel are opened in the firewall of the host is in
 [docs/firewall.md](docs/firewall.md), what a client asks the server about itself is in
 [docs/hello.md](docs/hello.md), and how the panel goes on a server is in
-[docs/install.md](docs/install.md).
+[docs/install.md](docs/install.md), or in a container in [docs/docker.md](docs/docker.md).

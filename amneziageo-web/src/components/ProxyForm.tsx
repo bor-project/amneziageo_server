@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
+import { uncertified } from "@/api/proxies"
 import type { ProxyCertificate, ProxyDraft, ProxyKind } from "@/api/proxies"
 import { Count, Flag, Line, Multi, Pick, Section, Switch } from "@/components/fields"
 import { Modal } from "@/components/Modal"
@@ -27,6 +28,8 @@ export function ProxyForm({
 }) {
   const t = useText()
   const [draft, setDraft] = useState<ProxyDraft>(start)
+  const bare = uncertified(panel, draft)
+  const fault = error !== null && error !== undefined ? complaint(error) : null
 
   function put(part: Partial<ProxyDraft>) {
     setDraft({ ...draft, ...part })
@@ -153,10 +156,13 @@ export function ProxyForm({
               hint={t("proxies.certificateKeyHint")}
               wide
             />
+            {bare && <div className="text-sm text-alarm sm:col-span-2">{t("error.noCertificate")}</div>}
           </Section>
         )}
 
-        {error !== null && error !== undefined && <div className="text-sm text-alarm">{t(complaint(error))}</div>}
+        {fault !== null && !(bare && fault === "error.noCertificate") && (
+          <div className="text-sm text-alarm">{t(fault)}</div>
+        )}
       </div>
     </Modal>
   )

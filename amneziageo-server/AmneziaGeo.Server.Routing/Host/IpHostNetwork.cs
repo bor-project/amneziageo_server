@@ -163,7 +163,21 @@ public sealed class IpHostNetwork : IHostNetwork
     {
         foreach (var knob in Forwarding)
         {
-            await File.WriteAllTextAsync(knob, "1", ct).ConfigureAwait(false);
+            if (File.Exists(knob) && (await File.ReadAllTextAsync(knob, ct).ConfigureAwait(false)).Trim() == "1")
+            {
+                continue;
+            }
+
+            try
+            {
+                await File.WriteAllTextAsync(knob, "1", ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new HostNetworkException(
+                    $"forwarding is off in {knob} and the host keeps the panel from turning it on",
+                    ex);
+            }
         }
     }
 

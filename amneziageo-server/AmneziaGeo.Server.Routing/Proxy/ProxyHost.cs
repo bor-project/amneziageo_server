@@ -8,9 +8,7 @@ namespace AmneziaGeo.Server.Routing.Proxy;
 /// </summary>
 public sealed class ProxyHost
 {
-    private const string Tool = "systemctl";
-
-    private readonly IHostCommands _commands;
+    private readonly IProxyRunner _runner;
 
     private readonly IHostNetwork _network;
 
@@ -19,9 +17,9 @@ public sealed class ProxyHost
     /// <summary>
     /// ctor
     /// </summary>
-    public ProxyHost(IHostCommands commands, IHostNetwork network, string? directory = null)
+    public ProxyHost(IHostCommands commands, IHostNetwork network, string? directory = null, IProxyRunner? runner = null)
     {
-        _commands = commands;
+        _runner = runner ?? new SystemdProxies(commands);
         _network = network;
         _directory = string.IsNullOrWhiteSpace(directory) ? ProxyDefaults.Directory : directory;
     }
@@ -63,7 +61,7 @@ public sealed class ProxyHost
         {
             if (!proxy.IsEnabled)
             {
-                return await StopAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
+                return await _runner.StopAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
             }
 
             var written = await WriteAsync(proxy, ports, certificate, key, ct).ConfigureAwait(false);
@@ -72,8 +70,7 @@ public sealed class ProxyHost
                 return new ProxyState(false, written.Fault);
             }
 
-            var enabled = await RunAsync(["enable", Unit(proxy.Name, proxy.Kind)], ProxyState.Down, ct)
-                .ConfigureAwait(false);
+            var enabled = await _runner.EnableAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
             if (enabled.Message.Length > 0)
             {
                 return enabled;
@@ -88,8 +85,7 @@ public sealed class ProxyHost
                 }
             }
 
-            var started = await RunAsync(["restart", Unit(proxy.Name, proxy.Kind)], ProxyState.Up, ct)
-                .ConfigureAwait(false);
+            var started = await _runner.StartAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
 
             return started.Message.Length > 0
                 ? started
@@ -108,7 +104,7 @@ public sealed class ProxyHost
     {
         try
         {
-            var stopped = await StopAsync(name, kind, ct).ConfigureAwait(false);
+            var stopped = await _runner.StopAsync(name, kind, ct).ConfigureAwait(false);
             Clear(name);
 
             return stopped;
@@ -145,25 +141,12 @@ public sealed class ProxyHost
     {
         try
         {
-            var active = await _commands.RunAsync(Tool, ["is-active", Unit(name, kind)], null, ct)
-                .ConfigureAwait(false);
-
-            return active.IsOk ? ProxyState.Up : new ProxyState(false, active.Complaint);
+            return await _runner.StateAsync(name, kind, ct).ConfigureAwait(false);
         }
         catch (HostNetworkException ex)
         {
             return new ProxyState(false, ex.Message);
         }
-    }
-
-    private async Task<ProxyState> StopAsync(string name, string kind, CancellationToken ct) =>
-        await RunAsync(["disable", "--now", Unit(name, kind)], ProxyState.Down, ct).ConfigureAwait(false);
-
-    private async Task<ProxyState> RunAsync(string[] arguments, ProxyState done, CancellationToken ct)
-    {
-        var result = await _commands.RunAsync(Tool, arguments, null, ct).ConfigureAwait(false);
-
-        return result.IsOk ? done : new ProxyState(false, result.Complaint);
     }
 
     private async Task<Written> WriteAsync(

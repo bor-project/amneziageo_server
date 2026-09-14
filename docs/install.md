@@ -5,6 +5,8 @@ the interfaces of the endpoints itself: the key, the port and the obfuscation go
 address ranges onto the interface, the masquerade and the closed ranges into the firewall. A host that has
 been raising its interfaces with `awg-quick` hands them over whole.
 
+This page puts the panel on as a package. The same panel goes on as a container, see [docker.md](docker.md).
+
 ## Build the package
 
 On the machine the code lives on:

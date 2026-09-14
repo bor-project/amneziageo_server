@@ -168,6 +168,8 @@ secret.
 
 The server reads the same floor from `Auth:MinimumPasswordLength`, along with the rest of the login settings:
 `Auth:AccessLifetime`, `Auth:RefreshLifetime`, `Auth:HostLogin`, `Auth:HostGroups`, `Auth:FailedAttempts`.
+`Auth:HostUsers` set to `false` keeps the accounts of the panel off the users of the host: an account is not
+carried there, as in a container, see [docker.md](docker.md).
 
 ## Commands
 

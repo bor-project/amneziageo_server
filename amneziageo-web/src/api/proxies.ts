@@ -22,6 +22,12 @@ export interface Proxy extends ProxyDraft {
   message: string
 }
 
+export function uncertified(panel: ProxyCertificate | undefined, proxy: ProxyDraft): boolean {
+  const bare = panel !== undefined && (panel.chain.length === 0 || panel.key.length === 0)
+
+  return bare && proxy.kind === "ws" && (proxy.certificate.length === 0 || proxy.certificateKey.length === 0)
+}
+
 export interface ProxyCertificate {
   chain: string
   key: string
