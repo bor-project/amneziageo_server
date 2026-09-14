@@ -1,5 +1,5 @@
-using System.Globalization;
 using AmneziaGeo.Server.Awg.Config;
+using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Dal;
 
@@ -26,7 +26,8 @@ public class ConfigTests
 
         var types = new[] { one.H1, one.H2, one.H3, one.H4 };
         Assert.Equal(4, types.Distinct(StringComparer.Ordinal).Count());
-        Assert.All(types, type => Assert.InRange(long.Parse(type, CultureInfo.InvariantCulture), ConfigRules.LowestType, ConfigRules.HighestType));
+        Assert.All(types, type => Assert.True(AwgRange.TryParse(type, out var span) && !span.IsOne));
+        Assert.All(types, type => { _ = AwgRange.TryParse(type, out var span); Assert.InRange((long)span.Low, (long)ConfigRules.LowestType, (long)ConfigRules.HighestType); });
         Assert.NotEqual(types, [other.H1, other.H2, other.H3, other.H4]);
         Assert.NotEqual(one.S1 + ConfigRules.HandshakeGap, one.S2);
     }

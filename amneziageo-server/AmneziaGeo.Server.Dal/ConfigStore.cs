@@ -205,7 +205,6 @@ public sealed class ConfigStore
         IsEnabled = entity.IsEnabled,
         Nat = entity.Nat,
         Opened = entity.Opened,
-        Speed = entity.Speed,
         Inbound = (ClientInbound)entity.Inbound,
         Blocked = Parts(entity.Blocked),
         PrivateKey = entity.PrivateKey,
@@ -257,7 +256,6 @@ public sealed class ConfigStore
         entity.IsEnabled = config.IsEnabled;
         entity.Nat = config.Nat;
         entity.Opened = config.Opened;
-        entity.Speed = config.Speed;
         entity.Inbound = (int)config.Inbound;
         entity.Blocked = string.Join(", ", config.Blocked);
         entity.PrivateKey = config.PrivateKey;

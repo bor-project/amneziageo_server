@@ -8,8 +8,8 @@ import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useTemplates } from "@/api/templates"
 import { Modal } from "@/components/Modal"
-import { Flag, Line, Multi, Pick, Regenerate } from "@/components/fields"
-import { field, label, primary, quiet, secondary } from "@/components/styles"
+import { Flag, Help, Line, Multi, Pick, Regenerate } from "@/components/fields"
+import { field, fieldBox, label, note, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { randomId, randomKey } from "@/keys"
@@ -91,6 +91,7 @@ export function ClientForm({
   return (
     <Modal
       title={title}
+      wide
       onClose={onClose}
       footer={
         <>
@@ -218,7 +219,12 @@ export function ClientForm({
 
         <Pick
           id="client-inbound"
-          caption={t("clients.inbound")}
+          caption={
+            <span className="flex items-center gap-1">
+              {t("clients.inbound")}
+              <Help text={t("clients.inboundHint")} />
+            </span>
+          }
           value={draft.inbound}
           onChange={(value) => put({ inbound: value as Inbound })}
         >
@@ -229,68 +235,78 @@ export function ClientForm({
         </Pick>
 
         <div className="sm:col-span-2">
-          <label className={label} htmlFor="client-routes">
-            {t("clients.routes")}
-          </label>
-          <div className="mt-1">
-            <Multi
-              id="client-routes"
-              value={draft.routes}
-              offers={[]}
-              placeholder={t("clients.noRoutes")}
-              onChange={(routes) => put({ routes })}
-            />
-          </div>
+          <details open={draft.routes.length > 0} className="rounded-md border border-line px-3 py-2">
+            <summary className="cursor-pointer select-none text-xs font-medium tracking-wide text-muted uppercase">
+              {t("clients.routes")}
+            </summary>
+
+            <div className="mt-3">
+              <Multi
+                id="client-routes"
+                value={draft.routes}
+                offers={[]}
+                placeholder={t("clients.noRoutes")}
+                onChange={(routes) => put({ routes })}
+              />
+            </div>
+          </details>
+          <div className={note}>{t("clients.routesNote")}</div>
         </div>
 
         <div className="sm:col-span-2">
-          <div className={label}>{t("clients.forwards")}</div>
-          <div className="mt-1 flex flex-col gap-2">
-            {draft.forwards.map((one, at) => (
-              <div key={at} className="flex items-center gap-2">
-                <select
-                  value={one.protocol}
-                  onChange={(e) => carry(at, { protocol: e.target.value as Forward["protocol"] })}
-                  className={`w-24 shrink-0 ${field}`}
-                >
-                  <option value="tcp">tcp</option>
-                  <option value="udp">udp</option>
-                </select>
-                <input
-                  inputMode="numeric"
-                  value={one.from === 0 ? "" : String(one.from)}
-                  placeholder={t("clients.forwardFrom")}
-                  onChange={(e) => carry(at, { from: portOf(e.target.value) })}
-                  className={`w-28 shrink-0 ${field}`}
-                />
-                <span className="text-sm text-muted">{t("clients.forwardTo")}</span>
-                <input
-                  inputMode="numeric"
-                  value={one.to === 0 ? "" : String(one.to)}
-                  placeholder={t("clients.forwardPort")}
-                  onChange={(e) => carry(at, { to: portOf(e.target.value) })}
-                  className={`w-28 shrink-0 ${field}`}
-                />
+          <details open={draft.forwards.length > 0} className="rounded-md border border-line px-3 py-2">
+            <summary className="cursor-pointer select-none text-xs font-medium tracking-wide text-muted uppercase">
+              {t("clients.forwards")}
+            </summary>
+
+            <div className="mt-3 flex flex-col gap-2">
+              {draft.forwards.map((one, at) => (
+                <div key={at} className="flex items-center gap-2">
+                  <select
+                    value={one.protocol}
+                    onChange={(e) => carry(at, { protocol: e.target.value as Forward["protocol"] })}
+                    className={`w-24 shrink-0 ${fieldBox}`}
+                  >
+                    <option value="tcp">tcp</option>
+                    <option value="udp">udp</option>
+                  </select>
+                  <input
+                    inputMode="numeric"
+                    value={one.from === 0 ? "" : String(one.from)}
+                    placeholder={t("clients.forwardFrom")}
+                    onChange={(e) => carry(at, { from: portOf(e.target.value) })}
+                    className={`w-28 shrink-0 ${fieldBox}`}
+                  />
+                  <span className="text-sm text-muted">{t("clients.forwardTo")}</span>
+                  <input
+                    inputMode="numeric"
+                    value={one.to === 0 ? "" : String(one.to)}
+                    placeholder={t("clients.forwardPort")}
+                    onChange={(e) => carry(at, { to: portOf(e.target.value) })}
+                    className={`w-28 shrink-0 ${fieldBox}`}
+                  />
+                  <button
+                    type="button"
+                    className={quiet}
+                    title={t("clients.forwardRemove")}
+                    onClick={() => put({ forwards: draft.forwards.filter((_, index) => index !== at) })}
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+              <div>
                 <button
                   type="button"
-                  className={quiet}
-                  title={t("clients.forwardRemove")}
-                  onClick={() => put({ forwards: draft.forwards.filter((_, index) => index !== at) })}
+                  className={secondary}
+                  onClick={() => put({ forwards: [...draft.forwards, { protocol: "tcp", from: 0, to: 0 }] })}
                 >
-                  &times;
+                  {t("clients.forwardAdd")}
                 </button>
               </div>
-            ))}
-            <div>
-              <button
-                type="button"
-                className={secondary}
-                onClick={() => put({ forwards: [...draft.forwards, { protocol: "tcp", from: 0, to: 0 }] })}
-              >
-                {t("clients.forwardAdd")}
-              </button>
             </div>
-          </div>
+          </details>
+          <div className={note}>{t("clients.forwardsNote")}</div>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
-using System.Globalization;
 using System.Security.Cryptography;
+using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Crypto;
 
 namespace AmneziaGeo.Server.Awg.Config;
@@ -95,6 +95,8 @@ public static class ConfigDefaults
             H2 = types[1],
             H3 = types[2],
             H4 = types[3],
+            RandomTrailers = true,
+            DisableCookies = true,
         };
     }
 
@@ -107,19 +109,19 @@ public static class ConfigDefaults
 
     private static string[] Types()
     {
-        var types = new List<string>(4);
+        var types = new List<AwgRange>(4);
         while (types.Count < 4)
         {
-            var type = RandomNumberGenerator
-                .GetInt32(ConfigRules.LowestType, ConfigRules.HighestType)
-                .ToString(CultureInfo.InvariantCulture);
+            var span = RandomNumberGenerator.GetInt32(1, 10);
+            var low = RandomNumberGenerator.GetInt32(ConfigRules.LowestType, ConfigRules.HighestType - span);
+            var type = new AwgRange((uint)low, (uint)(low + span));
 
-            if (!types.Contains(type, StringComparer.Ordinal))
+            if (types.All(one => one.High < type.Low || one.Low > type.High))
             {
                 types.Add(type);
             }
         }
 
-        return [.. types];
+        return [.. types.Select(one => one.ToString())];
     }
 }

@@ -70,11 +70,6 @@ public sealed class SpeedOffer : IHelloFeature
     {
         ArgumentNullException.ThrowIfNull(peer);
 
-        if (!peer.Endpoint.Speed)
-        {
-            return ValueTask.FromResult<object?>(null);
-        }
-
         var ticket = _tickets.Mint(peer.Client.Id);
         var request = peer.Context.Request;
         var root = request.Scheme + "://" + request.Host.Value + HelloDesk.SpeedPath;

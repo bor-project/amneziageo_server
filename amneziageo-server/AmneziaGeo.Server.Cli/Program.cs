@@ -32,6 +32,7 @@ return arguments.At(0) switch
     "role" => await RoleCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     "token" => await TokenCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     "import" => await ImportCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
+    "endpoint" => await EndpointCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     _ => Usage(),
 };
 
@@ -48,6 +49,7 @@ static int Usage()
           amneziageo-server-cli role list | add | set | remove
           amneziageo-server-cli token list | add | revoke
           amneziageo-server-cli import endpoint | peers | clients
+          amneziageo-server-cli endpoint list | open <name> | close <name>
           amneziageo-server-cli family [name]              resolve a netlink family
           amneziageo-server-cli device list                 name the amneziawg interfaces
           amneziageo-server-cli device show [name]          read an interface with its peers

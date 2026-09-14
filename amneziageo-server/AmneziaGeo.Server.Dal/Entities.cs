@@ -125,8 +125,6 @@ public sealed class ConfigEntity
 
     public bool Opened { get; set; }
 
-    public bool Speed { get; set; }
-
     public string Blocked { get; set; } = string.Empty;
 
     public int Inbound { get; set; }

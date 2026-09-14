@@ -209,11 +209,6 @@ public sealed record ServerConfig
     public bool Opened { get; init; }
 
     /// <summary>
-    /// Whether the clients of the endpoint measure their speed against the server itself.
-    /// </summary>
-    public bool Speed { get; init; }
-
-    /// <summary>
     /// The ranges clients of the endpoint are not let into.
     /// </summary>
     public IReadOnlyList<string> Blocked { get; init; } = [];

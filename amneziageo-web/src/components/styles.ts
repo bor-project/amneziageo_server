@@ -3,6 +3,10 @@ export const card = "rounded-lg border border-line bg-surface"
 export const field =
   "w-full rounded border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand"
 
+// The same as field without w-full, for fields with an explicit width in a flex row.
+export const fieldBox =
+  "rounded border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand"
+
 export const primary =
   "rounded bg-brand px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
 

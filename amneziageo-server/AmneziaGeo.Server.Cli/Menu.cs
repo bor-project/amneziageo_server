@@ -22,6 +22,7 @@ public static class Menu
             Terminal.Say("  4  who am i");
             Terminal.Say("  5  kernel");
             Terminal.Say("  6  tokens");
+            Terminal.Say("  7  endpoints");
             Terminal.Say("  0  quit");
 
             switch (Terminal.Ask("> "))
@@ -48,6 +49,10 @@ public static class Menu
 
                 case "6":
                     await TokensAsync(context, ct).ConfigureAwait(false);
+                    break;
+
+                case "7":
+                    await EndpointsAsync(context, ct).ConfigureAwait(false);
                     break;
 
                 case "0":
@@ -84,6 +89,42 @@ public static class Menu
 
                 case "3":
                     await TokenCommands.RevokeAsync(context, new Arguments(["token", "revoke"]), ct).ConfigureAwait(false);
+                    break;
+
+                case "0":
+                case "":
+                    return;
+
+                default:
+                    Terminal.Fail("there is no such item");
+                    break;
+            }
+        }
+    }
+
+    private static async Task EndpointsAsync(Context context, CancellationToken ct)
+    {
+        while (true)
+        {
+            Terminal.Say(string.Empty);
+            Terminal.Say("endpoints");
+            Terminal.Say("  1  list");
+            Terminal.Say("  2  open");
+            Terminal.Say("  3  close");
+            Terminal.Say("  0  back");
+
+            switch (Terminal.Ask("> "))
+            {
+                case "1":
+                    await EndpointCommands.ListAsync(context, ct).ConfigureAwait(false);
+                    break;
+
+                case "2":
+                    await EndpointCommands.OpenedAsync(context, new Arguments(["endpoint", "open"]), opened: true, ct).ConfigureAwait(false);
+                    break;
+
+                case "3":
+                    await EndpointCommands.OpenedAsync(context, new Arguments(["endpoint", "close"]), opened: false, ct).ConfigureAwait(false);
                     break;
 
                 case "0":

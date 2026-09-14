@@ -5,7 +5,7 @@ import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
 import { Modal } from "@/components/Modal"
 import { ObfuscationFields } from "@/components/Obfuscation"
-import { Count, Flag, Line, Pick, Section } from "@/components/fields"
+import { Count, Flag, Help, Line, Pick, Section, Switch } from "@/components/fields"
 import { field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
 import { useText } from "@/i18n"
@@ -75,6 +75,13 @@ export function ConfigForm({
       title={title}
       onClose={onClose}
       wide
+      head={
+        <Switch
+          id="config-on"
+          caption={t("configs.enabled")}
+          value={draft.isEnabled}
+          onChange={(value) => put({ isEnabled: value })}
+        />}
       footer={
         <>
           <button type="button" onClick={onClose} className={secondary}>
@@ -111,32 +118,19 @@ export function ConfigForm({
           wide
         />
         <Flag
-          id="config-enabled"
-          caption={t("configs.enabled")}
-          value={draft.isEnabled}
-          onChange={(value) => put({ isEnabled: value })}
-        />
-        <Flag
           id="config-nat"
           caption={t("configs.nat")}
           value={draft.nat}
           onChange={(value) => put({ nat: value })}
         />
-        <Flag
-          id="config-opened"
-          caption={t("configs.opened")}
-          value={draft.opened}
-          onChange={(value) => put({ opened: value })}
-        />
-        <Flag
-          id="config-speed"
-          caption={t("configs.speed")}
-          value={draft.speed}
-          onChange={(value) => put({ speed: value })}
-        />
         <Pick
           id="config-inbound"
-          caption={t("configs.inbound")}
+          caption={
+            <span className="flex items-center gap-1">
+              {t("configs.inbound")}
+              <Help text={t("configs.inboundHint")} />
+            </span>
+          }
           value={draft.inbound}
           onChange={(value) => put({ inbound: value as Inbound })}
           wide

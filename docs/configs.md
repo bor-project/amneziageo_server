@@ -35,8 +35,7 @@ go only to a caller that holds `interfaces:write`; to anyone else they come back
 | Closed to clients | the ranges clients of the endpoint are not let into |
 | Raise the interface | whether the panel puts the endpoint on the host |
 | NAT for clients | whether what clients send out is masqueraded behind the address of the host |
-| Open the port in the firewall | whether the panel holds the port of the endpoint open in the firewall of the host, together with both ways through its interface, see [firewall.md](firewall.md) |
-| Speed measured against the server | whether the clients of the endpoint measure their channel against the server itself, see [hello.md](hello.md) |
+| Open the port in the firewall | whether the panel holds the port of the endpoint open in the firewall of the host, together with both ways through its interface; set it with `amneziageo-server-cli endpoint open\|close`, see [firewall.md](firewall.md) |
 | Access to the clients | what reaches the clients of the endpoint from the tunnel unless a client names it itself: closed, the server alone, or the whole tunnel network, see [clients.md](clients.md) |
 | AllowedIPs | the ranges a client sends through the tunnel |
 | DNS | the name servers a client takes |

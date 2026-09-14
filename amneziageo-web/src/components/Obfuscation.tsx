@@ -39,7 +39,7 @@ export function ObfuscationFields({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-3">
         <Count
           id={`${id}-s1`}
           caption={t("configs.s1")}
@@ -53,20 +53,6 @@ export function ObfuscationFields({
           hint={t("configs.s2Hint")}
           value={cover.s2}
           onChange={(value) => onChange({ s2: value })}
-        />
-        <Count
-          id={`${id}-s3`}
-          caption={t("configs.s3")}
-          hint={t("configs.s3Hint")}
-          value={cover.s3}
-          onChange={(value) => onChange({ s3: value })}
-        />
-        <Count
-          id={`${id}-s4`}
-          caption={t("configs.s4")}
-          hint={t("configs.s4Hint")}
-          value={cover.s4}
-          onChange={(value) => onChange({ s4: value })}
         />
         <Line
           id={`${id}-h1`}
@@ -98,108 +84,155 @@ export function ObfuscationFields({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-3">
-        <Line
-          id={`${id}-padding`}
-          caption={t("configs.padding")}
-          hint={t("configs.paddingHint")}
-          value={cover.contentPaddingAddition}
-          onChange={(value) => onChange({ contentPaddingAddition: value })}
-        />
-        <Line
-          id={`${id}-rekey-after`}
-          caption={t("configs.rekeyAfter")}
-          hint={t("configs.rekeyAfterHint")}
-          value={cover.rekeyAfterTime}
-          onChange={(value) => onChange({ rekeyAfterTime: value })}
-        />
-        <Line
-          id={`${id}-rekey-timeout`}
-          caption={t("configs.rekeyTimeout")}
-          hint={t("configs.rekeyTimeoutHint")}
-          value={cover.rekeyTimeout}
-          onChange={(value) => onChange({ rekeyTimeout: value })}
-        />
-        <Line
-          id={`${id}-reject-after`}
-          caption={t("configs.rejectAfter")}
-          hint={t("configs.rejectAfterHint")}
-          value={cover.rejectAfterTime}
-          onChange={(value) => onChange({ rejectAfterTime: value })}
-        />
-        <Line
-          id={`${id}-keepalive-timeout`}
-          caption={t("configs.keepaliveTimeout")}
-          hint={t("configs.keepaliveTimeoutHint")}
-          value={cover.keepaliveTimeout}
-          onChange={(value) => onChange({ keepaliveTimeout: value })}
-        />
-        <Line
-          id={`${id}-attempts`}
-          caption={t("configs.attempts")}
-          hint={t("configs.attemptsHint")}
-          value={cover.maxHandshakeAttempts}
-          onChange={(value) => onChange({ maxHandshakeAttempts: value })}
-        />
-      </div>
-
-      <Line
-        id={`${id}-i1`}
-        caption={t("configs.i1")}
-        hint={t("configs.iHint")}
-        value={cover.i1 ?? ""}
-        onChange={(value) => onChange({ i1: value })}
-      />
-      <Line
-        id={`${id}-i2`}
-        caption={t("configs.i2")}
-        hint={t("configs.iHint")}
-        value={cover.i2 ?? ""}
-        onChange={(value) => onChange({ i2: value })}
-      />
-      <Line
-        id={`${id}-i3`}
-        caption={t("configs.i3")}
-        hint={t("configs.iHint")}
-        value={cover.i3 ?? ""}
-        onChange={(value) => onChange({ i3: value })}
-      />
-      <Line
-        id={`${id}-i4`}
-        caption={t("configs.i4")}
-        hint={t("configs.iHint")}
-        value={cover.i4 ?? ""}
-        onChange={(value) => onChange({ i4: value })}
-      />
-      <Line
-        id={`${id}-i5`}
-        caption={t("configs.i5")}
-        hint={t("configs.iHint")}
-        value={cover.i5 ?? ""}
-        onChange={(value) => onChange({ i5: value })}
-      />
-      <Line
-        id={`${id}-header-key`}
-        caption={t("configs.headerKey")}
-        hint={t("configs.headerKeyHint")}
-        value={cover.headerProtectionKey}
-        onChange={(value) => onChange({ headerProtectionKey: value.trim() })}
-        wide
-      />
-      <Flag
-        id={`${id}-trailers`}
-        caption={t("configs.trailers")}
-        hint={t("configs.trailersHint")}
-        value={cover.randomTrailers}
-        onChange={(value) => onChange({ randomTrailers: value })}
-      />
-      <Flag
-        id={`${id}-cookies`}
-        caption={t("configs.cookies")}
-        hint={t("configs.cookiesHint")}
-        value={cover.disableCookies}
-        onChange={(value) => onChange({ disableCookies: value })}
-      />
+      <details className="rounded-md border border-line px-3 py-2 sm:col-span-2">
+        <summary className="cursor-pointer select-none text-xs font-medium tracking-wide text-muted uppercase">
+          {t("configs.advanced")}
+        </summary>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Count
+            id={`${id}-s3`}
+            caption={t("configs.s3")}
+            hint={t("configs.s3Hint")}
+            value={cover.s3}
+            onChange={(value) => onChange({ s3: value })}
+          />
+          <Count
+            id={`${id}-s4`}
+            caption={t("configs.s4")}
+            hint={t("configs.s4Hint")}
+            value={cover.s4}
+            onChange={(value) => onChange({ s4: value })}
+          />
+          <Line
+            id={`${id}-padding`}
+            caption={t("configs.padding")}
+            hint={t("configs.paddingHint")}
+            value={cover.contentPaddingAddition}
+            onChange={(value) => onChange({ contentPaddingAddition: value })}
+          />
+          <Line
+            id={`${id}-rekey-after`}
+            caption={t("configs.rekeyAfter")}
+            hint={t("configs.rekeyAfterHint")}
+            value={cover.rekeyAfterTime}
+            onChange={(value) => onChange({ rekeyAfterTime: value })}
+          />
+          <Line
+            id={`${id}-rekey-timeout`}
+            caption={t("configs.rekeyTimeout")}
+            hint={t("configs.rekeyTimeoutHint")}
+            value={cover.rekeyTimeout}
+            onChange={(value) => onChange({ rekeyTimeout: value })}
+          />
+          <Line
+            id={`${id}-reject-after`}
+            caption={t("configs.rejectAfter")}
+            hint={t("configs.rejectAfterHint")}
+            value={cover.rejectAfterTime}
+            onChange={(value) => onChange({ rejectAfterTime: value })}
+          />
+          <Line
+            id={`${id}-keepalive-timeout`}
+            caption={t("configs.keepaliveTimeout")}
+            hint={t("configs.keepaliveTimeoutHint")}
+            value={cover.keepaliveTimeout}
+            onChange={(value) => onChange({ keepaliveTimeout: value })}
+          />
+          <Line
+            id={`${id}-attempts`}
+            caption={t("configs.attempts")}
+            hint={t("configs.attemptsHint")}
+            value={cover.maxHandshakeAttempts}
+            onChange={(value) => onChange({ maxHandshakeAttempts: value })}
+          />
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Line
+            id={`${id}-i1`}
+            caption={t("configs.i1")}
+            hint={t("configs.i1Hint")}
+            value={cover.i1 ?? ""}
+            onChange={(value) => onChange({ i1: value })}
+          />
+          <Line
+            id={`${id}-i2`}
+            caption={t("configs.i2")}
+            hint={t("configs.i2Hint")}
+            value={cover.i2 ?? ""}
+            onChange={(value) => onChange({ i2: value })}
+          />
+          <Line
+            id={`${id}-i3`}
+            caption={t("configs.i3")}
+            hint={t("configs.i3Hint")}
+            value={cover.i3 ?? ""}
+            onChange={(value) => onChange({ i3: value })}
+          />
+          <Line
+            id={`${id}-i4`}
+            caption={t("configs.i4")}
+            hint={t("configs.i4Hint")}
+            value={cover.i4 ?? ""}
+            onChange={(value) => onChange({ i4: value })}
+          />
+          <Line
+            id={`${id}-i5`}
+            caption={t("configs.i5")}
+            hint={t("configs.i5Hint")}
+            value={cover.i5 ?? ""}
+            onChange={(value) => onChange({ i5: value })}
+          />
+          <Line
+            id={`${id}-header-key`}
+            caption={t("configs.headerKey")}
+            hint={t("configs.headerKeyHint")}
+            value={cover.headerProtectionKey}
+            onChange={(value) => onChange({ headerProtectionKey: value.trim() })}
+            after={
+              <button
+                type="button"
+                title={t("configs.generate")}
+                aria-label={t("configs.generate")}
+                onClick={() => onChange({ headerProtectionKey: randomHeaderKey() })}
+                className="flex shrink-0 items-center self-stretch rounded border border-line px-2 text-muted hover:bg-hover"
+              >
+                <RefreshIcon />
+              </button>
+            }
+            wide
+          />
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Flag
+            id={`${id}-trailers`}
+            caption={t("configs.trailers")}
+            hint={t("configs.trailersHint")}
+            value={cover.randomTrailers}
+            onChange={(value) => onChange({ randomTrailers: value })}
+          />
+          <Flag
+            id={`${id}-cookies`}
+            caption={t("configs.cookies")}
+            hint={t("configs.cookiesHint")}
+            value={cover.disableCookies}
+            onChange={(value) => onChange({ disableCookies: value })}
+          />
+        </div>
+      </details>
     </>
+  )
+}
+function randomHeaderKey() {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""))
+}
+
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M20 12a8 8 0 1 1-2.34-5.66" strokeLinecap="round" />
+      <path d="M20 4v4h-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }

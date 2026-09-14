@@ -232,7 +232,7 @@ function Adding({ configId, onClose }: { configId: number; onClose: () => void }
 
   if (draft.data === undefined) {
     return (
-      <Modal title={t("clients.newTitle")} onClose={onClose} footer={null}>
+      <Modal title={t("clients.newTitle")} wide onClose={onClose} footer={null}>
         <div className="text-sm text-muted">{t("clients.busy")}</div>
       </Modal>
     )

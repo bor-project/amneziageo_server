@@ -44,7 +44,6 @@ export interface Config {
   isEnabled: boolean
   nat: boolean
   opened: boolean
-  speed: boolean
   inbound: Inbound
   blocked: string[]
   publicKey: string
@@ -68,7 +67,6 @@ export interface ConfigDraft {
   isEnabled: boolean
   nat: boolean
   opened: boolean
-  speed: boolean
   inbound: Inbound
   blocked: string[]
   privateKey: string
@@ -159,7 +157,6 @@ export function draftOf(config: Config): ConfigDraft {
     isEnabled: config.isEnabled,
     nat: config.nat,
     opened: config.opened,
-    speed: config.speed,
     inbound: config.inbound,
     blocked: config.blocked,
     privateKey: config.privateKey ?? "",

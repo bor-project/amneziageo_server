@@ -75,7 +75,7 @@ rest, so a new feature needs nothing from the clients that do not know it yet. O
 
 | Feature | Offered while | Arguments |
 |---|---|---|
-| `speed` | the endpoint of the client measures, see [configs.md](configs.md) | `down`, `up`, `limit`, `expires` |
+| `speed` | always | `down`, `up`, `limit`, `expires` |
 | `subscription` | the subscriptions are on and the client carries one, see [subscriptions.md](subscriptions.md) | `url`, `updateHours` |
 
 The addresses carry the host and port the request arrived at.

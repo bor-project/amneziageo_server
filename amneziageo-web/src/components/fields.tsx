@@ -23,7 +23,7 @@ export function Line({
   after,
 }: {
   id: string
-  caption: string
+  caption: ReactNode
   value: string
   onChange: (value: string) => void
   wide?: boolean
@@ -78,6 +78,18 @@ export function Regenerate({ title, onClick }: { title: string; onClick: () => v
   )
 }
 
+export function Help({ text }: { text?: string }) {
+  return (
+    <span className="inline-flex items-center" title={text}>
+      <svg viewBox="0 0 24 24" className="size-3.5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" strokeLinecap="round" />
+        <path d="M12 17h.01" strokeLinecap="round" />
+      </svg>
+    </span>
+  )
+}
+
 export function Pick({
   id,
   caption,
@@ -89,7 +101,7 @@ export function Pick({
   disabled = false,
 }: {
   id: string
-  caption: string
+  caption: ReactNode
   value: string
   onChange: (value: string) => void
   children: ReactNode
@@ -124,7 +136,7 @@ export function Count({
   hint = "",
 }: {
   id: string
-  caption: string
+  caption: ReactNode
   value: number
   onChange: (value: number) => void
   hint?: string
@@ -154,7 +166,7 @@ export function Flag({
   hint = "",
 }: {
   id: string
-  caption: string
+  caption: ReactNode
   value: boolean
   onChange: (value: boolean) => void
   hint?: string
@@ -190,7 +202,7 @@ export function Switch({
   onChange,
 }: {
   id: string
-  caption: string
+  caption: ReactNode
   value: boolean
   onChange: (value: boolean) => void
 }) {
@@ -215,7 +227,7 @@ export function Switch({
   )
 }
 
-export function Row({ id, caption, children }: { id: string; caption: string; children: ReactNode }) {
+export function Row({ id, caption, children }: { id: string; caption: ReactNode; children: ReactNode }) {
   return (
     <div className="grid items-center gap-2 border-t border-line py-3 first:border-t-0 first:pt-0 sm:grid-cols-2 sm:gap-6">
       <label className="text-sm font-medium text-ink" htmlFor={id}>
