@@ -13,7 +13,6 @@ import { ClientCard } from "@/pages/ClientCard"
 import { ClientPage } from "@/pages/ClientPage"
 import { ClientRemove } from "@/pages/ClientRemove"
 import { Clients } from "@/pages/Clients"
-import { ClientsImport } from "@/pages/ClientsImport"
 import { ConfigCard } from "@/pages/ConfigCard"
 import { ConfigPage } from "@/pages/ConfigPage"
 import { ConfigRemove } from "@/pages/ConfigRemove"
@@ -146,7 +145,6 @@ export function App() {
                 <Route path="clients/:clientId" element={<ClientCard />} />
                 <Route element={<RequireScope scope={scopes.manageClients} />}>
                   <Route path="clients/new" element={<ClientPage />} />
-                  <Route path="clients/import" element={<ClientsImport />} />
                   <Route path="clients/:clientId/edit" element={<ClientPage />} />
                   <Route path="clients/:clientId/delete" element={<ClientRemove />} />
                 </Route>

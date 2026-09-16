@@ -12,7 +12,7 @@ import type { Template } from "@/api/templates"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { card, field } from "@/components/styles"
+import { card, fieldBox } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { Text } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -126,7 +126,7 @@ export function Templates() {
                 value={find}
                 placeholder={t("action.search")}
                 onChange={(e) => put("find", e.target.value)}
-                className={`max-w-80 ${field}`}
+                className={`w-full wide:w-80 ${fieldBox}`}
               />
             }
             columns={[

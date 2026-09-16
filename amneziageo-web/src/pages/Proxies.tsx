@@ -6,7 +6,7 @@ import { ProxyState } from "@/components/ProxyState"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { proxyFault, proxyKind, proxyPoint } from "@/components/proxy"
-import { card, field, secondary } from "@/components/styles"
+import { card, fieldBox, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -60,7 +60,7 @@ export function Proxies() {
               value={find}
               placeholder={t("action.search")}
               onChange={(e) => put("find", e.target.value)}
-              className={`max-w-80 ${field}`}
+              className={`w-full wide:w-80 ${fieldBox}`}
             />
           }
           columns={[

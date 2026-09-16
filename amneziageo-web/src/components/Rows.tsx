@@ -40,11 +40,13 @@ export function Rows<T>({
 
   const bar = (sortable.length > 0 || tools !== undefined) && (
     <div
-      className={`flex gap-3 border-b border-line px-4 py-3 ${wide ? "items-center justify-between" : "flex-col"}`}
+      className={`flex gap-3 border-b border-line px-4 py-3 ${wide ? "flex-wrap items-center" : "flex-col"}`}
     >
-      <div className={wide ? "min-w-0" : ""}>{tools}</div>
+      <div className={wide ? "max-w-full shrink-0" : ""}>{tools}</div>
       {sortable.length > 0 && (
-        <SortControl options={sortable} order={order} choose={choose} direct={direct} fill={!wide} />
+        <div className={wide ? "ml-auto shrink-0" : ""}>
+          <SortControl options={sortable} order={order} choose={choose} direct={direct} fill={!wide} />
+        </div>
       )}
     </div>
   )

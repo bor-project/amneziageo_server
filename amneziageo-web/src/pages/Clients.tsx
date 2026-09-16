@@ -8,7 +8,7 @@ import { Handshake, Speed, Traffic } from "@/components/ClientStats"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { card, field, secondary } from "@/components/styles"
+import { card, fieldBox } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
@@ -97,7 +97,7 @@ export function Clients() {
                 id="client-config"
                 value={picked}
                 onChange={(e) => put("config", e.target.value === "0" ? "" : e.target.value)}
-                className={`max-w-60 ${field}`}
+                className={`w-full wide:w-60 ${fieldBox}`}
               >
                 <option value={0}>{t("clients.everyConfig")}</option>
                 {(configs.data ?? []).map((one) => (
@@ -111,17 +111,8 @@ export function Clients() {
                 value={find}
                 placeholder={t("action.search")}
                 onChange={(e) => put("find", e.target.value)}
-                className={`max-w-60 ${field}`}
+                className={`w-full wide:w-60 ${fieldBox}`}
               />
-
-              {may && (
-                <Link
-                  to={picked === 0 ? "/connections/clients/import" : `/connections/clients/import?config=${picked}`}
-                  className={`flex h-10 items-center ${secondary}`}
-                >
-                  {t("clients.import")}
-                </Link>
-              )}
             </div>
           }
           columns={[

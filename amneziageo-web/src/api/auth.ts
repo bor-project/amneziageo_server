@@ -100,7 +100,6 @@ const complaints: Record<string, TextKey> = {
   "bad-mark": "error.badMark",
   "bad-table": "error.badTable",
   "bad-import": "error.badImport",
-  "bad-client-import": "error.badClientImport",
   "no-mark": "error.noMark",
   "unknown-outbound": "error.unknownOutbound",
   "host-refused": "error.hostRefused",

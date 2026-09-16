@@ -74,19 +74,6 @@ export interface ClientConfig {
   subscription: string
 }
 
-export interface ClientImportReport {
-  taken: number
-  held: number
-  renamed: { from: string; to: string }[]
-  refused: { name: string; error: string; message: string }[]
-}
-
-export interface ClientImportDraft {
-  configId: number
-  text: string
-  prefix: string
-}
-
 export function useClients() {
   return useQuery({
     queryKey: ["clients"],
@@ -130,12 +117,6 @@ export function useRemoveClient() {
 
 export function useSwitchClient() {
   return useRefreshing(({ id, on }: { id: number; on: boolean }) => client.post(`/clients/${id}/switch`, { on }))
-}
-
-export function useImportClients() {
-  return useRefreshing(
-    async (draft: ClientImportDraft) => (await client.post<ClientImportReport>("/clients/import", draft)).data,
-  )
 }
 
 export function draftOf(one: Client): ClientDraft {
