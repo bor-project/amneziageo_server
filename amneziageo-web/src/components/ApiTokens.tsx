@@ -44,6 +44,7 @@ export function ApiTokens() {
             {
               key: "name",
               caption: t("apiTokens.name"),
+              sort: (token) => token.name,
               lead: true,
               body: "font-medium text-ink",
               cell: (token) => token.name,
@@ -51,24 +52,28 @@ export function ApiTokens() {
             {
               key: "role",
               caption: t("apiTokens.role"),
+              sort: (token) => titleOf(catalog.data?.roles ?? [], token.role),
               body: "text-muted",
               cell: (token) => titleOf(catalog.data?.roles ?? [], token.role),
             },
             {
               key: "created",
               caption: t("apiTokens.created"),
+              sort: (token) => Date.parse(token.createdUtc),
               body: "whitespace-nowrap text-muted",
               cell: (token) => stamp(token.createdUtc),
             },
             {
               key: "expires",
               caption: t("apiTokens.expires"),
+              sort: (token) => (token.expiresUtc === null ? Number.MAX_SAFE_INTEGER : Date.parse(token.expiresUtc)),
               body: "whitespace-nowrap text-muted",
               cell: (token) => (token.expiresUtc === null ? t("apiTokens.forever") : stamp(token.expiresUtc)),
             },
             {
               key: "used",
               caption: t("apiTokens.used"),
+              sort: (token) => (token.lastUsedUtc === null ? null : Date.parse(token.lastUsedUtc)),
               body: "whitespace-nowrap text-muted",
               cell: (token) =>
                 token.lastUsedUtc === null ? (
@@ -83,6 +88,7 @@ export function ApiTokens() {
             {
               key: "state",
               caption: t("apiTokens.state"),
+              sort: (token) => (token.isExpired ? 1 : 0),
               cell: (token) => (
                 <span className={token.isExpired ? "text-alarm" : "text-brand-ink"}>
                   {t(token.isExpired ? "apiTokens.expired" : "apiTokens.active")}

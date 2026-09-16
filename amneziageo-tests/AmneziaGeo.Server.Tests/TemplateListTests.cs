@@ -7,12 +7,12 @@ public class TemplateListTests
     [Theory]
     [InlineData("geoip:RU", "geoip:ru")]
     [InlineData("GeoSite:YouTube", "geosite:youtube")]
-    [InlineData("domain:Example.COM", "example.com")]
-    [InlineData("https://www.youtube.com/watch?v=1", "www.youtube.com")]
-    [InlineData("cidr:10.1.2.3/8", "10.0.0.0/8")]
-    [InlineData("1.2.3.4/32", "1.2.3.4")]
-    [InlineData("2001:db8::1", "2001:db8::1")]
-    [InlineData("2001:db8::1/32", "2001:db8::/32")]
+    [InlineData("domain:Example.COM", "domain:example.com")]
+    [InlineData("https://www.youtube.com/watch?v=1", "domain:www.youtube.com")]
+    [InlineData("cidr:10.1.2.3/8", "cidr:10.0.0.0/8")]
+    [InlineData("1.2.3.4/32", "cidr:1.2.3.4")]
+    [InlineData("2001:db8::1", "cidr:2001:db8::1")]
+    [InlineData("2001:db8::1/32", "cidr:2001:db8::/32")]
     public void AnEntryIsKeptInOneForm(string written, string kept)
     {
         Assert.Equal(kept, TemplateList.Entry(written));

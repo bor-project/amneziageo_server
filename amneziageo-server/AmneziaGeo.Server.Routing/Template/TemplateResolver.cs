@@ -9,11 +9,22 @@ using AmneziaGeo.Server.Routing.Route;
 namespace AmneziaGeo.Server.Routing.Template;
 
 /// <summary>
+/// What one entry of a template came out as.
+/// </summary>
+/// <param name="Entry">The entry as the template keeps it.</param>
+/// <param name="AllowedIps">The ranges the entry stands for.</param>
+public sealed record TemplatePart(string Entry, IReadOnlyList<string> AllowedIps);
+
+/// <summary>
 /// What the entries of a template came out as.
 /// </summary>
 /// <param name="AllowedIps">The ranges the client file carries.</param>
 /// <param name="Missed">The entries nothing was found for.</param>
-public sealed record TemplateResolution(IReadOnlyList<string> AllowedIps, IReadOnlyList<string> Missed);
+/// <param name="Parts">What each entry gave on its own.</param>
+public sealed record TemplateResolution(
+    IReadOnlyList<string> AllowedIps,
+    IReadOnlyList<string> Missed,
+    IReadOnlyList<TemplatePart> Parts);
 
 /// <summary>
 /// Turns the entries of a template into ranges: geo keys over the databases, names through the name servers.
@@ -45,7 +56,7 @@ public sealed class TemplateResolver
     }
 
     /// <summary>
-    /// Returns the ranges the entries stand for and the entries that gave none.
+    /// Returns the ranges the entries stand for, what each of them gave and the ones that gave none.
     /// </summary>
     public async Task<TemplateResolution> ResolveAsync(
         IReadOnlyList<string> entries,
@@ -55,29 +66,30 @@ public sealed class TemplateResolver
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentNullException.ThrowIfNull(index);
 
-        var ranges = new List<AwgAllowedIp>();
-        var empty = new HashSet<string>(StringComparer.Ordinal);
+        var found = new Dictionary<string, List<AwgAllowedIp>>(StringComparer.Ordinal);
         var named = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         foreach (var entry in entries)
         {
-            var rule = RouteRules.Target(entry);
+            if (found.ContainsKey(entry))
+            {
+                continue;
+            }
+
+            var ranges = new List<AwgAllowedIp>();
+            found[entry] = ranges;
+            var rule = TemplateList.Rule(entry);
             if (rule is null)
             {
-                empty.Add(entry);
+                continue;
             }
-            else if (rule.Kind == GeoRuleKind.Cidr)
+
+            if (rule.Kind == GeoRuleKind.Cidr)
             {
                 ranges.Add(AwgAllowedIp.Parse(rule.Value));
             }
             else if (rule.Kind == GeoRuleKind.GeoIp)
             {
-                var found = index.Cidrs(rule.Value).Select(Range).OfType<AwgAllowedIp>().ToArray();
-                if (found.Length == 0)
-                {
-                    empty.Add(entry);
-                }
-
-                ranges.AddRange(found);
+                ranges.AddRange(index.Cidrs(rule.Value).Select(Range).OfType<AwgAllowedIp>());
             }
             else
             {
@@ -88,18 +100,17 @@ public sealed class TemplateResolver
         var answers = await AskAllAsync(Wanted(named), ct).ConfigureAwait(false);
         foreach (var (entry, names) in named)
         {
-            var found = names.SelectMany(name => Answered(answers, name)).ToArray();
-            if (found.Length == 0)
-            {
-                empty.Add(entry);
-            }
-
-            ranges.AddRange(found.Select(address => new AwgAllowedIp(address, Width(address))));
+            found[entry].AddRange(names
+                .SelectMany(name => Answered(answers, name))
+                .Select(address => new AwgAllowedIp(address, Width(address))));
         }
 
+        var kept = entries.Distinct(StringComparer.Ordinal).ToArray();
+
         return new TemplateResolution(
-            [.. RangeMerge.Merge(ranges).Select(range => range.ToString())],
-            [.. entries.Where(empty.Contains)]);
+            Written(found.Values.SelectMany(ranges => ranges)),
+            [.. kept.Where(entry => found[entry].Count == 0)],
+            [.. kept.Select(entry => new TemplatePart(entry, Written(found[entry])))]);
     }
 
     private async Task<Dictionary<string, IReadOnlyList<IPAddress>>> AskAllAsync(string[] names, CancellationToken ct)
@@ -168,6 +179,9 @@ public sealed class TemplateResolver
 
         return found;
     }
+
+    private static IReadOnlyList<string> Written(IEnumerable<AwgAllowedIp> ranges) =>
+        [.. RangeMerge.Merge(ranges).Select(range => range.ToString())];
 
     private static string[] Wanted(Dictionary<string, IReadOnlyList<string>> named) =>
         [.. named.Values.SelectMany(names => names).Distinct(StringComparer.OrdinalIgnoreCase).Take(MaxNames)];

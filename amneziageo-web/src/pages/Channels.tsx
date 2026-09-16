@@ -99,6 +99,7 @@ export function Channels() {
               {
                 key: "name",
                 caption: t("outbounds.name"),
+                sort: (line) => (line.kind === "channel" ? line.channel.name : line.group.name),
                 lead: true,
                 body: "font-medium text-ink",
                 cell: (line) =>
@@ -119,6 +120,10 @@ export function Channels() {
               {
                 key: "kind",
                 caption: t("outbounds.kind"),
+                sort: (line) =>
+                  line.kind === "channel"
+                    ? t(kindKey(line.channel.kind))
+                    : `${t("outbounds.group")} · ${t(strategy(line.group))}`,
                 body: "text-muted",
                 cell: (line) =>
                   line.kind === "channel"
@@ -128,6 +133,12 @@ export function Channels() {
               {
                 key: "server",
                 caption: t("outbounds.server"),
+                sort: (line) =>
+                  line.kind === "channel" && line.channel.kind !== "local"
+                    ? `${line.channel.host}:${line.channel.port}`
+                    : line.kind === "group"
+                      ? line.group.state.members.map((member) => member.name).join(", ")
+                      : null,
                 body: "text-muted",
                 cell: (line) =>
                   line.kind === "group" ? (
@@ -141,12 +152,14 @@ export function Channels() {
               {
                 key: "mark",
                 caption: t("outbounds.mark"),
+                sort: (line) => (line.kind === "channel" ? `${line.channel.mark} / ${line.channel.table}` : null),
                 body: "text-muted",
                 cell: (line) => (line.kind === "channel" ? `${line.channel.mark} / ${line.channel.table}` : ""),
               },
               {
                 key: "state",
                 caption: t("outbounds.state"),
+                sort: (line) => (line.kind === "channel" ? channelRank(line.channel) : groupRank(line.group)),
                 cell: (line) =>
                   line.kind === "channel" ? (
                     <ChannelState outbound={line.channel} t={t} language={language} />
@@ -157,6 +170,13 @@ export function Channels() {
               {
                 key: "traffic",
                 caption: t("outbounds.traffic"),
+                sort: (line) =>
+                  line.kind === "channel" &&
+                  line.channel.state !== null &&
+                  line.channel.state.hasLink &&
+                  line.channel.kind !== "local"
+                    ? line.channel.state.rxBytes + line.channel.state.txBytes
+                    : null,
                 body: "text-muted",
                 cell: (line) =>
                   line.kind === "channel" &&
@@ -382,6 +402,40 @@ function Members({ members }: { members: BalancerMember[] }) {
       ))}
     </span>
   )
+}
+
+function channelRank(outbound: Outbound): number {
+  const state = outbound.state
+
+  if (state === null) {
+    return 3
+  }
+
+  if (state.fault.length > 0) {
+    return 1
+  }
+
+  if (!state.hasLink) {
+    return 2
+  }
+
+  if (state.probe !== null && !state.probe.isReached) {
+    return 4
+  }
+
+  if (outbound.kind !== "wg") {
+    return 0
+  }
+
+  return state.lastHandshake === null ? 5 : 0
+}
+
+function groupRank(balancer: Balancer): number {
+  if (!balancer.isEnabled) {
+    return 2
+  }
+
+  return balancer.state.isLive ? 0 : 1
 }
 
 function kindKey(kind: OutboundKind): TextKey {

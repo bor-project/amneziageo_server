@@ -35,6 +35,7 @@ export function Roles() {
             {
               key: "title",
               caption: t("roles.label"),
+              sort: (role) => (role.title.length > 0 ? role.title : role.name),
               lead: true,
               cell: (role) => (
                 <>
@@ -49,13 +50,23 @@ export function Roles() {
             {
               key: "rights",
               caption: t("roles.rights"),
+              sort: (role) =>
+                role.scopes.length === 0
+                  ? t("roles.none")
+                  : role.scopes.map((scope) => t(`scope.${scope}` as TextKey)).join(", "),
               body: "text-muted",
               cell: (role) =>
                 role.scopes.length === 0
                   ? t("roles.none")
                   : role.scopes.map((scope) => t(`scope.${scope}` as TextKey)).join(", "),
             },
-            { key: "users", caption: t("roles.users"), body: "text-muted", cell: (role) => role.users },
+            {
+              key: "users",
+              caption: t("roles.users"),
+              sort: (role) => role.users,
+              body: "text-muted",
+              cell: (role) => role.users,
+            },
             {
               key: "actions",
               caption: t("roles.actions"),

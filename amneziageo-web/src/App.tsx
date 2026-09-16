@@ -19,6 +19,7 @@ import { Proxies } from "@/pages/Proxies"
 import { Rules } from "@/pages/Rules"
 import { PanelCertificates, PanelServer } from "@/pages/Settings"
 import { Subscriptions } from "@/pages/Subscriptions"
+import { TemplatePage } from "@/pages/TemplatePage"
 import { Templates } from "@/pages/Templates"
 import { useAppearance } from "@/theme/theme"
 
@@ -72,6 +73,10 @@ export function App() {
                 <Route index element={<Configs />} />
                 <Route path="clients" element={<Clients />} />
                 <Route path="templates" element={<Templates />} />
+                <Route element={<RequireScope scope={scopes.manageClients} />}>
+                  <Route path="templates/new" element={<TemplatePage />} />
+                  <Route path="templates/:templateId" element={<TemplatePage />} />
+                </Route>
                 <Route path="proxies" element={<Proxies />} />
               </Route>
               <Route path="routing" element={<Tabbed title="nav.routing" tabs={routing} />}>

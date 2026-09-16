@@ -26,7 +26,7 @@ public class TemplateStoreTests
         var read = await bench.Templates.FindAsync(added.Record!.Id, CancellationToken.None);
 
         Assert.True(added.IsOk, added.Message);
-        Assert.Equal(["10.0.0.0/8", "geoip:zz"], read!.Entries);
+        Assert.Equal(["cidr:10.0.0.0/8", "geoip:zz"], read!.Entries);
         Assert.Equal(["10.0.0.0/8"], read.AllowedIps);
         Assert.Equal(["geoip:zz"], read.Missed);
         Assert.Equal(["9.9.9.9"], read.Dns);
@@ -61,7 +61,7 @@ public class TemplateStoreTests
             CancellationToken.None);
 
         Assert.True(added.IsOk, added.Message);
-        Assert.Equal(["example.com", "geoip:ru", "10.0.0.0/8"], added.Record!.Entries);
+        Assert.Equal(["domain:example.com", "geoip:ru", "cidr:10.0.0.0/8"], added.Record!.Entries);
     }
 
     [Fact]

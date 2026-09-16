@@ -3,11 +3,14 @@ import { useJournal, useVersions } from "@/api/diagnostics"
 import type { JournalEntry } from "@/api/diagnostics"
 import { useHealth } from "@/api/health"
 import { useOverview } from "@/api/overview"
+import { SortBar, SortCaption } from "@/components/Rows"
+import { ariaSort, useOrder, useSorted } from "@/components/sort"
 import { card, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import { roomyQuery, useAbove } from "@/theme/width"
 
 const loud = new Set(["Warning", "Error", "Critical"])
+const levels = ["Trace", "Debug", "Information", "Warning", "Error", "Critical"]
 
 export function Diagnostics() {
   const t = useText()
@@ -19,6 +22,27 @@ export function Diagnostics() {
   const roomy = useAbove(roomyQuery)
   const tunnel = overview.data?.tunnel
   const known = versions.data
+  const { order, toggle } = useOrder()
+
+  const heads = [
+    { key: "time", caption: t("diagnostics.time"), pad: "px-4", sort: (entry: JournalEntry) => Date.parse(entry.time) },
+    {
+      key: "level",
+      caption: t("diagnostics.level"),
+      pad: "px-2",
+      sort: (entry: JournalEntry) => (levels.includes(entry.level) ? levels.indexOf(entry.level) : null),
+    },
+    {
+      key: "source",
+      caption: t("diagnostics.source"),
+      pad: "px-2",
+      sort: (entry: JournalEntry) => entry.category.split(".").at(-1) ?? entry.category,
+    },
+    { key: "message", caption: t("diagnostics.message"), pad: "px-4", sort: (entry: JournalEntry) => entry.message },
+  ]
+
+  const chosen = heads.find((head) => head.key === order?.key)
+  const entries = useSorted(journal.data ?? [], chosen?.sort, order)
 
   const rows: [string, string][] = [
     [t("diagnostics.panel"), health.data?.version ?? ""],
@@ -57,14 +81,32 @@ export function Diagnostics() {
           <div className="max-h-[60vh] overflow-auto">
             {roomy ? (
               <table className="w-full text-left text-xs">
+                <thead className="text-muted">
+                  <tr>
+                    {heads.map((head) => (
+                      <th
+                        key={head.key}
+                        aria-sort={ariaSort(head.key, order)}
+                        className={`${head.pad} py-1.5 font-normal whitespace-nowrap`}
+                      >
+                        <SortCaption caption={head.caption} name={head.key} order={order} toggle={toggle} />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody>
-                  {journal.data.map((entry, at) => (
-                    <Record key={at} entry={entry} language={language} />
+                  {entries.map((place) => (
+                    <Record key={place.at} entry={place.item} language={language} />
                   ))}
                 </tbody>
               </table>
             ) : (
-              journal.data.map((entry, at) => <Note key={at} entry={entry} language={language} />)
+              <>
+                <SortBar options={heads} order={order} toggle={toggle} />
+                {entries.map((place) => (
+                  <Note key={place.at} entry={place.item} language={language} />
+                ))}
+              </>
             )}
           </div>
         )}
@@ -78,7 +120,7 @@ function Note({ entry, language }: { entry: JournalEntry; language: string }) {
   const source = entry.category.split(".").at(-1) ?? entry.category
 
   return (
-    <div className="border-t border-line px-4 py-2 text-xs first:border-t-0">
+    <div className="border-t border-line px-4 py-2 text-xs">
       <div className="flex flex-wrap items-center gap-2 text-muted">
         <span>{new Date(entry.time).toLocaleString(language)}</span>
         <span className={tone}>{entry.level}</span>
@@ -97,7 +139,7 @@ function Record({ entry, language }: { entry: JournalEntry; language: string }) 
   const source = entry.category.split(".").at(-1) ?? entry.category
 
   return (
-    <tr className="border-t border-line align-top first:border-t-0">
+    <tr className="border-t border-line align-top">
       <td className="px-4 py-1.5 whitespace-nowrap text-muted">{new Date(entry.time).toLocaleString(language)}</td>
       <td className={`px-2 py-1.5 whitespace-nowrap ${tone}`}>{entry.level}</td>
       <td className="px-2 py-1.5 whitespace-nowrap text-muted" title={entry.category}>

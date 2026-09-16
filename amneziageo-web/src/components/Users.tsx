@@ -38,6 +38,7 @@ export function Users() {
             {
               key: "name",
               caption: t("users.name"),
+              sort: (user) => user.name,
               lead: true,
               cell: (user) => (
                 <>
@@ -49,12 +50,16 @@ export function Users() {
             {
               key: "kind",
               caption: t("users.kind"),
+              sort: (user) => t(`users.kind.${user.kind}` as TextKey),
               body: "text-muted",
               cell: (user) => t(`users.kind.${user.kind}` as TextKey),
             },
             {
               key: "role",
               caption: t("users.role"),
+              sort: (user) =>
+                catalog.data?.roles.find((one) => one.name === user.role)?.title ??
+                (user.role.length > 0 ? user.role : t("role.none")),
               body: "text-muted",
               cell: (user) =>
                 catalog.data?.roles.find((one) => one.name === user.role)?.title ??
@@ -63,6 +68,7 @@ export function Users() {
             {
               key: "state",
               caption: t("users.state"),
+              sort: (user) => (user.enabled ? 0 : 1),
               cell: (user) => (
                 <span className={user.enabled ? "text-brand-ink" : "text-alarm"}>
                   {t(user.enabled ? "users.enabled" : "users.disabled")}

@@ -51,6 +51,36 @@ public class TemplateResolverTests
     }
 
     [Fact]
+    public async Task EveryEntryTellsWhatItGaveAndTheWholeIsFolded()
+    {
+        var book = new NameBook(new() { ["example.com"] = ["10.1.2.3"] });
+
+        var found = await new TemplateResolver(book).ResolveAsync(
+            ["cidr:10.0.0.0/8", "domain:example.com"],
+            Index(),
+            CancellationToken.None);
+
+        Assert.Equal(["10.0.0.0/8"], found.AllowedIps);
+        Assert.Equal(["cidr:10.0.0.0/8", "domain:example.com"], found.Parts.Select(part => part.Entry));
+        Assert.Equal(["10.0.0.0/8"], found.Parts[0].AllowedIps);
+        Assert.Equal(["10.1.2.3/32"], found.Parts[1].AllowedIps);
+    }
+
+    [Fact]
+    public async Task WhatTwoEntriesShareStaysWhenOneOfThemGoes()
+    {
+        var book = new NameBook(new() { ["example.com"] = ["77.88.8.8"] });
+        var resolver = new TemplateResolver(book);
+
+        var both = await resolver.ResolveAsync(["geoip:ru", "example.com"], Index(), CancellationToken.None);
+        var one = await resolver.ResolveAsync(["geoip:ru"], Index(), CancellationToken.None);
+
+        Assert.Equal(["77.88.8.0/24"], both.AllowedIps);
+        Assert.Equal(["77.88.8.0/24"], one.AllowedIps);
+        Assert.Equal(["77.88.8.8/32"], both.Parts[1].AllowedIps);
+    }
+
+    [Fact]
     public async Task ANameIsAskedForBothFamiliesOnce()
     {
         var book = new NameBook(new() { ["yandex.ru"] = ["77.88.8.8"] });

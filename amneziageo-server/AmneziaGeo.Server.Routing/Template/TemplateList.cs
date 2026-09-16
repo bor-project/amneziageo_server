@@ -18,6 +18,11 @@ public static class TemplateList
     private static readonly string[] Marks = ["domain:", "cidr:"];
 
     /// <summary>
+    /// Returns what an entry stands for, or null when the text is none.
+    /// </summary>
+    public static GeoRule? Rule(string? text) => RouteRules.Target(Bare(text));
+
+    /// <summary>
     /// Returns the entry written the way a template keeps it, or null when the text is none.
     /// </summary>
     public static string? Entry(string? text)
@@ -32,8 +37,8 @@ public static class TemplateList
         {
             GeoRuleKind.GeoIp => "geoip:" + rule.Value.ToLowerInvariant(),
             GeoRuleKind.GeoSite => "geosite:" + rule.Value.ToLowerInvariant(),
-            GeoRuleKind.Cidr => Range(body),
-            _ => rule.Value,
+            GeoRuleKind.Cidr => "cidr:" + Range(body),
+            _ => "domain:" + rule.Value,
         };
     }
 

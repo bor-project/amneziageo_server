@@ -45,7 +45,7 @@ export function Clients() {
   const addDevice = useAddDevice()
   const may = holds(user, scopes.manageClients)
   const all = clients.data ?? []
-  const shown = ordered(all.filter((one) => picked === 0 || one.configId === picked))
+  const shown = all.filter((one) => picked === 0 || one.configId === picked)
   const names = new Map((templates.data ?? []).map((one): [number, string] => [one.id, one.name]))
 
   function named(one: Client): string {
@@ -116,11 +116,13 @@ export function Clients() {
         {shown.length > 0 && (
           <Rows
             items={shown}
+            arrange={ordered}
             keyOf={(one) => one.id}
             columns={[
               {
                 key: "name",
                 caption: t("clients.name"),
+                sort: (one) => one.name,
                 lead: true,
                 body: "font-medium text-ink",
                 cell: (one) => (
@@ -134,26 +136,46 @@ export function Clients() {
               {
                 key: "config",
                 caption: t("clients.endpointName"),
+                sort: (one) => one.config,
                 body: "text-muted",
                 cell: (one) => one.config,
               },
-              { key: "template", caption: t("clients.template"), body: "text-muted", cell: (one) => named(one) },
+              {
+                key: "template",
+                caption: t("clients.template"),
+                sort: (one) => named(one),
+                body: "text-muted",
+                cell: (one) => named(one),
+              },
               {
                 key: "address",
                 caption: t("clients.address"),
+                sort: (one) => one.address.join(", "),
                 body: "text-muted",
                 cell: (one) => one.address.join(", "),
               },
-              { key: "speed", caption: t("clients.speed"), cell: (one) => <Speed one={one} t={t} /> },
+              {
+                key: "speed",
+                caption: t("clients.speed"),
+                sort: (one) => one.state.txRate + one.state.rxRate,
+                cell: (one) => <Speed one={one} t={t} />,
+              },
               {
                 key: "traffic",
                 caption: t("clients.traffic"),
+                sort: (one) => (one.parentId === null ? one.state.used : one.state.todayRx + one.state.todayTx),
                 body: "whitespace-nowrap text-muted",
                 cell: (one) => <Traffic one={one} t={t} />,
               },
               {
                 key: "state",
                 caption: t("clients.state"),
+                sort: (one) =>
+                  (one.isEnabled && one.state.isSpent) || !one.state.isPresent || one.state.lastHandshake === null
+                    ? null
+                    : one.state.isOnline
+                      ? Number.MAX_SAFE_INTEGER
+                      : Date.parse(one.state.lastHandshake),
                 cell: (one) => <State one={one} t={t} language={language} />,
               },
               {

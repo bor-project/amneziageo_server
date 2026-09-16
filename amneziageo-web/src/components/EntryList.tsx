@@ -2,6 +2,7 @@ import { useState } from "react"
 import type { KeyboardEvent } from "react"
 import { useGeoEntries, useGeoKeys } from "@/api/geo"
 import type { GeoKeys } from "@/api/geo"
+import type { TemplatePart } from "@/api/templates"
 import { TextBlock } from "@/components/TextBlock"
 import { card, field } from "@/components/styles"
 import { useText } from "@/i18n"
@@ -12,11 +13,13 @@ const offered = 8
 export function EntryList({
   id,
   value,
+  parts,
   placeholder,
   onChange,
 }: {
   id: string
   value: string[]
+  parts: TemplatePart[] | undefined
   placeholder: string
   onChange: (value: string[]) => void
 }) {
@@ -107,17 +110,16 @@ export function EntryList({
               <div className="flex items-center gap-3 px-3 py-1.5 text-sm">
                 <span className="w-16 shrink-0 text-xs text-muted">{t(badge(one))}</span>
                 <span className="min-w-0 flex-1 truncate font-mono text-ink">{one}</span>
-                {geo(one) && (
-                  <button
-                    type="button"
-                    title={t("templates.showEntries")}
-                    aria-label={t("templates.showEntries")}
-                    onClick={() => setOpen(open === one ? null : one)}
-                    className="px-1 text-muted hover:text-brand-ink"
-                  >
-                    {open === one ? "▾" : "▸"}
-                  </button>
-                )}
+                <span className="shrink-0 text-xs text-muted">{held(parts, one)?.total}</span>
+                <button
+                  type="button"
+                  title={t("templates.showEntries")}
+                  aria-label={t("templates.showEntries")}
+                  onClick={() => setOpen(open === one ? null : one)}
+                  className="px-1 text-muted hover:text-brand-ink"
+                >
+                  {open === one ? "▾" : "▸"}
+                </button>
                 <button
                   type="button"
                   title={t("templates.remove")}
@@ -128,7 +130,7 @@ export function EntryList({
                   &times;
                 </button>
               </div>
-              {open === one && <Inside token={one} />}
+              {open === one && <Inside token={one} part={held(parts, one)} />}
             </div>
           ))}
         </div>
@@ -137,15 +139,15 @@ export function EntryList({
   )
 }
 
-function Inside({ token }: { token: string }) {
+function Inside({ token, part }: { token: string; part: TemplatePart | undefined }) {
   const t = useText()
-  const inside = useGeoEntries(token)
-  const data = inside.data
+  const inside = useGeoEntries(geo(token) ? token : null)
+  const data = geo(token) ? inside.data : part && { total: part.total, entries: part.allowedIps }
 
   return (
     <div className="px-3 pb-2">
       <div className="text-xs text-muted">
-        {data === undefined ? t("templates.loading") : summary(t, data.total, data.entries.length)}
+        {data === undefined ? t("templates.loading") : summary(t, geo(token), data.total, data.entries.length)}
       </div>
       {data !== undefined && data.entries.length > 0 && (
         <TextBlock className="mt-1 max-h-40 overflow-auto rounded bg-canvas p-2 text-xs text-ink">{data.entries.join("\n")}</TextBlock>
@@ -154,14 +156,24 @@ function Inside({ token }: { token: string }) {
   )
 }
 
-function summary(t: Text, total: number, shown: number): string {
+function summary(t: Text, category: boolean, total: number, shown: number): string {
   if (total === 0) {
-    return t("templates.noEntries")
+    return category ? t("templates.noEntries") : t("templates.noAddresses")
   }
 
-  return shown < total
-    ? t("templates.entriesShown", { shown: String(shown), total: String(total) })
-    : t("templates.entriesCount", { count: String(total) })
+  if (shown < total) {
+    return category
+      ? t("templates.entriesShown", { shown: String(shown), total: String(total) })
+      : t("templates.addressesShown", { shown: String(shown), total: String(total) })
+  }
+
+  return category
+    ? t("templates.entriesCount", { count: String(total) })
+    : t("templates.addressesCount", { count: String(total) })
+}
+
+function held(parts: TemplatePart[] | undefined, token: string): TemplatePart | undefined {
+  return parts?.find((one) => one.entry === token)
 }
 
 function entry(text: string): string | null {
@@ -175,10 +187,10 @@ function entry(text: string): string | null {
   }
 
   if (/^[\d.]+(\/\d{1,2})?$/.test(body) || (body.includes(":") && /^[\da-f:.]+(\/\d{1,3})?$/i.test(body))) {
-    return body
+    return `cidr:${body}`
   }
 
-  return /^[\p{L}\p{N}_-]+(\.[\p{L}\p{N}_-]+)+$/u.test(body) ? body.toLowerCase() : null
+  return /^[\p{L}\p{N}_-]+(\.[\p{L}\p{N}_-]+)+$/u.test(body) ? `domain:${body.toLowerCase()}` : null
 }
 
 function host(text: string): string {
@@ -202,11 +214,16 @@ function badge(one: string): TextKey {
     return "templates.kindGeoSite"
   }
 
-  if (one.includes("/")) {
+  if (one.startsWith("domain:")) {
+    return "templates.kindDomain"
+  }
+
+  const body = one.replace(/^cidr:/, "")
+  if (body.includes("/")) {
     return "templates.kindNetwork"
   }
 
-  return /^[\d.]+$/.test(one) || one.includes(":") ? "templates.kindAddress" : "templates.kindDomain"
+  return /^[\d.]+$/.test(body) || body.includes(":") ? "templates.kindAddress" : "templates.kindDomain"
 }
 
 function geo(one: string): boolean {

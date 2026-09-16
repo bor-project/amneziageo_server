@@ -208,7 +208,7 @@ public sealed class TemplateStore
     {
         Id = entity.Id,
         Name = entity.Name,
-        Entries = Parts(entity.Entries),
+        Entries = [.. Parts(entity.Entries).Select(one => TemplateList.Entry(one) ?? one)],
         AllowedIps = Parts(entity.AllowedIps),
         Missed = Parts(entity.Missed),
         Dns = Parts(entity.Dns),

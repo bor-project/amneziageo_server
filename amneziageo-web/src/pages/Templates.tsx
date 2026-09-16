@@ -1,22 +1,13 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { scopes } from "@/api/scopes"
-import {
-  draftOf,
-  freshTemplate,
-  useAddTemplate,
-  useChangeTemplate,
-  useRefreshTemplate,
-  useRemoveTemplate,
-  useTemplateDefaults,
-  useTemplates,
-} from "@/api/templates"
+import { useRefreshTemplate, useRemoveTemplate, useTemplateDefaults, useTemplates } from "@/api/templates"
 import type { Template } from "@/api/templates"
 import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { TemplateForm } from "@/components/TemplateForm"
 import { card, danger, primary, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { Text } from "@/i18n"
@@ -26,14 +17,11 @@ import { useAppSelector } from "@/store/hooks"
 export function Templates() {
   const t = useText()
   const language = useLanguage()
+  const navigate = useNavigate()
   const user = useAppSelector((s) => s.auth.user)
   const templates = useTemplates()
   const defaults = useTemplateDefaults().data
-  const [adding, setAdding] = useState(false)
-  const [editing, setEditing] = useState<Template | null>(null)
   const [removing, setRemoving] = useState<Template | null>(null)
-  const add = useAddTemplate()
-  const change = useChangeTemplate()
   const refresh = useRefreshTemplate()
   const remove = useRemoveTemplate()
   const may = holds(user, scopes.manageClients)
@@ -51,7 +39,7 @@ export function Templates() {
 
     return [
       ...again,
-      { label: t("templates.edit"), onPick: () => setEditing(one) },
+      { label: t("templates.edit"), onPick: () => navigate(`/connections/templates/${one.id}`) },
       { label: t("templates.remove"), onPick: () => setRemoving(one), alarming: true },
     ]
   }
@@ -82,7 +70,7 @@ export function Templates() {
       <div className={`mt-4 ${card}`}>
         {may && (
           <div className="flex justify-end border-b border-line px-4 py-3">
-            <button type="button" onClick={() => setAdding(true)} className={primary}>
+            <button type="button" onClick={() => navigate("/connections/templates/new")} className={primary}>
               {t("templates.add")}
             </button>
           </div>
@@ -102,6 +90,7 @@ export function Templates() {
               {
                 key: "name",
                 caption: t("templates.name"),
+                sort: (one) => one.name,
                 lead: true,
                 body: "font-medium text-ink",
                 cell: (one) => one.name,
@@ -109,6 +98,7 @@ export function Templates() {
               {
                 key: "allowed",
                 caption: t("templates.allowed"),
+                sort: (one) => entries(t, one.entries, allowed),
                 body: "max-w-52 text-muted",
                 cell: (one) => (
                   <span className="block truncate" title={one.entries.join(", ")}>
@@ -119,6 +109,7 @@ export function Templates() {
               {
                 key: "resolved",
                 caption: t("templates.resolved"),
+                sort: (one) => (one.entries.length === 0 ? null : one.allowedIps.length),
                 body: "text-muted",
                 cell: (one) => (
                   <span
@@ -135,24 +126,28 @@ export function Templates() {
               {
                 key: "dns",
                 caption: t("templates.dns"),
+                sort: (one) => listed(one.dns, defaults?.dns),
                 body: "text-muted",
                 cell: (one) => listed(one.dns, defaults?.dns),
               },
               {
                 key: "mtu",
                 caption: t("templates.mtu"),
+                sort: (one) => one.mtu ?? defaults?.mtu ?? null,
                 body: "text-muted",
                 cell: (one) => one.mtu ?? defaults?.mtu,
               },
               {
                 key: "keepalive",
                 caption: t("templates.keepalive"),
+                sort: (one) => one.keepalive ?? defaults?.keepalive ?? null,
                 body: "text-muted",
                 cell: (one) => one.keepalive ?? defaults?.keepalive,
               },
               {
                 key: "clients",
                 caption: t("templates.clients"),
+                sort: (one) => one.clients,
                 body: "text-muted",
                 cell: (one) => one.clients,
               },
@@ -166,29 +161,6 @@ export function Templates() {
           />
         )}
       </div>
-
-      {adding && (
-        <TemplateForm
-          title={t("templates.newTitle")}
-          start={freshTemplate}
-          pending={add.isPending}
-          error={add.error}
-          onSave={(draft) => void add.mutateAsync(draft).then(() => setAdding(false))}
-          onClose={() => setAdding(false)}
-        />
-      )}
-
-      {editing && (
-        <TemplateForm
-          title={t("templates.editTitle", { name: editing.name })}
-          start={draftOf(editing)}
-          held={editing}
-          pending={change.isPending}
-          error={change.error}
-          onSave={(draft) => void change.mutateAsync({ id: editing.id, draft }).then(() => setEditing(null))}
-          onClose={() => setEditing(null)}
-        />
-      )}
 
       {removing && (
         <Modal

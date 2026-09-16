@@ -65,6 +65,7 @@ export function Rules() {
               {
                 key: "name",
                 caption: t("rules.name"),
+                sort: (rule) => rule.name,
                 lead: true,
                 body: "font-medium text-ink",
                 cell: (rule) => (
@@ -77,12 +78,14 @@ export function Rules() {
               {
                 key: "action",
                 caption: t("rules.action"),
+                sort: (rule) => (rule.action === "block" ? t("rules.actionBlock") : rule.outbound),
                 body: "text-muted",
                 cell: (rule) => (rule.action === "block" ? t("rules.actionBlock") : rule.outbound),
               },
               {
                 key: "targets",
                 caption: t("rules.targets"),
+                sort: (rule) => (rule.targets.length > 0 ? rule.targets.join(", ") : t("rules.anything")),
                 body: "max-w-72 text-muted",
                 cell: (rule) => (
                   <span className="block truncate" title={rule.targets.join(", ")}>
@@ -93,6 +96,7 @@ export function Rules() {
               {
                 key: "sources",
                 caption: t("rules.sources"),
+                sort: (rule) => (rule.sources.length > 0 ? rule.sources.join(", ") : t("rules.anyone")),
                 body: "max-w-48 text-muted",
                 cell: (rule) => (
                   <span className="block truncate" title={rule.sources.join(", ")}>
@@ -100,14 +104,26 @@ export function Rules() {
                   </span>
                 ),
               },
-              { key: "traffic", caption: t("rules.traffic"), body: "text-muted", cell: (rule) => traffic(rule, t) },
+              {
+                key: "traffic",
+                caption: t("rules.traffic"),
+                sort: (rule) => traffic(rule, t),
+                body: "text-muted",
+                cell: (rule) => traffic(rule, t),
+              },
               {
                 key: "ranges",
                 caption: t("rules.ranges"),
+                sort: (rule) => `${rule.state.ranges} / ${rule.state.names}`,
                 body: "text-muted",
                 cell: (rule) => `${rule.state.ranges} / ${rule.state.names}`,
               },
-              { key: "state", caption: t("rules.state"), cell: (rule) => <State rule={rule} t={t} /> },
+              {
+                key: "state",
+                caption: t("rules.state"),
+                sort: (rule) => ruleRank(rule),
+                cell: (rule) => <State rule={rule} t={t} />,
+              },
               {
                 key: "actions",
                 caption: t("rules.actions"),
@@ -185,6 +201,14 @@ export function Rules() {
       )}
     </div>
   )
+}
+
+function ruleRank(rule: Rule): number {
+  if (rule.state.fault.length > 0) {
+    return 1
+  }
+
+  return rule.state.isLive ? 0 : 2
 }
 
 function State({ rule, t }: { rule: Rule; t: Text }) {

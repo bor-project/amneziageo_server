@@ -15,12 +15,12 @@ The ranges are not written by hand. The template keeps a list of entries, the wa
 |---|---|---|
 | GeoIP | `geoip:ru` | the ranges the geo databases carry for the country |
 | GeoSite | `geosite:youtube` | the addresses the names of the category resolve to |
-| Network | `10.0.0.0/8` | itself |
-| Address | `1.2.3.4` | itself |
-| Domain | `example.com` | the addresses the name resolves to |
+| Network | `cidr:10.0.0.0/8` | itself |
+| Address | `cidr:1.2.3.4` | itself |
+| Domain | `domain:example.com` | the addresses the name resolves to |
 
-The client forms `domain:example.com` and `cidr:10.0.0.0/8` are taken too, and so is a link, which leaves its
-host. A name is asked for both families through the name servers of the panel resolver (`upstreams` in
+A network, an address or a name written bare takes its prefix as it is added, and so does a link, which leaves
+its host. A name is asked for both families through the name servers of the panel resolver (`upstreams` in
 [dns.md](dns.md)); of a geosite category only the domains and the exact names are asked, keywords and
 expressions have no address of their own. One pass asks at most 4000 names and stops after a minute; a name that
 did not answer in time counts as not found.
@@ -47,9 +47,17 @@ first.
 nothing, the time of the last pass and the number of clients that take each; `GET /api/templates/{id}` returns
 one; `GET /api/templates/defaults` returns what an empty field gives, `::/0` among the ranges when an interface
 carries IPv6; all three need `state:read`. `POST /api/templates`, `PUT /api/templates/{id}`,
-`POST /api/templates/{id}/refresh` and `DELETE /api/templates/{id}` need `clients:write`. A request writes
+`POST /api/templates/{id}/refresh`, `POST /api/templates/preview` and `DELETE /api/templates/{id}` need
+`clients:write`. A request writes
 `entries`, never `allowedIps`. A client names its template in `templateId`; a number the panel does not hold is
 refused with `unknown-template`.
+
+`POST /api/templates/preview` tells what a list of entries gives before a template is kept: how many ranges
+came out, the first 1000 of them, the entries that gave nothing, and per entry how many ranges it gave and the
+first 200. The panel asks it while a template is edited, so an entry shows what it brings and what stays when
+it goes: a range two entries share is held by the one that remains. It needs `clients:write`. The panel
+keeps the count beside the field: over 12000 ranges it warns that the speed may drop, over 16000 it does not
+let the template be saved.
 
 `GET /api/geo/entries?key=geosite:youtube&limit=200` shows what a geo key carries: how many entries and the first
 of them, the ranges of a country or the names of a category, a name written `full:`, `keyword:` or `regexp:` when

@@ -77,6 +77,7 @@ export function Geo() {
               {
                 key: "name",
                 caption: t("geo.name"),
+                sort: (source) => source.name,
                 lead: true,
                 body: "font-medium text-ink",
                 cell: (source) => (
@@ -89,12 +90,14 @@ export function Geo() {
               {
                 key: "kind",
                 caption: t("geo.kind"),
+                sort: (source) => (source.kind === "geoip" ? t("geo.kindIp") : t("geo.kindSite")),
                 body: "text-muted",
                 cell: (source) => (source.kind === "geoip" ? t("geo.kindIp") : t("geo.kindSite")),
               },
               {
                 key: "url",
                 caption: t("geo.url"),
+                sort: (source) => source.url,
                 body: "max-w-72 text-muted",
                 cell: (source) => (
                   <span className="block truncate" title={source.url}>
@@ -105,18 +108,21 @@ export function Geo() {
               {
                 key: "entries",
                 caption: t("geo.entries"),
+                sort: (source) => (source.entryCount > 0 ? source.entryCount : null),
                 body: "text-muted",
                 cell: (source) => (source.entryCount > 0 ? source.entryCount : ""),
               },
               {
                 key: "size",
                 caption: t("geo.size"),
+                sort: (source) => (source.size > 0 ? source.size : null),
                 body: "text-muted",
                 cell: (source) => (source.size > 0 ? bytes(t, source.size) : ""),
               },
               {
                 key: "updated",
                 caption: t("geo.updated"),
+                sort: (source) => (source.updatedUtc === null ? null : Date.parse(source.updatedUtc)),
                 body: "text-muted",
                 cell: (source) => (
                   <>

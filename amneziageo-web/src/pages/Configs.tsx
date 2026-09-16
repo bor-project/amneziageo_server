@@ -59,6 +59,7 @@ export function Configs() {
               {
                 key: "name",
                 caption: t("configs.name"),
+                sort: (config) => config.name,
                 lead: true,
                 body: "font-medium text-ink",
                 cell: (config) => config.name,
@@ -66,6 +67,7 @@ export function Configs() {
               {
                 key: "endpoint",
                 caption: t("configs.endpoint"),
+                sort: (config) => (config.host.length > 0 ? `${config.host}:${config.listenPort}` : config.listenPort),
                 body: "text-muted",
                 cell: (config) =>
                   config.host.length > 0 ? `${config.host}:${config.listenPort}` : config.listenPort,
@@ -73,12 +75,14 @@ export function Configs() {
               {
                 key: "address",
                 caption: t("configs.address"),
+                sort: (config) => config.address.join(", "),
                 body: "text-muted",
                 cell: (config) => config.address.join(", "),
               },
               {
                 key: "public",
                 caption: t("configs.public"),
+                sort: (config) => config.publicKey,
                 body: "max-w-56 text-muted",
                 cell: (config) => <span className="block truncate">{config.publicKey}</span>,
               },

@@ -1,16 +1,17 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
-import { useTemplateDefaults } from "@/api/templates"
-import type { Template, TemplateDraft } from "@/api/templates"
+import { useTemplateDefaults, useTemplatePreview } from "@/api/templates"
+import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
 import { EntryList } from "@/components/EntryList"
-import { Modal } from "@/components/Modal"
-import { TextBlock } from "@/components/TextBlock"
 import { Line } from "@/components/fields"
-import { field, label, primary, secondary } from "@/components/styles"
-import { useLanguage, useText } from "@/i18n"
+import { card, field, label, primary, secondary } from "@/components/styles"
+import { useText } from "@/i18n"
+import type { Text } from "@/i18n"
+
+const slowAt = 12000
+const stopAt = 16000
 
 export function TemplateForm({
-  title,
   start,
   held,
   pending,
@@ -18,7 +19,6 @@ export function TemplateForm({
   onSave,
   onClose,
 }: {
-  title: string
   start: TemplateDraft
   held?: Template
   pending: boolean
@@ -27,37 +27,27 @@ export function TemplateForm({
   onClose: () => void
 }) {
   const t = useText()
-  const language = useLanguage()
   const defaults = useTemplateDefaults().data
   const [draft, setDraft] = useState(start)
   const [servers, setServers] = useState(start.dns.join(", "))
+  const [touched, setTouched] = useState(false)
+  const preview = useTemplatePreview(touched ? draft.entries : [])
+  const found = preview.data ?? kept(held)
+  const total = found === undefined || preview.isFetching ? null : found.total
+  const heavy = total !== null && total > stopAt
 
   function put(change: Partial<TemplateDraft>) {
     setDraft({ ...draft, ...change })
   }
 
+  function list(entries: string[]) {
+    setTouched(true)
+    put({ entries })
+  }
+
   return (
-    <Modal
-      title={title}
-      wide
-      onClose={onClose}
-      footer={
-        <>
-          <button type="button" onClick={onClose} className={secondary}>
-            {t("templates.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave({ ...draft, dns: parts(servers) })}
-            disabled={pending || draft.name.trim().length === 0}
-            className={primary}
-          >
-            {pending ? t("templates.busy") : t("templates.save")}
-          </button>
-        </>
-      }
-    >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className={`mt-4 ${card}`}>
+      <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
         <Line
           id="template-name"
           caption={t("templates.name")}
@@ -67,35 +57,38 @@ export function TemplateForm({
         />
 
         <div className="sm:col-span-2">
-          <label className={label} htmlFor="template-entries">
-            {t("templates.allowed")}
-          </label>
+          <div className="flex items-baseline justify-between gap-3">
+            <label className={label} htmlFor="template-entries">
+              {t("templates.allowed")}
+            </label>
+            {draft.entries.length > 0 && (
+              <div className="flex items-baseline gap-2 text-xs">
+                <span className="text-muted">{count(t, total)}</span>
+                {total !== null && total > slowAt && (
+                  <span className={heavy ? "text-alarm" : "text-warn"}>
+                    {t(heavy ? "templates.addressesTooMany" : "templates.addressesSlow")}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
           <div className="mt-1">
             <EntryList
               id="template-entries"
               value={draft.entries}
+              parts={found?.parts}
               placeholder={draft.entries.length === 0 ? (defaults?.allowedIps.join(", ") ?? "") : ""}
-              onChange={(entries) => put({ entries })}
+              onChange={list}
             />
           </div>
         </div>
 
-        {held !== undefined && held.entries.length > 0 && (
-          <div className="sm:col-span-2">
-            <div className={label}>{t("templates.resolved")}</div>
-            <TextBlock className="mt-1 max-h-40 overflow-auto rounded border border-line bg-canvas p-3 text-xs text-ink">
-              {held.allowedIps.join("\n")}
-            </TextBlock>
-            <div className="mt-1 text-xs text-muted">
-              {t("templates.resolvedLine", {
-                count: String(held.allowedIps.length),
-                time: held.refreshedUtc === null ? "-" : new Date(held.refreshedUtc).toLocaleString(language),
-              })}
-            </div>
-            {held.missed.length > 0 && (
-              <div className="mt-1 text-xs text-warn">{t("templates.missed", { list: held.missed.join(", ") })}</div>
-            )}
-          </div>
+        {draft.entries.length > 0 && found !== undefined && found.missed.length > 0 && (
+          <div className="text-xs text-warn sm:col-span-2">{t("templates.missed", { list: found.missed.join(", ") })}</div>
+        )}
+
+        {preview.error !== null && (
+          <div className="text-xs text-alarm sm:col-span-2">{t(complaint(preview.error))}</div>
         )}
 
         <Line
@@ -122,10 +115,26 @@ export function TemplateForm({
           placeholder={defaults === undefined ? "" : String(defaults.keepalive)}
           onChange={(keepalive) => put({ keepalive })}
         />
+
+        {error !== null && error !== undefined && (
+          <div className="text-sm text-alarm sm:col-span-2">{t(complaint(error))}</div>
+        )}
       </div>
 
-      {error !== null && error !== undefined && <div className="text-sm text-alarm">{t(complaint(error))}</div>}
-    </Modal>
+      <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
+        <button type="button" onClick={onClose} className={secondary}>
+          {t("templates.cancel")}
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave({ ...draft, dns: parts(servers) })}
+          disabled={pending || preview.isFetching || heavy || draft.name.trim().length === 0}
+          className={primary}
+        >
+          {pending ? t("templates.busy") : t("templates.save")}
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -157,6 +166,16 @@ function Maybe({
       />
     </div>
   )
+}
+
+function kept(held: Template | undefined): TemplatePreview | undefined {
+  return held === undefined
+    ? undefined
+    : { total: held.allowedIps.length, allowedIps: held.allowedIps, missed: held.missed, parts: [] }
+}
+
+function count(t: Text, total: number | null): string {
+  return total === null ? t("templates.refreshing") : t("templates.addressesCount", { count: String(total) })
 }
 
 function parts(text: string): string[] {

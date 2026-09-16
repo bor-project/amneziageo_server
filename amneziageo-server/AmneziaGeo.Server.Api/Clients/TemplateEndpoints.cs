@@ -2,6 +2,7 @@ using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Template;
 
 namespace AmneziaGeo.Server.Api.Clients;
 
@@ -24,6 +25,7 @@ public static class TemplateEndpoints
 
         var writing = routes.MapGroup("/api/templates").RequireScope(Scopes.ManageClients);
         writing.MapPost("/", AddAsync);
+        writing.MapPost("/preview", PreviewAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapPost("/{id:long}/refresh", RefreshAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
@@ -119,6 +121,22 @@ public static class TemplateEndpoints
         var full = await refresher.ResolveAsync(held, ct).ConfigureAwait(false);
 
         return await KeepAsync(id, full, store, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> PreviewAsync(
+        TemplatePreviewRequest request,
+        TemplateRefresher refresher,
+        CancellationToken ct)
+    {
+        var entries = TemplateAnswers.Entries(request.Entries);
+        if (TemplateList.Check(entries) is { } fault)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, fault.Code, fault.Message);
+        }
+
+        var found = await refresher.FindAsync(entries, ct).ConfigureAwait(false);
+
+        return Results.Ok(TemplateAnswers.Preview(found));
     }
 
     private static async Task<IResult> RemoveAsync(long id, TemplateStore store, CancellationToken ct)

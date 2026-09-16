@@ -59,6 +59,7 @@ export function Proxies() {
               {
                 key: "name",
                 caption: t("proxies.name"),
+                sort: (proxy) => proxy.name,
                 lead: true,
                 body: "font-medium text-ink",
                 cell: (proxy) => (
@@ -71,19 +72,28 @@ export function Proxies() {
               {
                 key: "kind",
                 caption: t("proxies.kind"),
+                sort: (proxy) => (proxy.kind === "wg" ? t("proxies.kindWg") : t("proxies.kindWs")),
                 body: "text-muted",
                 cell: (proxy) => (proxy.kind === "wg" ? t("proxies.kindWg") : t("proxies.kindWs")),
               },
-              { key: "port", caption: t("proxies.port"), body: "text-muted", cell: (proxy) => proxy.port },
+              {
+                key: "port",
+                caption: t("proxies.port"),
+                sort: (proxy) => proxy.port,
+                body: "text-muted",
+                cell: (proxy) => proxy.port,
+              },
               {
                 key: "address",
                 caption: t("proxies.address"),
+                sort: (proxy) => (proxy.kind === "wg" ? proxy.target : `/${proxy.path}`),
                 body: "text-muted",
                 cell: (proxy) => (proxy.kind === "wg" ? proxy.target : `/${proxy.path}`),
               },
               {
                 key: "state",
                 caption: t("proxies.state"),
+                sort: (proxy) => (proxy.message.length > 0 || uncertified(tls.data, proxy) ? 2 : proxy.isRunning ? 0 : 1),
                 cell: (proxy) => (
                   <State
                     proxy={proxy}

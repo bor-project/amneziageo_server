@@ -24,6 +24,19 @@ export interface TemplateDraft {
   keepalive: number | null
 }
 
+export interface TemplatePart {
+  entry: string
+  total: number
+  allowedIps: string[]
+}
+
+export interface TemplatePreview {
+  total: number
+  allowedIps: string[]
+  missed: string[]
+  parts: TemplatePart[]
+}
+
 export interface TemplateDefaults {
   allowedIps: string[]
   dns: string[]
@@ -44,6 +57,15 @@ export function useTemplateDefaults() {
   return useQuery({
     queryKey: ["template-defaults"],
     queryFn: async () => (await client.get<TemplateDefaults>("/templates/defaults")).data,
+  })
+}
+
+export function useTemplatePreview(entries: string[]) {
+  return useQuery({
+    queryKey: ["template-preview", entries],
+    queryFn: async () => (await client.post<TemplatePreview>("/templates/preview", { entries }, slow)).data,
+    enabled: entries.length > 0,
+    staleTime: 60000,
   })
 }
 
