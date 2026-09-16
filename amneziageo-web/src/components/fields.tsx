@@ -2,11 +2,20 @@ import { useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
 import { card, field, label, note } from "@/components/styles"
 
-export function Section({ title, children }: { title: string; children: ReactNode }) {
+export function Part({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="border-t border-line pt-3 first:border-t-0 first:pt-0">
-      <div className="text-xs font-medium tracking-wide text-muted uppercase">{title}</div>
-      <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>
+    <div className={`flex flex-col gap-3.5 p-4.5 ${card}`}>
+      <div className="text-sm font-semibold text-ink-soft">{title}</div>
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">{children}</div>
+    </div>
+  )
+}
+
+export function Box({ caption, children }: { caption: string; children: ReactNode }) {
+  return (
+    <div className={`p-4 ${card}`}>
+      <div className="text-xs text-faint">{caption}</div>
+      <div className="mt-2">{children}</div>
     </div>
   )
 }
@@ -194,7 +203,6 @@ export function Flag({
   )
 }
 
-
 export function Switch({
   id,
   caption,
@@ -223,17 +231,6 @@ export function Switch({
           className={`absolute top-[2px] size-4 rounded-full bg-surface ${value ? "left-[18px]" : "left-[2px]"}`}
         />
       </button>
-    </div>
-  )
-}
-
-export function Row({ id, caption, children }: { id: string; caption: ReactNode; children: ReactNode }) {
-  return (
-    <div className="grid items-center gap-2 border-t border-line py-3 first:border-t-0 first:pt-0 sm:grid-cols-2 sm:gap-6">
-      <label className="text-sm font-medium text-ink" htmlFor={id}>
-        {caption}
-      </label>
-      {children}
     </div>
   )
 }

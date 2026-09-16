@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { useLanguage } from "@/i18n"
 
 export type SortValue = string | number | null
@@ -13,13 +13,34 @@ export interface Place<T> {
   at: number
 }
 
-export function useOrder() {
-  const [order, setOrder] = useState<Order | null>(null)
+export function useOrder(name = "") {
+  const [params, setParams] = useSearchParams()
+  const keyName = name === "" ? "sort" : `${name}Sort`
+  const dirName = name === "" ? "dir" : `${name}Dir`
+  const key = params.get(keyName)
+  const order = key === null ? null : { key, down: params.get(dirName) === "desc" }
 
-  const toggle = (key: string) =>
-    setOrder((now) => (now?.key !== key ? { key, down: false } : now.down ? null : { key, down: true }))
+  function put(next: Order | null) {
+    const kept = new URLSearchParams(params)
 
-  return { order, toggle }
+    if (next === null) {
+      kept.delete(keyName)
+      kept.delete(dirName)
+    } else {
+      kept.set(keyName, next.key)
+      kept.set(dirName, next.down ? "desc" : "asc")
+    }
+
+    setParams(kept, { replace: true })
+  }
+
+  return {
+    order,
+    toggle: (picked: string) =>
+      put(order?.key !== picked ? { key: picked, down: false } : order.down ? null : { key: picked, down: true }),
+    choose: (picked: string) => put({ key: picked, down: order?.down ?? false }),
+    direct: (picked: string, down: boolean) => put({ key: order?.key ?? picked, down }),
+  }
 }
 
 export function useSorted<T>(

@@ -2,21 +2,18 @@ import { useState } from "react"
 import { complaint } from "@/api/auth"
 import type { BalanceStrategy, BalancerDraft } from "@/api/balancers"
 import { useOutbounds } from "@/api/outbounds"
-import { Modal } from "@/components/Modal"
-import { Flag, Line } from "@/components/fields"
-import { field, label, primary, quiet, secondary } from "@/components/styles"
+import { Flag, Line, Part } from "@/components/fields"
+import { card, field, label, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 
 export function BalancerForm({
-  title,
   start,
   pending,
   error,
   onSave,
   onClose,
 }: {
-  title: string
   start: BalancerDraft
   pending: boolean
   error: unknown
@@ -40,26 +37,8 @@ export function BalancerForm({
   }
 
   return (
-    <Modal
-      title={title}
-      onClose={onClose}
-      footer={
-        <>
-          <button type="button" onClick={onClose} className={secondary}>
-            {t("balancers.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave(draft)}
-            disabled={pending || draft.name.length === 0 || draft.members.length === 0}
-            className={primary}
-          >
-            {pending ? t("balancers.busy") : t("balancers.save")}
-          </button>
-        </>
-      }
-    >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="mt-4 flex flex-col gap-4">
+      <Part title={t("balancers.partMain")}>
         <Line
           id="balancer-name"
           caption={t("balancers.name")}
@@ -148,11 +127,25 @@ export function BalancerForm({
             onChange={(isEnabled) => put({ isEnabled })}
           />
         </div>
-      </div>
+      </Part>
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
-    </Modal>
+
+      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        <button type="button" onClick={onClose} className={secondary}>
+          {t("balancers.cancel")}
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave(draft)}
+          disabled={pending || draft.name.length === 0 || draft.members.length === 0}
+          className={primary}
+        >
+          {pending ? t("balancers.busy") : t("balancers.save")}
+        </button>
+      </div>
+    </div>
   )
 }

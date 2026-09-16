@@ -1,135 +1,144 @@
-import { useState } from "react"
-import {
-  draftOf,
-  useAddGeoSource,
-  useChangeGeoSource,
-  useGeoKeys,
-  useGeoSources,
-  useMoveGeoSource,
-  useRemoveGeoSource,
-  useUpdateGeo,
-  useUpdateGeoSource,
-} from "@/api/geo"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
+import { useGeoKeys, useGeoSources, useMoveGeoSource, useUpdateGeo, useUpdateGeoSource } from "@/api/geo"
 import type { GeoSource } from "@/api/geo"
 import { scopes } from "@/api/scopes"
-import { GeoForm } from "@/components/GeoForm"
-import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { card, danger, primary, secondary } from "@/components/styles"
+import { Box } from "@/components/fields"
+import { card, field, secondary } from "@/components/styles"
 import { bytes } from "@/format"
 import { useLanguage, useText } from "@/i18n"
 import type { Text } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
 
-const fresh = { name: "", kind: "geoip" as const, url: "", isEnabled: true }
-
 export function Geo() {
   const t = useText()
   const language = useLanguage()
+  const navigate = useNavigate()
   const user = useAppSelector((s) => s.auth.user)
+  const [params, setParams] = useSearchParams()
   const sources = useGeoSources()
   const keys = useGeoKeys()
-  const [adding, setAdding] = useState(false)
-  const [editing, setEditing] = useState<GeoSource | null>(null)
-  const [removing, setRemoving] = useState<GeoSource | null>(null)
-  const add = useAddGeoSource()
-  const change = useChangeGeoSource()
-  const remove = useRemoveGeoSource()
   const move = useMoveGeoSource()
   const update = useUpdateGeoSource()
   const updateAll = useUpdateGeo()
   const may = holds(user, scopes.manageRouting)
-  const last = (sources.data?.length ?? 0) - 1
+  const find = params.get("find") ?? ""
+  const all = sources.data ?? []
+  const shown = all.filter((one) => matches(one, find))
+  const last = all.length - 1
+
+  function put(key: string, value: string) {
+    const kept = new URLSearchParams(params)
+
+    if (value === "") {
+      kept.delete(key)
+    } else {
+      kept.set(key, value)
+    }
+
+    setParams(kept, { replace: true })
+  }
 
   return (
-    <div>
-      <div className={`mt-4 flex flex-wrap gap-6 px-4 py-3 ${card}`}>
-        <Tally caption={t("geo.countries")} value={keys.data?.countries.length ?? 0} />
-        <Tally caption={t("geo.categories")} value={keys.data?.categories.length ?? 0} />
+    <div className="mt-4 flex flex-col gap-4">
+      <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
+        <Box caption={t("geo.countries")}>
+          <div className="text-lg font-semibold text-ink">{keys.data?.countries.length ?? 0}</div>
+        </Box>
+        <Box caption={t("geo.categories")}>
+          <div className="text-lg font-semibold text-ink">{keys.data?.categories.length ?? 0}</div>
+        </Box>
       </div>
 
-      <div className={`mt-4 ${card}`}>
-        {may && (
-          <div className="flex justify-end gap-2 border-b border-line px-4 py-3">
-            <button
-              type="button"
-              onClick={() => void updateAll.mutateAsync()}
-              disabled={updateAll.isPending}
-              className={secondary}
-            >
-              {updateAll.isPending ? t("geo.updating") : t("geo.updateAll")}
-            </button>
-            <button type="button" onClick={() => setAdding(true)} className={primary}>
-              {t("geo.add")}
-            </button>
-          </div>
-        )}
+      <div className={card}>
+        {all.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("geo.empty")}</div>}
 
-        {sources.data?.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("geo.empty")}</div>}
-
-        {sources.data && sources.data.length > 0 && (
+        {all.length > 0 && (
           <Rows
-            items={sources.data}
-            keyOf={(source) => source.id}
+            name="geo"
+            items={shown}
+            keyOf={(one) => one.id}
+            tools={
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={find}
+                  placeholder={t("action.search")}
+                  onChange={(e) => put("find", e.target.value)}
+                  className={`max-w-60 ${field}`}
+                />
+                {may && (
+                  <button
+                    type="button"
+                    onClick={() => void updateAll.mutateAsync()}
+                    disabled={updateAll.isPending}
+                    className={secondary}
+                  >
+                    {updateAll.isPending ? t("geo.updating") : t("geo.updateAll")}
+                  </button>
+                )}
+              </div>
+            }
             columns={[
               {
                 key: "name",
                 caption: t("geo.name"),
-                sort: (source) => source.name,
+                sort: (one) => one.name,
                 lead: true,
-                body: "font-medium text-ink",
-                cell: (source) => (
+                body: "font-semibold text-ink",
+                cell: (one) => (
                   <>
-                    {source.name}
-                    {!source.isEnabled && <span className="ml-2 text-xs text-muted">{t("geo.off")}</span>}
+                    {may ? (
+                      <Link to={`/routing/geo/${one.id}/edit`} className="hover:text-brand-ink">
+                        {one.name}
+                      </Link>
+                    ) : (
+                      one.name
+                    )}
+                    {!one.isEnabled && <span className="ml-2 text-xs text-muted">{t("geo.off")}</span>}
                   </>
                 ),
               },
               {
                 key: "kind",
                 caption: t("geo.kind"),
-                sort: (source) => (source.kind === "geoip" ? t("geo.kindIp") : t("geo.kindSite")),
-                body: "text-muted",
-                cell: (source) => (source.kind === "geoip" ? t("geo.kindIp") : t("geo.kindSite")),
+                sort: (one) => (one.kind === "geoip" ? t("geo.kindIp") : t("geo.kindSite")),
+                cell: (one) => (one.kind === "geoip" ? t("geo.kindIp") : t("geo.kindSite")),
               },
               {
                 key: "url",
                 caption: t("geo.url"),
-                sort: (source) => source.url,
-                body: "max-w-72 text-muted",
-                cell: (source) => (
-                  <span className="block truncate" title={source.url}>
-                    {source.url}
+                sort: (one) => one.url,
+                body: "max-w-72",
+                cell: (one) => (
+                  <span className="block truncate" title={one.url}>
+                    {one.url}
                   </span>
                 ),
               },
               {
                 key: "entries",
                 caption: t("geo.entries"),
-                sort: (source) => (source.entryCount > 0 ? source.entryCount : null),
-                body: "text-muted",
-                cell: (source) => (source.entryCount > 0 ? source.entryCount : ""),
+                sort: (one) => (one.entryCount > 0 ? one.entryCount : null),
+                cell: (one) => (one.entryCount > 0 ? one.entryCount : ""),
               },
               {
                 key: "size",
                 caption: t("geo.size"),
-                sort: (source) => (source.size > 0 ? source.size : null),
-                body: "text-muted",
-                cell: (source) => (source.size > 0 ? bytes(t, source.size) : ""),
+                sort: (one) => (one.size > 0 ? one.size : null),
+                cell: (one) => (one.size > 0 ? bytes(t, one.size) : ""),
               },
               {
                 key: "updated",
                 caption: t("geo.updated"),
-                sort: (source) => (source.updatedUtc === null ? null : Date.parse(source.updatedUtc)),
-                body: "text-muted",
-                cell: (source) => (
+                sort: (one) => (one.updatedUtc === null ? null : Date.parse(one.updatedUtc)),
+                cell: (one) => (
                   <>
-                    {stamp(t, language, source)}
-                    {source.lastError.length > 0 && (
-                      <div className="max-w-72 truncate text-xs text-alarm" title={source.lastError}>
-                        {source.lastError}
+                    {stamp(t, language, one)}
+                    {one.lastError.length > 0 && (
+                      <div className="max-w-72 truncate text-xs text-alarm" title={one.lastError}>
+                        {one.lastError}
                       </div>
                     )}
                   </>
@@ -139,25 +148,24 @@ export function Geo() {
                 key: "actions",
                 caption: t("geo.actions"),
                 tail: true,
-                cell: (source, at) =>
+                cell: (one, at) =>
                   may && (
                     <RowActions
                       title={t("geo.actions")}
                       actions={[
-                        { label: t("geo.update"), onPick: () => void update.mutateAsync(source.id) },
-                        { label: t("geo.edit"), onPick: () => setEditing(source) },
+                        { label: t("geo.update"), onPick: () => void update.mutateAsync(one.id) },
+                        { label: t("geo.edit"), onPick: () => navigate(`/routing/geo/${one.id}/edit`) },
                         ...(at > 0
-                          ? [{ label: t("geo.up"), onPick: () => void move.mutateAsync({ id: source.id, up: true }) }]
+                          ? [{ label: t("geo.up"), onPick: () => void move.mutateAsync({ id: one.id, up: true }) }]
                           : []),
                         ...(at < last
-                          ? [
-                              {
-                                label: t("geo.down"),
-                                onPick: () => void move.mutateAsync({ id: source.id, up: false }),
-                              },
-                            ]
+                          ? [{ label: t("geo.down"), onPick: () => void move.mutateAsync({ id: one.id, up: false }) }]
                           : []),
-                        { label: t("geo.remove"), onPick: () => setRemoving(source), alarming: true },
+                        {
+                          label: t("geo.remove"),
+                          onPick: () => navigate(`/routing/geo/${one.id}/delete`),
+                          alarming: true,
+                        },
                       ]}
                     />
                   ),
@@ -166,67 +174,16 @@ export function Geo() {
           />
         )}
       </div>
-
-      {adding && (
-        <GeoForm
-          title={t("geo.newTitle")}
-          start={fresh}
-          pending={add.isPending}
-          error={add.error}
-          onSave={(draft) => void add.mutateAsync(draft).then(() => setAdding(false))}
-          onClose={() => setAdding(false)}
-        />
-      )}
-
-      {editing && (
-        <GeoForm
-          title={t("geo.editTitle", { name: editing.name })}
-          start={draftOf(editing)}
-          pending={change.isPending}
-          error={change.error}
-          onSave={(draft) =>
-            void change.mutateAsync({ id: editing.id, draft }).then(() => setEditing(null))
-          }
-          onClose={() => setEditing(null)}
-        />
-      )}
-
-      {removing && (
-        <Modal
-          title={t("geo.removeTitle", { name: removing.name })}
-          onClose={() => setRemoving(null)}
-          footer={
-            <>
-              <button type="button" onClick={() => setRemoving(null)} className={secondary}>
-                {t("geo.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={() => void remove.mutateAsync(removing.id).then(() => setRemoving(null))}
-                disabled={remove.isPending}
-                className={danger}
-              >
-                {t("geo.remove")}
-              </button>
-            </>
-          }
-        >
-          <div className="text-sm text-muted">{removing.url}</div>
-        </Modal>
-      )}
-    </div>
-  )
-}
-
-function Tally({ caption, value }: { caption: string; value: number }) {
-  return (
-    <div>
-      <div className="text-xs text-muted">{caption}</div>
-      <div className="text-lg font-semibold text-ink">{value}</div>
     </div>
   )
 }
 
 function stamp(t: Text, language: string, source: GeoSource): string {
   return source.updatedUtc === null ? t("geo.never") : new Date(source.updatedUtc).toLocaleString(language)
+}
+
+function matches(one: GeoSource, find: string): boolean {
+  const query = find.trim().toLowerCase()
+
+  return query === "" || one.name.toLowerCase().includes(query) || one.url.toLowerCase().includes(query)
 }

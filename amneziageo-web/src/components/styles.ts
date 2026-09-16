@@ -1,23 +1,29 @@
-export const card = "rounded-lg border border-line bg-surface"
+export const card = "rounded-xl border border-line bg-surface"
 
 export const field =
-  "w-full rounded border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand"
+  "w-full rounded-lg border border-line-input bg-input px-3 py-2.25 text-sm text-ink outline-none focus:border-brand"
 
 // The same as field without w-full, for fields with an explicit width in a flex row.
 export const fieldBox =
-  "rounded border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand"
+  "rounded-lg border border-line-input bg-input px-3 py-2.25 text-sm text-ink outline-none focus:border-brand"
 
 export const primary =
-  "rounded bg-brand px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+  "rounded-lg bg-brand px-4.5 py-2.5 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-50"
 
 export const secondary =
-  "rounded border border-line px-3 py-2 text-sm text-muted hover:bg-hover disabled:opacity-50"
+  "rounded-lg border border-line-button px-4 py-2.25 text-sm text-ink-soft hover:bg-active disabled:opacity-50"
 
 export const danger =
-  "rounded bg-alarm px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+  "rounded-lg bg-alarm-button px-4.5 py-2.5 text-sm font-medium text-white hover:bg-alarm-button-hover disabled:opacity-50"
 
-export const quiet = "rounded px-2 py-1 text-sm text-muted hover:bg-hover hover:text-brand-ink"
+export const quiet = "rounded-md px-2 py-1 text-sm text-muted hover:bg-active hover:text-ink"
 
-export const label = "block text-sm text-muted"
+export const label = "block text-xs text-muted"
 
 export const note = "mt-1 text-xs text-muted"
+
+export const chip = "rounded-md bg-chip px-2.5 py-1.25 text-[13px] text-chip-ink"
+
+export const menu = "rounded-[10px] border border-line-menu bg-menu p-1.5 shadow-[var(--shade)]"
+
+export const menuItem = "rounded-md px-2.5 py-2 text-left text-[13px] text-ink-soft hover:bg-active hover:text-ink"

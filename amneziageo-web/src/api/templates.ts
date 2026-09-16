@@ -70,7 +70,7 @@ export function useTemplatePreview(entries: string[]) {
 }
 
 export function useAddTemplate() {
-  return useRefreshing((draft: TemplateDraft) => client.post("/templates", draft, slow))
+  return useRefreshing(async (draft: TemplateDraft) => (await client.post<Template>("/templates", draft, slow)).data)
 }
 
 export function useChangeTemplate() {
@@ -105,7 +105,7 @@ export const freshTemplate: TemplateDraft = {
   keepalive: null,
 }
 
-function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
+function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) {
   const queryClient = useQueryClient()
 
   return useMutation({

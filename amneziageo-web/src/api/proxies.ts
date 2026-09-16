@@ -63,7 +63,7 @@ export function useFreshProxy(enabled: boolean, name: string) {
 }
 
 export function useAddProxy() {
-  return useRefreshing((draft: ProxyDraft) => client.post("/proxies", draft))
+  return useRefreshing(async (draft: ProxyDraft) => (await client.post<Proxy>("/proxies", draft)).data)
 }
 
 export function useChangeProxy() {
@@ -93,7 +93,7 @@ export function draftOf(proxy: Proxy): ProxyDraft {
   }
 }
 
-function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
+function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) {
   const queryClient = useQueryClient()
 
   return useMutation({

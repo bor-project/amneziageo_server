@@ -1,8 +1,9 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 import { draftOf, freshTemplate, useAddTemplate, useChangeTemplate, useTemplates } from "@/api/templates"
-import { Crumbs } from "@/components/Crumbs"
 import { TemplateForm } from "@/components/TemplateForm"
+import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
+import { templateTrail } from "@/pages/trails"
 
 export function TemplatePage() {
   const t = useText()
@@ -13,26 +14,21 @@ export function TemplatePage() {
   const change = useChangeTemplate()
   const held = templateId === undefined ? undefined : templates.data?.find((one) => one.id === Number(templateId))
 
-  function back() {
-    navigate("/connections/templates")
-  }
-
-  function trail(title: string) {
-    return <Crumbs items={[{ to: "/connections/templates", label: t("tab.templates") }, { label: title }]} />
-  }
+  useTail(
+    held === undefined
+      ? [{ label: t("templates.newTitle") }]
+      : [templateTrail(held, templates.data ?? []), { label: t("templates.edit") }],
+  )
 
   if (templateId === undefined) {
     return (
-      <div>
-        {trail(t("templates.newTitle"))}
-        <TemplateForm
-          start={freshTemplate}
-          pending={add.isPending}
-          error={add.error}
-          onSave={(draft) => void add.mutateAsync(draft).then(back)}
-          onClose={back}
-        />
-      </div>
+      <TemplateForm
+        start={freshTemplate}
+        pending={add.isPending}
+        error={add.error}
+        onSave={(draft) => void add.mutateAsync(draft).then((made) => navigate(`/connections/templates/${made.id}`))}
+        onClose={() => navigate("/connections/templates")}
+      />
     )
   }
 
@@ -44,17 +40,16 @@ export function TemplatePage() {
     )
   }
 
+  const card = `/connections/templates/${held.id}`
+
   return (
-    <div>
-      {trail(held.name)}
-      <TemplateForm
-        start={draftOf(held)}
-        held={held}
-        pending={change.isPending}
-        error={change.error}
-        onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(back)}
-        onClose={back}
-      />
-    </div>
+    <TemplateForm
+      start={draftOf(held)}
+      held={held}
+      pending={change.isPending}
+      error={change.error}
+      onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(card))}
+      onClose={() => navigate(card)}
+    />
   )
 }

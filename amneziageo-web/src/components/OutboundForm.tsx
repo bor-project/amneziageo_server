@@ -3,16 +3,14 @@ import { complaint } from "@/api/auth"
 import type { Obfuscation } from "@/api/configs"
 import { useImportOutbound, useOutboundKeys } from "@/api/outbounds"
 import type { OutboundDraft, OutboundKind } from "@/api/outbounds"
-import { Modal } from "@/components/Modal"
 import { ObfuscationFields } from "@/components/Obfuscation"
-import { Count, Flag, Line, Section } from "@/components/fields"
-import { field, label, primary, secondary } from "@/components/styles"
+import { Count, Flag, Line, Part } from "@/components/fields"
+import { card, field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 
 export function OutboundForm({
-  title,
   start,
   publicKey,
   pending,
@@ -20,7 +18,6 @@ export function OutboundForm({
   onSave,
   onClose,
 }: {
-  title: string
   start: OutboundDraft
   publicKey: string
   pending: boolean
@@ -72,27 +69,8 @@ export function OutboundForm({
   const tunnel = draft.kind === "wg" || draft.kind === "ws"
 
   return (
-    <Modal
-      title={title}
-      onClose={onClose}
-      wide
-      footer={
-        <>
-          <button type="button" onClick={onClose} className={secondary}>
-            {t("outbounds.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave(draft)}
-            disabled={pending || draft.name.length === 0}
-            className={primary}
-          >
-            {pending ? t("outbounds.busy") : t("outbounds.save")}
-          </button>
-        </>
-      }
-    >
-      <Section title={t("outbounds.settings")}>
+    <div className="mt-4 flex flex-col gap-4">
+      <Part title={t("outbounds.settings")}>
         <Line
           id="outbound-name"
           caption={t("outbounds.name")}
@@ -120,9 +98,9 @@ export function OutboundForm({
           value={draft.isEnabled}
           onChange={(value) => put({ isEnabled: value })}
         />
-      </Section>
+      </Part>
 
-      <Section title={t("outbounds.probe")}>
+      <Part title={t("outbounds.probe")}>
         <Line
           id="outbound-probe"
           caption={t("outbounds.probeServer")}
@@ -135,10 +113,10 @@ export function OutboundForm({
           value={draft.probeEvery}
           onChange={(value) => put({ probeEvery: value })}
         />
-      </Section>
+      </Part>
 
       {tunnel && (
-        <Section title={t("outbounds.server")}>
+        <Part title={t("outbounds.server")}>
           <Line
             id="outbound-host"
             caption={t("outbounds.host")}
@@ -191,11 +169,11 @@ export function OutboundForm({
             value={draft.closePrivate}
             onChange={(value) => put({ closePrivate: value })}
           />
-        </Section>
+        </Part>
       )}
 
       {tunnel && (
-        <Section title={t("outbounds.keys")}>
+        <Part title={t("outbounds.keys")}>
           <Line
             id="outbound-private"
             caption={t("outbounds.private")}
@@ -226,17 +204,17 @@ export function OutboundForm({
             onChange={(value) => put({ presharedKey: value.trim() })}
             wide
           />
-        </Section>
+        </Part>
       )}
 
       {tunnel && (
-        <Section title={t("outbounds.obfuscation")}>
+        <Part title={t("outbounds.obfuscation")}>
           <ObfuscationFields id="outbound" cover={draft.obfuscation} onChange={twist} />
-        </Section>
+        </Part>
       )}
 
       {tunnel && (
-        <Section title={t("outbounds.import")}>
+        <Part title={t("outbounds.import")}>
           <div className="sm:col-span-2">
             <label className={label} htmlFor="outbound-config">
               {t("outbounds.paste")}
@@ -262,12 +240,26 @@ export function OutboundForm({
           {read.error !== null && read.error !== undefined && (
             <div className="text-sm text-alarm sm:col-span-2">{t(complaint(read.error) as TextKey)}</div>
           )}
-        </Section>
+        </Part>
       )}
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
-    </Modal>
+
+      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        <button type="button" onClick={onClose} className={secondary}>
+          {t("outbounds.cancel")}
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave(draft)}
+          disabled={pending || draft.name.length === 0}
+          className={primary}
+        >
+          {pending ? t("outbounds.busy") : t("outbounds.save")}
+        </button>
+      </div>
+    </div>
   )
 }

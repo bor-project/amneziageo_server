@@ -1,8 +1,6 @@
 import { useSyncExternalStore } from "react"
 
-export const roomyQuery = "(min-width: 768px)"
-
-export const wideQuery = "(min-width: 992px)"
+export const wideQuery = "(min-width: 880px)"
 
 export function above(query: string): boolean {
   return window.matchMedia(query).matches

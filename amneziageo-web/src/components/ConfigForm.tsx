@@ -3,16 +3,14 @@ import { complaint } from "@/api/auth"
 import { useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
-import { Modal } from "@/components/Modal"
 import { ObfuscationFields } from "@/components/Obfuscation"
-import { Count, Flag, Help, Line, Pick, Section, Switch } from "@/components/fields"
-import { field, label, primary, secondary } from "@/components/styles"
+import { Count, Flag, Help, Line, Part, Pick, Switch } from "@/components/fields"
+import { card, field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 
 export function ConfigForm({
-  title,
   start,
   publicKey,
   pending,
@@ -21,7 +19,6 @@ export function ConfigForm({
   onClose,
   importable = false,
 }: {
-  title: string
   start: ConfigDraft
   publicKey: string
   pending: boolean
@@ -71,34 +68,16 @@ export function ConfigForm({
   }
 
   return (
-    <Modal
-      title={title}
-      onClose={onClose}
-      wide
-      head={
-        <Switch
-          id="config-on"
-          caption={t("configs.enabled")}
-          value={draft.isEnabled}
-          onChange={(value) => put({ isEnabled: value })}
-        />}
-      footer={
-        <>
-          <button type="button" onClick={onClose} className={secondary}>
-            {t("configs.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave(draft)}
-            disabled={pending || draft.name.length === 0}
-            className={primary}
-          >
-            {pending ? t("configs.busy") : t("configs.save")}
-          </button>
-        </>
-      }
-    >
-      <Section title={t("configs.network")}>
+    <div className="mt-4 flex flex-col gap-4">
+      <Part title={t("configs.network")}>
+        <div className="sm:col-span-2">
+          <Switch
+            id="config-on"
+            caption={t("configs.enabled")}
+            value={draft.isEnabled}
+            onChange={(value) => put({ isEnabled: value })}
+          />
+        </div>
         <Line id="config-name" caption={t("configs.name")} value={draft.name} onChange={(value) => put({ name: value })} />
         <Line id="config-host" caption={t("configs.host")} value={draft.host} onChange={(value) => put({ host: value })} />
         <Count id="config-port" caption={t("configs.port")} value={draft.listenPort} onChange={(value) => put({ listenPort: value })} />
@@ -139,9 +118,9 @@ export function ConfigForm({
           <option value="server">{t("clients.inboundServer")}</option>
           <option value="network">{t("clients.inboundNetwork")}</option>
         </Pick>
-      </Section>
+      </Part>
 
-      <Section title={t("configs.clients")}>
+      <Part title={t("configs.clients")}>
         <Line
           id="config-allowed"
           caption={t("configs.allowed")}
@@ -168,9 +147,9 @@ export function ConfigForm({
           onChange={(value) => put({ offlineAfter: value })}
           hint={t("configs.offlineAfterHint")}
         />
-      </Section>
+      </Part>
 
-      <Section title={t("configs.keys")}>
+      <Part title={t("configs.keys")}>
         <Line
           id="config-private"
           caption={t("configs.private")}
@@ -204,14 +183,14 @@ export function ConfigForm({
             {t("configs.generate")}
           </button>
         </div>
-      </Section>
+      </Part>
 
-      <Section title={t("configs.obfuscation")}>
+      <Part title={t("configs.obfuscation")}>
         <ObfuscationFields id="config" cover={draft.obfuscation} onChange={twist} />
-      </Section>
+      </Part>
 
       {importable && (
-        <Section title={t("configs.import")}>
+        <Part title={t("configs.import")}>
           <div className="sm:col-span-2">
             <label className={label} htmlFor="config-file">
               {t("configs.paste")}
@@ -237,12 +216,26 @@ export function ConfigForm({
           {read.error !== null && read.error !== undefined && (
             <div className="text-sm text-alarm sm:col-span-2">{t(complaint(read.error) as TextKey)}</div>
           )}
-        </Section>
+        </Part>
       )}
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
-    </Modal>
+
+      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        <button type="button" onClick={onClose} className={secondary}>
+          {t("configs.cancel")}
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave(draft)}
+          disabled={pending || draft.name.length === 0}
+          className={primary}
+        >
+          {pending ? t("configs.busy") : t("configs.save")}
+        </button>
+      </div>
+    </div>
   )
 }

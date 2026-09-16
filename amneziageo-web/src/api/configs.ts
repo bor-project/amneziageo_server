@@ -107,7 +107,7 @@ export function useFreshConfig(enabled: boolean, name: string) {
 }
 
 export function useAddConfig() {
-  return useRefreshing((draft: ConfigDraft) => client.post("/configs", draft))
+  return useRefreshing(async (draft: ConfigDraft) => (await client.post<Config>("/configs", draft)).data)
 }
 
 export function useChangeConfig() {
@@ -165,7 +165,7 @@ export function draftOf(config: Config): ConfigDraft {
   }
 }
 
-function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
+function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) {
   const queryClient = useQueryClient()
 
   return useMutation({

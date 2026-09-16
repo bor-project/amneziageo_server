@@ -4,7 +4,7 @@ import { Users } from "@/components/Users"
 
 export function Accounts() {
   return (
-    <div>
+    <div className="mt-4 flex flex-col gap-4">
       <Users />
       <Roles />
       <ApiTokens />

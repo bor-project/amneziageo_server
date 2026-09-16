@@ -17,7 +17,7 @@ export interface ClientState {
   isSpent: boolean
 }
 
-export type Inbound = "off" | "server" | "network"
+export type Inbound = "off" | "server" | "network" | "endpoint"
 
 export interface Forward {
   protocol: "tcp" | "udp"
@@ -113,7 +113,7 @@ export function useClientDraft() {
 }
 
 export function useAddClient() {
-  return useRefreshing((draft: ClientDraft) => client.post("/clients", draft))
+  return useRefreshing(async (draft: ClientDraft) => (await client.post<Client>("/clients", draft)).data)
 }
 
 export function useAddDevice() {

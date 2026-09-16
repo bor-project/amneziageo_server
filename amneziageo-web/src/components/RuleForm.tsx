@@ -3,21 +3,18 @@ import { complaint } from "@/api/auth"
 import { useBalancers } from "@/api/balancers"
 import { useOutbounds } from "@/api/outbounds"
 import type { RuleAction, RuleDraft, RuleProtocol } from "@/api/rules"
-import { Modal } from "@/components/Modal"
-import { Flag, Line } from "@/components/fields"
-import { field, label, primary, secondary } from "@/components/styles"
+import { Flag, Line, Part } from "@/components/fields"
+import { card, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 
 export function RuleForm({
-  title,
   start,
   pending,
   error,
   onSave,
   onClose,
 }: {
-  title: string
   start: RuleDraft
   pending: boolean
   error: unknown
@@ -34,27 +31,8 @@ export function RuleForm({
   }
 
   return (
-    <Modal
-      title={title}
-      wide
-      onClose={onClose}
-      footer={
-        <>
-          <button type="button" onClick={onClose} className={secondary}>
-            {t("rules.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave(draft)}
-            disabled={pending || draft.name.length === 0}
-            className={primary}
-          >
-            {pending ? t("rules.busy") : t("rules.save")}
-          </button>
-        </>
-      }
-    >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="mt-4 flex flex-col gap-4">
+      <Part title={t("rules.partMain")}>
         <Line id="rule-name" caption={t("rules.name")} value={draft.name} onChange={(name) => put({ name })} />
 
         <div>
@@ -120,20 +98,6 @@ export function RuleForm({
           </select>
         </div>
 
-        <Rows
-          id="rule-targets"
-          caption={t("rules.targets")}
-          value={draft.targets}
-          onChange={(targets) => put({ targets })}
-        />
-
-        <Rows
-          id="rule-sources"
-          caption={t("rules.sources")}
-          value={draft.sources}
-          onChange={(sources) => put({ sources })}
-        />
-
         <Line
           id="rule-ports"
           caption={t("rules.ports")}
@@ -150,16 +114,46 @@ export function RuleForm({
             onChange={(isEnabled) => put({ isEnabled })}
           />
         </div>
-      </div>
+      </Part>
+
+      <Part title={t("rules.partAddresses")}>
+        <Lines
+          id="rule-targets"
+          caption={t("rules.targets")}
+          value={draft.targets}
+          onChange={(targets) => put({ targets })}
+        />
+
+        <Lines
+          id="rule-sources"
+          caption={t("rules.sources")}
+          value={draft.sources}
+          onChange={(sources) => put({ sources })}
+        />
+      </Part>
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
-    </Modal>
+
+      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        <button type="button" onClick={onClose} className={secondary}>
+          {t("rules.cancel")}
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave(draft)}
+          disabled={pending || draft.name.length === 0}
+          className={primary}
+        >
+          {pending ? t("rules.busy") : t("rules.save")}
+        </button>
+      </div>
+    </div>
   )
 }
 
-function Rows({
+function Lines({
   id,
   caption,
   value,
@@ -177,10 +171,10 @@ function Rows({
       </label>
       <textarea
         id={id}
-        rows={5}
+        rows={6}
         value={value.join("\n")}
         onChange={(e) => onChange(split(e.target.value))}
-        className={`mt-1 font-mono ${field}`}
+        className={`mt-1 font-mono text-xs ${field}`}
       />
     </div>
   )

@@ -6,20 +6,44 @@
   --breakpoint-lg: 992px;
   --breakpoint-xl: 1200px;
   --breakpoint-2xl: 1400px;
+  --breakpoint-wide: 880px;
 }
 
 @theme inline {
   --color-canvas: var(--canvas);
+  --color-chrome: var(--chrome);
   --color-surface: var(--surface);
-  --color-ink: var(--ink);
-  --color-muted: var(--muted);
-  --color-line: var(--line);
+  --color-input: var(--input);
+  --color-menu: var(--menu);
   --color-hover: var(--hover);
+  --color-nav: var(--nav);
+  --color-active: var(--active);
+  --color-chip: var(--chip);
+  --color-chip-ink: var(--chip-ink);
+  --color-picked: var(--picked);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-input: var(--line-input);
+  --color-line-menu: var(--line-menu);
+  --color-line-button: var(--line-button);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-mono: var(--mono);
   --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
   --color-brand-ink: var(--brand-ink);
-  --color-brand-soft: var(--brand-soft);
+  --color-brand-lit: var(--brand-lit);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
   --color-alarm: var(--alarm);
+  --color-alarm-lit: var(--alarm-lit);
   --color-alarm-soft: var(--alarm-soft);
+  --color-alarm-line: var(--alarm-line);
+  --color-alarm-button: var(--alarm-button);
+  --color-alarm-button-hover: var(--alarm-button-hover);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
 }
@@ -27,35 +51,83 @@
 :root {
   color-scheme: light;
   --canvas: #F8FAFC;
+  --chrome: #FFFFFF;
   --surface: #FFFFFF;
-  --ink: #0F172A;
-  --muted: #64748B;
-  --line: #E2E8F0;
+  --input: #FFFFFF;
+  --menu: #FFFFFF;
   --hover: #F1F5F9;
+  --nav: #F1F5F9;
+  --active: #E8EEF9;
+  --chip: #E8EEF9;
+  --chip-ink: #1A50B0;
+  --picked: #D7E3F8;
+  --line: #E2E8F0;
+  --line-soft: #EEF2F7;
+  --line-input: #CBD5E1;
+  --line-menu: #E2E8F0;
+  --line-button: #CBD5E1;
+  --ink: #0F172A;
+  --ink-soft: #1E293B;
+  --body: #334155;
+  --muted: #64748B;
+  --faint: #94A3B8;
+  --mono: #475569;
   --brand: #1A50B0;
+  --brand-hover: #143F8C;
   --brand-ink: #1A50B0;
-  --brand-soft: #E8EEF9;
+  --brand-lit: #123774;
+  --good: #15803D;
+  --good-soft: #DCFCE7;
   --alarm: #B91C1C;
+  --alarm-lit: #991B1B;
   --alarm-soft: #FEF2F2;
+  --alarm-line: #FECACA;
+  --alarm-button: #B91C1C;
+  --alarm-button-hover: #991B1B;
   --warn: #B45309;
   --warn-soft: #FFF7E6;
+  --shade: 0 16px 40px rgba(15, 23, 42, .18);
 }
 
 .dark {
   color-scheme: dark;
-  --canvas: #0B1120;
-  --surface: #111B2E;
-  --ink: #E2E8F0;
-  --muted: #94A3B8;
-  --line: #22304C;
-  --hover: #182238;
-  --brand: #2C63C8;
-  --brand-ink: #8FB3F5;
-  --brand-soft: #172C52;
-  --alarm: #F2A3A3;
-  --alarm-soft: #3A1A1D;
+  --canvas: #080C14;
+  --chrome: #0B111C;
+  --surface: #0F1623;
+  --input: #0B1220;
+  --menu: #111A28;
+  --hover: #121B2A;
+  --nav: #131C2B;
+  --active: #16233A;
+  --chip: #1B2A44;
+  --chip-ink: #CFE0FF;
+  --picked: #1E3A6B;
+  --line: #1A2333;
+  --line-soft: #141D2C;
+  --line-input: #22304A;
+  --line-menu: #243149;
+  --line-button: #2B3A57;
+  --ink: #E7EEF9;
+  --ink-soft: #CDD8E8;
+  --body: #A7B4C8;
+  --muted: #8494AB;
+  --faint: #6B7C93;
+  --mono: #8FA3BF;
+  --brand: #3B82F6;
+  --brand-hover: #2F6FD8;
+  --brand-ink: #5B9CF8;
+  --brand-lit: #8DBBFB;
+  --good: #4ADE80;
+  --good-soft: #14301F;
+  --alarm: #F28A8A;
+  --alarm-lit: #FFB3B3;
+  --alarm-soft: #241A1A;
+  --alarm-line: #4A2B2B;
+  --alarm-button: #B03A4A;
+  --alarm-button-hover: #C94255;
   --warn: #F0B35A;
   --warn-soft: #36270F;
+  --shade: 0 16px 40px rgba(0, 0, 0, .55);
 }
 
 html,
@@ -64,7 +136,32 @@ body,
   height: 100%;
 }
 
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-button) var(--chrome);
+}
+
 body {
   background-color: var(--canvas);
   color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--chrome);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-input);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
 }

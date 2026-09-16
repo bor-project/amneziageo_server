@@ -1,34 +1,18 @@
-import { useState } from "react"
-import {
-  draftOf as groupDraft,
-  freshBalancer,
-  useAddBalancer,
-  useBalancers,
-  useChangeBalancer,
-  useRemoveBalancer,
-  useSwitchBalancer,
-} from "@/api/balancers"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
+import { useBalancers, useSwitchBalancer } from "@/api/balancers"
 import type { Balancer, BalancerMember } from "@/api/balancers"
 import {
-  draftOf as channelDraft,
-  useAddOutbound,
   useApplyOutbound,
-  useChangeOutbound,
-  useFreshOutbound,
   useMoveOutbound,
   useOutbounds,
   useProbeOutbound,
-  useRemoveOutbound,
   useSwitchOutbound,
 } from "@/api/outbounds"
-import type { Outbound, OutboundKind } from "@/api/outbounds"
+import type { Outbound, OutboundKind, OutboundState } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
-import { BalancerForm } from "@/components/BalancerForm"
-import { Modal } from "@/components/Modal"
-import { OutboundForm } from "@/components/OutboundForm"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { card, danger, secondary } from "@/components/styles"
+import { card, field, secondary } from "@/components/styles"
 import { bytes } from "@/format"
 import { useLanguage, useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -40,28 +24,18 @@ type Line = { kind: "channel"; channel: Outbound } | { kind: "group"; group: Bal
 export function Channels() {
   const t = useText()
   const language = useLanguage()
+  const navigate = useNavigate()
   const user = useAppSelector((s) => s.auth.user)
+  const [params, setParams] = useSearchParams()
   const outbounds = useOutbounds()
   const balancers = useBalancers()
-  const [adding, setAdding] = useState(false)
-  const [editing, setEditing] = useState<Outbound | null>(null)
-  const [removing, setRemoving] = useState<Outbound | null>(null)
-  const [grouping, setGrouping] = useState(false)
-  const [regrouping, setRegrouping] = useState<Balancer | null>(null)
-  const [ungrouping, setUngrouping] = useState<Balancer | null>(null)
-  const fresh = useFreshOutbound(adding, nextName(outbounds.data), "wg")
-  const add = useAddOutbound()
-  const change = useChangeOutbound()
-  const remove = useRemoveOutbound()
   const move = useMoveOutbound()
   const turn = useSwitchOutbound()
   const apply = useApplyOutbound()
   const probe = useProbeOutbound()
-  const addGroup = useAddBalancer()
-  const changeGroup = useChangeBalancer()
-  const removeGroup = useRemoveBalancer()
   const turnGroup = useSwitchBalancer()
   const may = holds(user, scopes.manageRouting)
+  const find = params.get("find") ?? ""
   const channels = outbounds.data ?? []
   const groups = balancers.data ?? []
   const last = channels.length - 1
@@ -69,274 +43,190 @@ export function Channels() {
     ...channels.map((channel): Line => ({ kind: "channel", channel })),
     ...groups.map((group): Line => ({ kind: "group", group })),
   ]
+  const shown = lines.filter((line) => matches(line, find))
   const loaded = outbounds.data !== undefined && balancers.data !== undefined
 
+  function put(key: string, value: string) {
+    const kept = new URLSearchParams(params)
+
+    if (value === "") {
+      kept.delete(key)
+    } else {
+      kept.set(key, value)
+    }
+
+    setParams(kept, { replace: true })
+  }
+
   return (
-    <div>
-      <div className={`mt-4 ${card}`}>
-        {may && (
-          <div className="flex justify-end gap-2 border-b border-line px-4 py-3">
-            <RowActions
-              title={t("outbounds.add")}
-              trigger={t("outbounds.add")}
-              actions={[
-                { label: t("outbounds.channel"), onPick: () => setAdding(true) },
-                ...(channels.length > 0 ? [{ label: t("outbounds.group"), onPick: () => setGrouping(true) }] : []),
-              ]}
-            />
-          </div>
-        )}
+    <div className={`mt-4 ${card}`}>
+      {loaded && lines.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("outbounds.empty")}</div>}
 
-        {loaded && channels.length + groups.length === 0 && (
-          <div className="px-4 py-6 text-sm text-muted">{t("outbounds.empty")}</div>
-        )}
-
-        {channels.length + groups.length > 0 && (
-          <Rows
-            items={lines}
-            keyOf={(line) => (line.kind === "channel" ? `channel-${line.channel.id}` : `group-${line.group.id}`)}
-            columns={[
-              {
-                key: "name",
-                caption: t("outbounds.name"),
-                sort: (line) => (line.kind === "channel" ? line.channel.name : line.group.name),
-                lead: true,
-                body: "font-medium text-ink",
-                cell: (line) =>
-                  line.kind === "channel" ? (
-                    <>
-                      {line.channel.name}
-                      {!line.channel.isEnabled && (
-                        <span className="ml-2 text-xs text-muted">{t("outbounds.off")}</span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {line.group.name}
-                      {!line.group.isEnabled && <span className="ml-2 text-xs text-muted">{t("balancers.off")}</span>}
-                    </>
-                  ),
-              },
-              {
-                key: "kind",
-                caption: t("outbounds.kind"),
-                sort: (line) =>
-                  line.kind === "channel"
-                    ? t(kindKey(line.channel.kind))
-                    : `${t("outbounds.group")} · ${t(strategy(line.group))}`,
-                body: "text-muted",
-                cell: (line) =>
-                  line.kind === "channel"
-                    ? t(kindKey(line.channel.kind))
-                    : `${t("outbounds.group")} · ${t(strategy(line.group))}`,
-              },
-              {
-                key: "server",
-                caption: t("outbounds.server"),
-                sort: (line) =>
-                  line.kind === "channel" && line.channel.kind !== "local"
-                    ? `${line.channel.host}:${line.channel.port}`
-                    : line.kind === "group"
-                      ? line.group.state.members.map((member) => member.name).join(", ")
-                      : null,
-                body: "text-muted",
-                cell: (line) =>
-                  line.kind === "group" ? (
-                    <Members members={line.group.state.members} />
-                  ) : line.channel.kind === "local" ? (
-                    ""
-                  ) : (
-                    `${line.channel.host}:${line.channel.port}`
-                  ),
-              },
-              {
-                key: "mark",
-                caption: t("outbounds.mark"),
-                sort: (line) => (line.kind === "channel" ? `${line.channel.mark} / ${line.channel.table}` : null),
-                body: "text-muted",
-                cell: (line) => (line.kind === "channel" ? `${line.channel.mark} / ${line.channel.table}` : ""),
-              },
-              {
-                key: "state",
-                caption: t("outbounds.state"),
-                sort: (line) => (line.kind === "channel" ? channelRank(line.channel) : groupRank(line.group)),
-                cell: (line) =>
-                  line.kind === "channel" ? (
-                    <ChannelState outbound={line.channel} t={t} language={language} />
-                  ) : (
-                    <GroupState balancer={line.group} t={t} />
-                  ),
-              },
-              {
-                key: "traffic",
-                caption: t("outbounds.traffic"),
-                sort: (line) =>
-                  line.kind === "channel" &&
-                  line.channel.state !== null &&
-                  line.channel.state.hasLink &&
-                  line.channel.kind !== "local"
-                    ? line.channel.state.rxBytes + line.channel.state.txBytes
+      {lines.length > 0 && (
+        <Rows
+          name="channel"
+          items={shown}
+          keyOf={(line) => (line.kind === "channel" ? `channel-${line.channel.id}` : `group-${line.group.id}`)}
+          tools={
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={find}
+                placeholder={t("action.search")}
+                onChange={(e) => put("find", e.target.value)}
+                className={`max-w-60 ${field}`}
+              />
+              {may && channels.length > 0 && (
+                <Link to="/routing/channels/groups/new" className={`flex h-10 items-center ${secondary}`}>
+                  {t("outbounds.group")}
+                </Link>
+              )}
+            </div>
+          }
+          columns={[
+            {
+              key: "name",
+              caption: t("outbounds.name"),
+              sort: (line) => (line.kind === "channel" ? line.channel.name : line.group.name),
+              lead: true,
+              body: "font-semibold text-ink",
+              cell: (line) =>
+                line.kind === "channel" ? (
+                  <>
+                    {may ? (
+                      <Link to={`/routing/channels/${line.channel.id}/edit`} className="hover:text-brand-ink">
+                        {line.channel.name}
+                      </Link>
+                    ) : (
+                      line.channel.name
+                    )}
+                    {!line.channel.isEnabled && <span className="ml-2 text-xs text-muted">{t("outbounds.off")}</span>}
+                  </>
+                ) : (
+                  <>
+                    {may ? (
+                      <Link to={`/routing/channels/groups/${line.group.id}/edit`} className="hover:text-brand-ink">
+                        {line.group.name}
+                      </Link>
+                    ) : (
+                      line.group.name
+                    )}
+                    {!line.group.isEnabled && <span className="ml-2 text-xs text-muted">{t("balancers.off")}</span>}
+                  </>
+                ),
+            },
+            {
+              key: "kind",
+              caption: t("outbounds.kind"),
+              sort: (line) => named(t, line),
+              cell: (line) => named(t, line),
+            },
+            {
+              key: "server",
+              caption: t("outbounds.server"),
+              sort: (line) =>
+                line.kind === "channel" && line.channel.kind !== "local"
+                  ? `${line.channel.host}:${line.channel.port}`
+                  : line.kind === "group"
+                    ? line.group.state.members.map((member) => member.name).join(", ")
                     : null,
-                body: "text-muted",
-                cell: (line) =>
-                  line.kind === "channel" &&
-                  line.channel.state !== null &&
-                  line.channel.state.hasLink &&
-                  line.channel.kind !== "local"
-                    ? `${bytes(t, line.channel.state.rxBytes)} / ${bytes(t, line.channel.state.txBytes)}`
-                    : "",
-              },
-              {
-                key: "actions",
-                caption: t("outbounds.actions"),
-                tail: true,
-                cell: (line, at) =>
-                  may &&
-                  (line.kind === "channel" ? (
-                    <RowActions
-                      title={t("outbounds.actions")}
-                      actions={[
-                        { label: t("outbounds.apply"), onPick: () => void apply.mutateAsync(line.channel.id) },
-                        { label: t("outbounds.probeNow"), onPick: () => void probe.mutateAsync(line.channel.id) },
-                        {
-                          label: line.channel.isEnabled ? t("outbounds.turnOff") : t("outbounds.turnOn"),
-                          onPick: () => void turn.mutateAsync({ id: line.channel.id, on: !line.channel.isEnabled }),
-                        },
-                        { label: t("outbounds.edit"), onPick: () => setEditing(line.channel) },
-                        ...(at > 0
-                          ? [
-                              {
-                                label: t("outbounds.up"),
-                                onPick: () => void move.mutateAsync({ id: line.channel.id, up: true }),
-                              },
-                            ]
-                          : []),
-                        ...(at < last
-                          ? [
-                              {
-                                label: t("outbounds.down"),
-                                onPick: () => void move.mutateAsync({ id: line.channel.id, up: false }),
-                              },
-                            ]
-                          : []),
-                        { label: t("outbounds.remove"), onPick: () => setRemoving(line.channel), alarming: true },
-                      ]}
-                    />
-                  ) : (
-                    <RowActions
-                      title={t("balancers.actions")}
-                      actions={[
-                        {
-                          label: line.group.isEnabled ? t("balancers.turnOff") : t("balancers.turnOn"),
-                          onPick: () => void turnGroup.mutateAsync({ id: line.group.id, on: !line.group.isEnabled }),
-                        },
-                        { label: t("balancers.edit"), onPick: () => setRegrouping(line.group) },
-                        { label: t("balancers.remove"), onPick: () => setUngrouping(line.group), alarming: true },
-                      ]}
-                    />
-                  )),
-              },
-            ]}
-          />
-        )}
-      </div>
-
-      {adding && fresh.data && (
-        <OutboundForm
-          title={t("outbounds.newTitle")}
-          start={channelDraft(fresh.data)}
-          publicKey={fresh.data.publicKey}
-          pending={add.isPending}
-          error={add.error}
-          onSave={(draft) => void add.mutateAsync(draft).then(() => setAdding(false))}
-          onClose={() => setAdding(false)}
+              cell: (line) =>
+                line.kind === "group" ? (
+                  <Members members={line.group.state.members} />
+                ) : line.channel.kind === "local" ? (
+                  ""
+                ) : (
+                  `${line.channel.host}:${line.channel.port}`
+                ),
+            },
+            {
+              key: "mark",
+              caption: t("outbounds.mark"),
+              sort: (line) => (line.kind === "channel" ? `${line.channel.mark} / ${line.channel.table}` : null),
+              cell: (line) => (line.kind === "channel" ? `${line.channel.mark} / ${line.channel.table}` : ""),
+            },
+            {
+              key: "state",
+              caption: t("outbounds.state"),
+              sort: (line) => (line.kind === "channel" ? channelRank(line.channel) : groupRank(line.group)),
+              cell: (line) =>
+                line.kind === "channel" ? (
+                  <ChannelState outbound={line.channel} t={t} language={language} />
+                ) : (
+                  <GroupState balancer={line.group} t={t} />
+                ),
+            },
+            {
+              key: "traffic",
+              caption: t("outbounds.traffic"),
+              sort: (line) => sum(carried(line)),
+              cell: (line) => told(t, carried(line)),
+            },
+            {
+              key: "actions",
+              caption: t("outbounds.actions"),
+              tail: true,
+              cell: (line, at) =>
+                may &&
+                (line.kind === "channel" ? (
+                  <RowActions
+                    title={t("outbounds.actions")}
+                    actions={[
+                      { label: t("outbounds.apply"), onPick: () => void apply.mutateAsync(line.channel.id) },
+                      { label: t("outbounds.probeNow"), onPick: () => void probe.mutateAsync(line.channel.id) },
+                      {
+                        label: line.channel.isEnabled ? t("outbounds.turnOff") : t("outbounds.turnOn"),
+                        onPick: () => void turn.mutateAsync({ id: line.channel.id, on: !line.channel.isEnabled }),
+                      },
+                      {
+                        label: t("outbounds.edit"),
+                        onPick: () => navigate(`/routing/channels/${line.channel.id}/edit`),
+                      },
+                      ...(at > 0
+                        ? [
+                            {
+                              label: t("outbounds.up"),
+                              onPick: () => void move.mutateAsync({ id: line.channel.id, up: true }),
+                            },
+                          ]
+                        : []),
+                      ...(at < last
+                        ? [
+                            {
+                              label: t("outbounds.down"),
+                              onPick: () => void move.mutateAsync({ id: line.channel.id, up: false }),
+                            },
+                          ]
+                        : []),
+                      {
+                        label: t("outbounds.remove"),
+                        onPick: () => navigate(`/routing/channels/${line.channel.id}/delete`),
+                        alarming: true,
+                      },
+                    ]}
+                  />
+                ) : (
+                  <RowActions
+                    title={t("balancers.actions")}
+                    actions={[
+                      {
+                        label: line.group.isEnabled ? t("balancers.turnOff") : t("balancers.turnOn"),
+                        onPick: () => void turnGroup.mutateAsync({ id: line.group.id, on: !line.group.isEnabled }),
+                      },
+                      {
+                        label: t("balancers.edit"),
+                        onPick: () => navigate(`/routing/channels/groups/${line.group.id}/edit`),
+                      },
+                      {
+                        label: t("balancers.remove"),
+                        onPick: () => navigate(`/routing/channels/groups/${line.group.id}/delete`),
+                        alarming: true,
+                      },
+                    ]}
+                  />
+                )),
+            },
+          ]}
         />
-      )}
-
-      {editing && (
-        <OutboundForm
-          title={t("outbounds.editTitle", { name: editing.name })}
-          start={channelDraft(editing)}
-          publicKey={editing.publicKey}
-          pending={change.isPending}
-          error={change.error}
-          onSave={(draft) => void change.mutateAsync({ id: editing.id, draft }).then(() => setEditing(null))}
-          onClose={() => setEditing(null)}
-        />
-      )}
-
-      {removing && (
-        <Modal
-          title={t("outbounds.removeTitle", { name: removing.name })}
-          onClose={() => setRemoving(null)}
-          footer={
-            <>
-              <button type="button" onClick={() => setRemoving(null)} className={secondary}>
-                {t("outbounds.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={() => void remove.mutateAsync(removing.id).then(() => setRemoving(null))}
-                disabled={remove.isPending}
-                className={danger}
-              >
-                {t("outbounds.remove")}
-              </button>
-            </>
-          }
-        >
-          <div className="text-sm text-muted">
-            {removing.kind === "local" ? t("outbounds.kindLocal") : `${removing.host}:${removing.port}`}
-          </div>
-        </Modal>
-      )}
-
-      {grouping && (
-        <BalancerForm
-          title={t("balancers.newTitle")}
-          start={freshBalancer}
-          pending={addGroup.isPending}
-          error={addGroup.error}
-          onSave={(draft) => void addGroup.mutateAsync(draft).then(() => setGrouping(false))}
-          onClose={() => setGrouping(false)}
-        />
-      )}
-
-      {regrouping && (
-        <BalancerForm
-          title={t("balancers.editTitle", { name: regrouping.name })}
-          start={groupDraft(regrouping)}
-          pending={changeGroup.isPending}
-          error={changeGroup.error}
-          onSave={(draft) =>
-            void changeGroup.mutateAsync({ id: regrouping.id, draft }).then(() => setRegrouping(null))
-          }
-          onClose={() => setRegrouping(null)}
-        />
-      )}
-
-      {ungrouping && (
-        <Modal
-          title={t("balancers.removeTitle", { name: ungrouping.name })}
-          onClose={() => setUngrouping(null)}
-          footer={
-            <>
-              <button type="button" onClick={() => setUngrouping(null)} className={secondary}>
-                {t("balancers.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={() => void removeGroup.mutateAsync(ungrouping.id).then(() => setUngrouping(null))}
-                disabled={removeGroup.isPending}
-                className={danger}
-              >
-                {t("balancers.remove")}
-              </button>
-            </>
-          }
-        >
-          <div className="text-sm text-muted">{ungrouping.members.join(", ")}</div>
-        </Modal>
       )}
     </div>
   )
@@ -365,7 +255,7 @@ function ChannelState({ outbound, t, language }: { outbound: Outbound; t: Text; 
   }
 
   if (outbound.kind !== "wg") {
-    return <span className="text-ink">{t("outbounds.ready")}</span>
+    return <span className="text-good">{t("outbounds.ready")}</span>
   }
 
   return (
@@ -386,7 +276,7 @@ function GroupState({ balancer, t }: { balancer: Balancer; t: Text }) {
     return <span className="text-alarm">{t("error.noLiveMember")}</span>
   }
 
-  return <span className="text-ink">{t("balancers.live")}</span>
+  return <span className="text-good">{t("balancers.live")}</span>
 }
 
 function Members({ members }: { members: BalancerMember[] }) {
@@ -395,13 +285,37 @@ function Members({ members }: { members: BalancerMember[] }) {
       {members.map((member) => (
         <span
           key={member.name}
-          className={member.isAlive ? "rounded bg-brand-soft px-2 py-0.5 text-brand-ink" : "rounded px-2 py-0.5 text-muted"}
+          className={member.isAlive ? "rounded bg-chip px-2 py-0.5 text-chip-ink" : "rounded px-2 py-0.5 text-muted"}
         >
           {member.name}
         </span>
       ))}
     </span>
   )
+}
+
+function carried(line: Line): OutboundState | null {
+  if (line.kind !== "channel" || line.channel.kind === "local") {
+    return null
+  }
+
+  const state = line.channel.state
+
+  return state !== null && state.hasLink ? state : null
+}
+
+function sum(state: OutboundState | null): number | null {
+  return state === null ? null : state.rxBytes + state.txBytes
+}
+
+function told(t: Text, state: OutboundState | null): string {
+  return state === null ? "" : `${bytes(t, state.rxBytes)} / ${bytes(t, state.txBytes)}`
+}
+
+function named(t: Text, line: Line): string {
+  return line.kind === "channel"
+    ? t(kindKey(line.channel.kind))
+    : `${t("outbounds.group")} · ${t(strategy(line.group))}`
 }
 
 function channelRank(outbound: Outbound): number {
@@ -454,12 +368,23 @@ function strategy(balancer: Balancer): TextKey {
   return balancer.strategy === "sticky" ? "balancers.sticky" : "balancers.priority"
 }
 
-function nextName(outbounds: Outbound[] | undefined): string {
-  const taken = new Set((outbounds ?? []).map((one) => one.name))
-  let at = 1
-  while (taken.has(`out${at}`)) {
-    at++
+function matches(line: Line, find: string): boolean {
+  const query = find.trim().toLowerCase()
+
+  if (query === "") {
+    return true
   }
 
-  return `out${at}`
+  if (line.kind === "group") {
+    return (
+      line.group.name.toLowerCase().includes(query) ||
+      line.group.members.some((member) => member.toLowerCase().includes(query))
+    )
+  }
+
+  return (
+    line.channel.name.toLowerCase().includes(query) ||
+    line.channel.host.toLowerCase().includes(query) ||
+    String(line.channel.port).includes(query)
+  )
 }

@@ -1,23 +1,11 @@
-import { useState } from "react"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { reason } from "@/api/auth"
-import { useOutbounds } from "@/api/outbounds"
-import {
-  draftOf,
-  freshRule,
-  useAddRule,
-  useChangeRule,
-  useMoveRule,
-  useRemoveRule,
-  useRules,
-  useSwitchRule,
-} from "@/api/rules"
+import { useMoveRule, useRules, useSwitchRule } from "@/api/rules"
 import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
-import { Modal } from "@/components/Modal"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { RuleForm } from "@/components/RuleForm"
-import { card, danger, primary, secondary } from "@/components/styles"
+import { card, field } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -25,185 +13,150 @@ import { useAppSelector } from "@/store/hooks"
 
 export function Rules() {
   const t = useText()
+  const navigate = useNavigate()
   const user = useAppSelector((s) => s.auth.user)
+  const [params, setParams] = useSearchParams()
   const rules = useRules()
-  const outbounds = useOutbounds()
-  const [adding, setAdding] = useState(false)
-  const [editing, setEditing] = useState<Rule | null>(null)
-  const [removing, setRemoving] = useState<Rule | null>(null)
-  const add = useAddRule()
-  const change = useChangeRule()
-  const remove = useRemoveRule()
   const move = useMoveRule()
   const turn = useSwitchRule()
   const may = holds(user, scopes.manageRouting)
-  const last = (rules.data?.length ?? 0) - 1
+  const find = params.get("find") ?? ""
+  const all = rules.data ?? []
+  const shown = all.filter((one) => matches(one, find))
+  const last = all.length - 1
+
+  function put(key: string, value: string) {
+    const kept = new URLSearchParams(params)
+
+    if (value === "") {
+      kept.delete(key)
+    } else {
+      kept.set(key, value)
+    }
+
+    setParams(kept, { replace: true })
+  }
 
   return (
-    <div>
-      <div className={`mt-4 ${card}`}>
-        {may && (
-          <div className="flex justify-end gap-2 border-b border-line px-4 py-3">
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              disabled={(outbounds.data?.length ?? 0) === 0}
-              className={primary}
-            >
-              {t("rules.add")}
-            </button>
-          </div>
-        )}
+    <div className={`mt-4 ${card}`}>
+      {all.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("rules.empty")}</div>}
 
-        {rules.data?.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("rules.empty")}</div>}
-
-        {rules.data && rules.data.length > 0 && (
-          <Rows
-            items={rules.data}
-            keyOf={(rule) => rule.id}
-            columns={[
-              {
-                key: "name",
-                caption: t("rules.name"),
-                sort: (rule) => rule.name,
-                lead: true,
-                body: "font-medium text-ink",
-                cell: (rule) => (
-                  <>
-                    {rule.name}
-                    {!rule.isEnabled && <span className="ml-2 text-xs text-muted">{t("rules.off")}</span>}
-                  </>
-                ),
-              },
-              {
-                key: "action",
-                caption: t("rules.action"),
-                sort: (rule) => (rule.action === "block" ? t("rules.actionBlock") : rule.outbound),
-                body: "text-muted",
-                cell: (rule) => (rule.action === "block" ? t("rules.actionBlock") : rule.outbound),
-              },
-              {
-                key: "targets",
-                caption: t("rules.targets"),
-                sort: (rule) => (rule.targets.length > 0 ? rule.targets.join(", ") : t("rules.anything")),
-                body: "max-w-72 text-muted",
-                cell: (rule) => (
-                  <span className="block truncate" title={rule.targets.join(", ")}>
-                    {rule.targets.length > 0 ? rule.targets.join(", ") : t("rules.anything")}
-                  </span>
-                ),
-              },
-              {
-                key: "sources",
-                caption: t("rules.sources"),
-                sort: (rule) => (rule.sources.length > 0 ? rule.sources.join(", ") : t("rules.anyone")),
-                body: "max-w-48 text-muted",
-                cell: (rule) => (
-                  <span className="block truncate" title={rule.sources.join(", ")}>
-                    {rule.sources.length > 0 ? rule.sources.join(", ") : t("rules.anyone")}
-                  </span>
-                ),
-              },
-              {
-                key: "traffic",
-                caption: t("rules.traffic"),
-                sort: (rule) => traffic(rule, t),
-                body: "text-muted",
-                cell: (rule) => traffic(rule, t),
-              },
-              {
-                key: "ranges",
-                caption: t("rules.ranges"),
-                sort: (rule) => `${rule.state.ranges} / ${rule.state.names}`,
-                body: "text-muted",
-                cell: (rule) => `${rule.state.ranges} / ${rule.state.names}`,
-              },
-              {
-                key: "state",
-                caption: t("rules.state"),
-                sort: (rule) => ruleRank(rule),
-                cell: (rule) => <State rule={rule} t={t} />,
-              },
-              {
-                key: "actions",
-                caption: t("rules.actions"),
-                tail: true,
-                cell: (rule, at) =>
-                  may && (
-                    <RowActions
-                      title={t("rules.actions")}
-                      actions={[
-                        {
-                          label: rule.isEnabled ? t("rules.turnOff") : t("rules.turnOn"),
-                          onPick: () => void turn.mutateAsync({ id: rule.id, on: !rule.isEnabled }),
-                        },
-                        { label: t("rules.edit"), onPick: () => setEditing(rule) },
-                        ...(at > 0
-                          ? [{ label: t("rules.up"), onPick: () => void move.mutateAsync({ id: rule.id, up: true }) }]
-                          : []),
-                        ...(at < last
-                          ? [{ label: t("rules.down"), onPick: () => void move.mutateAsync({ id: rule.id, up: false }) }]
-                          : []),
-                        { label: t("rules.remove"), onPick: () => setRemoving(rule), alarming: true },
-                      ]}
-                    />
-                  ),
-              },
-            ]}
-          />
-        )}
-      </div>
-
-      {adding && (
-        <RuleForm
-          title={t("rules.newTitle")}
-          start={{ ...freshRule, outbound: outbounds.data?.[0]?.name ?? "" }}
-          pending={add.isPending}
-          error={add.error}
-          onSave={(draft) => void add.mutateAsync(draft).then(() => setAdding(false))}
-          onClose={() => setAdding(false)}
-        />
-      )}
-
-      {editing && (
-        <RuleForm
-          title={t("rules.editTitle", { name: editing.name })}
-          start={draftOf(editing)}
-          pending={change.isPending}
-          error={change.error}
-          onSave={(draft) => void change.mutateAsync({ id: editing.id, draft }).then(() => setEditing(null))}
-          onClose={() => setEditing(null)}
-        />
-      )}
-
-      {removing && (
-        <Modal
-          title={t("rules.removeTitle", { name: removing.name })}
-          onClose={() => setRemoving(null)}
-          footer={
-            <>
-              <button type="button" onClick={() => setRemoving(null)} className={secondary}>
-                {t("rules.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={() => void remove.mutateAsync(removing.id).then(() => setRemoving(null))}
-                disabled={remove.isPending}
-                className={danger}
-              >
-                {t("rules.remove")}
-              </button>
-            </>
+      {all.length > 0 && (
+        <Rows
+          name="rule"
+          items={shown}
+          keyOf={(one) => one.id}
+          tools={
+            <input
+              value={find}
+              placeholder={t("action.search")}
+              onChange={(e) => put("find", e.target.value)}
+              className={`max-w-80 ${field}`}
+            />
           }
-        >
-          <div className="text-sm text-muted">{removing.targets.join(", ")}</div>
-        </Modal>
+          columns={[
+            {
+              key: "name",
+              caption: t("rules.name"),
+              sort: (one) => one.name,
+              lead: true,
+              body: "font-semibold text-ink",
+              cell: (one) => (
+                <>
+                  {may ? (
+                    <Link to={`/routing/rules/${one.id}/edit`} className="hover:text-brand-ink">
+                      {one.name}
+                    </Link>
+                  ) : (
+                    one.name
+                  )}
+                  {!one.isEnabled && <span className="ml-2 text-xs text-muted">{t("rules.off")}</span>}
+                </>
+              ),
+            },
+            {
+              key: "action",
+              caption: t("rules.action"),
+              sort: (one) => (one.action === "block" ? t("rules.actionBlock") : one.outbound),
+              cell: (one) => (one.action === "block" ? t("rules.actionBlock") : one.outbound),
+            },
+            {
+              key: "targets",
+              caption: t("rules.targets"),
+              sort: (one) => (one.targets.length > 0 ? one.targets.join(", ") : t("rules.anything")),
+              body: "max-w-72",
+              cell: (one) => (
+                <span className="block truncate" title={one.targets.join(", ")}>
+                  {one.targets.length > 0 ? one.targets.join(", ") : t("rules.anything")}
+                </span>
+              ),
+            },
+            {
+              key: "sources",
+              caption: t("rules.sources"),
+              sort: (one) => (one.sources.length > 0 ? one.sources.join(", ") : t("rules.anyone")),
+              body: "max-w-48",
+              cell: (one) => (
+                <span className="block truncate" title={one.sources.join(", ")}>
+                  {one.sources.length > 0 ? one.sources.join(", ") : t("rules.anyone")}
+                </span>
+              ),
+            },
+            {
+              key: "traffic",
+              caption: t("rules.traffic"),
+              sort: (one) => traffic(one, t),
+              cell: (one) => traffic(one, t),
+            },
+            {
+              key: "ranges",
+              caption: t("rules.ranges"),
+              sort: (one) => `${one.state.ranges} / ${one.state.names}`,
+              cell: (one) => `${one.state.ranges} / ${one.state.names}`,
+            },
+            {
+              key: "state",
+              caption: t("rules.state"),
+              sort: (one) => ranked(one),
+              cell: (one) => <State rule={one} t={t} />,
+            },
+            {
+              key: "actions",
+              caption: t("rules.actions"),
+              tail: true,
+              cell: (one, at) =>
+                may && (
+                  <RowActions
+                    title={t("rules.actions")}
+                    actions={[
+                      {
+                        label: one.isEnabled ? t("rules.turnOff") : t("rules.turnOn"),
+                        onPick: () => void turn.mutateAsync({ id: one.id, on: !one.isEnabled }),
+                      },
+                      { label: t("rules.edit"), onPick: () => navigate(`/routing/rules/${one.id}/edit`) },
+                      ...(at > 0
+                        ? [{ label: t("rules.up"), onPick: () => void move.mutateAsync({ id: one.id, up: true }) }]
+                        : []),
+                      ...(at < last
+                        ? [{ label: t("rules.down"), onPick: () => void move.mutateAsync({ id: one.id, up: false }) }]
+                        : []),
+                      {
+                        label: t("rules.remove"),
+                        onPick: () => navigate(`/routing/rules/${one.id}/delete`),
+                        alarming: true,
+                      },
+                    ]}
+                  />
+                ),
+            },
+          ]}
+        />
       )}
     </div>
   )
 }
 
-function ruleRank(rule: Rule): number {
+function ranked(rule: Rule): number {
   if (rule.state.fault.length > 0) {
     return 1
   }
@@ -224,15 +177,23 @@ function State({ rule, t }: { rule: Rule; t: Text }) {
     return <span className="text-muted">{t("rules.off")}</span>
   }
 
-  return (
-    <span className="text-ink">
-      {t("rules.live")}
-    </span>
-  )
+  return <span className="text-good">{t("rules.live")}</span>
 }
 
 function traffic(rule: Rule, t: Text): string {
   const protocol = rule.protocol === "any" ? t("rules.protocolAny") : rule.protocol.toUpperCase()
 
   return rule.ports.length > 0 ? `${protocol} ${rule.ports.join(", ")}` : protocol
+}
+
+function matches(one: Rule, find: string): boolean {
+  const query = find.trim().toLowerCase()
+
+  return (
+    query === "" ||
+    one.name.toLowerCase().includes(query) ||
+    one.outbound.toLowerCase().includes(query) ||
+    one.targets.some((target) => target.toLowerCase().includes(query)) ||
+    one.sources.some((source) => source.toLowerCase().includes(query))
+  )
 }

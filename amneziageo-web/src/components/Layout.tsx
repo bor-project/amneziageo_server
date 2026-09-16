@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react"
-import { NavLink, Outlet, useNavigate } from "react-router-dom"
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom"
 import { signOut } from "@/api/auth"
 import { useHealth } from "@/api/health"
 import { usePanel } from "@/api/panel"
 import { scopes } from "@/api/scopes"
 import { queryClient } from "@/api/queryClient"
+import { Crumbs, CrumbsHolder } from "@/components/Crumbs"
 import { LanguagePicker } from "@/components/LanguagePicker"
-import { PasswordDialog } from "@/components/PasswordDialog"
 import { RestartButton } from "@/components/RestartButton"
 import { ThemeToggle } from "@/components/ThemeToggle"
-import { card } from "@/components/styles"
+import { menu, menuItem } from "@/components/styles"
 import { isLanguageChoice, useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { useAbove, wideQuery } from "@/theme/width"
@@ -24,11 +24,11 @@ const links: { to: string; label: TextKey; scope: string }[] = [
   { to: "/settings", label: "nav.settings", scope: scopes.manageAccess },
 ]
 
-const item = "rounded px-3 py-2 text-sm"
-const active = "bg-brand-soft font-medium text-brand-ink"
-const idle = "text-muted hover:bg-hover"
-const column = "flex w-56 shrink-0 flex-col border-r border-line bg-surface"
-const drawer = "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-line bg-surface shadow-xl"
+const item = "rounded-lg px-2.5 py-2 text-sm"
+const active = "bg-active font-medium text-ink"
+const idle = "text-muted hover:bg-nav hover:text-ink"
+const column = "flex w-54 shrink-0 flex-col gap-6 border-r border-line bg-chrome px-3 py-5"
+const drawer = "fixed inset-y-0 left-0 z-50 flex w-64 flex-col gap-6 border-r border-line bg-chrome px-3 py-5 shadow-xl"
 
 export function Layout() {
   const t = useText()
@@ -62,60 +62,71 @@ export function Layout() {
   }, [dispatch, wide])
 
   return (
-    <div className="flex h-full bg-canvas text-ink">
-      {open && !wide && (
-        <div className="fixed inset-0 z-40 bg-black/50" onMouseDown={() => dispatch(sidebarSet(false))} />
-      )}
+    <CrumbsHolder>
+      <div className="flex h-full bg-canvas text-ink">
+        {open && !wide && (
+          <div className="fixed inset-0 z-40 bg-black/50" onMouseDown={() => dispatch(sidebarSet(false))} />
+        )}
 
-      {open && (
-        <aside className={wide ? column : drawer}>
-          <div className="flex h-13 items-center px-4">
-            <span className="text-lg font-semibold text-brand-ink">{t("app.name")}</span>
-          </div>
+        {open && (
+          <aside className={wide ? column : drawer}>
+            <div className="flex items-center gap-2 px-1">
+              <span className="size-5.5 rounded-md bg-brand" aria-hidden />
+              <span className="text-sm font-semibold tracking-[-0.01em] text-ink">{t("app.name")}</span>
+            </div>
 
-          <nav className="flex flex-1 flex-col gap-1 px-2 pt-2">
-            {links
-              .filter((l) => holds(user, l.scope))
-              .map((l) => (
-                <NavLink
-                  key={l.to}
-                  to={l.to}
-                  end={l.to === "/"}
-                  onClick={() => !wide && dispatch(sidebarSet(false))}
-                  className={({ isActive }) => `${item} ${isActive ? active : idle}`}
+            <nav className="flex flex-1 flex-col gap-1">
+              {links
+                .filter((l) => holds(user, l.scope))
+                .map((l) => (
+                  <NavLink
+                    key={l.to}
+                    to={l.to}
+                    end={l.to === "/"}
+                    onClick={() => !wide && dispatch(sidebarSet(false))}
+                    className={({ isActive }) => `${item} ${isActive ? active : idle}`}
+                  >
+                    {t(l.label)}
+                  </NavLink>
+                ))}
+            </nav>
+
+            <div className="border-t border-line px-1 pt-3 text-xs text-faint">{state(t, health)}</div>
+          </aside>
+        )}
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex min-h-14 items-center justify-between gap-3 border-b border-line bg-chrome px-5 py-2">
+            <div className="flex min-w-0 items-center gap-2">
+              {!wide && (
+                <button
+                  type="button"
+                  title={t("layout.nav")}
+                  aria-label={t("layout.nav")}
+                  onClick={() => dispatch(sidebarToggled())}
+                  className="rounded-lg p-2 text-muted hover:bg-active hover:text-ink"
                 >
-                  {t(l.label)}
-                </NavLink>
-              ))}
-          </nav>
+                  <Bars />
+                </button>
+              )}
+              <Crumbs />
+            </div>
 
-          <div className="border-t border-line px-4 pt-2 pb-4 text-xs text-muted">{state(t, health)}</div>
-        </aside>
-      )}
+            <div className="flex shrink-0 items-center gap-2">
+              <RestartButton />
+              <ThemeToggle />
+              <UserMenu />
+            </div>
+          </header>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-13 items-center gap-2 border-b border-line bg-surface px-3">
-          <button
-            type="button"
-            title={t("layout.nav")}
-            aria-label={t("layout.nav")}
-            onClick={() => dispatch(sidebarToggled())}
-            className="rounded p-2 text-muted hover:bg-hover hover:text-brand-ink"
-          >
-            <Bars />
-          </button>
-          <div className="ml-auto flex items-center gap-2">
-            <RestartButton />
-            <ThemeToggle />
-            <UserMenu />
-          </div>
-        </header>
-
-        <main className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
-          <Outlet />
-        </main>
+          <main className="min-h-0 flex-1 overflow-auto p-5">
+            <div className="mx-auto max-w-[1240px]">
+              <Outlet />
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </CrumbsHolder>
   )
 }
 
@@ -125,7 +136,6 @@ function UserMenu() {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [changing, setChanging] = useState(false)
 
   async function leave() {
     setOpen(false)
@@ -142,9 +152,9 @@ function UserMenu() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 rounded px-1.5 py-1 text-sm text-ink hover:bg-hover"
+        className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-[13px] text-ink-soft hover:bg-active"
       >
-        <span className="flex size-7 items-center justify-center rounded-full bg-brand-soft text-xs font-medium text-brand-ink">
+        <span className="flex size-7 items-center justify-center rounded-full bg-chip text-xs font-semibold text-chip-ink">
           {name.slice(0, 1).toUpperCase()}
         </span>
         <span className="hidden max-w-40 truncate sm:block">{name}</span>
@@ -154,40 +164,27 @@ function UserMenu() {
       {open && (
         <>
           <div className="fixed inset-0 z-30" onMouseDown={() => setOpen(false)} />
-          <div className={`absolute right-0 z-40 mt-1 w-56 py-1 shadow-lg ${card}`}>
-            <div className="border-b border-line px-3 pt-1 pb-2">
-              <div className="truncate text-sm text-ink">{name}</div>
-              <div className="truncate text-xs text-muted">{user === null ? "" : user.role}</div>
+          <div className={`absolute right-0 z-40 mt-1 w-56 ${menu}`}>
+            <div className="border-b border-line-menu px-2.5 pt-1 pb-2">
+              <div className="truncate text-[13px] text-ink">{name}</div>
+              <div className="truncate text-xs text-faint">{user === null ? "" : user.role}</div>
             </div>
 
-            <div className="border-b border-line px-3 py-2">
+            <div className="border-b border-line-menu px-2.5 py-2">
               <LanguagePicker className="w-full" />
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false)
-                setChanging(true)
-              }}
-              className="w-full px-3 py-2 text-left text-sm text-muted hover:bg-hover hover:text-brand-ink"
-            >
+            <Link to="/account/password" onClick={() => setOpen(false)} className={`block w-full ${menuItem}`}>
               {t("password.title")}
-            </button>
+            </Link>
 
-            <button
-              type="button"
-              onClick={() => void leave()}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted hover:bg-hover hover:text-brand-ink"
-            >
+            <button type="button" onClick={() => void leave()} className={`flex w-full items-center gap-2 ${menuItem}`}>
               <Door />
               {t("layout.signOut")}
             </button>
           </div>
         </>
       )}
-
-      {changing && <PasswordDialog onClose={() => setChanging(false)} />}
     </div>
   )
 }
@@ -212,7 +209,7 @@ function Chevron({ open }: { open: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      className={`size-4 text-muted ${open ? "-rotate-90" : "rotate-90"}`}
+      className={`size-4 text-faint ${open ? "-rotate-90" : "rotate-90"}`}
       fill="none"
       stroke="currentColor"
       strokeWidth="1.6"

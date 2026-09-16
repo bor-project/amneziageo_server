@@ -3,11 +3,12 @@ import { useJournal, useVersions } from "@/api/diagnostics"
 import type { JournalEntry } from "@/api/diagnostics"
 import { useHealth } from "@/api/health"
 import { useOverview } from "@/api/overview"
-import { SortBar, SortCaption } from "@/components/Rows"
+import { SortCaption } from "@/components/Rows"
+import { SortControl } from "@/components/SortControl"
 import { ariaSort, useOrder, useSorted } from "@/components/sort"
 import { card, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
-import { roomyQuery, useAbove } from "@/theme/width"
+import { useAbove, wideQuery } from "@/theme/width"
 
 const loud = new Set(["Warning", "Error", "Critical"])
 const levels = ["Trace", "Debug", "Information", "Warning", "Error", "Critical"]
@@ -19,10 +20,10 @@ export function Diagnostics() {
   const overview = useOverview()
   const versions = useVersions()
   const journal = useJournal()
-  const roomy = useAbove(roomyQuery)
+  const roomy = useAbove(wideQuery)
   const tunnel = overview.data?.tunnel
   const known = versions.data
-  const { order, toggle } = useOrder()
+  const { order, toggle, choose, direct } = useOrder()
 
   const heads = [
     { key: "time", caption: t("diagnostics.time"), pad: "px-4", sort: (entry: JournalEntry) => Date.parse(entry.time) },
@@ -56,12 +57,12 @@ export function Diagnostics() {
   return (
     <div className="mt-4 flex flex-col gap-4">
       <div className={`px-4 py-3 ${card}`}>
-        <div className="text-sm font-medium text-ink">{t("diagnostics.versions")}</div>
+        <div className="text-sm font-semibold text-ink-soft">{t("diagnostics.versions")}</div>
         <div className="mt-2 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-sm">
           {rows.map(([caption, value]) => (
             <Fragment key={caption}>
-              <span className="text-muted">{caption}</span>
-              <span className="text-ink">{value}</span>
+              <span className="text-faint">{caption}</span>
+              <span className="text-body">{value}</span>
             </Fragment>
           ))}
         </div>
@@ -69,7 +70,7 @@ export function Diagnostics() {
 
       <div className={card}>
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <span className="text-sm font-medium text-ink">{t("diagnostics.log")}</span>
+          <span className="text-sm font-semibold text-ink-soft">{t("diagnostics.log")}</span>
           <button type="button" onClick={() => void journal.refetch()} className={secondary}>
             {t("diagnostics.refresh")}
           </button>
@@ -81,7 +82,7 @@ export function Diagnostics() {
           <div className="max-h-[60vh] overflow-auto">
             {roomy ? (
               <table className="w-full text-left text-xs">
-                <thead className="text-muted">
+                <thead className="text-faint">
                   <tr>
                     {heads.map((head) => (
                       <th
@@ -102,7 +103,9 @@ export function Diagnostics() {
               </table>
             ) : (
               <>
-                <SortBar options={heads} order={order} toggle={toggle} />
+                <div className="border-b border-line px-4 py-3">
+                  <SortControl options={heads} order={order} choose={choose} direct={direct} fill />
+                </div>
                 {entries.map((place) => (
                   <Note key={place.at} entry={place.item} language={language} />
                 ))}
@@ -120,13 +123,13 @@ function Note({ entry, language }: { entry: JournalEntry; language: string }) {
   const source = entry.category.split(".").at(-1) ?? entry.category
 
   return (
-    <div className="border-t border-line px-4 py-2 text-xs">
+    <div className="border-t border-line-soft px-4 py-2 text-xs">
       <div className="flex flex-wrap items-center gap-2 text-muted">
         <span>{new Date(entry.time).toLocaleString(language)}</span>
         <span className={tone}>{entry.level}</span>
         <span title={entry.category}>{source}</span>
       </div>
-      <div className="mt-1 break-all text-ink">
+      <div className="mt-1 break-all text-body">
         {entry.message}
         {entry.fault.length > 0 && <div className="text-alarm">{entry.fault}</div>}
       </div>
@@ -139,13 +142,13 @@ function Record({ entry, language }: { entry: JournalEntry; language: string }) 
   const source = entry.category.split(".").at(-1) ?? entry.category
 
   return (
-    <tr className="border-t border-line align-top">
+    <tr className="border-t border-line-soft align-top hover:bg-hover">
       <td className="px-4 py-1.5 whitespace-nowrap text-muted">{new Date(entry.time).toLocaleString(language)}</td>
       <td className={`px-2 py-1.5 whitespace-nowrap ${tone}`}>{entry.level}</td>
       <td className="px-2 py-1.5 whitespace-nowrap text-muted" title={entry.category}>
         {source}
       </td>
-      <td className="px-4 py-1.5 break-all text-ink">
+      <td className="px-4 py-1.5 break-all text-body">
         {entry.message}
         {entry.fault.length > 0 && <div className="text-alarm">{entry.fault}</div>}
       </td>

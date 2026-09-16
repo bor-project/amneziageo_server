@@ -7,15 +7,13 @@ import type { Client, ClientDraft, Forward, Inbound } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useTemplates } from "@/api/templates"
-import { Modal } from "@/components/Modal"
-import { Flag, Help, Line, Multi, Pick, Regenerate } from "@/components/fields"
-import { field, fieldBox, label, note, primary, quiet, secondary } from "@/components/styles"
+import { Flag, Help, Line, Multi, Part, Pick, Regenerate } from "@/components/fields"
+import { card, field, fieldBox, label, note, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { randomId, randomKey } from "@/keys"
 
 export function ClientForm({
-  title,
   start,
   self,
   pending,
@@ -23,7 +21,6 @@ export function ClientForm({
   onSave,
   onClose,
 }: {
-  title: string
   start: ClientDraft
   self?: number
   pending: boolean
@@ -89,27 +86,8 @@ export function ClientForm({
   }
 
   return (
-    <Modal
-      title={title}
-      wide
-      onClose={onClose}
-      footer={
-        <>
-          <button type="button" onClick={onClose} className={secondary}>
-            {t("clients.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave({ ...draft, name: draft.name.trim(), address: addresses(), dailyLimit: allowed ?? 0 })}
-            disabled={!ready}
-            className={primary}
-          >
-            {pending ? t("clients.busy") : t("clients.save")}
-          </button>
-        </>
-      }
-    >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="mt-4 flex flex-col gap-4">
+      <Part title={t("clients.partMain")}>
         <Pick
           id="client-interface"
           caption={t("clients.endpointName")}
@@ -181,6 +159,10 @@ export function ClientForm({
           ))}
         </Pick>
 
+        <Line id="client-note" caption={t("clients.note")} value={draft.note} onChange={(note) => put({ note })} />
+      </Part>
+
+      <Part title={t("clients.partAccess")}>
         <Line
           id="client-limit"
           caption={t("clients.limit")}
@@ -197,25 +179,7 @@ export function ClientForm({
           onChange={(subscriptionId) => put({ subscriptionId: subscriptionId.trim() })}
           fault={misnamed ? t("error.badClientSubscription") : ""}
           after={<Regenerate title={t("clients.generate")} onClick={() => put({ subscriptionId: randomId() })} />}
-          wide
         />
-
-        <Line id="client-note" caption={t("clients.note")} value={draft.note} onChange={(note) => put({ note })} wide />
-
-        <div className="sm:col-span-2 flex flex-wrap gap-6">
-          <Flag
-            id="client-enabled"
-            caption={t("clients.enabled")}
-            value={draft.isEnabled}
-            onChange={(isEnabled) => put({ isEnabled })}
-          />
-          <Flag
-            id="client-devices"
-            caption={t("clients.multiDevice")}
-            value={draft.multiDevice}
-            onChange={(multiDevice) => put({ multiDevice })}
-          />
-        </div>
 
         <Pick
           id="client-inbound"
@@ -234,86 +198,109 @@ export function ClientForm({
           <option value="network">{t("clients.inboundNetwork")}</option>
         </Pick>
 
-        <div className="sm:col-span-2">
-          <details open={draft.routes.length > 0} className="rounded-md border border-line px-3 py-2">
-            <summary className="cursor-pointer select-none text-xs font-medium tracking-wide text-muted uppercase">
-              {t("clients.routes")}
-            </summary>
+        <div className="flex flex-wrap items-center gap-6 sm:col-span-2">
+          <Flag
+            id="client-enabled"
+            caption={t("clients.enabled")}
+            value={draft.isEnabled}
+            onChange={(isEnabled) => put({ isEnabled })}
+          />
+          <Flag
+            id="client-devices"
+            caption={t("clients.multiDevice")}
+            value={draft.multiDevice}
+            onChange={(multiDevice) => put({ multiDevice })}
+          />
+        </div>
+      </Part>
 
-            <div className="mt-3">
-              <Multi
-                id="client-routes"
-                value={draft.routes}
-                offers={[]}
-                placeholder={t("clients.noRoutes")}
-                onChange={(routes) => put({ routes })}
-              />
-            </div>
-          </details>
+      <Part title={t("clients.partNetwork")}>
+        <div className="sm:col-span-2">
+          <label className={label} htmlFor="client-routes">
+            {t("clients.routes")}
+          </label>
+          <div className="mt-1">
+            <Multi
+              id="client-routes"
+              value={draft.routes}
+              offers={[]}
+              placeholder={t("clients.noRoutes")}
+              onChange={(routes) => put({ routes })}
+            />
+          </div>
           <div className={note}>{t("clients.routesNote")}</div>
         </div>
 
         <div className="sm:col-span-2">
-          <details open={draft.forwards.length > 0} className="rounded-md border border-line px-3 py-2">
-            <summary className="cursor-pointer select-none text-xs font-medium tracking-wide text-muted uppercase">
-              {t("clients.forwards")}
-            </summary>
-
-            <div className="mt-3 flex flex-col gap-2">
-              {draft.forwards.map((one, at) => (
-                <div key={at} className="flex items-center gap-2">
-                  <select
-                    value={one.protocol}
-                    onChange={(e) => carry(at, { protocol: e.target.value as Forward["protocol"] })}
-                    className={`w-24 shrink-0 ${fieldBox}`}
-                  >
-                    <option value="tcp">tcp</option>
-                    <option value="udp">udp</option>
-                  </select>
-                  <input
-                    inputMode="numeric"
-                    value={one.from === 0 ? "" : String(one.from)}
-                    placeholder={t("clients.forwardFrom")}
-                    onChange={(e) => carry(at, { from: portOf(e.target.value) })}
-                    className={`w-28 shrink-0 ${fieldBox}`}
-                  />
-                  <span className="text-sm text-muted">{t("clients.forwardTo")}</span>
-                  <input
-                    inputMode="numeric"
-                    value={one.to === 0 ? "" : String(one.to)}
-                    placeholder={t("clients.forwardPort")}
-                    onChange={(e) => carry(at, { to: portOf(e.target.value) })}
-                    className={`w-28 shrink-0 ${fieldBox}`}
-                  />
-                  <button
-                    type="button"
-                    className={quiet}
-                    title={t("clients.forwardRemove")}
-                    onClick={() => put({ forwards: draft.forwards.filter((_, index) => index !== at) })}
-                  >
-                    &times;
-                  </button>
-                </div>
-              ))}
-              <div>
+          <div className={label}>{t("clients.forwards")}</div>
+          <div className="mt-1 flex flex-col gap-2">
+            {draft.forwards.map((one, at) => (
+              <div key={at} className="flex items-center gap-2">
+                <select
+                  value={one.protocol}
+                  onChange={(e) => carry(at, { protocol: e.target.value as Forward["protocol"] })}
+                  className={`w-24 shrink-0 ${fieldBox}`}
+                >
+                  <option value="tcp">tcp</option>
+                  <option value="udp">udp</option>
+                </select>
+                <input
+                  inputMode="numeric"
+                  value={one.from === 0 ? "" : String(one.from)}
+                  placeholder={t("clients.forwardFrom")}
+                  onChange={(e) => carry(at, { from: portOf(e.target.value) })}
+                  className={`w-28 shrink-0 ${fieldBox}`}
+                />
+                <span className="text-sm text-muted">{t("clients.forwardTo")}</span>
+                <input
+                  inputMode="numeric"
+                  value={one.to === 0 ? "" : String(one.to)}
+                  placeholder={t("clients.forwardPort")}
+                  onChange={(e) => carry(at, { to: portOf(e.target.value) })}
+                  className={`w-28 shrink-0 ${fieldBox}`}
+                />
                 <button
                   type="button"
-                  className={secondary}
-                  onClick={() => put({ forwards: [...draft.forwards, { protocol: "tcp", from: 0, to: 0 }] })}
+                  className={quiet}
+                  title={t("clients.forwardRemove")}
+                  onClick={() => put({ forwards: draft.forwards.filter((_, index) => index !== at) })}
                 >
-                  {t("clients.forwardAdd")}
+                  &times;
                 </button>
               </div>
+            ))}
+            <div>
+              <button
+                type="button"
+                className={secondary}
+                onClick={() => put({ forwards: [...draft.forwards, { protocol: "tcp", from: 0, to: 0 }] })}
+              >
+                {t("clients.forwardAdd")}
+              </button>
             </div>
-          </details>
+          </div>
           <div className={note}>{t("clients.forwardsNote")}</div>
         </div>
-      </div>
+      </Part>
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
-    </Modal>
+
+      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        <button type="button" onClick={onClose} className={secondary}>
+          {t("clients.cancel")}
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave({ ...draft, name: draft.name.trim(), address: addresses(), dailyLimit: allowed ?? 0 })}
+          disabled={!ready}
+          className={primary}
+        >
+          {pending ? t("clients.busy") : t("clients.save")}
+        </button>
+      </div>
+    </div>
   )
 }
 

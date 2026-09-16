@@ -3,7 +3,7 @@ import { complaint } from "@/api/auth"
 import { useTemplateDefaults, useTemplatePreview } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
 import { EntryList } from "@/components/EntryList"
-import { Line } from "@/components/fields"
+import { Line, Part } from "@/components/fields"
 import { card, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
@@ -46,8 +46,8 @@ export function TemplateForm({
   }
 
   return (
-    <div className={`mt-4 ${card}`}>
-      <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
+    <div className="mt-4 flex flex-col gap-4">
+      <Part title={t("templates.partMain")}>
         <Line
           id="template-name"
           caption={t("templates.name")}
@@ -55,7 +55,9 @@ export function TemplateForm({
           onChange={(name) => put({ name })}
           wide
         />
+      </Part>
 
+      <Part title={t("templates.partRouting")}>
         <div className="sm:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <label className={label} htmlFor="template-entries">
@@ -84,13 +86,17 @@ export function TemplateForm({
         </div>
 
         {draft.entries.length > 0 && found !== undefined && found.missed.length > 0 && (
-          <div className="text-xs text-warn sm:col-span-2">{t("templates.missed", { list: found.missed.join(", ") })}</div>
+          <div className="text-xs text-warn sm:col-span-2">
+            {t("templates.missed", { list: found.missed.join(", ") })}
+          </div>
         )}
 
         {preview.error !== null && (
           <div className="text-xs text-alarm sm:col-span-2">{t(complaint(preview.error))}</div>
         )}
+      </Part>
 
+      <Part title={t("templates.partNetwork")}>
         <Line
           id="template-dns"
           caption={t("templates.dns")}
@@ -115,13 +121,11 @@ export function TemplateForm({
           placeholder={defaults === undefined ? "" : String(defaults.keepalive)}
           onChange={(keepalive) => put({ keepalive })}
         />
+      </Part>
 
-        {error !== null && error !== undefined && (
-          <div className="text-sm text-alarm sm:col-span-2">{t(complaint(error))}</div>
-        )}
-      </div>
+      {error !== null && error !== undefined && <div className="text-sm text-alarm">{t(complaint(error))}</div>}
 
-      <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
+      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
         <button type="button" onClick={onClose} className={secondary}>
           {t("templates.cancel")}
         </button>

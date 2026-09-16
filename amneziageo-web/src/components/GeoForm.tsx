@@ -1,20 +1,18 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
 import type { GeoKind, GeoSourceDraft } from "@/api/geo"
-import { Modal } from "@/components/Modal"
-import { field, label, primary, secondary } from "@/components/styles"
+import { Flag, Line, Part } from "@/components/fields"
+import { card, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 
 export function GeoForm({
-  title,
   start,
   pending,
   error,
   onSave,
   onClose,
 }: {
-  title: string
   start: GeoSourceDraft
   pending: boolean
   error: unknown
@@ -29,78 +27,54 @@ export function GeoForm({
   }
 
   return (
-    <Modal
-      title={title}
-      onClose={onClose}
-      footer={
-        <>
-          <button type="button" onClick={onClose} className={secondary}>
-            {t("geo.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave(draft)}
-            disabled={pending || draft.name.length === 0 || draft.url.length === 0}
-            className={primary}
+    <div className="mt-4 flex flex-col gap-4">
+      <Part title={t("geo.partMain")}>
+        <Line id="geo-name" caption={t("geo.name")} value={draft.name} onChange={(name) => put({ name })} />
+
+        <div>
+          <label className={label} htmlFor="geo-kind">
+            {t("geo.kind")}
+          </label>
+          <select
+            id="geo-kind"
+            value={draft.kind}
+            onChange={(e) => put({ kind: e.target.value as GeoKind })}
+            className={`mt-1 ${field}`}
           >
-            {pending ? t("geo.busy") : t("geo.save")}
-          </button>
-        </>
-      }
-    >
-      <div>
-        <label className={label} htmlFor="geo-name">
-          {t("geo.name")}
-        </label>
-        <input
-          id="geo-name"
-          value={draft.name}
-          onChange={(e) => put({ name: e.target.value })}
-          className={`mt-1 ${field}`}
-        />
-      </div>
+            <option value="geoip">{t("geo.kindIp")}</option>
+            <option value="geosite">{t("geo.kindSite")}</option>
+          </select>
+        </div>
 
-      <div>
-        <label className={label} htmlFor="geo-kind">
-          {t("geo.kind")}
-        </label>
-        <select
-          id="geo-kind"
-          value={draft.kind}
-          onChange={(e) => put({ kind: e.target.value as GeoKind })}
-          className={`mt-1 ${field}`}
-        >
-          <option value="geoip">{t("geo.kindIp")}</option>
-          <option value="geosite">{t("geo.kindSite")}</option>
-        </select>
-      </div>
+        <Line id="geo-url" caption={t("geo.url")} value={draft.url} onChange={(url) => put({ url })} wide />
 
-      <div>
-        <label className={label} htmlFor="geo-url">
-          {t("geo.url")}
-        </label>
-        <input
-          id="geo-url"
-          value={draft.url}
-          onChange={(e) => put({ url: e.target.value })}
-          className={`mt-1 ${field}`}
-        />
-      </div>
-
-      <label className="flex items-center gap-2 text-sm text-muted" htmlFor="geo-enabled">
-        <input
-          id="geo-enabled"
-          type="checkbox"
-          checked={draft.isEnabled}
-          onChange={(e) => put({ isEnabled: e.target.checked })}
-          className="size-4 accent-brand"
-        />
-        {t("geo.enabled")}
-      </label>
+        <div className="sm:col-span-2">
+          <Flag
+            id="geo-enabled"
+            caption={t("geo.enabled")}
+            value={draft.isEnabled}
+            onChange={(isEnabled) => put({ isEnabled })}
+          />
+        </div>
+      </Part>
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
-    </Modal>
+
+      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        <button type="button" onClick={onClose} className={secondary}>
+          {t("geo.cancel")}
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave(draft)}
+          disabled={pending || draft.name.length === 0 || draft.url.length === 0}
+          className={primary}
+        >
+          {pending ? t("geo.busy") : t("geo.save")}
+        </button>
+      </div>
+    </div>
   )
 }

@@ -3,8 +3,8 @@ import { complaint, reason } from "@/api/auth"
 import { scopes } from "@/api/scopes"
 import { draftOf, useSaveSubscription, useSubscription } from "@/api/subscription"
 import type { Subscription, SubscriptionDraft } from "@/api/subscription"
-import { Multi, Row } from "@/components/fields"
-import { card, field, primary, secondary } from "@/components/styles"
+import { Count, Flag, Line, Multi, Part, Pick } from "@/components/fields"
+import { card, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -70,68 +70,87 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
   }
 
   return (
-    <div className={`mt-4 px-4 py-2 ${card}`}>
-      <Row id="subscription-enabled" caption={t("subscription.enabled")}>
-        <input
-          id="subscription-enabled"
-          type="checkbox"
-          checked={draft.isEnabled}
-          onChange={(e) => set({ isEnabled: e.target.checked })}
-          className="size-4 accent-brand"
-        />
-      </Row>
+    <div className="mt-4 flex flex-col gap-4">
+      <Part title={t("subscription.partServing")}>
+        <div className="sm:col-span-2">
+          <Flag
+            id="subscription-enabled"
+            caption={t("subscription.enabled")}
+            value={draft.isEnabled}
+            onChange={(isEnabled) => set({ isEnabled })}
+          />
+        </div>
 
-      <Row id="subscription-listen" caption={t("settings.listen")}>
-        <Multi
-          id="subscription-listen"
-          value={draft.listen}
-          offers={settings.addresses}
-          placeholder={t("settings.everyAddress")}
-          onChange={(listen) => set({ listen })}
-        />
-      </Row>
+        <div className="sm:col-span-2">
+          <label className={label} htmlFor="subscription-listen">
+            {t("settings.listen")}
+          </label>
+          <div className="mt-1">
+            <Multi
+              id="subscription-listen"
+              value={draft.listen}
+              offers={settings.addresses}
+              placeholder={t("settings.everyAddress")}
+              onChange={(listen) => set({ listen })}
+            />
+          </div>
+        </div>
 
-      <Row id="subscription-domains" caption={t("settings.domains")}>
-        <Multi
-          id="subscription-domains"
-          value={draft.domains}
-          offers={settings.certificates}
-          placeholder={t("settings.anyDomain")}
-          onChange={(domains) => set({ domains })}
-        />
-      </Row>
+        <div className="sm:col-span-2">
+          <label className={label} htmlFor="subscription-domains">
+            {t("settings.domains")}
+          </label>
+          <div className="mt-1">
+            <Multi
+              id="subscription-domains"
+              value={draft.domains}
+              offers={settings.certificates}
+              placeholder={t("settings.anyDomain")}
+              onChange={(domains) => set({ domains })}
+            />
+          </div>
+        </div>
 
-      <Row id="subscription-port" caption={t("settings.port")}>
-        <input
+        <Count
           id="subscription-port"
-          type="number"
-          className={field}
+          caption={t("settings.port")}
           value={draft.port}
-          onChange={(e) => set({ port: Number(e.target.value) })}
+          onChange={(port) => set({ port })}
         />
-      </Row>
 
-      <Row id="subscription-opened" caption={t("settings.opened")}>
-        <input
-          id="subscription-opened"
-          type="checkbox"
-          checked={draft.opened}
-          onChange={(e) => set({ opened: e.target.checked })}
-          className="size-4 accent-brand"
-        />
-      </Row>
-
-      <Row id="subscription-path" caption={t("subscription.path")}>
-        <input
+        <Line
           id="subscription-path"
-          className={field}
+          caption={t("subscription.path")}
           value={draft.path}
-          onChange={(e) => set({ path: e.target.value })}
+          onChange={(path) => set({ path })}
         />
-      </Row>
 
-      <Row id="subscription-domain" caption={t("settings.domain")}>
-        <select id="subscription-domain" className={field} value={domain} onChange={(e) => pickDomain(e.target.value)}>
+        <Count
+          id="subscription-hours"
+          caption={t("subscription.updateHours")}
+          value={draft.updateHours}
+          onChange={(updateHours) => set({ updateHours })}
+        />
+
+        <Line
+          id="subscription-title"
+          caption={t("subscription.title")}
+          value={draft.title}
+          onChange={(title) => set({ title })}
+        />
+
+        <div className="sm:col-span-2">
+          <Flag
+            id="subscription-opened"
+            caption={t("settings.opened")}
+            value={draft.opened}
+            onChange={(opened) => set({ opened })}
+          />
+        </div>
+      </Part>
+
+      <Part title={t("settings.partCertificate")}>
+        <Pick id="subscription-domain" caption={t("settings.domain")} value={domain} onChange={pickDomain}>
           <option value="">{t("subscription.panelCertificate")}</option>
           {settings.certificates.map((name) => (
             <option key={name} value={name}>
@@ -139,47 +158,33 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
             </option>
           ))}
           <option value={own}>{t("settings.ownCertificate")}</option>
-        </select>
-      </Row>
+        </Pick>
 
-      <Row id="subscription-certificate" caption={t("settings.certificate")}>
-        <input
+        <div />
+
+        <Line
           id="subscription-certificate"
-          className={field}
+          caption={t("settings.certificate")}
           value={draft.certificate}
-          onChange={(e) => set({ certificate: e.target.value })}
+          onChange={(certificate) => set({ certificate })}
+          wide
         />
-      </Row>
 
-      <Row id="subscription-certificate-key" caption={t("settings.certificateKey")}>
-        <input
+        <Line
           id="subscription-certificate-key"
-          className={field}
+          caption={t("settings.certificateKey")}
           value={draft.certificateKey}
-          onChange={(e) => set({ certificateKey: e.target.value })}
+          onChange={(certificateKey) => set({ certificateKey })}
+          wide
         />
-      </Row>
+      </Part>
 
-      <Row id="subscription-hours" caption={t("subscription.updateHours")}>
-        <input
-          id="subscription-hours"
-          type="number"
-          className={field}
-          value={draft.updateHours}
-          onChange={(e) => set({ updateHours: Number(e.target.value) })}
-        />
-      </Row>
+      {refused !== null && <div className="text-sm text-alarm">{t(refused)}</div>}
 
-      <Row id="subscription-title" caption={t("subscription.title")}>
-        <input
-          id="subscription-title"
-          className={field}
-          value={draft.title}
-          onChange={(e) => set({ title: e.target.value })}
-        />
-      </Row>
-
-      <div className="flex items-center gap-2 border-t border-line py-3">
+      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        <button type="button" className={secondary} disabled={kept === null || save.isPending} onClick={drop}>
+          {t("settings.cancel")}
+        </button>
         <button
           type="button"
           className={primary}
@@ -188,10 +193,6 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
         >
           {t("settings.save")}
         </button>
-        <button type="button" className={secondary} disabled={kept === null || save.isPending} onClick={drop}>
-          {t("settings.cancel")}
-        </button>
-        {refused !== null && <span className="text-sm text-alarm">{t(refused)}</span>}
       </div>
     </div>
   )

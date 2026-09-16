@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { useClientConfig } from "@/api/clients"
-import { Modal } from "@/components/Modal"
 import { TextBlock } from "@/components/TextBlock"
-import { primary, secondary } from "@/components/styles"
+import { card, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { selectsAll, selectText } from "@/select"
@@ -25,7 +24,7 @@ const tab = "-mb-px border-b-2 px-1 pb-2 text-sm"
 const chosen = "border-brand font-medium text-brand-ink"
 const plain = "border-transparent text-muted hover:text-brand-ink"
 
-export function ClientConfig({ id, title, onClose }: { id: number; title: string; onClose: () => void }) {
+export function ClientConfig({ id }: { id: number }) {
   const t = useText()
   const config = useClientConfig(id)
   const [picked, setPicked] = useState<Kind | null>(null)
@@ -66,27 +65,20 @@ export function ClientConfig({ id, title, onClose }: { id: number; title: string
   const room = Math.min(440, Math.max(280, 3 * Math.max(...offered.map((one) => pictures.data?.[one.kind]?.modules ?? 0))))
 
   return (
-    <Modal
-      title={title}
-      onClose={onClose}
-      wide
-      footer={
-        <>
-          <button type="button" onClick={onClose} className={secondary}>
-            {t("clients.close")}
-          </button>
-          <button
-            type="button"
-            onClick={() => save(config.data?.fileName ?? "client.conf", words.file)}
-            disabled={words.file.length === 0}
-            className={primary}
-          >
-            {t("clients.download")}
-          </button>
-        </>
-      }
-    >
-      <div className="grid gap-4 sm:grid-cols-[auto_1fr]">
+    <div className={card}>
+      <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3">
+        <div className="truncate font-mono text-xs text-mono">{config.data?.fileName ?? ""}</div>
+        <button
+          type="button"
+          onClick={() => save(config.data?.fileName ?? "client.conf", words.file)}
+          disabled={words.file.length === 0}
+          className={secondary}
+        >
+          {t("clients.download")}
+        </button>
+      </div>
+
+      <div className="grid gap-4 p-4 sm:grid-cols-[auto_1fr]">
         <div className="flex flex-col items-center gap-3">
           <div className="flex gap-6 self-stretch border-b border-line">
             {offered.map((one) => (
@@ -122,12 +114,12 @@ export function ClientConfig({ id, title, onClose }: { id: number; title: string
 
         <TextBlock
           ref={text}
-          className={`max-h-80 overflow-auto rounded border border-line bg-canvas p-3 text-xs text-ink ${kind === "file" ? "" : "break-all whitespace-pre-wrap"}`}
+          className={`max-h-[32rem] overflow-auto rounded-lg border border-line bg-canvas p-3 font-mono text-xs leading-7 text-mono ${kind === "file" ? "" : "break-all whitespace-pre-wrap"}`}
         >
           {words[kind]}
         </TextBlock>
       </div>
-    </Modal>
+    </div>
   )
 }
 

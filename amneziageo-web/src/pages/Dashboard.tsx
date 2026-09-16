@@ -4,6 +4,7 @@ import { useOverview } from "@/api/overview"
 import type { Overview } from "@/api/overview"
 import { Sparkline } from "@/components/Chart"
 import type { Trace } from "@/components/Chart"
+import { useCrumbs } from "@/components/crumbs"
 import { card, quiet } from "@/components/styles"
 import { average, bytes, peak, percent, rate, share, span } from "@/format"
 import { useText } from "@/i18n"
@@ -13,6 +14,8 @@ export function Dashboard() {
   const health = useHealth()
   const overview = useOverview()
   const data = overview.data
+
+  useCrumbs([{ label: t("nav.overview") }])
 
   if (!data) {
     return <div />
@@ -24,7 +27,9 @@ export function Dashboard() {
   const storage = window.storage.map((one) => share(one, data.storage.total))
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
+      <h1 className="text-2xl leading-10 font-semibold tracking-[-0.02em]">{t("nav.overview")}</h1>
+
       <Head data={data} version={health.data?.version} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -150,7 +155,7 @@ function Head({ data, version }: { data: Overview; version?: string }) {
 
   return (
     <div className={`flex flex-wrap items-center gap-3 px-4 py-3 ${card}`}>
-      <span className={`size-2 rounded-full ${data.tunnel.loaded ? "bg-brand" : "bg-alarm"}`} />
+      <span className={`size-2 rounded-full ${data.tunnel.loaded ? "bg-good" : "bg-alarm"}`} />
       <span className="text-sm font-medium text-ink">{t("overview.kernel")}</span>
       <span className="text-sm text-muted">
         {data.tunnel.loaded ? t("overview.loaded", { version: data.tunnel.version }) : t("overview.missing")}
@@ -188,13 +193,13 @@ function Meter({
       </div>
 
       <div className="mt-2 text-3xl font-semibold text-ink">{percent(value)}</div>
-      <div className="text-xs text-muted">{note}</div>
+      <div className="text-xs text-faint">{note}</div>
 
       <div className="mt-3">
         <Sparkline traces={traces} mean />
       </div>
 
-      <div className="mt-2 flex justify-between text-[11px] tracking-wide text-muted">
+      <div className="mt-2 flex justify-between text-[11px] tracking-wide text-faint">
         <span>{left}</span>
         <span>{right}</span>
       </div>
@@ -215,7 +220,7 @@ function Legend({ tone, title, value }: { tone: string; title: string; value: st
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[11px] tracking-wide text-muted uppercase">{title}</div>
+      <div className="text-[11px] tracking-wide text-faint uppercase">{title}</div>
       <div className="mt-2 grid grid-cols-2 gap-4">{children}</div>
     </div>
   )
@@ -224,7 +229,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 function Fact({ title, value }: { title: string; value: string }) {
   return (
     <div>
-      <div className="text-[11px] tracking-wide text-muted uppercase">{title}</div>
+      <div className="text-[11px] tracking-wide text-faint uppercase">{title}</div>
       <div className="mt-1 text-sm font-medium text-ink">{value}</div>
     </div>
   )
@@ -237,7 +242,7 @@ function Addresses({ list }: { list: string[] }) {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <div className="text-[11px] tracking-wide text-muted uppercase">{t("overview.addresses")}</div>
+        <div className="text-[11px] tracking-wide text-faint uppercase">{t("overview.addresses")}</div>
         <button type="button" onClick={() => setShown(!shown)} className={quiet}>
           <Eye open={shown} />
         </button>
