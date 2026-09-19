@@ -1,5 +1,8 @@
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Balance;
+using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Outbound;
+using AmneziaGeo.Server.Routing.Route;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -114,6 +117,55 @@ public class OutboundStoreTests
     }
 
     [Fact]
+    public async Task ARenamedOutboundCarriesItsNameIntoTheRulesTheBalancersAndTheResolver()
+    {
+        using var bench = new Bench();
+        var added = await bench.Outbounds.AddAsync(Tunnel("awgbor"), CancellationToken.None);
+        var rule = await bench.Rules.AddAsync(Rule("through bor", "awgbor"), CancellationToken.None);
+        var other = await bench.Rules.AddAsync(Rule("straight", OutboundDefaults.DirectName), CancellationToken.None);
+        var group = await bench.Balancers.AddAsync(
+            BalanceDefaults.Fresh("both") with { Members = ["awgbor", OutboundDefaults.DirectName] },
+            CancellationToken.None);
+        await bench.Resolver.SaveAsync(DnsDefaults.Settings with { Outbound = "awgbor" }, CancellationToken.None);
+
+        var changed = await bench.Outbounds.ChangeAsync(added.Record!.Id, Tunnel("awgfar"), CancellationToken.None);
+
+        Assert.True(changed.IsOk, changed.Message);
+        Assert.Equal("awgfar", (await bench.Rules.FindAsync(rule.Record!.Id, CancellationToken.None))?.Outbound);
+        Assert.Equal(
+            OutboundDefaults.DirectName,
+            (await bench.Rules.FindAsync(other.Record!.Id, CancellationToken.None))?.Outbound);
+        Assert.Equal(
+            ["awgfar", OutboundDefaults.DirectName],
+            (await bench.Balancers.FindAsync(group.Record!.Id, CancellationToken.None))!.Members);
+        Assert.Equal("awgfar", (await bench.Resolver.ReadAsync(CancellationToken.None)).Outbound);
+    }
+
+    [Fact]
+    public async Task AnOutboundARuleABalancerOrTheResolverLeavesThroughIsNotRemoved()
+    {
+        using var bench = new Bench();
+        var ruled = await bench.Outbounds.AddAsync(Tunnel("awgbor"), CancellationToken.None);
+        var grouped = await bench.Outbounds.AddAsync(Tunnel("awgfar"), CancellationToken.None);
+        var asked = await bench.Outbounds.AddAsync(Tunnel("awgdns"), CancellationToken.None);
+        await bench.Rules.AddAsync(Rule("through bor", "awgbor"), CancellationToken.None);
+        await bench.Balancers.AddAsync(BalanceDefaults.Fresh("both") with { Members = ["awgfar"] }, CancellationToken.None);
+        await bench.Resolver.SaveAsync(DnsDefaults.Settings with { Outbound = "awgdns" }, CancellationToken.None);
+
+        var rule = await bench.Outbounds.RemoveAsync(ruled.Record!.Id, CancellationToken.None);
+        var member = await bench.Outbounds.RemoveAsync(grouped.Record!.Id, CancellationToken.None);
+        var resolver = await bench.Outbounds.RemoveAsync(asked.Record!.Id, CancellationToken.None);
+
+        Assert.Equal("outbound-in-use", rule.Code);
+        Assert.Contains("a rule leaves through", rule.Message, StringComparison.Ordinal);
+        Assert.Equal("outbound-in-use", member.Code);
+        Assert.Contains("the balancer 'both'", member.Message, StringComparison.Ordinal);
+        Assert.Equal("outbound-in-use", resolver.Code);
+        Assert.Contains("the resolver", resolver.Message, StringComparison.Ordinal);
+        Assert.Equal(4, (await bench.Outbounds.ListAsync(CancellationToken.None)).Count);
+    }
+
+    [Fact]
     public async Task ACommandAgainstAnOutboundThePanelDoesNotHoldIsRefused()
     {
         using var bench = new Bench();
@@ -124,6 +176,12 @@ public class OutboundStoreTests
             OutboundOutcome.Unknown,
             (await bench.Outbounds.SwitchAsync(404, false, CancellationToken.None)).Outcome);
     }
+
+    private static RouteRule Rule(string name, string outbound) => RouteDefaults.Fresh(name) with
+    {
+        Outbound = outbound,
+        Targets = ["geoip:ru"],
+    };
 
     private static OutboundConfig Tunnel(string name) => new()
     {

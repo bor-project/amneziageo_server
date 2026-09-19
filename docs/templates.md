@@ -39,7 +39,7 @@ first.
 |---|---|
 | Name | up to 64 characters, one of a kind |
 | Entries | up to 256 geo keys, networks, addresses and domains; empty gives `0.0.0.0/0`, with `::/0` for a client with an IPv6 address |
-| DNS | name server addresses; empty gives `1.1.1.1` and `1.0.0.1` |
+| DNS | name server addresses; empty gives the resolver of the panel, or `1.1.1.1` and `1.0.0.1` when it is off |
 | MTU | 576 to 9000; empty gives 1420 |
 | Keepalive | 0 to 65535 seconds, 0 turns it off; empty gives 25 |
 

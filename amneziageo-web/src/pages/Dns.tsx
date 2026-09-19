@@ -2,8 +2,10 @@ import { useState } from "react"
 import { complaint } from "@/api/auth"
 import { draftOf, useResolver, useSaveResolver } from "@/api/dns"
 import type { DnsDraft, DnsState, Resolver as ResolverSettings } from "@/api/dns"
+import { useBalancers } from "@/api/balancers"
+import { useOutbounds } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
-import { Box, Count, Flag, Line, Part } from "@/components/fields"
+import { Box, Count, Flag, Line, Part, Pick } from "@/components/fields"
 import { card, primary, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -75,6 +77,8 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
   const dispatch = useAppDispatch()
   const kept = useAppSelector((s) => s.drafts.dns)
   const [fault, setFault] = useState<TextKey | null>(null)
+  const outbounds = useOutbounds()
+  const balancers = useBalancers()
   const save = useSaveResolver()
   const saved = draftOf(settings)
   const draft = kept ?? saved
@@ -126,6 +130,30 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
           onChange={(v) => set({ upstreams: parts(v) })}
           wide
         />
+        <Pick
+          id="dns-outbound"
+          caption={t("dns.outbound")}
+          value={draft.outbound}
+          onChange={(v) => set({ outbound: v })}
+        >
+          <option value="">{t("dns.throughHost")}</option>
+          <optgroup label={t("rules.outbounds")}>
+            {(outbounds.data ?? []).map((one) => (
+              <option key={one.id} value={one.name}>
+                {one.name}
+              </option>
+            ))}
+          </optgroup>
+          {(balancers.data ?? []).length > 0 && (
+            <optgroup label={t("rules.balancers")}>
+              {(balancers.data ?? []).map((one) => (
+                <option key={one.id} value={one.name}>
+                  {one.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </Pick>
       </Part>
 
       <Part title={t("dns.memory")}>

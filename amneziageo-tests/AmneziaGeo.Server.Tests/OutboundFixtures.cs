@@ -19,6 +19,11 @@ public sealed class Ledger : IHostNetwork
     public HashSet<string> Links { get; } = [];
 
     /// <summary>
+    /// The interfaces the host carries down.
+    /// </summary>
+    public HashSet<string> Down { get; } = [];
+
+    /// <summary>
     /// The interface the host reaches the internet through.
     /// </summary>
     public string Uplink { get; set; } = "eth0";
@@ -42,6 +47,11 @@ public sealed class Ledger : IHostNetwork
     /// Tells whether the host carries an interface.
     /// </summary>
     public bool HasLink(string name) => Links.Contains(name);
+
+    /// <summary>
+    /// Tells whether an interface is on the host and up.
+    /// </summary>
+    public bool IsUp(string name) => Links.Contains(name) && !Down.Contains(name);
 
     /// <summary>
     /// Adds an AmneziaWG interface.
@@ -72,7 +82,12 @@ public sealed class Ledger : IHostNetwork
     /// <summary>
     /// Sets the packet size of an interface and brings it up.
     /// </summary>
-    public Task UpAsync(string name, int mtu, CancellationToken ct) => Step($"up {name} {mtu}");
+    public Task UpAsync(string name, int mtu, CancellationToken ct)
+    {
+        Down.Remove(name);
+
+        return Step($"up {name} {mtu}");
+    }
 
     /// <summary>
     /// Puts the way out through an interface into a routing table.
@@ -94,6 +109,11 @@ public sealed class Ledger : IHostNetwork
     /// </summary>
     public Task RuleAsync(uint mark, int table, int priority, bool present, CancellationToken ct) =>
         Step($"rule {mark} {table} {priority} {present}");
+
+    /// <summary>
+    /// Adds the rule that refuses a marked packet no outbound takes.
+    /// </summary>
+    public Task SealAsync(CancellationToken ct) => Step("seal");
 
     /// <summary>
     /// Returns the interface the host reaches the internet through.

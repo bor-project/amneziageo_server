@@ -11,6 +11,11 @@ public interface IHostNetwork
     bool HasLink(string name);
 
     /// <summary>
+    /// Tells whether an interface is on the host and up.
+    /// </summary>
+    bool IsUp(string name);
+
+    /// <summary>
     /// Adds an AmneziaWG interface.
     /// </summary>
     Task AddLinkAsync(string name, CancellationToken ct);
@@ -44,6 +49,11 @@ public interface IHostNetwork
     /// Adds or removes the rule that sends a marked packet into a routing table.
     /// </summary>
     Task RuleAsync(uint mark, int table, int priority, bool present, CancellationToken ct);
+
+    /// <summary>
+    /// Adds the rule that refuses a marked packet no outbound takes.
+    /// </summary>
+    Task SealAsync(CancellationToken ct);
 
     /// <summary>
     /// Returns the interface the host reaches the internet through.

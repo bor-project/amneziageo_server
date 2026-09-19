@@ -21,6 +21,7 @@ public class DnsSettingsTests
         Assert.True((running with { Port = 5300 }).Differs(running));
         Assert.True((running with { Upstreams = ["9.9.9.9", "149.112.112.112"] }).Differs(running));
         Assert.True((running with { BlockDoh = !running.BlockDoh }).Differs(running));
+        Assert.True((running with { Outbound = "bor" }).Differs(running));
     }
 
     [Fact]

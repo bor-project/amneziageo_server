@@ -305,11 +305,13 @@ function carried(line: Line): OutboundState | null {
 }
 
 function sum(state: OutboundState | null): number | null {
-  return state === null ? null : state.rxBytes + state.txBytes
+  return state === null || state.rxBytes === null || state.txBytes === null ? null : state.rxBytes + state.txBytes
 }
 
 function told(t: Text, state: OutboundState | null): string {
-  return state === null ? "" : `${bytes(t, state.rxBytes)} / ${bytes(t, state.txBytes)}`
+  return state === null || state.rxBytes === null || state.txBytes === null
+    ? ""
+    : `${bytes(t, state.rxBytes)} / ${bytes(t, state.txBytes)}`
 }
 
 function named(t: Text, line: Line): string {

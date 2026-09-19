@@ -1,5 +1,6 @@
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Balance;
+using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Route;
 
 namespace AmneziaGeo.Server.Tests;
@@ -114,6 +115,39 @@ public class BalanceStoreTests
 
         Assert.Equal(BalanceOutcome.Unknown, changed.Outcome);
         Assert.Equal("unknown-balancer", changed.Code);
+    }
+
+    [Fact]
+    public async Task ARenamedBalancerCarriesItsNameIntoTheRulesAndTheResolver()
+    {
+        using var bench = new Bench();
+        var added = await bench.Balancers.AddAsync(Group("home"), CancellationToken.None);
+        var rule = await bench.Rules.AddAsync(
+            RouteDefaults.Fresh("home") with { Outbound = "home", Targets = ["geoip:ru"] },
+            CancellationToken.None);
+        await bench.Resolver.SaveAsync(DnsDefaults.Settings with { Outbound = "home" }, CancellationToken.None);
+
+        var changed = await bench.Balancers.ChangeAsync(added.Record!.Id, Group("abroad"), CancellationToken.None);
+        var removed = await bench.Balancers.RemoveAsync(added.Record.Id, CancellationToken.None);
+
+        Assert.True(changed.IsOk, changed.Message);
+        Assert.Equal("abroad", (await bench.Rules.FindAsync(rule.Record!.Id, CancellationToken.None))?.Outbound);
+        Assert.Equal("abroad", (await bench.Resolver.ReadAsync(CancellationToken.None)).Outbound);
+        Assert.Equal("balancer-in-use", removed.Code);
+    }
+
+    [Fact]
+    public async Task ABalancerTheResolverAsksThroughIsNotRemoved()
+    {
+        using var bench = new Bench();
+        var added = await bench.Balancers.AddAsync(Group("home"), CancellationToken.None);
+        await bench.Resolver.SaveAsync(DnsDefaults.Settings with { Outbound = "home" }, CancellationToken.None);
+
+        var removed = await bench.Balancers.RemoveAsync(added.Record!.Id, CancellationToken.None);
+
+        Assert.Equal("balancer-in-use", removed.Code);
+        Assert.Contains("the resolver", removed.Message, StringComparison.Ordinal);
+        Assert.NotNull(await bench.Balancers.FindAsync(added.Record.Id, CancellationToken.None));
     }
 
     private static Balancer Group(string name) => BalanceDefaults.Fresh(name) with { Members = ["direct"] };

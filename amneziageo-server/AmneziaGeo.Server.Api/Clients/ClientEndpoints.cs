@@ -1,5 +1,7 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Api.Hello;
+using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Auth;
@@ -7,6 +9,7 @@ using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Traffic;
 
@@ -128,6 +131,30 @@ public static class ClientEndpoints
             ClientTraffic.None));
     }
 
+    private static async Task<TunnelClient?> FilledAsync(
+        TunnelClient draft,
+        ConfigStore configs,
+        ClientStore store,
+        CancellationToken ct)
+    {
+        if (draft.Address.Count > 0 && draft.PublicKey.Length > 0)
+        {
+            return draft;
+        }
+
+        var endpoint = await configs.FindAsync(draft.ConfigId, ct).ConfigureAwait(false);
+        if (endpoint is null)
+        {
+            return null;
+        }
+
+        var keyed = ClientDefaults.Keyed(draft);
+
+        return keyed.Address.Count > 0
+            ? keyed
+            : keyed with { Address = await FreeAddressAsync(endpoint, store, ct).ConfigureAwait(false) };
+    }
+
     private static async Task<IReadOnlyList<string>> FreeAddressAsync(
         ServerConfig? endpoint,
         ClientStore store,
@@ -149,6 +176,8 @@ public static class ClientEndpoints
         ConfigStore configs,
         ClientStore store,
         TemplateStore templates,
+        DnsStore dns,
+        DnsState resolver,
         SubscriptionState subscriptions,
         PanelSettings panel,
         WebOptions options,
@@ -171,10 +200,12 @@ public static class ClientEndpoints
             ? await templates.FindAsync(chosen, ct).ConfigureAwait(false)
             : null;
 
+        var names = DnsHandout.For(endpoint, resolver.Settings ?? await dns.ReadAsync(ct).ConfigureAwait(false));
+
         return Results.Ok(new ClientConfigResponse(
             ClientText.FileName(endpoint, client),
-            ClientText.Text(endpoint, client, template, hello.Port),
-            ClientLink.Link(endpoint, client, template, hello.Port),
+            ClientText.Text(endpoint, client, template, hello.Port, names),
+            ClientLink.Link(endpoint, client, template, hello.Port, names),
             SubscriptionAnswer.Address(
                 subscriptions.Current,
                 panel,
@@ -191,9 +222,16 @@ public static class ClientEndpoints
         EndpointHost endpoints,
         ClientGuard guard,
         TrafficLedger ledger,
+        RouteApplier routes,
         CancellationToken ct)
     {
-        var result = await store.AddAsync(ClientAnswers.Draft(request, null), ct).ConfigureAwait(false);
+        var draft = ClientAnswers.Draft(request, null);
+        if (await FilledAsync(draft, configs, store, ct).ConfigureAwait(false) is not { } settled)
+        {
+            return Missing(draft.ConfigId);
+        }
+
+        var result = await store.AddAsync(settled, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -201,6 +239,8 @@ public static class ClientEndpoints
 
         var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, endpoints, ct)
             .ConfigureAwait(false);
+
+        await routes.FollowClientsAsync(ct).ConfigureAwait(false);
 
         return Results.Created(
             $"/api/clients/{result.Record.Id}",
@@ -215,6 +255,7 @@ public static class ClientEndpoints
         EndpointHost endpoints,
         ClientGuard guard,
         TrafficLedger ledger,
+        RouteApplier routes,
         CancellationToken ct)
     {
         var result = await store.AddDeviceAsync(id, ct).ConfigureAwait(false);
@@ -225,6 +266,8 @@ public static class ClientEndpoints
 
         var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, endpoints, ct)
             .ConfigureAwait(false);
+
+        await routes.FollowClientsAsync(ct).ConfigureAwait(false);
 
         return Results.Created(
             $"/api/clients/{result.Record.Id}",
@@ -240,6 +283,7 @@ public static class ClientEndpoints
         EndpointHost endpoints,
         ClientGuard guard,
         TrafficLedger ledger,
+        RouteApplier routes,
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -259,6 +303,8 @@ public static class ClientEndpoints
             : [held.PublicKey];
         var endpoint = await SettleAsync(result.Record.ConfigId, gone, configs, store, host, endpoints, ct)
             .ConfigureAwait(false);
+
+        await routes.FollowClientsAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(Answer(result.Record, endpoint, host, guard, ledger, true));
     }
@@ -294,6 +340,7 @@ public static class ClientEndpoints
         ClientStore store,
         ClientHost host,
         EndpointHost endpoints,
+        RouteApplier routes,
         CancellationToken ct)
     {
         var devices = await store.DevicesAsync(id, ct).ConfigureAwait(false);
@@ -313,6 +360,8 @@ public static class ClientEndpoints
                 ct)
             .ConfigureAwait(false);
 
+        await routes.FollowClientsAsync(ct).ConfigureAwait(false);
+
         return Results.NoContent();
     }
 
@@ -322,6 +371,7 @@ public static class ClientEndpoints
         ClientStore store,
         ClientHost host,
         EndpointHost endpoints,
+        RouteApplier routes,
         CancellationToken ct)
     {
         var endpoint = await configs.FindAsync(request.ConfigId, ct).ConfigureAwait(false);
@@ -338,6 +388,8 @@ public static class ClientEndpoints
 
         var report = await store.ImportAllAsync(read.Clients, ct).ConfigureAwait(false);
         await SettleAsync(endpoint.Id, [], configs, store, host, endpoints, ct).ConfigureAwait(false);
+
+        await routes.FollowClientsAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(report);
     }

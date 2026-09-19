@@ -17,8 +17,8 @@ public static class EndpointRuleset
     public const string TableName = "amneziageo_in";
 
     /// <summary>
-    /// Returns the ruleset that masquerades the clients, holds them out of the closed ranges and lets through what
-    /// the clients take from the tunnel.
+    /// Returns the ruleset that masquerades the clients, carries the ports of the host to them under the address of
+    /// the endpoint, holds them out of the closed ranges and lets through what the clients take from the tunnel.
     /// </summary>
     public static string Text(
         IReadOnlyList<ServerConfig> configs,
@@ -41,7 +41,7 @@ public static class EndpointRuleset
         }
 
         Prerouting(text, live, taken, uplink);
-        Postrouting(text, live, uplink);
+        Postrouting(text, live, taken, uplink);
         Forward(text, live, taken);
         text.Append("}\n");
 
@@ -91,7 +91,11 @@ public static class EndpointRuleset
         text.Append("\t}\n\n");
     }
 
-    private static void Postrouting(StringBuilder text, IReadOnlyList<ServerConfig> configs, string uplink)
+    private static void Postrouting(
+        StringBuilder text,
+        IReadOnlyList<ServerConfig> configs,
+        IReadOnlyList<TunnelClient> clients,
+        string uplink)
     {
         text.Append("\tchain postrouting {\n");
         text.Append("\t\ttype nat hook postrouting priority srcnat; policy accept;\n");
@@ -101,6 +105,20 @@ public static class EndpointRuleset
             {
                 text.Append("\t\t").Append(Family(range)).Append(" saddr ").Append(range)
                     .Append(" oifname \"").Append(uplink).Append("\" masquerade\n");
+            }
+        }
+
+        if (uplink.Length > 0)
+        {
+            foreach (var config in configs)
+            {
+                foreach (var carried in Carried([config], clients))
+                {
+                    text.Append("\t\toifname \"").Append(config.Name).Append("\" ")
+                        .Append(Family(carried.Target)).Append(" daddr ").Append(carried.Target.Address)
+                        .Append(' ').Append(carried.Forward.Protocol).Append(" dport ")
+                        .Append(Number(carried.Forward.To)).Append(" ct status dnat masquerade\n");
+                }
             }
         }
 

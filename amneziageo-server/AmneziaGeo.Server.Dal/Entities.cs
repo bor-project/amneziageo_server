@@ -343,15 +343,37 @@ public sealed class RouteRuleEntity
 
     public string Outbound { get; set; } = string.Empty;
 
+    public bool HoldsWhenDown { get; set; }
+
     public string Targets { get; set; } = string.Empty;
 
     public string Sources { get; set; } = string.Empty;
 
+    public string Clients { get; set; } = string.Empty;
+
+    public string Inbounds { get; set; } = string.Empty;
+
     public string Ports { get; set; } = string.Empty;
+
+    public string SourcePorts { get; set; } = string.Empty;
 
     public string Protocol { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// The basic routing lists as the database holds them.
+/// </summary>
+public sealed class RouteBasicEntity
+{
+    public long Id { get; set; }
+
+    public string Direct { get; set; } = string.Empty;
+
+    public string Block { get; set; } = string.Empty;
 
     public DateTimeOffset UpdatedUtc { get; set; }
 }
@@ -424,6 +446,8 @@ public sealed class DnsSettingsEntity
     public int Port { get; set; }
 
     public string Upstreams { get; set; } = string.Empty;
+
+    public string Outbound { get; set; } = string.Empty;
 
     public string Listen { get; set; } = string.Empty;
 

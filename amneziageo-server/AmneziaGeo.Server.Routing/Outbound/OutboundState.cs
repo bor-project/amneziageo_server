@@ -26,6 +26,11 @@ public sealed record OutboundState(
     ProbeReading? Probe = null)
 {
     /// <summary>
+    /// Whether the bytes are counted for the outbound at all.
+    /// </summary>
+    public bool Counted { get; init; } = true;
+
+    /// <summary>
     /// Tells whether the outbound carries traffic, taking the probe over the handshake.
     /// </summary>
     public bool Carries => IsAlive && Probe is not { IsReached: false };

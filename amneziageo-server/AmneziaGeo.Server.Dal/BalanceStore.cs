@@ -113,7 +113,7 @@ public sealed class BalanceStore
     }
 
     /// <summary>
-    /// Replaces the settings of a balancer, keeping its place.
+    /// Replaces the settings of a balancer, keeping its place and carrying a new name into what names it.
     /// </summary>
     public async Task<BalanceResult> ChangeAsync(long id, Balancer draft, CancellationToken ct)
     {
@@ -139,8 +139,11 @@ public sealed class BalanceStore
             return BalanceResult.No(BalanceOutcome.Invalid, fault.Code, fault.Message);
         }
 
+        var old = entity.Name;
+        var now = _time.GetUtcNow();
         Write(entity, full);
-        entity.UpdatedUtc = _time.GetUtcNow();
+        entity.UpdatedUtc = now;
+        await NameFollow.WayAsync(_db, old, entity.Name, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return BalanceResult.Done(Read(entity));
@@ -168,7 +171,7 @@ public sealed class BalanceStore
     }
 
     /// <summary>
-    /// Removes a balancer, unless a rule leaves through it.
+    /// Removes a balancer, unless a rule or the resolver leaves through it.
     /// </summary>
     public async Task<BalanceResult> RemoveAsync(long id, CancellationToken ct)
     {
@@ -188,6 +191,14 @@ public sealed class BalanceStore
                 BalanceOutcome.Invalid,
                 "balancer-in-use",
                 $"a rule leaves through the balancer '{name}'");
+        }
+
+        if (await NameFollow.AsksThroughAsync(_db, name, ct).ConfigureAwait(false))
+        {
+            return BalanceResult.No(
+                BalanceOutcome.Invalid,
+                "balancer-in-use",
+                $"the resolver asks through the balancer '{name}'");
         }
 
         var gone = Read(entity);

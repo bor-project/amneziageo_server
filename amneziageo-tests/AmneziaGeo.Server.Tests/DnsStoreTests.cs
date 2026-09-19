@@ -26,6 +26,7 @@ public class DnsStoreTests
             IsEnabled = true,
             Port = 5300,
             Upstreams = ["9.9.9.9", "1.1.1.1:5353"],
+            Outbound = "bor",
             Listen = ["10.8.0.1"],
             NameMinutes = 30,
             CacheSize = 128,
@@ -43,6 +44,7 @@ public class DnsStoreTests
         Assert.True(held.IsEnabled);
         Assert.Equal(5300, held.Port);
         Assert.Equal(["9.9.9.9", "1.1.1.1:5353"], held.Upstreams);
+        Assert.Equal("bor", held.Outbound);
         Assert.Equal(["10.8.0.1"], held.Listen);
         Assert.Equal(30, held.NameMinutes);
         Assert.Equal(128, held.CacheSize);

@@ -130,7 +130,7 @@ public sealed class ConfigStore
     }
 
     /// <summary>
-    /// Replaces the settings of an endpoint.
+    /// Replaces the settings of an endpoint, carrying its new name into the rules.
     /// </summary>
     public async Task<ConfigResult> ChangeAsync(long id, ServerConfig draft, CancellationToken ct)
     {
@@ -162,8 +162,11 @@ public sealed class ConfigStore
                 $"the panel already listens on port {draft.ListenPort}");
         }
 
+        var old = entity.Name;
+        var now = _time.GetUtcNow();
         Write(entity, draft);
-        entity.UpdatedUtc = _time.GetUtcNow();
+        entity.UpdatedUtc = now;
+        await NameFollow.InboundAsync(_db, old, entity.Name, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ConfigResult.Done(Read(entity));

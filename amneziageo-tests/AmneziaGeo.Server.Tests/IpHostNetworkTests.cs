@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Routing.Host;
+using AmneziaGeo.Server.Routing.Outbound;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -41,6 +42,39 @@ public class IpHostNetworkTests
         await network.RuleAsync(0xA602, 42602, 10001, false, CancellationToken.None);
 
         Assert.True(tools.Called("ip rule del pref 10001 fwmark 42498 lookup 42602"));
+    }
+
+    [Fact]
+    public async Task TheSealIsAddedInBothFamiliesWhenTheHostLacksIt()
+    {
+        var tools = new Tools();
+        var network = new IpHostNetwork(tools);
+
+        await network.SealAsync(CancellationToken.None);
+
+        Assert.True(tools.Called("ip rule add pref 10255 fwmark 0xa600/0xffffff00 unreachable"));
+        Assert.True(tools.Called("ip -6 rule add pref 10255 fwmark 0xa600/0xffffff00 unreachable"));
+    }
+
+    [Fact]
+    public async Task ASealTheHostHoldsIsNotAddedAgain()
+    {
+        var tools = new Tools();
+        var held = new CommandResult(0, "10255:\tfrom all fwmark 0xa600/0xffffff00 unreachable\n", string.Empty);
+        tools.Answers["ip rule show pref 10255"] = held;
+        tools.Answers["ip -6 rule show pref 10255"] = held;
+        var network = new IpHostNetwork(tools);
+
+        await network.SealAsync(CancellationToken.None);
+
+        Assert.False(tools.Called("ip rule add"));
+        Assert.False(tools.Called("ip -6 rule add"));
+    }
+
+    [Fact]
+    public void TheSealStandsRightBelowTheLastMark()
+    {
+        Assert.Equal(OutboundRules.SealPriority, OutboundRules.PriorityOf(OutboundRules.LastMark) + 1);
     }
 
     [Fact]

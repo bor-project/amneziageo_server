@@ -102,9 +102,18 @@ up. A `local` outbound looks the way out up in the main table instead. What land
 
 - `ip rule add pref 10000+n fwmark <mark> lookup <table>`, above the main rule, so an unmarked packet
   keeps going the way it went before;
+- `ip rule add pref 10255 fwmark 0xa600/0xffffff00 unreachable`, in both families, right below the rules of
+  the outbounds, so a marked packet whose outbound is off, gone or without an interface is refused instead of
+  falling through to the main table and leaving through the uplink;
 - `default dev <name> table <table>` for a tunnel;
 - one firewall table, `inet amneziageo_out`, that masquerades what leaves through every outbound that is
   on, holds a TCP segment down to what the path carries and filters what comes out of the tunnels.
+
+The refusal covers the traffic of the rules, the probe, the resolver and every other socket under a mark:
+while the interface of a tunnel is down, its table is empty and its probe misses, so the outbound stops
+carrying traffic, a rule that holds keeps its traffic and a balancer moves to another member. A client whose
+connection broke this way gets `network unreachable`, and a packet of a connection the host no longer tracks
+is dropped rather than sent on under the address of the client, see [rules.md](rules.md).
 
 The interface itself is given no mark: the mark is what sends a packet into the tunnel, not what the
 tunnel puts on its own packets, so there is no loop to break. The interface takes each of its addresses
@@ -136,11 +145,20 @@ address of the tunnel.
 ## Putting it on the host
 
 Adding, changing, turning on and off, and removing an outbound each put it on the host straight away.
+Renaming an outbound writes the new name into the rules and the balancers that name it and into the settings of
+the resolver, the saved and the running ones alike, so nothing that left through the outbound loses it. An
+outbound that a rule, a balancer or the resolver leaves through is not removed: the panel answers
+`outbound-in-use` and names what holds it.
 `POST /api/outbounds/apply` goes over every outbound, rewrites the firewall table and lays the rules again;
 the panel does the same when it starts, so the outbounds and the rules come back after a reboot. An interface
 that already carries the server of its outbound and no other peer keeps it, with the handshake and the
 counters, so the panel starting over does not break the tunnel. An outbound that is turned off is taken off the
 host: the rule goes, the table is cleared, and the interface is removed.
+
+The panel looks at the interfaces of the outbounds that are on every five seconds, and one that was brought
+down behind its back, with `ip link set down` or otherwise, is brought up again with its addresses and its
+route. An interface that is gone altogether is laid again by `Apply` or `POST /api/outbounds/apply`; until then
+the outbound carries nothing.
 
 Raising an interface, writing keys to it and changing routing rules need `CAP_NET_ADMIN`. A server that
 runs without it answers with the outbound and the reason on it instead of failing the request. Setting
@@ -150,4 +168,7 @@ runs without it answers with the outbound and the reason on it instead of failin
 
 The table names the kind, the server, the mark and the table, the last handshake and the traffic each way.
 A `ws` outbound names the server behind the proxy, and the proxy itself stands in the form.
-A tunnel counts as alive while its handshake is under three minutes old.
+A tunnel counts as alive while its handshake is under three minutes old and its interface is up; while the
+interface is down the state says so in `fault`. An outbound through the host has no
+interface of its own, so there is nothing to count the bytes on: `rxBytes` and `txBytes` come back empty rather
+than as zeros, and the panel leaves the traffic of such an outbound blank.

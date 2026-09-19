@@ -15,6 +15,11 @@ public sealed record RouteExit(string Strategy, IReadOnlyList<uint> Marks)
     public static readonly RouteExit None = new(BalanceStrategy.Priority, []);
 
     /// <summary>
+    /// The seed the addresses of the clients are spread with.
+    /// </summary>
+    public uint Seed { get; init; }
+
+    /// <summary>
     /// The mark the traffic carries when there is one to carry.
     /// </summary>
     public uint Mark => Marks.Count > 0 ? Marks[0] : 0;

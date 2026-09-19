@@ -5,7 +5,14 @@ namespace AmneziaGeo.Server.Api.Rules;
 /// <summary>
 /// What the host carries for one rule.
 /// </summary>
-public sealed record RouteStateBody(bool IsLive, string Fault, string Message, uint Mark, int Ranges, int Names);
+public sealed record RouteStateBody(
+    bool IsLive,
+    bool IsHeld,
+    string Fault,
+    string Message,
+    uint Mark,
+    int Ranges,
+    int Names);
 
 /// <summary>
 /// One routing rule as the panel reads it.
@@ -17,9 +24,13 @@ public sealed record RouteResponse(
     bool IsEnabled,
     string Action,
     string Outbound,
+    bool HoldsWhenDown,
     IReadOnlyList<string> Targets,
     IReadOnlyList<string> Sources,
+    IReadOnlyList<string> Clients,
+    IReadOnlyList<string> Inbounds,
     IReadOnlyList<string> Ports,
+    IReadOnlyList<string> SourcePorts,
     string Protocol,
     RouteStateBody State,
     DateTimeOffset CreatedUtc,
@@ -30,18 +41,71 @@ public sealed record RouteResponse(
 /// </summary>
 public sealed record RouteRequest(
     string? Name,
-    bool IsEnabled,
+    bool? IsEnabled,
     string? Action,
     string? Outbound,
+    bool? HoldsWhenDown,
     IReadOnlyList<string>? Targets,
     IReadOnlyList<string>? Sources,
     IReadOnlyList<string>? Ports,
-    string? Protocol);
+    string? Protocol,
+    IReadOnlyList<string>? Clients = null,
+    IReadOnlyList<string>? Inbounds = null,
+    IReadOnlyList<string>? SourcePorts = null);
 
 /// <summary>
-/// Which way a rule moves in the list.
+/// Which way a rule moves in the list, or the place it goes to, counting from one.
 /// </summary>
-public sealed record RouteMoveRequest(bool Up);
+public sealed record RouteMoveRequest(bool Up, int? To = null);
+
+/// <summary>
+/// The basic lists as the panel reads them.
+/// </summary>
+public sealed record RouteBasicResponse(
+    IReadOnlyList<string> Direct,
+    IReadOnlyList<string> Block,
+    RouteStateBody DirectState,
+    RouteStateBody BlockState,
+    DateTimeOffset UpdatedUtc);
+
+/// <summary>
+/// The basic lists a request sets, keeping the one it stays silent about.
+/// </summary>
+public sealed record RouteBasicRequest(IReadOnlyList<string>? Direct, IReadOnlyList<string>? Block);
+
+/// <summary>
+/// The traffic the route tester is asked about.
+/// </summary>
+public sealed record RouteTestRequest(string? Target, int? Port, string? Protocol, string? Client, int? SourcePort);
+
+/// <summary>
+/// The rule that took the traffic in the answer of the route tester.
+/// </summary>
+public sealed record RouteTestRule(long Id, string Name, int Place, string Action, string Outbound);
+
+/// <summary>
+/// One outbound the traffic may leave through in the answer of the route tester.
+/// </summary>
+public sealed record RouteTestMember(string Name, bool IsEnabled, bool IsAlive, bool Carries);
+
+/// <summary>
+/// The way out of the rule that took the traffic.
+/// </summary>
+public sealed record RouteTestExit(string Name, bool IsGroup, string Strategy, IReadOnlyList<RouteTestMember> Members);
+
+/// <summary>
+/// Where the rules send the traffic asked about.
+/// </summary>
+public sealed record RouteTestResponse(
+    string Verdict,
+    string Guard,
+    string Name,
+    IReadOnlyList<string> Addresses,
+    string Inbound,
+    IReadOnlyList<string> Sources,
+    RouteTestRule? Rule,
+    RouteTestExit? Exit,
+    IReadOnlyList<RouteStep> Steps);
 
 /// <summary>
 /// Whether a rule is on.
@@ -74,9 +138,13 @@ public static class RouteAnswers
             rule.IsEnabled,
             rule.Action,
             rule.Outbound,
+            rule.HoldsWhenDown,
             rule.Targets,
             rule.Sources,
+            rule.Clients,
+            rule.Inbounds,
             rule.Ports,
+            rule.SourcePorts,
             rule.Protocol,
             State(leg),
             rule.CreatedUtc,
@@ -84,29 +152,65 @@ public static class RouteAnswers
     }
 
     /// <summary>
-    /// Returns what a request asks a rule to become.
+    /// Returns what a request asks a rule to become, keeping what it stays silent about.
     /// </summary>
-    public static RouteRule Draft(RouteRequest request)
+    public static RouteRule Draft(RouteRequest request, RouteRule? held = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         return new RouteRule
         {
             Name = (request.Name ?? string.Empty).Trim(),
-            IsEnabled = request.IsEnabled,
+            IsEnabled = request.IsEnabled ?? held?.IsEnabled ?? false,
             Action = (request.Action ?? RouteAction.Out).Trim(),
             Outbound = (request.Outbound ?? string.Empty).Trim(),
+            HoldsWhenDown = request.HoldsWhenDown ?? held?.HoldsWhenDown ?? true,
             Targets = Clean(request.Targets),
             Sources = Clean(request.Sources),
+            Clients = request.Clients is null ? held?.Clients ?? [] : Clean(request.Clients),
+            Inbounds = request.Inbounds is null ? held?.Inbounds ?? [] : Clean(request.Inbounds),
             Ports = Clean(request.Ports),
+            SourcePorts = request.SourcePorts is null ? held?.SourcePorts ?? [] : Clean(request.SourcePorts),
             Protocol = (request.Protocol ?? RouteProtocol.Any).Trim(),
         };
     }
 
+    /// <summary>
+    /// Returns what a request asks the basic lists to become, keeping the one it stays silent about.
+    /// </summary>
+    public static RouteBasic Basic(RouteBasicRequest request, RouteBasic held)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(held);
+
+        return held with
+        {
+            Direct = request.Direct is null ? held.Direct : Clean(request.Direct),
+            Block = request.Block is null ? held.Block : Clean(request.Block),
+        };
+    }
+
+    /// <summary>
+    /// Returns the basic lists with what the host carries for them.
+    /// </summary>
+    public static RouteBasicResponse Basic(RouteBasic basic, RoutePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(basic);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        return new RouteBasicResponse(
+            basic.Direct,
+            basic.Block,
+            State(plan.Legs.FirstOrDefault(leg => leg.Rule.Id == RouteBasic.DirectId)),
+            State(plan.Legs.FirstOrDefault(leg => leg.Rule.Id == RouteBasic.BlockId)),
+            basic.UpdatedUtc);
+    }
+
     private static RouteStateBody State(RouteLeg? leg) => leg is null
-        ? new RouteStateBody(false, string.Empty, string.Empty, 0, 0, 0)
+        ? new RouteStateBody(false, false, string.Empty, string.Empty, 0, 0, 0)
         : new RouteStateBody(
             leg.IsLive,
+            leg.IsHeld,
             leg.Fault?.Code ?? string.Empty,
             leg.Fault?.Message ?? string.Empty,
             leg.Mark,

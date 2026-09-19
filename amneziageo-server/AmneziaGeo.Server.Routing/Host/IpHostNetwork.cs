@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using AmneziaGeo.Server.Routing.Outbound;
 
 namespace AmneziaGeo.Server.Routing.Host;
 
@@ -13,6 +15,8 @@ public sealed class IpHostNetwork : IHostNetwork
     private const string Ip = "ip";
     private const string Nft = "nft";
     private const string LinkKind = "amneziawg";
+    private const string Flags = "flags";
+    private const int UpFlag = 0x1;
 
     private static readonly char[] Blanks = [' ', '\t', '\n', '\r'];
 
@@ -40,6 +44,27 @@ public sealed class IpHostNetwork : IHostNetwork
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         return Directory.Exists(Path.Combine(NetworkClass, name));
+    }
+
+    /// <summary>
+    /// Tells whether an interface is on the host and up.
+    /// </summary>
+    public bool IsUp(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        try
+        {
+            var text = File.ReadAllText(Path.Combine(NetworkClass, name, Flags)).Trim();
+
+            return text.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(text[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var flags)
+                && (flags & UpFlag) != 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -139,6 +164,24 @@ public sealed class IpHostNetwork : IHostNetwork
     }
 
     /// <summary>
+    /// Adds the rule that refuses a marked packet no outbound takes.
+    /// </summary>
+    public async Task SealAsync(CancellationToken ct)
+    {
+        var order = OutboundRules.SealPriority.ToString(CultureInfo.InvariantCulture);
+        var words = new[] { "rule", "add", "pref", order, "fwmark", OutboundRules.SealMarks, "unreachable" };
+        if (!await HasSealAsync(["rule", "show", "pref", order], ct).ConfigureAwait(false))
+        {
+            await Quietly([Ip, .. words], ct).ConfigureAwait(false);
+        }
+
+        if (!await HasSealAsync(["-6", "rule", "show", "pref", order], ct).ConfigureAwait(false))
+        {
+            await Quietly([Ip, "-6", .. words], ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Returns the interface the host reaches the internet through.
     /// </summary>
     public async Task<string> UplinkAsync(CancellationToken ct)
@@ -219,6 +262,13 @@ public sealed class IpHostNetwork : IHostNetwork
             .ConfigureAwait(false);
 
         return result.IsOk && result.Output.Contains($"fwmark 0x{mark:x}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<bool> HasSealAsync(IReadOnlyList<string> arguments, CancellationToken ct)
+    {
+        var result = await _commands.RunAsync(Ip, arguments, null, ct).ConfigureAwait(false);
+
+        return result.IsOk && result.Output.Contains("unreachable", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<HashSet<string>?> AddressesAsync(string name, CancellationToken ct)

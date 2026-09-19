@@ -86,6 +86,22 @@ Naming a pair of paths in the panel does the same, and picking a certificate dom
 `Web:CertificateRoot` moves the directory the certificate domains are looked for in, `/etc/letsencrypt/live`
 by default.
 
+`Web:Proxies` names the reverse proxies whose `X-Forwarded-Host`, `X-Forwarded-Proto` and `X-Forwarded-For` the
+panel reads; a request from any other address is taken as it arrives. Behind a proxy this is what makes the
+subscription link of a client carry the name clients reach the server by instead of the address the request came
+in on. The list is empty by default, and a panel with no proxy in front of it needs nothing here.
+
+```json
+{
+  "Web": {
+    "Proxies": [ "127.0.0.1", "10.0.0.2" ]
+  }
+}
+```
+
+A name told in the panel outweighs all of this: the subscription takes its own domain first, then the domain of
+the panel, and only then the host the request carried.
+
 The chain is read again whenever the file behind it changes, so a renewed certificate is taken without a
 restart. A certificate the settings name and the host does not carry stops the server at start.
 

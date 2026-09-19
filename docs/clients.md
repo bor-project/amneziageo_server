@@ -42,6 +42,11 @@ The private key of a client is written out only to a caller that holds `clients:
 a name no other client carries. With `?config=<id>` it also carries the first number free in every range of the
 endpoint, as an address out of each.
 
+`POST /api/clients` fills in what the body leaves out: with no keys it makes a pair, with a private key alone it
+works out the public one, and with no address it takes the first free number of the endpoint. So a caller of its
+own needs no more than `{ "name": "...", "configId": <id> }`, and a body that names an endpoint the panel does
+not hold is answered with `unknown-config`.
+
 The panel adds a client to the interface picked in its form, and the address is written as a number: the head
 of every range comes from the interface and the number goes into each of them, so a client of an interface with
 IPv6 takes the same number in both families. A client whose addresses do not come out of one number is edited as
@@ -66,8 +71,10 @@ itself: the panel puts nothing on it.
 A port of the host is carried to a client whatever its access says, because naming the port is the
 permission: `tcp:2222:22` takes port 2222 of the host to port 22 of the client. One port of the host is
 carried once per protocol, and a client that carries addresses of both families takes the port in both.
-The client answers only when the ranges it routes into the tunnel cover the address the request came from,
-so a client that routes `0.0.0.0/0` answers everyone and a narrower list answers what it holds.
+The request reaches the client under the address of the endpoint in the tunnel, so the client answers back
+through the tunnel whatever ranges it routes there, and sees the server rather than the address the request
+came from. A client of AmneziaGeo takes it only while it lets connections in from the tunnel; the server
+alone is enough (`amneziageo config inbound <name> host`).
 
 The file and the `vpn://` link of the client name what it takes from the tunnel, so the application turns
 the flags of its own operating system on without being told twice: the file carries the lines

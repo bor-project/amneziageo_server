@@ -188,6 +188,30 @@ public class EndpointHostTests
     }
 
     [Fact]
+    public void AClientTakesACarriedPortUnderTheAddressOfTheEndpoint()
+    {
+        var text = EndpointRuleset.Text(
+            [Endpoint() with { Id = 7 }],
+            [
+                Client() with
+                {
+                    Address = ["10.0.0.5/32", "fd42:6d79:7670::cafe:5/128"],
+                    Forwards = [new PortForward("tcp", 2222, 22)],
+                },
+            ],
+            "ens3");
+
+        Assert.Contains(
+            "oifname \"awg0\" ip daddr 10.0.0.5 tcp dport 22 ct status dnat masquerade",
+            text,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "oifname \"awg0\" ip6 daddr fd42:6d79:7670::cafe:5 tcp dport 22 ct status dnat masquerade",
+            text,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AClientThatIsTurnedOffTakesNeitherTheTunnelNorAPortOfTheHost()
     {
         var text = EndpointRuleset.Text(
@@ -216,6 +240,7 @@ public class EndpointHostTests
             string.Empty);
 
         Assert.DoesNotContain("dnat", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("masquerade", text, StringComparison.Ordinal);
         Assert.Contains("oifname \"awg0\" ip daddr 10.0.0.5 udp dport 53 accept", text, StringComparison.Ordinal);
     }
 

@@ -39,6 +39,16 @@ public static class OutboundRules
     public const int FirstPriority = 10000;
 
     /// <summary>
+    /// The place in the rule list that refuses a marked packet no outbound takes.
+    /// </summary>
+    public const int SealPriority = FirstPriority + (int)(LastMark - FirstMark) + 1;
+
+    /// <summary>
+    /// The marks the outbounds take, as the rule list matches them.
+    /// </summary>
+    public const string SealMarks = "0xa600/0xffffff00";
+
+    /// <summary>
     /// Returns why the settings of an outbound are unusable, or null when they hold.
     /// </summary>
     public static OutboundFault? Check(OutboundConfig outbound)

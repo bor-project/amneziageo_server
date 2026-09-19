@@ -13,6 +13,34 @@ namespace AmneziaGeo.Server.Tests;
 public class ClientTests
 {
     [Fact]
+    public void AClientWithoutKeysIsGivenAPair()
+    {
+        var keyed = ClientDefaults.Keyed(new TunnelClient { ConfigId = 1, Name = "milena" });
+
+        Assert.True(Curve25519.IsKey(keyed.PrivateKey));
+        Assert.Equal(Curve25519.PublicOf(keyed.PrivateKey), keyed.PublicKey);
+    }
+
+    [Fact]
+    public void AClientWithOnlyAPrivateKeyIsGivenThePublicOne()
+    {
+        var pair = Curve25519.Create();
+        var keyed = ClientDefaults.Keyed(new TunnelClient { ConfigId = 1, Name = "milena", PrivateKey = pair.PrivateKey });
+
+        Assert.Equal(pair.PrivateKey, keyed.PrivateKey);
+        Assert.Equal(pair.PublicKey, keyed.PublicKey);
+    }
+
+    [Fact]
+    public void AClientThatBringsItsOwnPublicKeyKeepsIt()
+    {
+        var pair = Curve25519.Create();
+        var client = new TunnelClient { ConfigId = 1, Name = "milena", PublicKey = pair.PublicKey };
+
+        Assert.Same(client, ClientDefaults.Keyed(client));
+    }
+
+    [Fact]
     public void AFreshClientCarriesAKeyPairOfItsOwn()
     {
         var client = ClientDefaults.Fresh(1, "milena");
@@ -65,6 +93,37 @@ public class ClientTests
         Assert.Equal("client-address-reserved", Fitting("fd00::/128"));
         Assert.Equal("bad-client-address", Fitting("10.8.0.5/24"));
         Assert.Equal("bad-client-address", Fitting("10.8.0.5/32", "10.8.0.6/32"));
+    }
+
+    [Fact]
+    public void TheConfigurationOfAClientCarriesTheResolverOfThePanel()
+    {
+        var text = ClientText.Text(Endpoint(), Client(), null, 0, ["10.8.0.1"]);
+
+        Assert.Contains("DNS = 10.8.0.1", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATemplateWithNamesOfItsOwnOutweighsTheResolver()
+    {
+        var template = new ClientTemplate { Name = "own", Dns = ["9.9.9.9"] };
+        var text = ClientText.Text(Endpoint(), Client(), template, 0, ["10.8.0.1"]);
+
+        Assert.Contains("DNS = 9.9.9.9", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATemplateWithoutNamesTakesTheResolver()
+    {
+        var text = ClientText.Text(Endpoint(), Client(), new ClientTemplate { Name = "plain" }, 0, ["10.8.0.1"]);
+
+        Assert.Contains("DNS = 10.8.0.1", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithoutAResolverTheNamesOfTheEndpointStand()
+    {
+        Assert.Contains("DNS = 1.1.1.1", ClientText.Text(Endpoint(), Client()), StringComparison.Ordinal);
     }
 
     [Fact]

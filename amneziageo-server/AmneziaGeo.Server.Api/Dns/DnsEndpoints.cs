@@ -42,12 +42,28 @@ public static class DnsEndpoints
     private static async Task<IResult> SaveAsync(
         DnsRequest request,
         DnsStore store,
+        OutboundStore outbounds,
+        BalanceStore balancers,
         DnsState state,
         DnsSets sets,
         RoutePlans plans,
         CancellationToken ct)
     {
-        var result = await store.SaveAsync(DnsAnswers.Draft(request), ct).ConfigureAwait(false);
+        var draft = DnsAnswers.Draft(request);
+        if (draft.Outbound.Length > 0
+            && !DnsExit.Knows(
+                draft.Outbound,
+                await outbounds.ListAsync(ct).ConfigureAwait(false),
+                await balancers.ListAsync(ct).ConfigureAwait(false)))
+        {
+            var missing = new Failure(
+                "unknown-outbound",
+                $"there is no outbound or balancer called '{draft.Outbound}'");
+
+            return Results.Json(missing, statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var result = await store.SaveAsync(draft, ct).ConfigureAwait(false);
         if (!result.IsOk || result.Record is null)
         {
             return Results.Json(new Failure(result.Code, result.Message), statusCode: StatusCodes.Status400BadRequest);

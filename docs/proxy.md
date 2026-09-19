@@ -53,7 +53,7 @@ itself with the same arguments and starts one again three seconds after it falls
 with the panel, see [docker.md](docker.md).
 
 A client names the proxy as `wss://<host>:<port>/<path>` and the endpoint it wants as the port of the
-interface. The same shape works the other way round, for an outbound of the `ws` kind that leaves through a
+interface. A client of AmneziaGeo learns all of it from the server itself, see [hello.md](hello.md). The same shape works the other way round, for an outbound of the `ws` kind that leaves through a
 proxy elsewhere, see [outbounds.md](outbounds.md).
 
 ## The wireguard kind

@@ -4,6 +4,7 @@ using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Host;
+using AmneziaGeo.Server.Routing.Route;
 
 namespace AmneziaGeo.Server.Api.Dns;
 
@@ -13,6 +14,8 @@ namespace AmneziaGeo.Server.Api.Dns;
 public sealed class DnsHost : BackgroundService
 {
     private static readonly TimeSpan Between = TimeSpan.FromMilliseconds(500);
+
+    private const int WarmPerTick = 16;
 
     private readonly SemaphoreSlim _turn = new(1, 1);
 
@@ -30,7 +33,13 @@ public sealed class DnsHost : BackgroundService
 
     private DnsServer? _server;
 
+    private IDnsUpstream? _upstream;
+
+    private readonly Dictionary<DnsWarmName, DnsWarmTry> _asked = new();
+
     private DnsSettings _settings = DnsDefaults.Settings;
+
+    private long _turns;
 
     /// <summary>
     /// ctor
@@ -57,6 +66,12 @@ public sealed class DnsHost : BackgroundService
     public DnsSettings Settings => _settings;
 
     /// <summary>
+    /// Returns the addresses a name answers with through the way out of the resolver, or null when it is not running.
+    /// </summary>
+    public async Task<IReadOnlyList<IPAddress>?> AskAsync(string name, CancellationToken ct) =>
+        _upstream is { } upstream ? await DnsLookup.AskAsync(upstream, name, ct).ConfigureAwait(false) : null;
+
+    /// <summary>
     /// Takes the settings anew and starts the resolver over.
     /// </summary>
     public Task RestartAsync(CancellationToken ct) => StartAsync(true, ct);
@@ -66,11 +81,34 @@ public sealed class DnsHost : BackgroundService
     /// </summary>
     public Task RebindAsync(CancellationToken ct) => StartAsync(false, ct);
 
+    /// <summary>
+    /// Carries a new name of the outbound or the balancer the resolver asks through into the settings it runs with.
+    /// </summary>
+    public async Task FollowAsync(string old, string anew, CancellationToken ct)
+    {
+        await _turn.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (!string.Equals(_settings.Outbound, old, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Volatile.Write(ref _settings, _settings with { Outbound = anew });
+            _state.Took(_settings);
+        }
+        finally
+        {
+            _turn.Release();
+        }
+    }
+
     /// <inheritdoc/>
     public override async Task StopAsync(CancellationToken ct)
     {
         _server?.Stop();
         _server = null;
+        _upstream = null;
         _state.Stopped();
         await base.StopAsync(ct).ConfigureAwait(false);
     }
@@ -84,6 +122,8 @@ public sealed class DnsHost : BackgroundService
             using var timer = new PeriodicTimer(Between, _time);
             while (await timer.WaitForNextTickAsync(stopping).ConfigureAwait(false))
             {
+                Look();
+                await WarmAsync(stopping).ConfigureAwait(false);
                 await FlushAsync(stopping).ConfigureAwait(false);
             }
         }
@@ -132,8 +172,12 @@ public sealed class DnsHost : BackgroundService
 
     private void Serve(IReadOnlyList<IPAddress> addresses)
     {
+        var upstream = new DnsUpstream(
+            _settings.Upstreams,
+            DnsDefaults.Wait,
+            () => Way(Volatile.Read(ref _settings), Interlocked.Increment(ref _turns)).Mark);
         var resolver = new DnsResolver(
-            new DnsUpstream(_settings.Upstreams, DnsDefaults.Wait),
+            upstream,
             new DnsCache(_settings.CacheSize, _time),
             _sets,
             () => _plans.Held,
@@ -155,8 +199,101 @@ public sealed class DnsHost : BackgroundService
         }
 
         _server = server;
+        _upstream = upstream;
+        _asked.Clear();
         _state.Started([.. taken.Select(address => address.ToString())], _time.GetUtcNow());
-        _logger.LogInformation("the resolver answers on {Addresses} port {Port}", string.Join(", ", _state.Listening), _settings.Port);
+        _logger.LogInformation(
+            "the resolver answers on {Addresses} port {Port} and asks through {Exit}",
+            string.Join(", ", _state.Listening),
+            _settings.Port,
+            _settings.Outbound.Length == 0 ? "the host" : _settings.Outbound);
+        Look();
+    }
+
+    private DnsWay Way(DnsSettings settings, long turn) =>
+        DnsExit.Way(settings, _plans.Held?.Ways ?? RouteWays.None, turn);
+
+    private void Look()
+    {
+        if (_upstream is null)
+        {
+            return;
+        }
+
+        var fault = Way(_settings, 0).Fault?.Message;
+        if (fault == _state.Way)
+        {
+            return;
+        }
+
+        _state.Leaves(fault);
+        if (fault is null)
+        {
+            _logger.LogInformation("the resolver asks through '{Outbound}' again", _settings.Outbound);
+        }
+        else
+        {
+            _logger.LogWarning("the way out of the resolver is broken: {Fault}", fault);
+        }
+    }
+
+    private async Task WarmAsync(CancellationToken ct)
+    {
+        if (_upstream is not { } upstream)
+        {
+            return;
+        }
+
+        var lifetime = _settings.NameLifetime;
+        var names = DnsWarm.Names(_plans.Held);
+        Forget(names);
+
+        var asking = _time.GetUtcNow();
+        var wanted = names
+            .Where(one => !_asked.TryGetValue(one, out var last) || last.Again <= asking)
+            .Take(WarmPerTick)
+            .ToArray();
+
+        if (wanted.Length == 0)
+        {
+            return;
+        }
+
+        var found = await DnsWarm.AskAsync(upstream, wanted, ct).ConfigureAwait(false);
+        var answered = found.Select(one => one.Name).ToHashSet();
+        var now = _time.GetUtcNow();
+        foreach (var one in wanted)
+        {
+            _asked[one] = answered.Contains(one)
+                ? new DnsWarmTry(now + DnsWarm.Rest(lifetime), 0)
+                : Missed(one, now, lifetime);
+        }
+
+        foreach (var (name, address) in found)
+        {
+            _sets.Add(name.Rule, address, lifetime);
+        }
+    }
+
+    private DnsWarmTry Missed(DnsWarmName name, DateTimeOffset now, TimeSpan lifetime)
+    {
+        var misses = (_asked.TryGetValue(name, out var last) ? last.Misses : 0) + 1;
+
+        return new DnsWarmTry(now + DnsWarm.Again(misses, lifetime), misses);
+    }
+
+    private void Forget(IReadOnlyList<DnsWarmName> names)
+    {
+        if (_asked.Count <= names.Count)
+        {
+            return;
+        }
+
+        var held = names.ToHashSet();
+        foreach (var gone in _asked.Keys.Where(name => !held.Contains(name)).ToArray())
+        {
+            _asked.Remove(gone);
+        }
     }
 
     private async Task FlushAsync(CancellationToken ct)
@@ -200,4 +337,9 @@ public sealed class DnsHost : BackgroundService
 
         return IPAddress.TryParse(text.Trim(), out var address) ? address : null;
     }
+
+    /// <summary>
+    /// When a name is asked about again and how many times it missed.
+    /// </summary>
+    private sealed record DnsWarmTry(DateTimeOffset Again, int Misses);
 }

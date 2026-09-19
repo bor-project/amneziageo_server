@@ -2,7 +2,9 @@ using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Geo.Files;
+using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Dns;
+using AmneziaGeo.Server.Routing.Route;
 using AmneziaGeo.Server.Routing.Template;
 
 namespace AmneziaGeo.Server.Api.Clients;
@@ -22,17 +24,34 @@ public sealed class TemplateRefresher
 
     private readonly DnsState _resolver;
 
+    private readonly OutboundStore _outbounds;
+
+    private readonly BalanceStore _balancers;
+
+    private readonly BalanceLive _live;
+
     private readonly TimeProvider _time;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public TemplateRefresher(GeoStore geo, IGeoFileStore files, DnsStore dns, DnsState resolver, TimeProvider time)
+    public TemplateRefresher(
+        GeoStore geo,
+        IGeoFileStore files,
+        DnsStore dns,
+        DnsState resolver,
+        OutboundStore outbounds,
+        BalanceStore balancers,
+        BalanceLive live,
+        TimeProvider time)
     {
         _geo = geo;
         _files = files;
         _dns = dns;
         _resolver = resolver;
+        _outbounds = outbounds;
+        _balancers = balancers;
+        _live = live;
         _time = time;
     }
 
@@ -67,7 +86,10 @@ public sealed class TemplateRefresher
 
         var sources = await _geo.ListAsync(ct).ConfigureAwait(false);
         var settings = _resolver.Settings ?? await _dns.ReadAsync(ct).ConfigureAwait(false);
-        var resolver = new TemplateResolver(new DnsUpstream(settings.Upstreams, Wait));
+        var outbounds = await _outbounds.ListAsync(ct).ConfigureAwait(false);
+        var balancers = await _balancers.ListAsync(ct).ConfigureAwait(false);
+        var way = DnsExit.Way(settings, new RouteWays(outbounds, balancers, _live.Alive));
+        var resolver = new TemplateResolver(new DnsUpstream(settings.Upstreams, Wait, () => way.Mark));
 
         return await resolver.ResolveAsync(entries, GeoIndex.Load(sources, _files), ct).ConfigureAwait(false);
     }

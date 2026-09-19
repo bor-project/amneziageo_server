@@ -1,3 +1,5 @@
+using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Geo;
 
@@ -24,6 +26,11 @@ public static class RouteRules
     public const int MaxConditions = 64;
 
     /// <summary>
+    /// How many targets one of the basic lists carries.
+    /// </summary>
+    public const int MaxBasic = 1024;
+
+    /// <summary>
     /// Returns why the settings of a rule are unusable, or null when they hold.
     /// </summary>
     public static RouteFault? Check(RouteRule rule)
@@ -33,9 +40,22 @@ public static class RouteRules
         return CheckName(rule.Name)
             ?? CheckAction(rule)
             ?? CheckProtocol(rule.Protocol)
-            ?? CheckTargets(rule.Targets)
+            ?? CheckTargets(rule.Targets, MaxConditions)
             ?? CheckSources(rule.Sources)
-            ?? CheckPorts(rule.Ports);
+            ?? CheckClients(rule.Clients)
+            ?? CheckInbounds(rule.Inbounds)
+            ?? CheckPorts(rule.Ports, "bad-port", "ports")
+            ?? CheckPorts(rule.SourcePorts, "bad-source-port", "source ports");
+    }
+
+    /// <summary>
+    /// Returns why the basic lists are unusable, or null when they hold.
+    /// </summary>
+    public static RouteFault? CheckBasic(RouteBasic basic)
+    {
+        ArgumentNullException.ThrowIfNull(basic);
+
+        return CheckTargets(basic.Direct, MaxBasic) ?? CheckTargets(basic.Block, MaxBasic);
     }
 
     /// <summary>
@@ -72,6 +92,11 @@ public static class RouteRules
         if (Head(body, "geosite:") is { } category)
         {
             return Key(category) ? new GeoRule(GeoRuleKind.GeoSite, category) : null;
+        }
+
+        if (Head(body, "domain:") is { } name)
+        {
+            return name.Length > 0 && Domain(name) ? new GeoRule(GeoRuleKind.Domain, name.ToLowerInvariant()) : null;
         }
 
         if (AwgAllowedIp.TryParse(body, out var range))
@@ -123,11 +148,11 @@ public static class RouteRules
             ? null
             : new RouteFault("bad-protocol", $"'{protocol}' is not a protocol a rule matches");
 
-    private static RouteFault? CheckTargets(IReadOnlyList<string> targets)
+    private static RouteFault? CheckTargets(IReadOnlyList<string> targets, int most)
     {
-        if (targets.Count > MaxConditions)
+        if (targets.Count > most)
         {
-            return Many("targets");
+            return Many(most, "targets");
         }
 
         foreach (var target in targets)
@@ -159,26 +184,64 @@ public static class RouteRules
         return null;
     }
 
-    private static RouteFault? CheckPorts(IReadOnlyList<string> ports)
+    private static RouteFault? CheckClients(IReadOnlyList<string> clients)
     {
-        if (ports.Count > MaxConditions)
+        if (clients.Count > MaxConditions)
         {
-            return Many("ports");
+            return Many("clients");
         }
 
-        foreach (var port in ports)
+        foreach (var client in clients)
         {
-            if (!Ports(port, out _, out _))
+            if (ClientRules.CheckName(client) is not null)
             {
-                return new RouteFault("bad-port", $"'{port}' is not a port or a range of ports");
+                return new RouteFault("bad-rule-client", $"'{client}' is not a name a client takes");
             }
         }
 
         return null;
     }
 
-    private static RouteFault Many(string what) =>
-        new("too-many", $"a rule carries at most {MaxConditions} {what}");
+    private static RouteFault? CheckInbounds(IReadOnlyList<string> inbounds)
+    {
+        if (inbounds.Count > MaxConditions)
+        {
+            return Many("interfaces");
+        }
+
+        foreach (var inbound in inbounds)
+        {
+            if (ConfigRules.CheckName(inbound) is not null)
+            {
+                return new RouteFault("bad-rule-inbound", $"'{inbound}' is not a name an interface takes");
+            }
+        }
+
+        return null;
+    }
+
+    private static RouteFault? CheckPorts(IReadOnlyList<string> ports, string code, string what)
+    {
+        if (ports.Count > MaxConditions)
+        {
+            return Many(what);
+        }
+
+        foreach (var port in ports)
+        {
+            if (!Ports(port, out _, out _))
+            {
+                return new RouteFault(code, $"'{port}' is not a port or a range of ports");
+            }
+        }
+
+        return null;
+    }
+
+    private static RouteFault Many(string what) => Many(MaxConditions, what);
+
+    private static RouteFault Many(int most, string what) =>
+        new("too-many", $"a rule carries at most {most} {what}");
 
     private static string? Head(string value, string mark) =>
         value.StartsWith(mark, StringComparison.OrdinalIgnoreCase) ? value[mark.Length..].Trim() : null;

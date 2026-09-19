@@ -49,9 +49,10 @@ public sealed class OutboundHost
 
         try
         {
+            await _network.SealAsync(ct).ConfigureAwait(false);
             if (!outbound.IsEnabled)
             {
-                await WithdrawAsync(outbound, ct).ConfigureAwait(false);
+                await TakeOffAsync(outbound, ct).ConfigureAwait(false);
 
                 return OutboundState.Missing(outbound.Name);
             }
@@ -81,6 +82,31 @@ public sealed class OutboundHost
     {
         ArgumentNullException.ThrowIfNull(outbound);
 
+        await _network.SealAsync(ct).ConfigureAwait(false);
+        await TakeOffAsync(outbound, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Brings up the interface of an outbound the host holds down, telling whether it had to.
+    /// </summary>
+    public async Task<bool> MendAsync(OutboundConfig outbound, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(outbound);
+
+        if (!outbound.IsEnabled || !IsDown(outbound))
+        {
+            return false;
+        }
+
+        await _network.AddressAsync(outbound.Name, OutboundDevice.Hosts(outbound.Address), ct).ConfigureAwait(false);
+        await _network.UpAsync(outbound.Name, outbound.Mtu, ct).ConfigureAwait(false);
+        await _network.RouteAsync(outbound.Name, outbound.Table, ct).ConfigureAwait(false);
+
+        return true;
+    }
+
+    private async Task TakeOffAsync(OutboundConfig outbound, CancellationToken ct)
+    {
         await _network
             .RuleAsync(outbound.Mark, outbound.Table, OutboundRules.PriorityOf(outbound.Mark), false, ct)
             .ConfigureAwait(false);
@@ -139,15 +165,22 @@ public sealed class OutboundHost
         var reading = _probes?.Find(outbound.Name);
         if (!OutboundKind.HasLink(outbound.Kind))
         {
-            return new OutboundState(outbound.Name, true, string.Empty, null, 0, 0, true, string.Empty, reading);
+            return new OutboundState(outbound.Name, true, string.Empty, null, 0, 0, true, string.Empty, reading)
+            {
+                Counted = false,
+            };
         }
 
         try
         {
-            return OutboundDevice.State(outbound, _devices.Find(outbound.Name), _time.GetUtcNow()) with
+            var state = OutboundDevice.State(outbound, _devices.Find(outbound.Name), _time.GetUtcNow()) with
             {
                 Probe = reading,
             };
+
+            return IsDown(outbound)
+                ? state with { IsAlive = false, Fault = $"the interface '{outbound.Name}' is down" }
+                : state;
         }
         catch (Exception ex) when (ex is NetlinkException or IOException or InvalidOperationException)
         {
@@ -178,6 +211,9 @@ public sealed class OutboundHost
         await _network.UpAsync(outbound.Name, outbound.Mtu, ct).ConfigureAwait(false);
         await _network.RouteAsync(outbound.Name, outbound.Table, ct).ConfigureAwait(false);
     }
+
+    private bool IsDown(OutboundConfig outbound) =>
+        OutboundKind.HasLink(outbound.Kind) && _network.HasLink(outbound.Name) && !_network.IsUp(outbound.Name);
 
     private bool Holds(OutboundConfig outbound) =>
         _devices.Find(outbound.Name)?.Peers.All(peer => peer.PublicKey == outbound.PeerKey) == true;

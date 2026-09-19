@@ -41,6 +41,8 @@ public sealed record RouteResult(RouteOutcome Outcome, string Code, string Messa
 /// </summary>
 public sealed class RouteStore
 {
+    private const long BasicRow = 1;
+
     private static readonly char[] Breaks = [',', ' ', '\t', '\n', '\r'];
 
     private readonly AppDbContext _db;
@@ -210,6 +212,68 @@ public sealed class RouteStore
         return RouteResult.Done(Read(entity));
     }
 
+    /// <summary>
+    /// Puts a rule at a place in the order, counting from one.
+    /// </summary>
+    public async Task<RouteResult> PlaceAsync(long id, int place, CancellationToken ct)
+    {
+        var all = await _db.Rules.OrderBy(rule => rule.Position).ToListAsync(ct).ConfigureAwait(false);
+        var entity = all.FirstOrDefault(rule => rule.Id == id);
+        if (entity is null)
+        {
+            return Missing(id);
+        }
+
+        all.Remove(entity);
+        all.Insert(Math.Clamp(place, 1, all.Count + 1) - 1, entity);
+        for (var at = 0; at < all.Count; at++)
+        {
+            all[at].Position = at + 1;
+        }
+
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return RouteResult.Done(Read(entity));
+    }
+
+    /// <summary>
+    /// Returns the basic lists the panel holds.
+    /// </summary>
+    public async Task<RouteBasic> ReadBasicAsync(CancellationToken ct)
+    {
+        var held = await _db.RouteBasics.AsNoTracking().FirstOrDefaultAsync(row => row.Id == BasicRow, ct)
+            .ConfigureAwait(false);
+
+        return held is null ? RouteBasic.Empty : Read(held);
+    }
+
+    /// <summary>
+    /// Saves the basic lists, returning why they were refused, or null when they went through.
+    /// </summary>
+    public async Task<RouteFault?> SaveBasicAsync(RouteBasic basic, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(basic);
+
+        if (RouteRules.CheckBasic(basic) is { } fault)
+        {
+            return fault;
+        }
+
+        var held = await _db.RouteBasics.FirstOrDefaultAsync(row => row.Id == BasicRow, ct).ConfigureAwait(false);
+        if (held is null)
+        {
+            held = new RouteBasicEntity { Id = BasicRow };
+            _db.RouteBasics.Add(held);
+        }
+
+        held.Direct = string.Join(", ", basic.Direct);
+        held.Block = string.Join(", ", basic.Block);
+        held.UpdatedUtc = _time.GetUtcNow();
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return null;
+    }
+
     private async Task<int> NextPositionAsync(CancellationToken ct)
     {
         var last = await _db.Rules.MaxAsync(rule => (int?)rule.Position, ct).ConfigureAwait(false);
@@ -231,11 +295,22 @@ public sealed class RouteStore
         IsEnabled = entity.IsEnabled,
         Action = entity.Action,
         Outbound = entity.Outbound,
+        HoldsWhenDown = entity.HoldsWhenDown,
         Targets = Parts(entity.Targets),
         Sources = Parts(entity.Sources),
+        Clients = Parts(entity.Clients),
+        Inbounds = Parts(entity.Inbounds),
         Ports = Parts(entity.Ports),
+        SourcePorts = Parts(entity.SourcePorts),
         Protocol = entity.Protocol,
         CreatedUtc = entity.CreatedUtc,
+        UpdatedUtc = entity.UpdatedUtc,
+    };
+
+    private static RouteBasic Read(RouteBasicEntity entity) => new()
+    {
+        Direct = Parts(entity.Direct),
+        Block = Parts(entity.Block),
         UpdatedUtc = entity.UpdatedUtc,
     };
 
@@ -246,9 +321,13 @@ public sealed class RouteStore
         entity.IsEnabled = rule.IsEnabled;
         entity.Action = rule.Action;
         entity.Outbound = rule.Outbound.Trim();
+        entity.HoldsWhenDown = rule.HoldsWhenDown;
         entity.Targets = string.Join(", ", rule.Targets);
         entity.Sources = string.Join(", ", rule.Sources);
+        entity.Clients = string.Join(", ", rule.Clients);
+        entity.Inbounds = string.Join(", ", rule.Inbounds);
         entity.Ports = string.Join(", ", rule.Ports);
+        entity.SourcePorts = string.Join(", ", rule.SourcePorts);
         entity.Protocol = rule.Protocol;
     }
 

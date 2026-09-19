@@ -21,6 +21,11 @@ public sealed record DnsSettings
     public IReadOnlyList<string> Upstreams { get; init; } = DnsDefaults.Upstreams;
 
     /// <summary>
+    /// The outbound the questions are asked through, empty for the way out of the host.
+    /// </summary>
+    public string Outbound { get; init; } = string.Empty;
+
+    /// <summary>
     /// The addresses the resolver listens on, empty for the addresses of the configurations.
     /// </summary>
     public IReadOnlyList<string> Listen { get; init; } = [];
@@ -75,6 +80,7 @@ public sealed record DnsSettings
         return IsEnabled != other.IsEnabled
             || Port != other.Port
             || !Upstreams.SequenceEqual(other.Upstreams, StringComparer.Ordinal)
+            || !string.Equals(Outbound, other.Outbound, StringComparison.Ordinal)
             || !Listen.SequenceEqual(other.Listen, StringComparer.Ordinal)
             || NameMinutes != other.NameMinutes
             || CacheSize != other.CacheSize

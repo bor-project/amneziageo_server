@@ -146,7 +146,7 @@ public sealed class OutboundStore
     }
 
     /// <summary>
-    /// Replaces the settings of an outbound, keeping its mark and its place.
+    /// Replaces the settings of an outbound, keeping its mark and its place and carrying a new name into what names it.
     /// </summary>
     public async Task<OutboundResult> ChangeAsync(long id, OutboundConfig draft, CancellationToken ct)
     {
@@ -170,8 +170,11 @@ public sealed class OutboundStore
             return OutboundResult.No(OutboundOutcome.Invalid, fault.Code, fault.Message);
         }
 
+        var old = entity.Name;
+        var now = _time.GetUtcNow();
         Write(entity, full);
-        entity.UpdatedUtc = _time.GetUtcNow();
+        entity.UpdatedUtc = now;
+        await NameFollow.WayAsync(_db, old, entity.Name, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return OutboundResult.Done(Read(entity));
@@ -196,7 +199,7 @@ public sealed class OutboundStore
     }
 
     /// <summary>
-    /// Removes an outbound.
+    /// Removes an outbound, unless a rule, a balancer or the resolver leaves through it.
     /// </summary>
     public async Task<OutboundResult> RemoveAsync(long id, CancellationToken ct)
     {
@@ -204,6 +207,11 @@ public sealed class OutboundStore
         if (entity is null)
         {
             return Missing(id);
+        }
+
+        if (await UserAsync(entity.Name, ct).ConfigureAwait(false) is { } user)
+        {
+            return OutboundResult.No(OutboundOutcome.Invalid, "outbound-in-use", user);
         }
 
         var gone = Read(entity);
@@ -243,6 +251,25 @@ public sealed class OutboundStore
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return OutboundResult.Done(Read(entity));
+    }
+
+    private async Task<string?> UserAsync(string name, CancellationToken ct)
+    {
+        if (await _db.Rules.AnyAsync(rule => rule.Outbound == name, ct).ConfigureAwait(false))
+        {
+            return $"a rule leaves through the outbound '{name}'";
+        }
+
+        var balancers = await _db.Balancers.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
+        var balancer = balancers.FirstOrDefault(one => NameFollow.Names(one.Members, name, StringComparer.Ordinal));
+        if (balancer is not null)
+        {
+            return $"the balancer '{balancer.Name}' picks from the outbound '{name}'";
+        }
+
+        return await NameFollow.AsksThroughAsync(_db, name, ct).ConfigureAwait(false)
+            ? $"the resolver asks through the outbound '{name}'"
+            : null;
     }
 
     private async Task<bool> TakenAsync(string name, long id, CancellationToken ct)

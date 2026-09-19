@@ -21,6 +21,7 @@ answer of the resolver is where the addresses come from.
 | Port | the port questions are taken on, 53 by default |
 | Listen on | the addresses questions are taken on, empty for the addresses of the configurations |
 | Upstream servers | the name servers questions are passed to, `1.1.1.1` or `8.8.8.8:5300` |
+| Ask through the channel | the outbound or the balancer the questions leave through, empty for the way out of the host |
 | An address lives | how long an answered address stays in the set of a rule, in minutes |
 | Answers held in memory | how many answers are kept back, zero for none |
 | An answer lives from, to | the bounds the lifetime of a kept answer is clamped to, in seconds |
@@ -31,6 +32,44 @@ answer of the resolver is where the addresses come from.
 A port under 1024 needs `CAP_NET_BIND_SERVICE`: under an ordinary account the resolver reports
 `Permission denied` and takes no address. An address that is not on the host is skipped, and the
 resolver answers on the rest.
+
+The resolver also asks about the names of the rules itself, without waiting for a client: every name a rule
+matches by, including the ones a `geosite:` category stands for, is asked about and the answers go into the set
+of that rule. So a rule works from the moment it is saved, even for a service the client resolved earlier and
+holds in its own cache. Names are asked about in batches of sixteen twice a second, at most 256 per rule, and
+each name that answered is asked again once half of `An address lives` has passed. A name that did not answer
+is asked again in two seconds, and the wait doubles with every miss up to a minute, so the sets fill as soon
+as the channel of the resolver carries again. A name several rules match by is asked about once per rule, so a
+rule added later fills its own set without waiting for the others. Names of rules the panel no longer holds
+are forgotten. Keywords and regular expressions of a
+category are left alone: there is nothing to ask about.
+
+While the resolver runs on port 53 and answers on the addresses of the configurations, the `DNS` line of every
+client carries the address of its own configuration instead of public name servers, and the same goes for the
+links a subscription hands out. A template with name servers of its own outweighs it; a template without them
+takes the resolver. When the resolver is off, answers on another port, or listens only on addresses outside the
+tunnel of that configuration, the client takes what the configuration or the template names. Taking the
+questions of the clients stays useful for the clients that ask elsewhere anyway, but the chain no longer rests
+on it.
+
+The questions leave through the way out of the host until a channel is picked. Where the local network
+answers about a service differently from the network behind the channel, a rule by name fills its set with
+the wrong addresses or with none at all, and the traffic never reaches the channel the rule sends it to.
+`Ask through the channel` puts the mark of that outbound on the questions, the mark its probe already
+carries, so the answers come from where the traffic is going. `PUT /api/dns` refuses a channel the panel
+does not hold with `unknown-outbound`. The entries of the client templates are resolved the same way.
+
+The channel is picked again for every question. A balancer hands the questions to its first member that
+carries traffic, and a `round` balancer hands them out to the members that carry in turn; a `sticky` one acts
+as `priority`, since every question comes from the host itself. So the resolver outlives the death of one
+channel the way the rules do. When none of the members carries, or the one outbound picked carries nothing,
+the questions still go into the channel, and `fault` in the state of the resolver says what is wrong.
+
+A question is never sent through the way out of the host once a channel is picked. While the outbound is
+turned off, the balancer is turned off or holds no outbound that is on, or the panel holds nothing under the name,
+the resolver asks nothing and answers the clients with `SERVFAIL`; the same goes for the names of the rules it
+asks about itself, the route tester and the entries of the templates. `fault` then names the reason, and the
+panel shows it on the `DNS` page.
 
 `Save` writes the settings down, and the resolver and the rules take them at `Restart`, the button that
 shows in the header while saved settings wait for it. It calls `POST /api/dns/restart`, or starts the whole

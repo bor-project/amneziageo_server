@@ -43,6 +43,7 @@ app.SettleProxies();
 app.SettleFirewall();
 app.StartOverview();
 
+app.UseForwarded();
 app.UseTunnelGate();
 app.UseSubscriptions();
 app.UsePanel();

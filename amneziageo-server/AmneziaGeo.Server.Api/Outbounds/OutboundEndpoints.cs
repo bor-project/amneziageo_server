@@ -1,5 +1,6 @@
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Configs;
+using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Core.Crypto;
@@ -147,6 +148,7 @@ public static class OutboundEndpoints
         OutboundStore store,
         OutboundHost host,
         RouteApplier routes,
+        DnsHost resolver,
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -163,6 +165,10 @@ public static class OutboundEndpoints
 
         var state = await host.ApplyAsync(result.Record!, ct).ConfigureAwait(false);
         await FirewallAsync(store, host, routes, ct).ConfigureAwait(false);
+        if (held is not null)
+        {
+            await resolver.FollowAsync(held.Name, result.Record!.Name, ct).ConfigureAwait(false);
+        }
 
         return Results.Ok(OutboundAnswers.Outbound(result.Record!, state, true));
     }

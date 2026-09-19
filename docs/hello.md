@@ -63,7 +63,8 @@ What the server answers a client that proved its key:
       "limit": 104857600,
       "expires": "2026-09-12T13:47:58+00:00"
     },
-    "subscription": { "url": "https://host:2096/sub/<subscription>", "updateHours": 12 }
+    "subscription": { "url": "https://host:2096/sub/<subscription>", "updateHours": 12 },
+    "websocket": { "host": "vpn.example", "port": 443, "path": "<secret path>", "target": 51820 }
   }
 }
 ```
@@ -77,8 +78,27 @@ rest, so a new feature needs nothing from the clients that do not know it yet. O
 |---|---|---|
 | `speed` | always | `down`, `up`, `limit`, `expires` |
 | `subscription` | the subscriptions are on and the client carries one, see [subscriptions.md](subscriptions.md) | `url`, `updateHours` |
+| `websocket` | a `ws` proxy is turned on and has a certificate, see [proxy.md](proxy.md) | `host`, `port`, `path`, `target` |
 
 The addresses carry the host and port the request arrived at.
+
+## The websocket front
+
+`websocket` names the front a client carries its tunnel through when the network passes nothing but web
+traffic. It comes from the first `ws` proxy that is turned on and has a certificate, its own or the one of the
+panel; a proxy that names no sources goes ahead of one that does.
+
+| Argument | What it holds |
+|---|---|
+| `host` | The host of the endpoint when the certificate of the proxy holds it, else the first name the certificate carries, so the client checks the certificate against a name it was issued for. Empty when the endpoint names no host and the certificate carries no name |
+| `port` | The port of the proxy |
+| `path` | The secret path of the proxy, without slashes around it |
+| `target` | The UDP port of the interface, the one the proxy hands the tunnel to |
+
+A client of AmneziaGeo takes the front as the websocket settings of the configuration while those stand at
+their defaults or already name this front: `wss://<host>:<port>/<path>`, under TLS with the certificate
+checked. It takes it only from an answer that carries the countersign and came inside the tunnel, and only
+when `target` is the port of its Endpoint. Turning the websocket on stays with the user.
 
 ## The countersign of the server
 

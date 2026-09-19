@@ -18,6 +18,7 @@ export interface DnsDraft {
   isEnabled: boolean
   port: number
   upstreams: string[]
+  outbound: string
   listen: string[]
   nameMinutes: number
   cacheSize: number
@@ -54,6 +55,7 @@ export function draftOf(resolver: Resolver): DnsDraft {
     isEnabled: resolver.isEnabled,
     port: resolver.port,
     upstreams: resolver.upstreams,
+    outbound: resolver.outbound,
     listen: resolver.listen,
     nameMinutes: resolver.nameMinutes,
     cacheSize: resolver.cacheSize,

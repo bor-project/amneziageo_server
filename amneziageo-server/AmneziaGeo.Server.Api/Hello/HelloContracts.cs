@@ -37,6 +37,15 @@ public sealed record SubscriptionFeature(string Url, int UpdateHours);
 public sealed record SpeedFeature(string Down, string Up, long Limit, DateTimeOffset Expires);
 
 /// <summary>
+/// Arguments of the websocket feature.
+/// </summary>
+/// <param name="Host">The name the front answers under, empty for the host of the Endpoint.</param>
+/// <param name="Port">The TCP port of the front.</param>
+/// <param name="Path">The secret path the front serves the tunnel under.</param>
+/// <param name="Target">The UDP port the front hands the tunnel to.</param>
+public sealed record WebSocketFeature(string Host, int Port, string Path, int Target);
+
+/// <summary>
 /// What the server lets a client that proved its key know about itself.
 /// </summary>
 /// <param name="Server">The name the panel answers under.</param>
@@ -92,4 +101,9 @@ public static class FeatureNames
     /// The measurement of the speed against the server.
     /// </summary>
     public const string Speed = "speed";
+
+    /// <summary>
+    /// The websocket front the tunnel is carried through.
+    /// </summary>
+    public const string WebSocket = "websocket";
 }

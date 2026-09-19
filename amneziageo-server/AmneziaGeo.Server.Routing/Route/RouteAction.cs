@@ -11,6 +11,11 @@ public static class RouteAction
     public const string Out = "out";
 
     /// <summary>
+    /// Sends the traffic out the way the host sends its own.
+    /// </summary>
+    public const string Direct = "direct";
+
+    /// <summary>
     /// Drops the traffic.
     /// </summary>
     public const string Block = "block";
@@ -18,7 +23,7 @@ public static class RouteAction
     /// <summary>
     /// Every action a rule takes.
     /// </summary>
-    public static readonly string[] All = [Out, Block];
+    public static readonly string[] All = [Out, Direct, Block];
 
     /// <summary>
     /// Tells whether a name is an action the server knows.

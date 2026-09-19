@@ -36,6 +36,11 @@ public sealed record RouteRule
     public string Outbound { get; init; } = string.Empty;
 
     /// <summary>
+    /// Whether the traffic is held back while the way out of the rule carries nothing.
+    /// </summary>
+    public bool HoldsWhenDown { get; init; } = true;
+
+    /// <summary>
     /// What the traffic goes to: geo keys, domains and address ranges.
     /// </summary>
     public IReadOnlyList<string> Targets { get; init; } = [];
@@ -46,9 +51,24 @@ public sealed record RouteRule
     public IReadOnlyList<string> Sources { get; init; } = [];
 
     /// <summary>
+    /// The clients of the panel the traffic comes from, by name.
+    /// </summary>
+    public IReadOnlyList<string> Clients { get; init; } = [];
+
+    /// <summary>
+    /// The interfaces the traffic comes in on.
+    /// </summary>
+    public IReadOnlyList<string> Inbounds { get; init; } = [];
+
+    /// <summary>
     /// The ports the traffic goes to, single or as a range.
     /// </summary>
     public IReadOnlyList<string> Ports { get; init; } = [];
+
+    /// <summary>
+    /// The ports the traffic comes from, single or as a range.
+    /// </summary>
+    public IReadOnlyList<string> SourcePorts { get; init; } = [];
 
     /// <summary>
     /// The protocol the traffic carries.

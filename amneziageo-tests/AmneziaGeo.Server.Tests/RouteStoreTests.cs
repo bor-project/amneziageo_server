@@ -118,6 +118,76 @@ public class RouteStoreTests
         Assert.Equal(RouteOutcome.Unknown, (await bench.Rules.RemoveAsync(7, CancellationToken.None)).Outcome);
     }
 
+    [Fact]
+    public async Task ARuleIsPutAtAPlaceAndTheOthersCloseUp()
+    {
+        using var bench = new Bench();
+        await bench.Rules.AddAsync(Rule("first"), CancellationToken.None);
+        await bench.Rules.AddAsync(Rule("second"), CancellationToken.None);
+        var third = await bench.Rules.AddAsync(Rule("third"), CancellationToken.None);
+
+        var placed = await bench.Rules.PlaceAsync(third.Record!.Id, 1, CancellationToken.None);
+        var held = await bench.Rules.ListAsync(CancellationToken.None);
+
+        Assert.True(placed.IsOk, placed.Message);
+        Assert.Equal(["third", "first", "second"], held.Select(rule => rule.Name));
+        Assert.Equal([1, 2, 3], held.Select(rule => rule.Position));
+    }
+
+    [Fact]
+    public async Task APlaceBeyondTheEndPutsTheRuleLast()
+    {
+        using var bench = new Bench();
+        var first = await bench.Rules.AddAsync(Rule("first"), CancellationToken.None);
+        await bench.Rules.AddAsync(Rule("second"), CancellationToken.None);
+
+        await bench.Rules.PlaceAsync(first.Record!.Id, 99, CancellationToken.None);
+
+        Assert.Equal(["second", "first"], (await bench.Rules.ListAsync(CancellationToken.None)).Select(rule => rule.Name));
+        Assert.Equal(RouteOutcome.Unknown, (await bench.Rules.PlaceAsync(77, 1, CancellationToken.None)).Outcome);
+    }
+
+    [Fact]
+    public async Task TheClientsTheInterfacesAndTheSourcePortsOfARuleAreKept()
+    {
+        using var bench = new Bench();
+        var draft = Rule("first") with { Clients = ["bor", "guest"], Inbounds = ["awg1"], SourcePorts = ["5000-6000"] };
+
+        var added = await bench.Rules.AddAsync(draft, CancellationToken.None);
+        var held = await bench.Rules.FindAsync(added.Record!.Id, CancellationToken.None);
+
+        Assert.Equal(["bor", "guest"], held!.Clients);
+        Assert.Equal(["awg1"], held.Inbounds);
+        Assert.Equal(["5000-6000"], held.SourcePorts);
+    }
+
+    [Fact]
+    public async Task TheBasicListsAreEmptyUntilSavedAndKeptAfter()
+    {
+        using var bench = new Bench();
+        Assert.Empty((await bench.Rules.ReadBasicAsync(CancellationToken.None)).Direct);
+
+        var fault = await bench.Rules.SaveBasicAsync(
+            new RouteBasic { Direct = ["geoip:ru", "ya.ru"], Block = ["geosite:category-ads-all"] },
+            CancellationToken.None);
+        var held = await bench.Rules.ReadBasicAsync(CancellationToken.None);
+
+        Assert.Null(fault);
+        Assert.Equal(["geoip:ru", "ya.ru"], held.Direct);
+        Assert.Equal(["geosite:category-ads-all"], held.Block);
+    }
+
+    [Fact]
+    public async Task ABasicListWithABrokenTargetIsRefusedAndNothingIsSaved()
+    {
+        using var bench = new Bench();
+
+        var fault = await bench.Rules.SaveBasicAsync(new RouteBasic { Block = ["what is this"] }, CancellationToken.None);
+
+        Assert.Equal("bad-target", fault?.Code);
+        Assert.Empty((await bench.Rules.ReadBasicAsync(CancellationToken.None)).Block);
+    }
+
     private static RouteRule Rule(string name) => RouteDefaults.Fresh(name) with
     {
         Outbound = "direct",

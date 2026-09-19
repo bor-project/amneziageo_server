@@ -18,12 +18,35 @@ public static class RouteRuleset
     /// <summary>
     /// Returns the name of the set that holds the ranges of a rule.
     /// </summary>
-    public static string RangeSet(long id, bool six) => $"r{id}v{(six ? 6 : 4)}";
+    public static string RangeSet(long id, bool six) => $"r{Tag(id)}v{(six ? 6 : 4)}";
 
     /// <summary>
     /// Returns the name of the set the resolver puts the addresses of a rule into.
     /// </summary>
-    public static string NameSet(long id, bool six) => $"n{id}v{(six ? 6 : 4)}";
+    public static string NameSet(long id, bool six) => $"n{Tag(id)}v{(six ? 6 : 4)}";
+
+    /// <summary>
+    /// Returns the rule a set of the resolver belongs to, or null when the set is not one.
+    /// </summary>
+    public static long? NameSetRule(string set)
+    {
+        ArgumentNullException.ThrowIfNull(set);
+
+        if (set.Length <= 3 || set[0] != 'n' || set[^2] != 'v')
+        {
+            return null;
+        }
+
+        var body = set.AsSpan(1, set.Length - 3);
+        var basic = body.Length > 1 && body[0] == 'b';
+        var digits = basic ? body[1..] : body;
+        if (!long.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var rule))
+        {
+            return null;
+        }
+
+        return basic ? -rule : rule;
+    }
 
     /// <summary>
     /// Returns the name of the set that holds the name servers answering over HTTPS.
@@ -37,7 +60,7 @@ public static class RouteRuleset
     {
         ArgumentNullException.ThrowIfNull(plan);
 
-        var live = plan.Legs.Where(leg => leg.IsLive).ToArray();
+        var live = plan.Legs.Where(leg => leg.IsOnHost).ToArray();
         var text = new StringBuilder();
         text.Append("table inet ").Append(TableName).Append('\n');
         text.Append("delete table inet ").Append(TableName).Append('\n');
@@ -54,6 +77,7 @@ public static class RouteRuleset
         if (plan.Inbound.Count > 0)
         {
             text.Append("\t\tiifname != { ").Append(Quoted(plan.Inbound)).Append(" } accept\n");
+            text.Append("\t\tct state invalid drop\n");
             text.Append("\t\tct mark != 0x00000000 meta mark set ct mark accept\n");
             text.Append("\t\tct state != new accept\n");
             text.Append("\t\tjump decide\n");
@@ -107,7 +131,7 @@ public static class RouteRuleset
     {
         ArgumentNullException.ThrowIfNull(leg);
 
-        if (leg.Rule.Targets.Count == 0 && leg.Rule.Sources.Count == 0)
+        if (leg.Rule.Targets.Count == 0 && !leg.IsBySource)
         {
             return Plain(leg);
         }
@@ -117,13 +141,14 @@ public static class RouteRuleset
         {
             var family = six ? "ip6" : "ip";
             var sources = six ? leg.Sources6 : leg.Sources4;
-            if (leg.Rule.Sources.Count > 0 && sources.Count == 0)
+            if (leg.IsBySource && sources.Count == 0)
             {
                 continue;
             }
 
             var tail = Ports(leg.Rule) + Verdict(leg, six);
-            var head = sources.Count > 0 ? $"{family} saddr {{ {string.Join(", ", sources)} }} " : string.Empty;
+            var head = Inbound(leg.Rule)
+                + (sources.Count > 0 ? $"{family} saddr {{ {string.Join(", ", sources)} }} " : string.Empty);
             foreach (var set in Sets(leg, six))
             {
                 lines.Add($"{head}{family} daddr @{set} {tail}");
@@ -140,15 +165,16 @@ public static class RouteRuleset
 
     private static IReadOnlyList<string> Plain(RouteLeg leg)
     {
+        var head = Inbound(leg.Rule);
         if (!Sticky(leg))
         {
-            return [Ports(leg.Rule) + Verdict(leg, false)];
+            return [head + Ports(leg.Rule) + Verdict(leg, false)];
         }
 
         return
         [
-            "meta nfproto ipv4 " + Ports(leg.Rule) + Verdict(leg, false),
-            "meta nfproto ipv6 " + Ports(leg.Rule) + Verdict(leg, true),
+            head + "meta nfproto ipv4 " + Ports(leg.Rule) + Verdict(leg, false),
+            head + "meta nfproto ipv6 " + Ports(leg.Rule) + Verdict(leg, true),
         ];
     }
 
@@ -231,24 +257,39 @@ public static class RouteRuleset
         text.Append("\t}\n\n");
     }
 
+    private static string Inbound(RouteRule rule) =>
+        rule.Inbounds.Count == 0 ? string.Empty : $"iifname {{ {Quoted(rule.Inbounds)} }} ";
+
     private static string Ports(RouteRule rule)
     {
-        var ports = string.Join(", ", rule.Ports.Select(port => port.Trim()));
+        var from = string.Join(", ", rule.SourcePorts.Select(port => port.Trim()));
+        var to = string.Join(", ", rule.Ports.Select(port => port.Trim()));
         if (rule.Protocol == RouteProtocol.Any)
         {
-            return ports.Length == 0 ? string.Empty : $"meta l4proto {{ tcp, udp }} th dport {{ {ports} }} ";
+            return from.Length == 0 && to.Length == 0
+                ? string.Empty
+                : "meta l4proto { tcp, udp } " + Pair("th", from, to);
         }
 
-        return ports.Length == 0
+        return from.Length == 0 && to.Length == 0
             ? $"meta l4proto {rule.Protocol} "
-            : $"{rule.Protocol} dport {{ {ports} }} ";
+            : Pair(rule.Protocol, from, to);
     }
+
+    private static string Pair(string head, string from, string to) =>
+        (from.Length > 0 ? $"{head} sport {{ {from} }} " : string.Empty)
+        + (to.Length > 0 ? $"{head} dport {{ {to} }} " : string.Empty);
 
     private static string Verdict(RouteLeg leg, bool six)
     {
-        if (leg.IsBlock)
+        if (leg.IsBlock || leg.IsHeld)
         {
             return "drop";
+        }
+
+        if (leg.IsDirect)
+        {
+            return "return";
         }
 
         return leg.Exit.IsSpread
@@ -261,7 +302,7 @@ public static class RouteRuleset
         var count = exit.Marks.Count.ToString(CultureInfo.InvariantCulture);
 
         return exit.Strategy == BalanceStrategy.Sticky
-            ? $"jhash {(six ? "ip6" : "ip")} saddr mod {count}"
+            ? $"jhash {(six ? "ip6" : "ip")} saddr mod {count} seed {Hex(exit.Seed)}"
             : $"numgen inc mod {count}";
     }
 
@@ -269,6 +310,9 @@ public static class RouteRuleset
         string.Join(", ", exit.Marks.Select((mark, at) => $"{at.ToString(CultureInfo.InvariantCulture)} : {Hex(mark)}"));
 
     private static string Hex(uint mark) => "0x" + mark.ToString("x", CultureInfo.InvariantCulture);
+
+    private static string Tag(long id) =>
+        id < 0 ? "b" + (-id).ToString(CultureInfo.InvariantCulture) : id.ToString(CultureInfo.InvariantCulture);
 
     private static string Quoted(IReadOnlyList<string> names) =>
         string.Join(", ", names.Select(name => $"\"{name}\""));

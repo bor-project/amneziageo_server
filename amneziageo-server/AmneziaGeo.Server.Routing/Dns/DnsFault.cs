@@ -1,7 +1,7 @@
 namespace AmneziaGeo.Server.Routing.Dns;
 
 /// <summary>
-/// Why the resolver settings were refused.
+/// What is wrong with the resolver settings or with the way out of the resolver.
 /// </summary>
 /// <param name="Code">The short name of the refusal.</param>
 /// <param name="Message">What exactly is wrong.</param>

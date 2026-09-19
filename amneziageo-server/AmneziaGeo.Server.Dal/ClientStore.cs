@@ -299,7 +299,8 @@ public sealed class ClientStore
     }
 
     /// <summary>
-    /// Replaces the settings of a client, carrying its state, its template and its daily limit over to its devices.
+    /// Replaces the settings of a client, carrying its state, its template and its daily limit over to its devices
+    /// and its new name into the rules.
     /// </summary>
     public async Task<ClientResult> ChangeAsync(long id, TunnelClient draft, CancellationToken ct)
     {
@@ -329,11 +330,13 @@ public sealed class ClientStore
             return refusal;
         }
 
+        var old = entity.Name;
         var now = _time.GetUtcNow();
         Write(entity, wanted);
         entity.UpdatedUtc = now;
         await FollowAsync(id, wanted.IsEnabled, wanted.TemplateId, wanted.DailyLimit, wanted.Inbound, now, ct)
             .ConfigureAwait(false);
+        await NameFollow.ClientAsync(_db, old, entity.Name, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ClientResult.Done(Read(entity));

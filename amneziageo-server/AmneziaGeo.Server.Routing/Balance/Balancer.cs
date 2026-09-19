@@ -36,6 +36,11 @@ public sealed record Balancer
     public IReadOnlyList<string> Members { get; init; } = [];
 
     /// <summary>
+    /// The seed the addresses of the clients are spread with.
+    /// </summary>
+    public uint Seed => unchecked((uint)(Id * 2654435761));
+
+    /// <summary>
     /// When the balancer was added.
     /// </summary>
     public DateTimeOffset CreatedUtc { get; init; }

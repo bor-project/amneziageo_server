@@ -7,6 +7,7 @@ import { Tabbed } from "@/components/Tabs"
 import type { Tab } from "@/components/Tabs"
 import { Accounts } from "@/pages/Accounts"
 import { BalancerPage } from "@/pages/BalancerPage"
+import { BasicRouting } from "@/pages/BasicRouting"
 import { BalancerRemove } from "@/pages/BalancerRemove"
 import { Channels } from "@/pages/Channels"
 import { ClientCard } from "@/pages/ClientCard"
@@ -34,9 +35,11 @@ import { ProxyPage } from "@/pages/ProxyPage"
 import { ProxyRemove } from "@/pages/ProxyRemove"
 import { RolePage } from "@/pages/RolePage"
 import { RoleRemove } from "@/pages/RoleRemove"
+import { RouteTest } from "@/pages/RouteTest"
 import { RulePage } from "@/pages/RulePage"
 import { RuleRemove } from "@/pages/RuleRemove"
 import { Rules } from "@/pages/Rules"
+import { Ruleset } from "@/pages/Ruleset"
 import { PanelCertificates, PanelServer } from "@/pages/Settings"
 import { Subscriptions } from "@/pages/Subscriptions"
 import { TemplateCard } from "@/pages/TemplateCard"
@@ -84,6 +87,8 @@ const routing: Tab[] = [
     scope: scopes.readState,
     add: { to: "/routing/rules/new", scope: scopes.manageRouting },
   },
+  { to: "/routing/basic", label: "tab.basic", scope: scopes.readState },
+  { to: "/routing/test", label: "tab.test", scope: scopes.readState },
   {
     to: "/routing/channels",
     label: "tab.channels",
@@ -97,6 +102,7 @@ const routing: Tab[] = [
     add: { to: "/routing/geo/new", scope: scopes.manageRouting },
   },
   { to: "/routing/dns", label: "tab.dns", scope: scopes.readState },
+  { to: "/routing/ruleset", label: "tab.ruleset", scope: scopes.manageRouting },
 ]
 
 const settings: Tab[] = [
@@ -171,6 +177,8 @@ export function App() {
                   <Route path="rules/:ruleId/edit" element={<RulePage />} />
                   <Route path="rules/:ruleId/delete" element={<RuleRemove />} />
                 </Route>
+                <Route path="basic" element={<BasicRouting />} />
+                <Route path="test" element={<RouteTest />} />
                 <Route path="channels" element={<Channels />} />
                 <Route element={<RequireScope scope={scopes.manageRouting} />}>
                   <Route path="channels/new" element={<OutboundPage />} />
@@ -187,6 +195,9 @@ export function App() {
                   <Route path="geo/:sourceId/delete" element={<GeoRemove />} />
                 </Route>
                 <Route path="dns" element={<Dns />} />
+                <Route element={<RequireScope scope={scopes.manageRouting} />}>
+                  <Route path="ruleset" element={<Ruleset />} />
+                </Route>
               </Route>
               {moved.map((one) => (
                 <Route key={one.from} path={one.from} element={<Navigate to={one.to} replace />} />

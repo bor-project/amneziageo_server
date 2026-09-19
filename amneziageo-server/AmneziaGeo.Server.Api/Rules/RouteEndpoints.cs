@@ -21,6 +21,8 @@ public static class RouteEndpoints
         var reading = routes.MapGroup("/api/rules").RequireScope(Scopes.ReadState);
         reading.MapGet("/", ListAsync);
         reading.MapGet("/{id:long}", FindAsync);
+        reading.MapGet("/basic", BasicAsync);
+        reading.MapPost("/test", TestAsync);
 
         var writing = routes.MapGroup("/api/rules").RequireScope(Scopes.ManageRouting);
         writing.MapGet("/draft", Draft);
@@ -30,6 +32,7 @@ public static class RouteEndpoints
         writing.MapPost("/{id:long}/switch", SwitchAsync);
         writing.MapPost("/{id:long}/move", MoveAsync);
         writing.MapPost("/apply", ApplyAsync);
+        writing.MapPut("/basic", ChangeBasicAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
         return routes;
@@ -54,6 +57,42 @@ public static class RouteEndpoints
         var plan = await applier.ReadAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(RouteAnswers.Rule(found, Leg(plan, id)));
+    }
+
+    private static async Task<IResult> BasicAsync(RouteStore store, RouteApplier applier, CancellationToken ct)
+    {
+        var basic = await store.ReadBasicAsync(ct).ConfigureAwait(false);
+        var plan = await applier.ReadAsync(ct).ConfigureAwait(false);
+
+        return Results.Ok(RouteAnswers.Basic(basic, plan));
+    }
+
+    private static async Task<IResult> ChangeBasicAsync(
+        RouteBasicRequest request,
+        RouteStore store,
+        RouteApplier applier,
+        CancellationToken ct)
+    {
+        var held = await store.ReadBasicAsync(ct).ConfigureAwait(false);
+        var fault = await store.SaveBasicAsync(RouteAnswers.Basic(request, held), ct).ConfigureAwait(false);
+        if (fault is not null)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, fault.Code, fault.Message);
+        }
+
+        var plan = await applier.SettleAsync(ct).ConfigureAwait(false);
+        var saved = await store.ReadBasicAsync(ct).ConfigureAwait(false);
+
+        return Results.Ok(RouteAnswers.Basic(saved, plan));
+    }
+
+    private static async Task<IResult> TestAsync(RouteTestRequest request, RouteTester tester, CancellationToken ct)
+    {
+        var (fault, answer) = await tester.TestAsync(request, ct).ConfigureAwait(false);
+
+        return fault is null
+            ? Results.Ok(answer)
+            : Refuse(StatusCodes.Status400BadRequest, fault.Code, fault.Message);
     }
 
     private static IResult Draft(string? name) =>
@@ -94,7 +133,13 @@ public static class RouteEndpoints
         RouteApplier applier,
         CancellationToken ct)
     {
-        var result = await store.ChangeAsync(id, RouteAnswers.Draft(request), ct).ConfigureAwait(false);
+        var held = await store.FindAsync(id, ct).ConfigureAwait(false);
+        if (held is null)
+        {
+            return Missing(id);
+        }
+
+        var result = await store.ChangeAsync(id, RouteAnswers.Draft(request, held), ct).ConfigureAwait(false);
 
         return await AnswerAsync(result, applier, ct).ConfigureAwait(false);
     }
@@ -118,7 +163,9 @@ public static class RouteEndpoints
         RouteApplier applier,
         CancellationToken ct)
     {
-        var result = await store.MoveAsync(id, request.Up, ct).ConfigureAwait(false);
+        var result = request.To is { } place
+            ? await store.PlaceAsync(id, place, ct).ConfigureAwait(false)
+            : await store.MoveAsync(id, request.Up, ct).ConfigureAwait(false);
 
         return await AnswerAsync(result, applier, ct).ConfigureAwait(false);
     }

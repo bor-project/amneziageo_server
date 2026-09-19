@@ -1,8 +1,10 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { reason } from "@/api/auth"
-import { useMoveRule, useRules, useSwitchRule } from "@/api/rules"
+import { useBalancers } from "@/api/balancers"
+import { useMoveRule, usePlaceRule, useRules, useSwitchRule } from "@/api/rules"
 import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
+import { Knob } from "@/components/fields"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { card, fieldBox } from "@/components/styles"
@@ -17,13 +19,17 @@ export function Rules() {
   const user = useAppSelector((s) => s.auth.user)
   const [params, setParams] = useSearchParams()
   const rules = useRules()
+  const balancers = useBalancers()
   const move = useMoveRule()
+  const place = usePlaceRule()
   const turn = useSwitchRule()
   const may = holds(user, scopes.manageRouting)
   const find = params.get("find") ?? ""
   const all = rules.data ?? []
   const shown = all.filter((one) => matches(one, find))
   const last = all.length - 1
+  const groups = new Set((balancers.data ?? []).map((one) => one.name))
+  const number = new Map(all.map((one, at) => [one.id, at + 1]))
 
   function put(key: string, value: string) {
     const kept = new URLSearchParams(params)
@@ -46,6 +52,14 @@ export function Rules() {
           name="rule"
           items={shown}
           keyOf={(one) => one.id}
+          drag={
+            may && find === ""
+              ? {
+                  title: t("rules.drag"),
+                  onMove: (one, to) => void place.mutateAsync({ id: one.id, to: number.get(to.id) ?? 1 }),
+                }
+              : undefined
+          }
           tools={
             <input
               value={find}
@@ -56,51 +70,74 @@ export function Rules() {
           }
           columns={[
             {
+              key: "place",
+              caption: "#",
+              sort: (one) => number.get(one.id) ?? 0,
+              body: "text-faint tabular-nums",
+              cell: (one) => number.get(one.id),
+            },
+            {
+              key: "on",
+              caption: t("rules.on"),
+              cell: (one) => (
+                <Knob
+                  value={one.isEnabled}
+                  title={one.isEnabled ? t("rules.turnOff") : t("rules.turnOn")}
+                  disabled={!may || turn.isPending}
+                  onChange={(on) => void turn.mutateAsync({ id: one.id, on })}
+                />
+              ),
+            },
+            {
               key: "name",
               caption: t("rules.name"),
               sort: (one) => one.name,
               lead: true,
               body: "font-semibold text-ink",
-              cell: (one) => (
-                <>
-                  {may ? (
-                    <Link to={`/routing/rules/${one.id}/edit`} className="hover:text-brand-ink">
-                      {one.name}
-                    </Link>
-                  ) : (
-                    one.name
-                  )}
-                  {!one.isEnabled && <span className="ml-2 text-xs text-muted">{t("rules.off")}</span>}
-                </>
-              ),
+              cell: (one) =>
+                may ? (
+                  <Link to={`/routing/rules/${one.id}/edit`} className="hover:text-brand-ink">
+                    {one.name}
+                  </Link>
+                ) : (
+                  one.name
+                ),
             },
             {
               key: "action",
               caption: t("rules.action"),
-              sort: (one) => (one.action === "block" ? t("rules.actionBlock") : one.outbound),
-              cell: (one) => (one.action === "block" ? t("rules.actionBlock") : one.outbound),
+              sort: (one) => way(one, t),
+              cell: (one) => (
+                <span className="whitespace-nowrap">
+                  {way(one, t)}
+                  {one.action === "out" && groups.has(one.outbound) && (
+                    <span className="ml-1.5 rounded bg-chip px-1.5 py-0.5 text-xs text-chip-ink">
+                      {t("rules.group")}
+                    </span>
+                  )}
+                </span>
+              ),
             },
             {
               key: "targets",
               caption: t("rules.targets"),
               sort: (one) => (one.targets.length > 0 ? one.targets.join(", ") : t("rules.anything")),
               body: "max-w-72",
-              cell: (one) => (
-                <span className="block truncate" title={one.targets.join(", ")}>
-                  {one.targets.length > 0 ? one.targets.join(", ") : t("rules.anything")}
-                </span>
-              ),
+              cell: (one) => <Some values={one.targets} none={t("rules.anything")} />,
             },
             {
               key: "sources",
               caption: t("rules.sources"),
-              sort: (one) => (one.sources.length > 0 ? one.sources.join(", ") : t("rules.anyone")),
-              body: "max-w-48",
-              cell: (one) => (
-                <span className="block truncate" title={one.sources.join(", ")}>
-                  {one.sources.length > 0 ? one.sources.join(", ") : t("rules.anyone")}
-                </span>
-              ),
+              sort: (one) => from(one).join(", "),
+              body: "max-w-56",
+              cell: (one) => <Some values={from(one)} none={t("rules.anyone")} />,
+            },
+            {
+              key: "inbounds",
+              caption: t("rules.inbounds"),
+              sort: (one) => one.inbounds.join(", "),
+              body: "max-w-40",
+              cell: (one) => <Some values={one.inbounds} none={t("rules.anyInbound")} />,
             },
             {
               key: "traffic",
@@ -124,20 +161,16 @@ export function Rules() {
               key: "actions",
               caption: t("rules.actions"),
               tail: true,
-              cell: (one, at) =>
+              cell: (one) =>
                 may && (
                   <RowActions
                     title={t("rules.actions")}
                     actions={[
-                      {
-                        label: one.isEnabled ? t("rules.turnOff") : t("rules.turnOn"),
-                        onPick: () => void turn.mutateAsync({ id: one.id, on: !one.isEnabled }),
-                      },
                       { label: t("rules.edit"), onPick: () => navigate(`/routing/rules/${one.id}/edit`) },
-                      ...(at > 0
+                      ...((number.get(one.id) ?? 1) > 1
                         ? [{ label: t("rules.up"), onPick: () => void move.mutateAsync({ id: one.id, up: true }) }]
                         : []),
-                      ...(at < last
+                      ...((number.get(one.id) ?? 1) - 1 < last
                         ? [{ label: t("rules.down"), onPick: () => void move.mutateAsync({ id: one.id, up: false }) }]
                         : []),
                       {
@@ -156,6 +189,33 @@ export function Rules() {
   )
 }
 
+function Some({ values, none }: { values: string[]; none: string }) {
+  if (values.length === 0) {
+    return <span className="text-muted">{none}</span>
+  }
+
+  return (
+    <span className="flex min-w-0 items-center gap-1.5" title={values.join("\n")}>
+      <span className="truncate">{values[0]}</span>
+      {values.length > 1 && (
+        <span className="shrink-0 rounded bg-chip px-1.5 py-0.5 text-xs text-chip-ink">+{values.length - 1}</span>
+      )}
+    </span>
+  )
+}
+
+function way(rule: Rule, t: Text): string {
+  if (rule.action === "block") {
+    return t("rules.actionBlock")
+  }
+
+  return rule.action === "direct" ? t("rules.actionDirect") : rule.outbound
+}
+
+function from(rule: Rule): string[] {
+  return [...rule.clients, ...rule.sources]
+}
+
 function ranked(rule: Rule): number {
   if (rule.state.fault.length > 0) {
     return 1
@@ -165,6 +225,14 @@ function ranked(rule: Rule): number {
 }
 
 function State({ rule, t }: { rule: Rule; t: Text }) {
+  if (rule.state.isHeld) {
+    return (
+      <span className="text-warn" title={rule.state.message}>
+        {t("rules.holding")}
+      </span>
+    )
+  }
+
   if (rule.state.fault.length > 0) {
     return (
       <span className="text-alarm" title={rule.state.message}>
@@ -182,8 +250,9 @@ function State({ rule, t }: { rule: Rule; t: Text }) {
 
 function traffic(rule: Rule, t: Text): string {
   const protocol = rule.protocol === "any" ? t("rules.protocolAny") : rule.protocol.toUpperCase()
+  const to = rule.ports.length > 0 ? `${protocol} ${rule.ports.join(", ")}` : protocol
 
-  return rule.ports.length > 0 ? `${protocol} ${rule.ports.join(", ")}` : protocol
+  return rule.sourcePorts.length > 0 ? `${to} ${t("rules.fromPorts", { ports: rule.sourcePorts.join(", ") })}` : to
 }
 
 function matches(one: Rule, find: string): boolean {
@@ -194,6 +263,8 @@ function matches(one: Rule, find: string): boolean {
     one.name.toLowerCase().includes(query) ||
     one.outbound.toLowerCase().includes(query) ||
     one.targets.some((target) => target.toLowerCase().includes(query)) ||
-    one.sources.some((source) => source.toLowerCase().includes(query))
+    one.sources.some((source) => source.toLowerCase().includes(query)) ||
+    one.clients.some((name) => name.toLowerCase().includes(query)) ||
+    one.inbounds.some((name) => name.toLowerCase().includes(query))
   )
 }

@@ -28,7 +28,7 @@ public sealed class DnsNames
         }
 
         var legs = plan.Legs
-            .Where(leg => leg.IsLive && leg.Domains.Count > 0)
+            .Where(leg => leg.IsOnHost && leg.Domains.Count > 0)
             .Select(leg => new Leg(leg.Rule.Id, new DomainMatcher(leg.Domains)))
             .ToArray();
 

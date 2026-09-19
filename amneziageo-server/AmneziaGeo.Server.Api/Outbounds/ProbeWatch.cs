@@ -2,6 +2,7 @@ using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Host;
+using AmneziaGeo.Server.Routing.Outbound;
 using AmneziaGeo.Server.Routing.Probe;
 
 namespace AmneziaGeo.Server.Api.Outbounds;
@@ -57,7 +58,7 @@ public sealed class ProbeWatch : BackgroundService
             var services = scope.ServiceProvider;
             var outbounds = await services.GetRequiredService<OutboundStore>().ListAsync(ct).ConfigureAwait(false);
             _live.Hold(outbounds.Select(one => one.Name));
-            var moved = false;
+            var moved = await MendAsync(outbounds, ct).ConfigureAwait(false);
             foreach (var outbound in outbounds.Where(_runner.IsDue))
             {
                 moved |= await _runner.RunAsync(outbound, ct).ConfigureAwait(false);
@@ -75,6 +76,28 @@ public sealed class ProbeWatch : BackgroundService
         {
             _logger.LogWarning(ex, "the outbounds were not probed");
         }
+    }
+
+    private async Task<bool> MendAsync(IReadOnlyList<OutboundConfig> outbounds, CancellationToken ct)
+    {
+        var mended = false;
+        foreach (var outbound in outbounds)
+        {
+            try
+            {
+                if (await _host.MendAsync(outbound, ct).ConfigureAwait(false))
+                {
+                    mended = true;
+                    _logger.LogWarning("the interface of '{Outbound}' was down and is up again", outbound.Name);
+                }
+            }
+            catch (HostNetworkException ex)
+            {
+                _logger.LogWarning(ex, "the interface of '{Outbound}' is down and did not come up", outbound.Name);
+            }
+        }
+
+        return mended;
     }
 
     /// <inheritdoc/>

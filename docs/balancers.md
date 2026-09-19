@@ -26,12 +26,19 @@ a balancer cannot take a name an outbound already carries.
 | Outbounds | up to 16 outbounds, in the order they are taken |
 | On | whether the rules that name the balancer go on the host |
 
+Renaming a balancer writes the new name into the rules that name it and into the settings of the resolver, the
+saved and the running ones alike. A balancer that a rule or the resolver leaves through is not removed: the
+panel answers `balancer-in-use`.
+
 ## The strategies
 
 `priority` gives the traffic to the first outbound of the list that carries traffic, and moves to the
 next one when it stops answering. `round` hands the connections to the live outbounds one after another,
-through `numgen inc`. `sticky` picks by the address of the client, through `jhash ip saddr`, so one
-client stays on one outbound while the set of live members does not change.
+through `numgen inc`. `sticky` picks by the address of the client, through `jhash ip saddr` under a seed the
+balancer keeps, so one client stays on one outbound while the set of live members does not change. The seed
+comes from the number of the balancer, which means it survives every write of the ruleset and every restart
+of the panel; without it nftables takes a fresh random seed each time the ruleset is loaded and the clients
+change places.
 
 ## What carries traffic
 
@@ -64,7 +71,9 @@ way, so a connection stays on the outbound it was given even when the next packe
 | `balancer-off` | the balancer is turned off |
 | `no-live-member` | nothing the balancer picks from is enabled and answering |
 
-An outbound the panel no longer holds is passed over, and one that is turned off is not picked.
+An outbound the panel no longer holds is passed over, and one that is turned off is not picked. Both codes
+say the way out is gone rather than the rule is wrong, so a rule that holds its traffic drops what it
+matches until a member carries again; see `Hold the traffic while the channel is down` in `rules.md`.
 
 ## What the panel shows
 

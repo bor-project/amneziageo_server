@@ -1,9 +1,11 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
 import { useBalancers } from "@/api/balancers"
+import { useClients } from "@/api/clients"
+import { useConfigs } from "@/api/configs"
 import { useOutbounds } from "@/api/outbounds"
 import type { RuleAction, RuleDraft, RuleProtocol } from "@/api/rules"
-import { Flag, Line, Part } from "@/components/fields"
+import { Flag, Line, Multi, Part } from "@/components/fields"
 import { card, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -24,6 +26,8 @@ export function RuleForm({
   const t = useText()
   const outbounds = useOutbounds()
   const balancers = useBalancers()
+  const clients = useClients()
+  const configs = useConfigs()
   const [draft, setDraft] = useState(start)
 
   function put(change: Partial<RuleDraft>) {
@@ -46,6 +50,7 @@ export function RuleForm({
             className={`mt-1 ${field}`}
           >
             <option value="out">{t("rules.actionOut")}</option>
+            <option value="direct">{t("rules.actionDirect")}</option>
             <option value="block">{t("rules.actionBlock")}</option>
           </select>
         </div>
@@ -103,16 +108,30 @@ export function RuleForm({
           caption={t("rules.ports")}
           value={draft.ports.join(", ")}
           onChange={(text) => put({ ports: split(text) })}
-          wide
         />
 
-        <div className="sm:col-span-2">
+        <Line
+          id="rule-source-ports"
+          caption={t("rules.sourcePorts")}
+          value={draft.sourcePorts.join(", ")}
+          onChange={(text) => put({ sourcePorts: split(text) })}
+        />
+
+        <div className="flex flex-col gap-2 sm:col-span-2">
           <Flag
             id="rule-enabled"
             caption={t("rules.enabled")}
             value={draft.isEnabled}
             onChange={(isEnabled) => put({ isEnabled })}
           />
+          {draft.action === "out" && (
+            <Flag
+              id="rule-holds"
+              caption={t("rules.holdsWhenDown")}
+              value={draft.holdsWhenDown}
+              onChange={(holdsWhenDown) => put({ holdsWhenDown })}
+            />
+          )}
         </div>
       </Part>
 
@@ -130,6 +149,36 @@ export function RuleForm({
           value={draft.sources}
           onChange={(sources) => put({ sources })}
         />
+
+        <div>
+          <label className={label} htmlFor="rule-clients">
+            {t("rules.clients")}
+          </label>
+          <div className="mt-1">
+            <Multi
+              id="rule-clients"
+              value={draft.clients}
+              offers={(clients.data ?? []).map((one) => one.name)}
+              placeholder={t("rules.anyone")}
+              onChange={(value) => put({ clients: value })}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className={label} htmlFor="rule-inbounds">
+            {t("rules.interfaces")}
+          </label>
+          <div className="mt-1">
+            <Multi
+              id="rule-inbounds"
+              value={draft.inbounds}
+              offers={(configs.data ?? []).map((one) => one.name)}
+              placeholder={t("rules.anyInbound")}
+              onChange={(value) => put({ inbounds: value })}
+            />
+          </div>
+        </div>
       </Part>
 
       {error !== null && error !== undefined && (

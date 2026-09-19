@@ -44,7 +44,8 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
         IReadOnlyList<TunnelClient> members,
         IReadOnlyDictionary<long, ClientTemplate> templates,
         Func<TunnelClient, ClientUsage> used,
-        int helloPort = 0)
+        int helloPort = 0,
+        Func<ServerConfig, IReadOnlyList<string>>? resolver = null)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentNullException.ThrowIfNull(members);
@@ -58,7 +59,7 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
             foreach (var member in members.Where(one => one.ConfigId == endpoint.Id && one.IsEnabled && one.PrivateKey.Length > 0))
             {
                 var template = member.TemplateId is { } chosen ? templates.GetValueOrDefault(chosen) : null;
-                links.Add(ClientLink.Link(endpoint, member, template, helloPort));
+                links.Add(ClientLink.Link(endpoint, member, template, helloPort, resolver?.Invoke(endpoint)));
                 groups[member.ParentId ?? member.Id] = new Share(used(member), member.DailyLimit);
             }
         }

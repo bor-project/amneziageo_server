@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
+using AmneziaGeo.Server.Routing.Outbound;
 
 namespace AmneziaGeo.Server.Routing.Dns;
 
@@ -29,23 +30,31 @@ public sealed class DnsUpstream : IDnsUpstream
 
     private readonly TimeSpan _wait;
 
+    private readonly Func<uint?> _way;
+
     /// <summary>
     /// ctor
     /// </summary>
-    public DnsUpstream(IReadOnlyList<string> servers, TimeSpan wait)
+    public DnsUpstream(IReadOnlyList<string> servers, TimeSpan wait, Func<uint?>? way = null)
     {
         ArgumentNullException.ThrowIfNull(servers);
 
         _servers = [.. servers.Select(one => DnsRules.Upstream(one, out var point) ? point : null).OfType<IPEndPoint>()];
         _wait = wait;
+        _way = way ?? (() => 0u);
     }
 
     /// <inheritdoc/>
     public async Task<byte[]?> AskAsync(ReadOnlyMemory<byte> question, bool stream, CancellationToken ct)
     {
+        if (_way() is not { } mark)
+        {
+            return null;
+        }
+
         foreach (var server in _servers)
         {
-            var answer = await OneAsync(server, question, stream, ct).ConfigureAwait(false);
+            var answer = await OneAsync(server, question, stream, mark, ct).ConfigureAwait(false);
             if (answer is not null)
             {
                 return answer;
@@ -55,15 +64,16 @@ public sealed class DnsUpstream : IDnsUpstream
         return null;
     }
 
-    private async Task<byte[]?> OneAsync(IPEndPoint server, ReadOnlyMemory<byte> question, bool stream, CancellationToken ct)
+    private async Task<byte[]?> OneAsync(
+        IPEndPoint server, ReadOnlyMemory<byte> question, bool stream, uint mark, CancellationToken ct)
     {
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
         limit.CancelAfter(_wait);
         try
         {
             return stream
-                ? await StreamAsync(server, question, limit.Token).ConfigureAwait(false)
-                : await PacketAsync(server, question, limit.Token).ConfigureAwait(false);
+                ? await StreamAsync(server, question, mark, limit.Token).ConfigureAwait(false)
+                : await PacketAsync(server, question, mark, limit.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -79,9 +89,15 @@ public sealed class DnsUpstream : IDnsUpstream
         }
     }
 
-    private static async Task<byte[]?> PacketAsync(IPEndPoint server, ReadOnlyMemory<byte> question, CancellationToken ct)
+    private static async Task<byte[]?> PacketAsync(
+        IPEndPoint server, ReadOnlyMemory<byte> question, uint mark, CancellationToken ct)
     {
         using var socket = new Socket(server.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+        if (!OutboundMark.Put(socket, mark))
+        {
+            return null;
+        }
+
         await socket.ConnectAsync(server, ct).ConfigureAwait(false);
         await socket.SendAsync(question, SocketFlags.None, ct).ConfigureAwait(false);
         var buffer = new byte[4096];
@@ -90,9 +106,15 @@ public sealed class DnsUpstream : IDnsUpstream
         return read < DnsMessage.HeaderLength || !Same(question.Span, buffer) ? null : buffer[..read];
     }
 
-    private static async Task<byte[]?> StreamAsync(IPEndPoint server, ReadOnlyMemory<byte> question, CancellationToken ct)
+    private static async Task<byte[]?> StreamAsync(
+        IPEndPoint server, ReadOnlyMemory<byte> question, uint mark, CancellationToken ct)
     {
         using var socket = new Socket(server.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+        if (!OutboundMark.Put(socket, mark))
+        {
+            return null;
+        }
+
         await socket.ConnectAsync(server, ct).ConfigureAwait(false);
         var head = new byte[2];
         BinaryPrimitives.WriteUInt16BigEndian(head, (ushort)question.Length);

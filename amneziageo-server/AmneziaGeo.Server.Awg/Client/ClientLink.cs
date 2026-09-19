@@ -27,14 +27,19 @@ public static class ClientLink
     /// <summary>
     /// Returns the configuration of a client as an Amnezia vpn:// link.
     /// </summary>
-    public static string Link(ServerConfig config, TunnelClient client, ClientTemplate? template = null, int helloPort = 0)
+    public static string Link(
+        ServerConfig config,
+        TunnelClient client,
+        ClientTemplate? template = null,
+        int helloPort = 0,
+        IReadOnlyList<string>? resolver = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
         var last = new JsonObject
         {
-            ["config"] = ClientText.Text(config, client, template, helloPort),
+            ["config"] = ClientText.Text(config, client, template, helloPort, resolver),
             ["hostName"] = config.Host,
             ["port"] = config.ListenPort,
         };

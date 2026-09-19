@@ -37,6 +37,11 @@ public sealed class WebOptions
     /// Where the certificates of the host are looked for.
     /// </summary>
     public string CertificateRoot { get; set; } = PanelDefaults.CertificateRoot;
+
+    /// <summary>
+    /// The addresses of the reverse proxies whose forwarded headers the panel takes.
+    /// </summary>
+    public string[] Proxies { get; set; } = [];
 }
 
 /// <summary>

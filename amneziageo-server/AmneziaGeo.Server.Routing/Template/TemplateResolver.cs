@@ -43,8 +43,6 @@ public sealed class TemplateResolver
 
     private const int Parallel = 16;
 
-    private static readonly DnsRecordType[] Kinds = [DnsRecordType.A, DnsRecordType.Aaaa];
-
     private readonly IDnsUpstream _upstream;
 
     /// <summary>
@@ -143,7 +141,7 @@ public sealed class TemplateResolver
 
         try
         {
-            return await AskAsync(name, ct).ConfigureAwait(false);
+            return await DnsLookup.AskAsync(_upstream, name, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -153,31 +151,6 @@ public sealed class TemplateResolver
         {
             gate.Release();
         }
-    }
-
-    private async Task<IReadOnlyList<IPAddress>> AskAsync(string name, CancellationToken ct)
-    {
-        var ascii = Ascii(name);
-        if (ascii is null)
-        {
-            return [];
-        }
-
-        var found = new List<IPAddress>();
-        foreach (var kind in Kinds)
-        {
-            var answer = await _upstream.AskAsync(DnsQuestion.Packet(ascii, kind, DnsQuestion.Id()), false, ct)
-                .ConfigureAwait(false);
-            if (answer is not null && DnsMessage.Read(answer) is { Code: 0 } message)
-            {
-                found.AddRange(message.Answers
-                    .Where(record => record.Type == kind)
-                    .Select(record => record.Address)
-                    .OfType<IPAddress>());
-            }
-        }
-
-        return found;
     }
 
     private static IReadOnlyList<string> Written(IEnumerable<AwgAllowedIp> ranges) =>
@@ -195,18 +168,6 @@ public sealed class TemplateResolver
             .Where(domain => domain.Kind is GeoDomainKind.Domain or GeoDomainKind.Full)
             .Select(domain => domain.Value.ToLowerInvariant())
     ];
-
-    private static string? Ascii(string name)
-    {
-        try
-        {
-            return new IdnMapping().GetAscii(name.Trim('.'));
-        }
-        catch (ArgumentException)
-        {
-            return null;
-        }
-    }
 
     private static AwgAllowedIp? Range(string cidr) => AwgAllowedIp.TryParse(cidr, out var range) ? range : null;
 

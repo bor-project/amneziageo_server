@@ -2,6 +2,7 @@ using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Route;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -272,6 +273,27 @@ public class ClientStoreTests
         var held = await bench.Clients.FindAsync(device.Record!.Id, CancellationToken.None);
 
         Assert.Equal(ClientInbound.Server, held?.Inbound);
+    }
+
+    [Fact]
+    public async Task ARenamedClientCarriesItsNameIntoTheRules()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+        var added = await bench.Clients.AddAsync(Fresh(endpoint, "milena"), CancellationToken.None);
+        var rule = await bench.Rules.AddAsync(
+            RouteDefaults.Fresh("home") with { Action = RouteAction.Direct, Clients = ["MILENA", "bogdan"] },
+            CancellationToken.None);
+
+        var changed = await bench.Clients.ChangeAsync(
+            added.Record!.Id,
+            added.Record with { Name = "milena-pc" },
+            CancellationToken.None);
+
+        Assert.True(changed.IsOk, changed.Message);
+        Assert.Equal(
+            ["milena-pc", "bogdan"],
+            (await bench.Rules.FindAsync(rule.Record!.Id, CancellationToken.None))!.Clients);
     }
 
     private static async Task<long> EndpointAsync(Bench bench)

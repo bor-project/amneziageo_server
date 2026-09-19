@@ -87,6 +87,16 @@ public sealed class DnsSets
     }
 
     /// <summary>
+    /// Tells whether an address sits in the set of a rule and its time has not run out.
+    /// </summary>
+    public bool Holds(long rule, IPAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        return _held.TryGetValue(Key(rule, address), out var held) && held.Until > _time.GetUtcNow();
+    }
+
+    /// <summary>
     /// Sends the addresses that wait into the sets of the rules the host carries.
     /// </summary>
     public async Task<int> FlushAsync(RoutePlan? plan, TimeSpan lifetime, CancellationToken ct)
@@ -249,8 +259,7 @@ public sealed class DnsSets
             yield break;
         }
 
-        var rule = RuleOf(name.GetString() ?? string.Empty);
-        if (rule < 0)
+        if (RouteRuleset.NameSetRule(name.GetString() ?? string.Empty) is not { } rule)
         {
             yield break;
         }
@@ -276,19 +285,13 @@ public sealed class DnsSets
         }
     }
 
-    private static long RuleOf(string set) =>
-        set.Length > 3 && set[0] == 'n' && set[^2] == 'v'
-        && long.TryParse(set.AsSpan(1, set.Length - 3), NumberStyles.None, CultureInfo.InvariantCulture, out var rule)
-            ? rule
-            : -1;
-
     private static double Number(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetDouble() : 0;
 
     private static HashSet<long> Live(RoutePlan? plan) =>
         plan is null
             ? []
-            : [.. plan.Legs.Where(leg => leg.IsLive && leg.Domains.Count > 0).Select(leg => leg.Rule.Id)];
+            : [.. plan.Legs.Where(leg => leg.IsOnHost && leg.Domains.Count > 0).Select(leg => leg.Rule.Id)];
 
     private sealed record Held(DnsEntry Entry, DateTimeOffset Again, DateTimeOffset Until);
 

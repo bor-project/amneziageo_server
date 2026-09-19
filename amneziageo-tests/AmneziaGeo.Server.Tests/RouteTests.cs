@@ -19,6 +19,8 @@ public class RouteTests
     [InlineData("8.8.8.8", GeoRuleKind.Cidr, "8.8.8.8/32")]
     [InlineData("2a02:6b8::/32", GeoRuleKind.Cidr, "2a02:6b8::/32")]
     [InlineData("Youtube.com", GeoRuleKind.Domain, "youtube.com")]
+    [InlineData("domain:Ifconfig.me", GeoRuleKind.Domain, "ifconfig.me")]
+    [InlineData(" domain:youtube.com ", GeoRuleKind.Domain, "youtube.com")]
     public void ATargetIsReadAsWhatItLooksLike(string text, GeoRuleKind kind, string value)
     {
         var target = RouteRules.Target(text);
@@ -31,6 +33,8 @@ public class RouteTests
     [Theory]
     [InlineData("")]
     [InlineData("geoip:")]
+    [InlineData("domain:")]
+    [InlineData("domain:no dots here")]
     [InlineData("1.2.3.0/44")]
     [InlineData("no dots here")]
     [InlineData(".leading.dot")]
@@ -206,12 +210,84 @@ public class RouteTests
     }
 
     [Fact]
+    public void ABrokenConnectionOfAClientIsDroppedBeforeTheMarks()
+    {
+        var text = RouteRuleset.Text(Plan(Out("awgbor") with { Targets = ["geoip:ru"] }));
+        var clients = text.IndexOf("iifname != { \"awg1\", \"awg2\" } accept", StringComparison.Ordinal);
+        var invalid = text.IndexOf("ct state invalid drop", StringComparison.Ordinal);
+        var mark = text.IndexOf("ct mark != 0x00000000 meta mark set ct mark accept", StringComparison.Ordinal);
+
+        Assert.True(clients >= 0 && clients < invalid && invalid < mark, text);
+    }
+
+    [Fact]
+    public void ThePlanKeepsTheWaysItWasBuiltOver()
+    {
+        var plan = Plan(Out("awgbor"));
+
+        Assert.Equal(0xA602u, plan.Ways.Outbound("awgbor")?.Mark);
+        Assert.False(plan.Ways.Outbound("awgoff")?.IsEnabled);
+    }
+
+    [Fact]
     public void ARuleThatIsOffLeavesNothingOnTheHost()
     {
         var text = RouteRuleset.Text(Plan(Out("awgbor") with { Targets = ["geoip:ru"], IsEnabled = false }));
 
         Assert.DoesNotContain("set r1v4", text, StringComparison.Ordinal);
         Assert.DoesNotContain("meta mark set 0x", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARuleHoldsItsTrafficWhileItsChannelCarriesNothing()
+    {
+        var plan = Plan(Out("awgoff") with { Targets = ["geoip:ru"] });
+        var text = RouteRuleset.Text(plan);
+        var leg = Assert.Single(plan.Legs);
+
+        Assert.False(leg.IsLive);
+        Assert.True(leg.IsHeld);
+        Assert.Equal("outbound-off", leg.Fault?.Code);
+        Assert.Contains("set r1v4", text, StringComparison.Ordinal);
+        Assert.Contains("ip daddr @r1v4 drop", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("meta mark set 0x", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AChannelThePanelNoLongerHoldsAlsoHoldsTheTraffic()
+    {
+        var leg = Assert.Single(Plan(Out("gone") with { Targets = ["geoip:ru"] }).Legs);
+
+        Assert.Equal("unknown-outbound", leg.Fault?.Code);
+        Assert.True(leg.IsHeld);
+    }
+
+    [Fact]
+    public void ARuleThatDoesNotHoldLetsItsTrafficOutOfTheHost()
+    {
+        var plan = Plan(Out("awgoff") with { Targets = ["geoip:ru"], HoldsWhenDown = false });
+        var text = RouteRuleset.Text(plan);
+
+        Assert.False(Assert.Single(plan.Legs).IsHeld);
+        Assert.DoesNotContain("r1v4", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARuleThatIsWrongItselfIsNotHeld()
+    {
+        var leg = Assert.Single(Plan(Out("awgbor") with { Targets = ["geosite:nothing"] }).Legs);
+
+        Assert.Equal("empty-target", leg.Fault?.Code);
+        Assert.False(leg.IsHeld);
+    }
+
+    [Fact]
+    public void ARuleThatIsOffHoldsNothing()
+    {
+        var leg = Assert.Single(Plan(Out("awgoff") with { Targets = ["geoip:ru"], IsEnabled = false }).Legs);
+
+        Assert.False(leg.IsHeld);
+        Assert.False(leg.IsOnHost);
     }
 
     [Fact]

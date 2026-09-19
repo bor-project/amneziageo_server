@@ -38,6 +38,10 @@ says why. `Cancel` drops what is not saved yet.
 On the port of the panel the listen addresses of the subscriptions do not count, and their path may not be
 `api`, `assets` or the path of the panel. A port of their own has to be let through the firewall of the host.
 
+With no domain of their own the subscriptions take the domain of the panel, and with neither the host the
+request arrived on. Behind a reverse proxy that host is the inner one until the proxy is named in
+`Web:Proxies`, see [serving.md](serving.md).
+
 ## What a subscription answers
 
 `GET /<path>/<subscription>` answers 404 when no client carries the subscription. Otherwise the body is base64

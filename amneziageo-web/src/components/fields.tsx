@@ -235,6 +235,35 @@ export function Switch({
   )
 }
 
+export function Knob({
+  value,
+  onChange,
+  title,
+  disabled = false,
+}: {
+  value: boolean
+  onChange: (value: boolean) => void
+  title: string
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={value}
+      aria-label={title}
+      title={title}
+      disabled={disabled}
+      onClick={() => onChange(!value)}
+      className={`relative block h-5 w-9 shrink-0 rounded-full disabled:opacity-60 ${value ? "bg-brand" : "bg-line"}`}
+    >
+      <span
+        className={`absolute top-[2px] size-4 rounded-full bg-surface ${value ? "left-[18px]" : "left-[2px]"}`}
+      />
+    </button>
+  )
+}
+
 export function Multi({
   id,
   value,

@@ -53,6 +53,8 @@ public sealed class RouteApplier
 
     private readonly DnsSets _sets;
 
+    private readonly ClientStore _clients;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -67,7 +69,8 @@ public sealed class RouteApplier
         IGeoFileStore files,
         RoutePlans plans,
         BalanceLive live,
-        DnsSets sets)
+        DnsSets sets,
+        ClientStore clients)
     {
         _rules = rules;
         _outbounds = outbounds;
@@ -80,6 +83,7 @@ public sealed class RouteApplier
         _plans = plans;
         _live = live;
         _sets = sets;
+        _clients = clients;
     }
 
     /// <summary>
@@ -93,6 +97,8 @@ public sealed class RouteApplier
         var configs = await _configs.ListAsync(ct).ConfigureAwait(false);
         var sources = await _geo.ListAsync(ct).ConfigureAwait(false);
         var resolver = _resolver.Settings ?? await _dns.ReadAsync(ct).ConfigureAwait(false);
+        var clients = await _clients.ListAsync(ct).ConfigureAwait(false);
+        var basic = await _rules.ReadBasicAsync(ct).ConfigureAwait(false);
         var plan = RoutePlan.Build(
             rules,
             outbounds,
@@ -100,7 +106,9 @@ public sealed class RouteApplier
             [.. configs.Select(config => config.Name)],
             resolver,
             balancers,
-            _live.Alive);
+            _live.Alive,
+            clients,
+            basic);
 
         _plans.Keep(plan);
 
@@ -122,6 +130,18 @@ public sealed class RouteApplier
         await _sets.LayAsync(RouteRuleset.Text(plan), plan, ct).ConfigureAwait(false);
 
         return plan;
+    }
+
+    /// <summary>
+    /// Puts the rules on the host anew when one of them names clients.
+    /// </summary>
+    public async Task FollowClientsAsync(CancellationToken ct)
+    {
+        var plan = await ReadAsync(ct).ConfigureAwait(false);
+        if (plan.Legs.Any(leg => leg.Rule.Clients.Count > 0))
+        {
+            await SettleAsync(ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

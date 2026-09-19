@@ -2,6 +2,7 @@ using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Route;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -142,6 +143,21 @@ public class ConfigTests
         Assert.Equal(51821, changed.Record.ListenPort);
         Assert.Equal(pair.PublicKey, changed.Record.PublicKey);
         Assert.True(changed.Record.UpdatedUtc >= changed.Record.CreatedUtc);
+    }
+
+    [Fact]
+    public async Task ARenamedEndpointCarriesItsNameIntoTheRules()
+    {
+        using var bench = new Bench();
+        var added = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), default);
+        var rule = await bench.Rules.AddAsync(
+            RouteDefaults.Fresh("home") with { Action = RouteAction.Direct, Inbounds = ["awg1", "awg9"] },
+            default);
+
+        var changed = await bench.Configs.ChangeAsync(added.Record!.Id, added.Record with { Name = "awg2" }, default);
+
+        Assert.True(changed.IsOk, changed.Message);
+        Assert.Equal(["awg2", "awg9"], (await bench.Rules.FindAsync(rule.Record!.Id, default))!.Inbounds);
     }
 
     [Fact]

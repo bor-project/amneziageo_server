@@ -38,7 +38,7 @@ go only to a caller that holds `interfaces:write`; to anyone else they come back
 | Open the port in the firewall | whether the panel holds the port of the endpoint open in the firewall of the host, together with both ways through its interface; set it with `amneziageo-server-cli endpoint open\|close`, see [firewall.md](firewall.md) |
 | Access to the clients | what reaches the clients of the endpoint from the tunnel unless a client names it itself: closed, the server alone, or the whole tunnel network, see [clients.md](clients.md) |
 | AllowedIPs | the ranges a client sends through the tunnel |
-| DNS | the name servers a client takes |
+| DNS | the name servers a client takes, unless the resolver of the panel answers inside the tunnel |
 | Keepalive | how often a client sends an empty packet, in seconds |
 | Client online for | how many seconds after its last packet, the keepalive included, a client counts as online: 60 by default, 10 to 3600 and not under two keepalive intervals; the online state in the list of clients and the guard go by it, see [devices.md](devices.md) |
 | Private key | the key of the interface, the public one is counted from it |

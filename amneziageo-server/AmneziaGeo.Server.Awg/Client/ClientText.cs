@@ -14,12 +14,17 @@ public static class ClientText
     /// <summary>
     /// Returns the configuration of a client as it is handed out.
     /// </summary>
-    public static string Text(ServerConfig config, TunnelClient client, ClientTemplate? template = null, int helloPort = 0)
+    public static string Text(
+        ServerConfig config,
+        TunnelClient client,
+        ClientTemplate? template = null,
+        int helloPort = 0,
+        IReadOnlyList<string>? resolver = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
-        var dns = template is null ? config.Dns : Either(template.Dns, TemplateDefaults.Dns);
+        var dns = Names(config, template, resolver);
         var ranges = template is null
             ? config.AllowedIps
             : Either(template.AllowedIps, TemplateDefaults.AllowedIps(client.Address));
@@ -148,6 +153,15 @@ public static class ClientText
 
     private static IReadOnlyList<string> Either(IReadOnlyList<string> own, IReadOnlyList<string> otherwise) =>
         own.Count > 0 ? own : otherwise;
+
+    private static IReadOnlyList<string> Names(ServerConfig config, ClientTemplate? template, IReadOnlyList<string>? resolver)
+    {
+        var own = resolver is { Count: > 0 } ? resolver : null;
+
+        return template is null
+            ? own ?? config.Dns
+            : Either(template.Dns, own ?? TemplateDefaults.Dns);
+    }
 
     private static void Obfuscation(StringBuilder text, ObfuscationSettings obfuscation)
     {

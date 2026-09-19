@@ -577,6 +577,10 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<int>("NameMinutes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Outbound")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Port")
                         .HasColumnType("INTEGER");
 
@@ -995,6 +999,28 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.RouteBasicEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Block")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Direct")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("RouteBasics");
+                });
+
             modelBuilder.Entity("AmneziaGeo.Server.Dal.RouteRuleEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -1006,7 +1032,20 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Clients")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("HoldsWhenDown")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Inbounds")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsEnabled")
@@ -1032,6 +1071,10 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<string>("Protocol")
                         .IsRequired()
                         .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourcePorts")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Sources")

@@ -86,11 +86,20 @@ public class BalanceTests
         var lines = RouteRuleset.Lines(Leg(Group(BalanceStrategy.Sticky), ["direct", "awgbor"]));
 
         Assert.Contains(
-            "ip daddr @r1v4 meta mark set jhash ip saddr mod 2 map { 0 : 0xa602, 1 : 0xa601 } return",
+            "ip daddr @r1v4 meta mark set jhash ip saddr mod 2 seed 0x9e3779b1 map { 0 : 0xa602, 1 : 0xa601 } return",
             lines);
         Assert.Contains(
-            "ip6 daddr @r1v6 meta mark set jhash ip6 saddr mod 2 map { 0 : 0xa602, 1 : 0xa601 } return",
+            "ip6 daddr @r1v6 meta mark set jhash ip6 saddr mod 2 seed 0x9e3779b1 map { 0 : 0xa602, 1 : 0xa601 } return",
             lines);
+    }
+
+    [Fact]
+    public void TheSeedOfAStickyBalancerStaysTheSameAcrossWrites()
+    {
+        var group = Group(BalanceStrategy.Sticky);
+
+        Assert.Equal(RouteRuleset.Lines(Leg(group, ["direct", "awgbor"])), RouteRuleset.Lines(Leg(group, ["direct", "awgbor"])));
+        Assert.NotEqual(group.Seed, (group with { Id = 2 }).Seed);
     }
 
     [Fact]
@@ -101,8 +110,8 @@ public class BalanceTests
 
         Assert.Equal(
             [
-                "meta nfproto ipv4 meta mark set jhash ip saddr mod 2 map { 0 : 0xa602, 1 : 0xa601 } return",
-                "meta nfproto ipv6 meta mark set jhash ip6 saddr mod 2 map { 0 : 0xa602, 1 : 0xa601 } return",
+                "meta nfproto ipv4 meta mark set jhash ip saddr mod 2 seed 0x9e3779b1 map { 0 : 0xa602, 1 : 0xa601 } return",
+                "meta nfproto ipv6 meta mark set jhash ip6 saddr mod 2 seed 0x9e3779b1 map { 0 : 0xa602, 1 : 0xa601 } return",
             ],
             RouteRuleset.Lines(leg));
     }

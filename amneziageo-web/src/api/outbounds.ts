@@ -14,8 +14,8 @@ export interface OutboundState {
   hasLink: boolean
   endpoint: string
   lastHandshake: string | null
-  rxBytes: number
-  txBytes: number
+  rxBytes: number | null
+  txBytes: number | null
   isAlive: boolean
   fault: string
   carries: boolean

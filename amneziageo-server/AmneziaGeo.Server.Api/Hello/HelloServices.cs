@@ -21,6 +21,7 @@ public static class HelloServices
         services.AddSingleton<TunnelAddresses>();
         services.AddSingleton<IHelloFeature, SubscriptionOffer>();
         services.AddSingleton<IHelloFeature, SpeedOffer>();
+        services.AddSingleton<IHelloFeature, WebSocketOffer>();
         services.AddSingleton<HelloDesk>();
         services.AddSingleton<HelloServer>();
         services.AddHostedService(provider => provider.GetRequiredService<HelloServer>());

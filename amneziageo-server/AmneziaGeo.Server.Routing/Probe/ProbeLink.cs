@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using AmneziaGeo.Server.Routing.Outbound;
 
 namespace AmneziaGeo.Server.Routing.Probe;
 
@@ -19,10 +20,6 @@ public interface IProbeLink
 /// </summary>
 public sealed class ProbeLink : IProbeLink
 {
-    private const int SocketLevel = 1;
-
-    private const int MarkOption = 36;
-
     private const int MaxAnswer = 1500;
 
     /// <inheritdoc/>
@@ -32,7 +29,7 @@ public sealed class ProbeLink : IProbeLink
         ArgumentNullException.ThrowIfNull(server);
 
         using var socket = new Socket(server.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-        if (!Mark(socket, mark))
+        if (!OutboundMark.Put(socket, mark))
         {
             return ProbeOutcome.Skipped;
         }
@@ -70,24 +67,5 @@ public sealed class ProbeLink : IProbeLink
         }
 
         return ProbeOutcome.Missed;
-    }
-
-    private static bool Mark(Socket socket, uint mark)
-    {
-        if (mark == 0 || !OperatingSystem.IsLinux())
-        {
-            return true;
-        }
-
-        try
-        {
-            socket.SetRawSocketOption(SocketLevel, MarkOption, BitConverter.GetBytes(mark));
-
-            return true;
-        }
-        catch (SocketException)
-        {
-            return false;
-        }
     }
 }

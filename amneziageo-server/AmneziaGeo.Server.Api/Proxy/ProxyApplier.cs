@@ -116,9 +116,20 @@ public sealed class ProxyApplier
     {
         ArgumentNullException.ThrowIfNull(proxy);
 
+        return Certificate(proxy, await PanelCertificateAsync(ct).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Returns the certificate a proxy takes once the one of the panel is known: its own, then that one.
+    /// </summary>
+    public static ProxyCertificate Certificate(ProxyConfig proxy, ProxyCertificate panel)
+    {
+        ArgumentNullException.ThrowIfNull(proxy);
+        ArgumentNullException.ThrowIfNull(panel);
+
         return proxy.Certificate.Length > 0 && proxy.CertificateKey.Length > 0
             ? new ProxyCertificate(proxy.Certificate, proxy.CertificateKey)
-            : await PanelCertificateAsync(ct).ConfigureAwait(false);
+            : panel;
     }
 
     /// <summary>

@@ -15,6 +15,8 @@ public sealed class DnsState
 
     private string? _fault;
 
+    private string? _way;
+
     private DnsSettings? _settings;
 
     /// <summary>
@@ -36,6 +38,11 @@ public sealed class DnsState
     /// Why the resolver is not running, or null.
     /// </summary>
     public string? Fault => Volatile.Read(ref _fault);
+
+    /// <summary>
+    /// What is wrong with the way out the questions take, or null.
+    /// </summary>
+    public string? Way => Volatile.Read(ref _way);
 
     /// <summary>
     /// The settings the resolver was last started with, or null before its first start.
@@ -80,9 +87,15 @@ public sealed class DnsState
     {
         Volatile.Write(ref _listening, []);
         Volatile.Write(ref _fault, fault);
+        Volatile.Write(ref _way, null);
         StartedUtc = null;
         IsRunning = false;
     }
+
+    /// <summary>
+    /// Keeps what is wrong with the way out the questions take.
+    /// </summary>
+    public void Leaves(string? fault) => Volatile.Write(ref _way, fault);
 
     /// <summary>
     /// Counts a question the resolver took.
