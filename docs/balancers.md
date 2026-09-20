@@ -28,7 +28,8 @@ a balancer cannot take a name an outbound already carries.
 
 Renaming a balancer writes the new name into the rules that name it and into the settings of the resolver, the
 saved and the running ones alike. A balancer that a rule or the resolver leaves through is not removed: the
-panel answers `balancer-in-use`.
+panel answers `balancer-in-use`, and the one the resolver asks through until it is restarted is held the same
+way as the one its saved settings name.
 
 ## The strategies
 
@@ -48,7 +49,10 @@ Two probes that miss in a row take a member off, and one answer brings it back. 
 probed the handshake stands in: an outbound through the host itself always counts, and a tunnel counts
 while its last handshake is under three minutes old. The server reads this back every fifteen seconds, and
 when the set of live outbounds is other than before it lays the whole ruleset again, so a member that went
-quiet is replaced without anyone touching the panel.
+quiet is replaced without anyone touching the panel. A change made in the panel does not wait for that round:
+laying the rules reads the members off the host first, so an outbound turned off, removed or taken out of a
+group leaves the ruleset at once. An outbound that was turned on joins it as soon as it carries traffic, which
+takes a handshake or a probe.
 
 ## What the host takes
 

@@ -199,9 +199,10 @@ public sealed class OutboundStore
     }
 
     /// <summary>
-    /// Removes an outbound, unless a rule, a balancer or the resolver leaves through it.
+    /// Removes an outbound, unless a rule, a balancer or the resolver leaves through it; live names the outbound
+    /// the running resolver asks through.
     /// </summary>
-    public async Task<OutboundResult> RemoveAsync(long id, CancellationToken ct)
+    public async Task<OutboundResult> RemoveAsync(long id, string live, CancellationToken ct)
     {
         var entity = await _db.Outbounds.FirstOrDefaultAsync(outbound => outbound.Id == id, ct).ConfigureAwait(false);
         if (entity is null)
@@ -209,7 +210,7 @@ public sealed class OutboundStore
             return Missing(id);
         }
 
-        if (await UserAsync(entity.Name, ct).ConfigureAwait(false) is { } user)
+        if (await UserAsync(entity.Name, live, ct).ConfigureAwait(false) is { } user)
         {
             return OutboundResult.No(OutboundOutcome.Invalid, "outbound-in-use", user);
         }
@@ -253,7 +254,7 @@ public sealed class OutboundStore
         return OutboundResult.Done(Read(entity));
     }
 
-    private async Task<string?> UserAsync(string name, CancellationToken ct)
+    private async Task<string?> UserAsync(string name, string live, CancellationToken ct)
     {
         if (await _db.Rules.AnyAsync(rule => rule.Outbound == name, ct).ConfigureAwait(false))
         {
@@ -267,8 +268,13 @@ public sealed class OutboundStore
             return $"the balancer '{balancer.Name}' picks from the outbound '{name}'";
         }
 
-        return await NameFollow.AsksThroughAsync(_db, name, ct).ConfigureAwait(false)
-            ? $"the resolver asks through the outbound '{name}'"
+        if (await NameFollow.AsksThroughAsync(_db, name, ct).ConfigureAwait(false))
+        {
+            return $"the resolver asks through the outbound '{name}'";
+        }
+
+        return string.Equals(live, name, StringComparison.Ordinal)
+            ? $"the resolver asks through the outbound '{name}' until it is restarted"
             : null;
     }
 

@@ -1,4 +1,7 @@
+using System.Net.Sockets;
+
 using AmneziaGeo.Server.Api.Rules;
+using AmneziaGeo.Server.Awg.Netlink;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Host;
@@ -69,7 +72,7 @@ public sealed class ProbeWatch : BackgroundService
                 return;
             }
 
-            _carrying.Keep(_host.States(outbounds).Where(state => state.Carries).Select(state => state.Name));
+            _carrying.Keep(_host.Carrying(outbounds));
             await services.GetRequiredService<RouteApplier>().SettleAsync(ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException)
@@ -85,15 +88,25 @@ public sealed class ProbeWatch : BackgroundService
         {
             try
             {
-                if (await _host.MendAsync(outbound, ct).ConfigureAwait(false))
+                var gone = !_host.State(outbound).HasLink;
+                if (!await _host.MendAsync(outbound, ct).ConfigureAwait(false))
                 {
-                    mended = true;
+                    continue;
+                }
+
+                mended = true;
+                if (gone)
+                {
+                    _logger.LogWarning("the interface of '{Outbound}' was gone and is laid again", outbound.Name);
+                }
+                else
+                {
                     _logger.LogWarning("the interface of '{Outbound}' was down and is up again", outbound.Name);
                 }
             }
-            catch (HostNetworkException ex)
+            catch (Exception ex) when (ex is HostNetworkException or NetlinkException or SocketException)
             {
-                _logger.LogWarning(ex, "the interface of '{Outbound}' is down and did not come up", outbound.Name);
+                _logger.LogWarning(ex, "the interface of '{Outbound}' did not come up", outbound.Name);
             }
         }
 

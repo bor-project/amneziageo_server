@@ -38,6 +38,7 @@ public sealed record ObfuscationBody(
 /// </summary>
 public sealed record ConfigResponse(
     long Id,
+    long? TemplateId,
     string Name,
     string Host,
     int ListenPort,
@@ -79,7 +80,14 @@ public sealed record ConfigRequest(
     string? PresharedKey,
     ObfuscationBody? Obfuscation,
     int? OfflineAfter = null,
-    string? Inbound = null);
+    string? Inbound = null,
+    long? TemplateId = null);
+
+/// <summary>
+/// What a request to turn an endpoint on or off carries.
+/// </summary>
+/// <param name="On">Whether the endpoint runs.</param>
+public sealed record ConfigSwitchRequest(bool? On);
 
 /// <summary>
 /// What putting an endpoint on the host produced, as the interface reads it.
@@ -111,6 +119,7 @@ public static class ConfigAnswers
     /// </summary>
     public static ConfigResponse Config(ServerConfig config, bool secrets) => new(
         config.Id,
+        config.TemplateId,
         config.Name,
         config.Host,
         config.ListenPort,
@@ -167,6 +176,7 @@ public static class ConfigAnswers
     /// </summary>
     public static ServerConfig Draft(ConfigRequest request) => new()
     {
+        TemplateId = request.TemplateId,
         Name = (request.Name ?? string.Empty).Trim(),
         Host = (request.Host ?? string.Empty).Trim(),
         ListenPort = request.ListenPort,

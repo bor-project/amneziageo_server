@@ -16,6 +16,11 @@ public static class DnsDefaults
     public const int NameMinutes = 60;
 
     /// <summary>
+    /// How many addresses of a rule stay in its set until newer ones push them out.
+    /// </summary>
+    public const int StandingAddresses = 128;
+
+    /// <summary>
     /// How many answers are held back.
     /// </summary>
     public const int CacheSize = 4096;

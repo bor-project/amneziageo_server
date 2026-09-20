@@ -19,10 +19,11 @@ export interface Panel extends PanelDraft {
   pending: boolean
 }
 
-export function usePanel() {
+export function usePanel(enabled = true) {
   return useQuery({
     queryKey: ["panel"],
     queryFn: async () => (await client.get<Panel>("/panel")).data,
+    enabled,
   })
 }
 

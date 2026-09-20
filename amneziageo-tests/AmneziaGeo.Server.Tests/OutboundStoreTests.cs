@@ -109,7 +109,7 @@ public class OutboundStoreTests
         using var bench = new Bench();
         var added = await bench.Outbounds.AddAsync(Tunnel("awgbor"), CancellationToken.None);
 
-        await bench.Outbounds.RemoveAsync(added.Record!.Id, CancellationToken.None);
+        await bench.Outbounds.RemoveAsync(added.Record!.Id, string.Empty, CancellationToken.None);
         var next = await bench.Outbounds.AddAsync(Tunnel("awgfar"), CancellationToken.None);
 
         Assert.Null(await bench.Outbounds.FindAsync(added.Record.Id, CancellationToken.None));
@@ -152,9 +152,9 @@ public class OutboundStoreTests
         await bench.Balancers.AddAsync(BalanceDefaults.Fresh("both") with { Members = ["awgfar"] }, CancellationToken.None);
         await bench.Resolver.SaveAsync(DnsDefaults.Settings with { Outbound = "awgdns" }, CancellationToken.None);
 
-        var rule = await bench.Outbounds.RemoveAsync(ruled.Record!.Id, CancellationToken.None);
-        var member = await bench.Outbounds.RemoveAsync(grouped.Record!.Id, CancellationToken.None);
-        var resolver = await bench.Outbounds.RemoveAsync(asked.Record!.Id, CancellationToken.None);
+        var rule = await bench.Outbounds.RemoveAsync(ruled.Record!.Id, string.Empty, CancellationToken.None);
+        var member = await bench.Outbounds.RemoveAsync(grouped.Record!.Id, string.Empty, CancellationToken.None);
+        var resolver = await bench.Outbounds.RemoveAsync(asked.Record!.Id, string.Empty, CancellationToken.None);
 
         Assert.Equal("outbound-in-use", rule.Code);
         Assert.Contains("a rule leaves through", rule.Message, StringComparison.Ordinal);
@@ -166,11 +166,26 @@ public class OutboundStoreTests
     }
 
     [Fact]
+    public async Task AnOutboundTheRunningResolverAsksThroughIsNotRemoved()
+    {
+        using var bench = new Bench();
+        var added = await bench.Outbounds.AddAsync(Tunnel("awgdns"), CancellationToken.None);
+        await bench.Resolver.SaveAsync(DnsDefaults.Settings with { Outbound = "awgbor" }, CancellationToken.None);
+
+        var held = await bench.Outbounds.RemoveAsync(added.Record!.Id, "awgdns", CancellationToken.None);
+        var free = await bench.Outbounds.RemoveAsync(added.Record.Id, "awgbor", CancellationToken.None);
+
+        Assert.Equal("outbound-in-use", held.Code);
+        Assert.Contains("until it is restarted", held.Message, StringComparison.Ordinal);
+        Assert.True(free.IsOk, free.Message);
+    }
+
+    [Fact]
     public async Task ACommandAgainstAnOutboundThePanelDoesNotHoldIsRefused()
     {
         using var bench = new Bench();
 
-        Assert.Equal(OutboundOutcome.Unknown, (await bench.Outbounds.RemoveAsync(404, CancellationToken.None)).Outcome);
+        Assert.Equal(OutboundOutcome.Unknown, (await bench.Outbounds.RemoveAsync(404, string.Empty, CancellationToken.None)).Outcome);
         Assert.Equal(OutboundOutcome.Unknown, (await bench.Outbounds.MoveAsync(404, true, CancellationToken.None)).Outcome);
         Assert.Equal(
             OutboundOutcome.Unknown,

@@ -51,11 +51,17 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<DnsSettingsEntity> Resolver => Set<DnsSettingsEntity>();
 
+    public DbSet<DnsStandingEntity> Standings => Set<DnsStandingEntity>();
+
     public DbSet<PanelEntity> Panel => Set<PanelEntity>();
 
     public DbSet<ProxyEntity> Proxy => Set<ProxyEntity>();
 
     public DbSet<TemplateEntity> Templates => Set<TemplateEntity>();
+
+    public DbSet<InterfaceTemplateEntity> InterfaceTemplates => Set<InterfaceTemplateEntity>();
+
+    public DbSet<ProxyTemplateEntity> ProxyTemplates => Set<ProxyTemplateEntity>();
 
     public DbSet<SubscriptionEntity> Subscription => Set<SubscriptionEntity>();
 
@@ -118,6 +124,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(config => config.Name).HasMaxLength(ConfigRules.MaxNameLength);
             entity.Property(config => config.Host).HasMaxLength(ConfigRules.MaxHostLength);
             entity.HasIndex(config => config.Name).IsUnique();
+            entity.HasIndex(config => config.TemplateId);
         });
 
         builder.Entity<ClientEntity>(entity =>
@@ -151,6 +158,21 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.HasIndex(template => template.Name).IsUnique();
         });
 
+        builder.Entity<InterfaceTemplateEntity>(entity =>
+        {
+            entity.Property(template => template.Name).HasMaxLength(InterfaceTemplateRules.MaxNameLength);
+            entity.HasIndex(template => template.Name).IsUnique();
+            entity.HasIndex(template => template.ClientTemplateId);
+        });
+
+        builder.Entity<ProxyTemplateEntity>(entity =>
+        {
+            entity.Property(template => template.Name).HasMaxLength(ProxyTemplateRules.MaxNameLength);
+            entity.Property(template => template.Kind).HasMaxLength(8);
+            entity.Property(template => template.Target).HasMaxLength(ProxyRules.MaxTargetLength);
+            entity.HasIndex(template => template.Name).IsUnique();
+        });
+
         builder.Entity<GeoSourceEntity>(entity =>
         {
             entity.Property(source => source.Name).HasMaxLength(GeoSourceRules.MaxNameLength);
@@ -175,6 +197,12 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
         {
             entity.Property(row => row.Upstreams).HasMaxLength(512);
             entity.Property(row => row.Listen).HasMaxLength(512);
+        });
+
+        builder.Entity<DnsStandingEntity>(entity =>
+        {
+            entity.Property(row => row.Address).HasMaxLength(64);
+            entity.HasIndex(row => new { row.RuleId, row.Address }).IsUnique();
         });
 
         builder.Entity<PanelEntity>(entity =>
@@ -207,6 +235,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(row => row.CertificateKey).HasMaxLength(ProxyRules.MaxFileLength);
             entity.HasIndex(row => row.Name).IsUnique();
             entity.HasIndex(row => new { row.Kind, row.Port }).IsUnique();
+            entity.HasIndex(row => row.TemplateId);
         });
 
         builder.Entity<BalancerEntity>(entity =>

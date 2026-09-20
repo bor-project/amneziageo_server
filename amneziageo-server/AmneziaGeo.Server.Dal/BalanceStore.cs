@@ -171,9 +171,10 @@ public sealed class BalanceStore
     }
 
     /// <summary>
-    /// Removes a balancer, unless a rule or the resolver leaves through it.
+    /// Removes a balancer, unless a rule or the resolver leaves through it; live names the outbound the running
+    /// resolver asks through.
     /// </summary>
-    public async Task<BalanceResult> RemoveAsync(long id, CancellationToken ct)
+    public async Task<BalanceResult> RemoveAsync(long id, string live, CancellationToken ct)
     {
         var entity = await _db.Balancers
             .FirstOrDefaultAsync(balancer => balancer.Id == id, ct)
@@ -199,6 +200,14 @@ public sealed class BalanceStore
                 BalanceOutcome.Invalid,
                 "balancer-in-use",
                 $"the resolver asks through the balancer '{name}'");
+        }
+
+        if (string.Equals(live, name, StringComparison.Ordinal))
+        {
+            return BalanceResult.No(
+                BalanceOutcome.Invalid,
+                "balancer-in-use",
+                $"the resolver asks through the balancer '{name}' until it is restarted");
         }
 
         var gone = Read(entity);

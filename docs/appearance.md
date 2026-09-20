@@ -73,6 +73,11 @@ corner, `head` and `body` add classes to the cells of the table. A cell that com
 />
 ```
 
+The cell in the corner of a row carries the menu of the row, and the menu carries only the ways into a page:
+the settings of the item, and the export of a client. What the item does, from applying an interface to probing
+a channel, lives in the form of the item, and so does its removal. A list that holds an order of its own, the
+rules, the geo sources and the channels, carries two arrows next to the menu, and the row is dragged as well.
+
 ## Words
 
 `src/i18n/en.ts` holds every line of the interface and, through `keyof typeof en`, the list of keys. A line

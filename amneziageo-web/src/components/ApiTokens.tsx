@@ -1,10 +1,9 @@
 import { Link, useNavigate } from "react-router-dom"
 import { useApiTokens } from "@/api/apiTokens"
 import { useRoles } from "@/api/roles"
-import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { titleOf } from "@/components/roles"
-import { card, primary } from "@/components/styles"
+import { card, danger, primary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 
 export function ApiTokens() {
@@ -93,16 +92,15 @@ export function ApiTokens() {
               caption: t("apiTokens.actions"),
               tail: true,
               cell: (one) => (
-                <RowActions
-                  title={t("apiTokens.actions")}
-                  actions={[
-                    {
-                      label: t("apiTokens.revoke"),
-                      onPick: () => navigate(`/settings/users/tokens/${one.id}/delete`),
-                      alarming: true,
-                    },
-                  ]}
-                />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/settings/users/tokens/${one.id}/delete`)}
+                    className={`text-sm ${danger}`}
+                  >
+                    {t("apiTokens.revoke")}
+                  </button>
+                </div>
               ),
             },
           ]}

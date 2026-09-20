@@ -200,6 +200,7 @@ public sealed class ProxyStore
     private static ProxyConfig Read(ProxyEntity row) => new()
     {
         Id = row.Id,
+        TemplateId = row.TemplateId,
         Name = row.Name,
         Kind = row.Kind,
         IsEnabled = row.IsEnabled,
@@ -214,6 +215,7 @@ public sealed class ProxyStore
 
     private static void Write(ProxyEntity row, ProxyConfig proxy)
     {
+        row.TemplateId = proxy.TemplateId;
         row.Name = proxy.Name.Trim();
         row.Kind = proxy.Kind;
         row.IsEnabled = proxy.IsEnabled;

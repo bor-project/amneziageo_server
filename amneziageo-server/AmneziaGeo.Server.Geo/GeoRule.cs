@@ -21,6 +21,11 @@ public enum GeoRuleKind
     Domain,
 
     /// <summary>
+    /// A word a name carries, as in keyword:ads.
+    /// </summary>
+    Keyword,
+
+    /// <summary>
     /// A single address range in CIDR notation.
     /// </summary>
     Cidr,

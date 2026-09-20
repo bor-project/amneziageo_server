@@ -23,6 +23,14 @@ public sealed record DnsEntry(long Rule, IPAddress Address)
 }
 
 /// <summary>
+/// One address a rule stands on until newer ones push it out.
+/// </summary>
+/// <param name="Rule">The rule the address belongs to.</param>
+/// <param name="Address">The address itself.</param>
+/// <param name="Seen">When the address was answered last.</param>
+public sealed record DnsStanding(long Rule, IPAddress Address, DateTimeOffset Seen);
+
+/// <summary>
 /// Puts the answered addresses into the sets of the rules, in batches.
 /// </summary>
 public sealed class DnsSets
@@ -31,6 +39,8 @@ public sealed class DnsSets
     /// How many addresses go to the host in one command.
     /// </summary>
     public const int MaxBatch = 512;
+
+    private static readonly TimeSpan Sweep = TimeSpan.FromSeconds(5);
 
     private readonly ConcurrentQueue<DnsEntry> _waiting = new();
 
@@ -42,17 +52,26 @@ public sealed class DnsSets
 
     private readonly TimeProvider _time;
 
+    private readonly int _standing;
+
     private long _added;
+
+    private long _stirs;
+
+    private long _life = TimeSpan.FromMinutes(DnsDefaults.NameMinutes).Ticks;
+
+    private DateTimeOffset _swept;
 
     private bool _seeded;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public DnsSets(IHostNetwork network, TimeProvider? time = null)
+    public DnsSets(IHostNetwork network, TimeProvider? time = null, int standing = DnsDefaults.StandingAddresses)
     {
         _network = network;
         _time = time ?? TimeProvider.System;
+        _standing = standing > 0 ? standing : 0;
     }
 
     /// <summary>
@@ -66,6 +85,13 @@ public sealed class DnsSets
     public long Added => Interlocked.Read(ref _added);
 
     /// <summary>
+    /// How many times the addresses the rules stand on changed.
+    /// </summary>
+    public long Stirs => Interlocked.Read(ref _stirs);
+
+    private TimeSpan Lifetime => TimeSpan.FromTicks(Interlocked.Read(ref _life));
+
+    /// <summary>
     /// Takes an address the resolver answered with, telling whether it has to go to the host.
     /// </summary>
     public bool Add(long rule, IPAddress address, TimeSpan lifetime)
@@ -74,13 +100,21 @@ public sealed class DnsSets
 
         var key = Key(rule, address);
         var now = _time.GetUtcNow();
-        if (_held.TryGetValue(key, out var held) && held.Again > now)
+        if (_held.TryGetValue(key, out var held))
         {
-            return false;
+            if (held.Again > now)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            Interlocked.Increment(ref _stirs);
         }
 
+        Note(lifetime);
         var entry = new DnsEntry(rule, address);
-        _held[key] = new Held(entry, now + (lifetime > TimeSpan.Zero ? lifetime / 2 : TimeSpan.Zero), now + lifetime);
+        _held[key] = new Held(entry, now + (lifetime > TimeSpan.Zero ? lifetime / 2 : TimeSpan.Zero), now + lifetime, now);
         _waiting.Enqueue(entry);
 
         return true;
@@ -97,6 +131,33 @@ public sealed class DnsSets
     }
 
     /// <summary>
+    /// Takes the addresses the rules stood on before the panel started.
+    /// </summary>
+    public void Restore(IReadOnlyList<DnsStanding> standings, TimeSpan lifetime)
+    {
+        ArgumentNullException.ThrowIfNull(standings);
+
+        Note(lifetime);
+        var now = _time.GetUtcNow();
+        var life = Lifetime;
+        foreach (var standing in standings)
+        {
+            var entry = new DnsEntry(standing.Rule, standing.Address);
+            var held = new Held(entry, now + life / 2, now + life, standing.Seen);
+            if (_held.TryAdd(Key(standing.Rule, standing.Address), held))
+            {
+                _waiting.Enqueue(entry);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the addresses the rules of a plan stand on.
+    /// </summary>
+    public IReadOnlyList<DnsStanding> Standings(RoutePlan? plan) =>
+        [.. Standing(Live(plan)).Values.Select(held => new DnsStanding(held.Entry.Rule, held.Entry.Address, held.Seen))];
+
+    /// <summary>
     /// Sends the addresses that wait into the sets of the rules the host carries.
     /// </summary>
     public async Task<int> FlushAsync(RoutePlan? plan, TimeSpan lifetime, CancellationToken ct)
@@ -104,6 +165,8 @@ public sealed class DnsSets
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            Note(lifetime);
+            Renew(plan);
             if (_waiting.IsEmpty)
             {
                 return 0;
@@ -204,12 +267,19 @@ public sealed class DnsSets
     {
         var now = _time.GetUtcNow();
         var live = Live(plan);
+        var standing = Standing(live);
+        var life = Lifetime;
         var kept = new List<(DnsEntry Entry, int Seconds)>();
         foreach (var pair in _held)
         {
-            if (pair.Value.Until <= now)
+            if (standing.ContainsKey(pair.Key))
             {
-                _held.TryRemove(pair.Key, out _);
+                _held[pair.Key] = pair.Value with { Again = now + life / 2, Until = now + life };
+                kept.Add((pair.Value.Entry, Seconds(life)));
+            }
+            else if (pair.Value.Until <= now)
+            {
+                Drop(pair.Key);
             }
             else if (live.Contains(pair.Value.Entry.Rule))
             {
@@ -220,6 +290,58 @@ public sealed class DnsSets
         return kept;
     }
 
+    private void Renew(RoutePlan? plan)
+    {
+        var now = _time.GetUtcNow();
+        if (now < _swept)
+        {
+            return;
+        }
+
+        _swept = now + Sweep;
+        var life = Lifetime;
+        foreach (var pair in Standing(Live(plan)))
+        {
+            if (pair.Value.Again > now)
+            {
+                continue;
+            }
+
+            _held[pair.Key] = pair.Value with { Again = now + life / 2, Until = now + life };
+            _waiting.Enqueue(pair.Value.Entry);
+        }
+    }
+
+    private Dictionary<string, Held> Standing(HashSet<long> live)
+    {
+        if (_standing == 0)
+        {
+            return [];
+        }
+
+        return _held
+            .Where(pair => live.Contains(pair.Value.Entry.Rule))
+            .GroupBy(pair => pair.Value.Entry.Rule)
+            .SelectMany(group => group.OrderByDescending(pair => pair.Value.Seen).Take(_standing))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+    }
+
+    private void Drop(string key)
+    {
+        if (_held.TryRemove(key, out _))
+        {
+            Interlocked.Increment(ref _stirs);
+        }
+    }
+
+    private void Note(TimeSpan lifetime)
+    {
+        if (lifetime > TimeSpan.Zero)
+        {
+            Interlocked.Exchange(ref _life, lifetime.Ticks);
+        }
+    }
+
     private void Seed(string json)
     {
         var now = _time.GetUtcNow();
@@ -227,7 +349,10 @@ public sealed class DnsSets
         {
             var until = now + laid.Left;
             var entry = new DnsEntry(laid.Rule, laid.Address);
-            _held.TryAdd(Key(laid.Rule, laid.Address), new Held(entry, until - laid.Life / 2, until));
+            if (_held.TryAdd(Key(laid.Rule, laid.Address), new Held(entry, until - laid.Life / 2, until, now)))
+            {
+                Interlocked.Increment(ref _stirs);
+            }
         }
     }
 
@@ -293,7 +418,7 @@ public sealed class DnsSets
             ? []
             : [.. plan.Legs.Where(leg => leg.IsOnHost && leg.Domains.Count > 0).Select(leg => leg.Rule.Id)];
 
-    private sealed record Held(DnsEntry Entry, DateTimeOffset Again, DateTimeOffset Until);
+    private sealed record Held(DnsEntry Entry, DateTimeOffset Again, DateTimeOffset Until, DateTimeOffset Seen);
 
     private sealed record Laid(long Rule, IPAddress Address, TimeSpan Left, TimeSpan Life);
 }

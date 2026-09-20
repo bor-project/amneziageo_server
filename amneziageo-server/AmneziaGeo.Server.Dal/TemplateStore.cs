@@ -99,6 +99,24 @@ public sealed class TemplateStore
     }
 
     /// <summary>
+    /// Puts the built in template in place, once, in a fresh database.
+    /// </summary>
+    public async Task SeedAsync(CancellationToken ct)
+    {
+        if (await _db.Templates.AnyAsync(ct).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        var now = _time.GetUtcNow();
+        var entity = new TemplateEntity { CreatedUtc = now, UpdatedUtc = now };
+        Write(entity, TemplateDefaults.Fresh());
+
+        _db.Templates.Add(entity);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Returns why a template cannot be written under the number, or null when it can.
     /// </summary>
     public Task<TemplateResult?> RefuseAsync(ClientTemplate draft, long id, CancellationToken ct)

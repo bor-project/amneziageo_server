@@ -1,5 +1,5 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { useClients } from "@/api/clients"
+import { useClients, useSwitchClient } from "@/api/clients"
 import type { Client } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import { scopes } from "@/api/scopes"
@@ -8,6 +8,7 @@ import { Handshake, Speed, Traffic } from "@/components/ClientStats"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
+import { Knob } from "@/components/fields"
 import { card, fieldBox } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -21,6 +22,7 @@ export function Clients() {
   const configs = useConfigs()
   const clients = useClients()
   const templates = useTemplates()
+  const turn = useSwitchClient()
   const may = holds(user, scopes.manageClients)
   const picked = Number(params.get("config") ?? 0)
   const find = params.get("find") ?? ""
@@ -94,6 +96,18 @@ export function Clients() {
           }
           columns={[
             {
+              key: "on",
+              caption: t("action.on"),
+              cell: (one) => (
+                <Knob
+                  value={one.isEnabled}
+                  title={one.isEnabled ? t("action.turnOff") : t("action.turnOn")}
+                  disabled={!may || turn.isPending}
+                  onChange={(on) => void turn.mutateAsync({ id: one.id, on })}
+                />
+              ),
+            },
+            {
               key: "name",
               caption: t("clients.name"),
               sort: (one) => one.name,
@@ -123,7 +137,7 @@ export function Clients() {
                 one.templateId === null ? (
                   t("clients.dash")
                 ) : (
-                  <Link to={`/connections/templates/${one.templateId}/edit`} className="text-brand-ink hover:text-brand-lit">
+                  <Link to={`/connections/templates/clients/${one.templateId}/edit`} className="text-brand-ink hover:text-brand-lit">
                     {named(one)}
                   </Link>
                 ),

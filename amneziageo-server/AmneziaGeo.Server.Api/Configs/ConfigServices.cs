@@ -15,6 +15,7 @@ public static class ConfigServices
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<EndpointHost>();
+        services.AddScoped<TemplateSpread>();
         services.AddHostedService<ConfigBoot>();
 
         return services;

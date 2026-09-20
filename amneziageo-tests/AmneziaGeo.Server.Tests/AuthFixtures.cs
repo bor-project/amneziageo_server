@@ -98,8 +98,12 @@ public sealed class Bench : IDisposable
         Rules = _scope.ServiceProvider.GetRequiredService<RouteStore>();
         Balancers = _scope.ServiceProvider.GetRequiredService<BalanceStore>();
         Resolver = _scope.ServiceProvider.GetRequiredService<DnsStore>();
+        Standings = _scope.ServiceProvider.GetRequiredService<DnsStandingStore>();
         Panel = _scope.ServiceProvider.GetRequiredService<PanelStore>();
         Templates = _scope.ServiceProvider.GetRequiredService<TemplateStore>();
+        InterfaceTemplates = _scope.ServiceProvider.GetRequiredService<InterfaceTemplateStore>();
+        ProxyTemplates = _scope.ServiceProvider.GetRequiredService<ProxyTemplateStore>();
+        Proxies = _scope.ServiceProvider.GetRequiredService<ProxyStore>();
         GeoFiles = _scope.ServiceProvider.GetRequiredService<IGeoFileStore>();
         RefreshTokens = _scope.ServiceProvider.GetRequiredService<IRefreshTokens>();
         Audit = _scope.ServiceProvider.GetRequiredService<IAuditLog>();
@@ -138,9 +142,17 @@ public sealed class Bench : IDisposable
 
     public DnsStore Resolver { get; }
 
+    public DnsStandingStore Standings { get; }
+
     public PanelStore Panel { get; }
 
     public TemplateStore Templates { get; }
+
+    public InterfaceTemplateStore InterfaceTemplates { get; }
+
+    public ProxyTemplateStore ProxyTemplates { get; }
+
+    public ProxyStore Proxies { get; }
 
     public string DatabasePath => _path;
 

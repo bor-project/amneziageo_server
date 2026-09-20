@@ -9,6 +9,7 @@ namespace AmneziaGeo.Server.Api.Proxy;
 /// </summary>
 public sealed record ProxyResponse(
     long Id,
+    long? TemplateId,
     string Name,
     string Kind,
     bool IsEnabled,
@@ -35,12 +36,13 @@ public sealed record ProxyRequest(
     string? Target,
     IReadOnlyList<string>? Sources,
     string? Certificate,
-    string? CertificateKey);
+    string? CertificateKey,
+    long? TemplateId = null);
 
 /// <summary>
 /// What turning a proxy on or off carries.
 /// </summary>
-public sealed record ProxySwitchRequest(bool On);
+public sealed record ProxySwitchRequest(bool? On);
 
 /// <summary>
 /// Turns a proxy into what the panel reads and back.
@@ -57,6 +59,7 @@ public static class ProxyAnswers
 
         return new ProxyResponse(
             proxy.Id,
+            proxy.TemplateId,
             proxy.Name,
             proxy.Kind,
             proxy.IsEnabled,
@@ -80,6 +83,7 @@ public static class ProxyAnswers
 
         return new ProxyConfig
         {
+            TemplateId = request.TemplateId,
             Name = Trim(request.Name),
             Kind = Trim(request.Kind),
             IsEnabled = request.IsEnabled,

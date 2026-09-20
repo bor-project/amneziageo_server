@@ -117,6 +117,11 @@ a whole table, and every address whose time has not run out goes in the same ste
 so the sets never stand empty. When the server starts, it reads the sets back from the host before it lays the
 rules for the first time, so the addresses outlive a restart too.
 
+A rule keeps the newest 128 of its addresses standing. They go into the database of the panel once a minute,
+come back into the set before the first question is asked and take a fresh time of their own while they stand,
+so a machine that rebooted does not leave the rule empty and a name that stopped answering leaves its
+addresses behind. An address a newer one pushes out of the standing ones lives out its time and goes.
+
 ## What the panel shows
 
 The page carries the settings and, above them, what the resolver is doing: whether it runs, the addresses

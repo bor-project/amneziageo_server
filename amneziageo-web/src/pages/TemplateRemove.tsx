@@ -19,7 +19,7 @@ export function TemplateRemove() {
     return templates.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("templates.loading")}</div>
     ) : (
-      <Navigate to="/connections/templates" replace />
+      <Navigate to="/connections/templates/clients" replace />
     )
   }
 
@@ -37,12 +37,12 @@ export function TemplateRemove() {
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}
 
       <div className="flex justify-end gap-2">
-        <Link to="/connections/templates" className={`flex h-10 items-center ${secondary}`}>
+        <Link to="/connections/templates/clients" className={`flex h-10 items-center ${secondary}`}>
           {t("action.backToList")}
         </Link>
         <button
           type="button"
-          onClick={() => void remove.mutateAsync(held.id).then(() => navigate("/connections/templates"))}
+          onClick={() => void remove.mutateAsync(held.id).then(() => navigate("/connections/templates/clients"))}
           disabled={remove.isPending}
           className={danger}
         >

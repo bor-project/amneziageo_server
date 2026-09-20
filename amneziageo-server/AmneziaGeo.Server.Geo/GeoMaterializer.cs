@@ -30,6 +30,9 @@ public static class GeoMaterializer
                 case GeoRuleKind.Domain:
                     domains.Add(new GeoDomain(GeoDomainKind.Domain, rule.Value));
                     break;
+                case GeoRuleKind.Keyword:
+                    domains.Add(new GeoDomain(GeoDomainKind.Plain, rule.Value));
+                    break;
                 case GeoRuleKind.GeoIp:
                 case GeoRuleKind.GeoSite:
                     Expand(Key(rule.Value), index, cidrs, domains);

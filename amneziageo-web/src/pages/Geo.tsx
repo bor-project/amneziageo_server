@@ -1,7 +1,8 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { useGeoKeys, useGeoSources, useMoveGeoSource, useUpdateGeo, useUpdateGeoSource } from "@/api/geo"
+import { useGeoKeys, useGeoSources, useMoveGeoSource, useUpdateGeo } from "@/api/geo"
 import type { GeoSource } from "@/api/geo"
 import { scopes } from "@/api/scopes"
+import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { Box } from "@/components/fields"
@@ -21,7 +22,6 @@ export function Geo() {
   const sources = useGeoSources()
   const keys = useGeoKeys()
   const move = useMoveGeoSource()
-  const update = useUpdateGeoSource()
   const updateAll = useUpdateGeo()
   const may = holds(user, scopes.manageRouting)
   const find = params.get("find") ?? ""
@@ -150,24 +150,21 @@ export function Geo() {
                 tail: true,
                 cell: (one, at) =>
                   may && (
-                    <RowActions
-                      title={t("geo.actions")}
-                      actions={[
-                        { label: t("geo.update"), onPick: () => void update.mutateAsync(one.id) },
-                        { label: t("geo.edit"), onPick: () => navigate(`/routing/geo/${one.id}/edit`) },
-                        ...(at > 0
-                          ? [{ label: t("geo.up"), onPick: () => void move.mutateAsync({ id: one.id, up: true }) }]
-                          : []),
-                        ...(at < last
-                          ? [{ label: t("geo.down"), onPick: () => void move.mutateAsync({ id: one.id, up: false }) }]
-                          : []),
-                        {
-                          label: t("geo.remove"),
-                          onPick: () => navigate(`/routing/geo/${one.id}/delete`),
-                          alarming: true,
-                        },
-                      ]}
-                    />
+                    <div className="flex items-center justify-end gap-1">
+                      <Move
+                        first={at === 0}
+                        last={at === last}
+                        upTitle={t("geo.up")}
+                        downTitle={t("geo.down")}
+                        onMove={(up) => void move.mutateAsync({ id: one.id, up })}
+                      />
+                      <RowActions
+                        title={t("geo.actions")}
+                        actions={[
+                          { label: t("action.settings"), onPick: () => navigate(`/routing/geo/${one.id}/edit`) },
+                        ]}
+                      />
+                    </div>
                   ),
               },
             ]}

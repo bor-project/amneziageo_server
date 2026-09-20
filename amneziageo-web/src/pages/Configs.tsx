@@ -1,10 +1,11 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { useClients } from "@/api/clients"
-import { useConfigs } from "@/api/configs"
+import { useConfigs, useSwitchConfig } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { scopes } from "@/api/scopes"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
+import { Knob } from "@/components/fields"
 import { card, fieldBox } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -17,6 +18,7 @@ export function Configs() {
   const [params, setParams] = useSearchParams()
   const configs = useConfigs()
   const clients = useClients()
+  const turn = useSwitchConfig()
   const may = holds(user, scopes.manageInterfaces)
   const find = params.get("find") ?? ""
   const all = configs.data ?? []
@@ -56,6 +58,18 @@ export function Configs() {
             />
           }
           columns={[
+            {
+              key: "on",
+              caption: t("action.on"),
+              cell: (one) => (
+                <Knob
+                  value={one.isEnabled}
+                  title={one.isEnabled ? t("action.turnOff") : t("action.turnOn")}
+                  disabled={!may || turn.isPending}
+                  onChange={(on) => void turn.mutateAsync({ id: one.id, on })}
+                />
+              ),
+            },
             {
               key: "name",
               caption: t("configs.name"),

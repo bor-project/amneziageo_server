@@ -144,6 +144,11 @@ public sealed record ServerConfig
     public long Id { get; init; }
 
     /// <summary>
+    /// The template the endpoint takes its constants from, or null for values of its own.
+    /// </summary>
+    public long? TemplateId { get; init; }
+
+    /// <summary>
     /// The name of the interface the endpoint runs on.
     /// </summary>
     public required string Name { get; init; }

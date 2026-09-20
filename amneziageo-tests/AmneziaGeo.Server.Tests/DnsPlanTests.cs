@@ -223,16 +223,20 @@ public class DnsPlanTests
     {
         var clock = new Clock(new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero));
         var host = new Ledger();
-        var sets = new DnsSets(host, clock);
+        var sets = new DnsSets(host, clock, 1);
         var plan = Plan(Rule("youtube.com"));
         sets.Add(1, IPAddress.Parse("1.2.3.4"), TimeSpan.FromMinutes(60));
+        clock.Pass(TimeSpan.FromMinutes(1));
+        sets.Add(1, IPAddress.Parse("5.6.7.8"), TimeSpan.FromMinutes(60));
         await sets.FlushAsync(plan, TimeSpan.FromMinutes(60), CancellationToken.None);
 
         clock.Pass(TimeSpan.FromMinutes(10));
 
-        Assert.Equal(1, await sets.LayAsync(RouteRuleset.Text(plan), plan, CancellationToken.None));
+        Assert.Equal(2, await sets.LayAsync(RouteRuleset.Text(plan), plan, CancellationToken.None));
         Assert.StartsWith("table inet amneziageo_rt\n", host.Ruleset, StringComparison.Ordinal);
-        Assert.EndsWith("}\nadd element inet amneziageo_rt n1v4 { 1.2.3.4 timeout 3000s }\n", host.Ruleset, StringComparison.Ordinal);
+        Assert.Contains("}\nadd element inet amneziageo_rt n1v4 { ", host.Ruleset, StringComparison.Ordinal);
+        Assert.Contains("1.2.3.4 timeout 2940s", host.Ruleset, StringComparison.Ordinal);
+        Assert.Contains("5.6.7.8 timeout 3600s", host.Ruleset, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -240,14 +244,16 @@ public class DnsPlanTests
     {
         var clock = new Clock(new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero));
         var host = new Ledger();
-        var sets = new DnsSets(host, clock);
-        sets.Add(1, IPAddress.Parse("1.2.3.4"), TimeSpan.FromMinutes(60));
+        var sets = new DnsSets(host, clock, 1);
         sets.Add(9, IPAddress.Parse("5.6.7.8"), TimeSpan.FromMinutes(600));
+        sets.Add(1, IPAddress.Parse("1.2.3.4"), TimeSpan.FromMinutes(60));
+        clock.Pass(TimeSpan.FromMinutes(1));
+        sets.Add(1, IPAddress.Parse("9.9.9.9"), TimeSpan.FromMinutes(60));
 
         clock.Pass(TimeSpan.FromMinutes(61));
 
-        Assert.Equal(0, await sets.LayAsync("rules\n", Plan(Rule("youtube.com")), CancellationToken.None));
-        Assert.Equal("rules\n", host.Ruleset);
+        Assert.Equal(1, await sets.LayAsync("rules\n", Plan(Rule("youtube.com")), CancellationToken.None));
+        Assert.Equal("rules\nadd element inet amneziageo_rt n1v4 { 9.9.9.9 timeout 3600s }\n", host.Ruleset);
     }
 
     [Fact]
@@ -260,8 +266,8 @@ public class DnsPlanTests
         var laid = await sets.LayAsync("rules\n", Plan(Rule("youtube.com")), CancellationToken.None);
 
         Assert.Equal(2, laid);
-        Assert.Contains("add element inet amneziageo_rt n1v4 { 1.2.3.4 timeout 3000s }", host.Ruleset, StringComparison.Ordinal);
-        Assert.Contains("add element inet amneziageo_rt n1v6 { 2a02:6b8::1 timeout 100s }", host.Ruleset, StringComparison.Ordinal);
+        Assert.Contains("add element inet amneziageo_rt n1v4 { 1.2.3.4 timeout 3600s }", host.Ruleset, StringComparison.Ordinal);
+        Assert.Contains("add element inet amneziageo_rt n1v6 { 2a02:6b8::1 timeout 3600s }", host.Ruleset, StringComparison.Ordinal);
         Assert.DoesNotContain("5.6.7.8", host.Ruleset, StringComparison.Ordinal);
         Assert.DoesNotContain("9.9.9.0", host.Ruleset, StringComparison.Ordinal);
     }
@@ -276,7 +282,7 @@ public class DnsPlanTests
         await sets.LayAsync("rules\n", Plan(Rule("youtube.com")), CancellationToken.None);
 
         var early = sets.Add(1, IPAddress.Parse("1.2.3.4"), TimeSpan.FromMinutes(60));
-        clock.Pass(TimeSpan.FromMinutes(21));
+        clock.Pass(TimeSpan.FromMinutes(31));
         var late = sets.Add(1, IPAddress.Parse("1.2.3.4"), TimeSpan.FromMinutes(60));
 
         Assert.False(early);
@@ -296,6 +302,56 @@ public class DnsPlanTests
 
         Assert.Equal(1, host.Steps.Count(step => step == "read amneziageo_rt"));
         Assert.Equal("rules\n", host.Ruleset);
+    }
+
+    [Fact]
+    public async Task TheAddressesARuleStandsOnComeBackBeforeTheFirstAnswer()
+    {
+        var clock = new Clock(new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero));
+        var host = new Ledger();
+        var sets = new DnsSets(host, clock);
+        var plan = Plan(Rule("youtube.com"));
+        var stood = new DnsStanding(1, IPAddress.Parse("1.2.3.4"), clock.GetUtcNow() - TimeSpan.FromDays(1));
+
+        sets.Restore([stood], TimeSpan.FromMinutes(60));
+        var laid = await sets.LayAsync(RouteRuleset.Text(plan), plan, CancellationToken.None);
+
+        Assert.Equal(1, laid);
+        Assert.EndsWith("add element inet amneziageo_rt n1v4 { 1.2.3.4 timeout 3600s }\n", host.Ruleset, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnAddressThatStandsGoesAgainOnceHalfItsLifePassedWithNoAnswer()
+    {
+        var clock = new Clock(new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero));
+        var host = new Ledger();
+        var sets = new DnsSets(host, clock);
+        var plan = Plan(Rule("youtube.com"));
+        sets.Add(1, IPAddress.Parse("1.2.3.4"), TimeSpan.FromMinutes(60));
+        await sets.FlushAsync(plan, TimeSpan.FromMinutes(60), CancellationToken.None);
+
+        clock.Pass(TimeSpan.FromMinutes(31));
+        var sent = await sets.FlushAsync(plan, TimeSpan.FromMinutes(60), CancellationToken.None);
+
+        Assert.Equal(1, sent);
+        Assert.Equal(2, host.Steps.Count(step => step == "firewall"));
+        Assert.Equal("add element inet amneziageo_rt n1v4 { 1.2.3.4 timeout 3600s }\n", host.Ruleset);
+    }
+
+    [Fact]
+    public void TheAddressesOfARuleThatIsGoneDoNotStand()
+    {
+        var clock = new Clock(new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero));
+        var sets = new DnsSets(new Ledger(), clock);
+        sets.Add(1, IPAddress.Parse("1.2.3.4"), TimeSpan.FromMinutes(60));
+        sets.Add(9, IPAddress.Parse("5.6.7.8"), TimeSpan.FromMinutes(60));
+
+        var standing = sets.Standings(Plan(Rule("youtube.com")));
+
+        Assert.Single(standing);
+        Assert.Equal(1L, standing[0].Rule);
+        Assert.Equal("1.2.3.4", standing[0].Address.ToString());
+        Assert.Equal(clock.GetUtcNow(), standing[0].Seen);
     }
 
     private const string HostSets = """

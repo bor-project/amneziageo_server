@@ -135,6 +135,22 @@ public static class ClientEndpoints
             ClientTraffic.None));
     }
 
+    private static async Task<long?> InheritedAsync(
+        long configId,
+        ConfigStore configs,
+        InterfaceTemplateStore templates,
+        CancellationToken ct)
+    {
+        if (await configs.FindAsync(configId, ct).ConfigureAwait(false) is not { TemplateId: { } held })
+        {
+            return null;
+        }
+
+        var template = await templates.FindAsync(held, ct).ConfigureAwait(false);
+
+        return template?.ClientTemplateId;
+    }
+
     private static async Task<TunnelClient?> FilledAsync(
         TunnelClient draft,
         ConfigStore configs,
@@ -223,6 +239,7 @@ public static class ClientEndpoints
         ClientRequest request,
         ConfigStore configs,
         ClientStore store,
+        InterfaceTemplateStore templates,
         ClientHost host,
         EndpointHost endpoints,
         ClientGuard guard,
@@ -231,6 +248,11 @@ public static class ClientEndpoints
         CancellationToken ct)
     {
         var draft = ClientAnswers.Draft(request, null);
+        if (draft.TemplateId is null)
+        {
+            draft = draft with { TemplateId = await InheritedAsync(draft.ConfigId, configs, templates, ct).ConfigureAwait(false) };
+        }
+
         if (await FilledAsync(draft, configs, store, ct).ConfigureAwait(false) is not { } settled)
         {
             return Missing(draft.ConfigId);
@@ -327,7 +349,12 @@ public static class ClientEndpoints
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var result = await store.SwitchAsync(id, request.On, ct).ConfigureAwait(false);
+        if (request.On is not { } on)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a switch needs the on field");
+        }
+
+        var result = await store.SwitchAsync(id, on, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);

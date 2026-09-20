@@ -173,6 +173,24 @@ public sealed class ConfigStore
     }
 
     /// <summary>
+    /// Turns an endpoint on or off.
+    /// </summary>
+    public async Task<ConfigResult> SwitchAsync(long id, bool on, CancellationToken ct)
+    {
+        var held = await _db.Configs.FirstOrDefaultAsync(row => row.Id == id, ct).ConfigureAwait(false);
+        if (held is null)
+        {
+            return Missing(id);
+        }
+
+        held.IsEnabled = on;
+        held.UpdatedUtc = _time.GetUtcNow();
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return ConfigResult.Done(Read(held));
+    }
+
+    /// <summary>
     /// Removes an endpoint.
     /// </summary>
     public async Task<ConfigResult> RemoveAsync(long id, CancellationToken ct)
@@ -196,6 +214,7 @@ public sealed class ConfigStore
     private static ServerConfig Read(ConfigEntity entity) => new()
     {
         Id = entity.Id,
+        TemplateId = entity.TemplateId,
         Name = entity.Name,
         Host = entity.Host,
         ListenPort = entity.ListenPort,
@@ -215,38 +234,12 @@ public sealed class ConfigStore
         PresharedKey = entity.PresharedKey,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
-        Obfuscation = new ObfuscationSettings
-        {
-            Jc = entity.Jc,
-            Jmin = entity.Jmin,
-            Jmax = entity.Jmax,
-            S1 = entity.S1,
-            S2 = entity.S2,
-            S3 = entity.S3,
-            S4 = entity.S4,
-            H1 = entity.H1,
-            H2 = entity.H2,
-            H3 = entity.H3,
-            H4 = entity.H4,
-            I1 = entity.I1,
-            I2 = entity.I2,
-            I3 = entity.I3,
-            I4 = entity.I4,
-            I5 = entity.I5,
-            HeaderProtectionKey = entity.HeaderProtectionKey,
-            ContentPaddingAddition = entity.ContentPaddingAddition,
-            RekeyAfterTime = entity.RekeyAfterTime,
-            RekeyTimeout = entity.RekeyTimeout,
-            RejectAfterTime = entity.RejectAfterTime,
-            KeepaliveTimeout = entity.KeepaliveTimeout,
-            MaxHandshakeAttempts = entity.MaxHandshakeAttempts,
-            RandomTrailers = entity.RandomTrailers,
-            DisableCookies = entity.DisableCookies,
-        },
+        Obfuscation = Obfuscations.Of(entity),
     };
 
     private static void Write(ConfigEntity entity, ServerConfig config)
     {
+        entity.TemplateId = config.TemplateId;
         entity.Name = config.Name;
         entity.Host = config.Host.Trim();
         entity.ListenPort = config.ListenPort;
@@ -264,35 +257,8 @@ public sealed class ConfigStore
         entity.PrivateKey = config.PrivateKey;
         entity.PublicKey = Curve25519.PublicOf(config.PrivateKey);
         entity.PresharedKey = config.PresharedKey.Trim();
-        entity.Jc = config.Obfuscation.Jc;
-        entity.Jmin = config.Obfuscation.Jmin;
-        entity.Jmax = config.Obfuscation.Jmax;
-        entity.S1 = config.Obfuscation.S1;
-        entity.S2 = config.Obfuscation.S2;
-        entity.S3 = config.Obfuscation.S3;
-        entity.S4 = config.Obfuscation.S4;
-        entity.H1 = config.Obfuscation.H1;
-        entity.H2 = config.Obfuscation.H2;
-        entity.H3 = config.Obfuscation.H3;
-        entity.H4 = config.Obfuscation.H4;
-        entity.I1 = Text(config.Obfuscation.I1);
-        entity.I2 = Text(config.Obfuscation.I2);
-        entity.I3 = Text(config.Obfuscation.I3);
-        entity.I4 = Text(config.Obfuscation.I4);
-        entity.I5 = Text(config.Obfuscation.I5);
-        entity.HeaderProtectionKey = config.Obfuscation.HeaderProtectionKey.Trim();
-        entity.ContentPaddingAddition = config.Obfuscation.ContentPaddingAddition.Trim();
-        entity.RekeyAfterTime = config.Obfuscation.RekeyAfterTime.Trim();
-        entity.RekeyTimeout = config.Obfuscation.RekeyTimeout.Trim();
-        entity.RejectAfterTime = config.Obfuscation.RejectAfterTime.Trim();
-        entity.KeepaliveTimeout = config.Obfuscation.KeepaliveTimeout.Trim();
-        entity.MaxHandshakeAttempts = config.Obfuscation.MaxHandshakeAttempts.Trim();
-        entity.RandomTrailers = config.Obfuscation.RandomTrailers;
-        entity.DisableCookies = config.Obfuscation.DisableCookies;
+        Obfuscations.Write(entity, config.Obfuscation);
     }
-
-    private static string? Text(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static IReadOnlyList<string> Parts(string text) =>
         [.. text.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];

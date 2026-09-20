@@ -89,7 +89,7 @@ public sealed record OutboundMoveRequest(bool Up);
 /// <summary>
 /// Whether an outbound is turned on.
 /// </summary>
-public sealed record OutboundSwitchRequest(bool On);
+public sealed record OutboundSwitchRequest(bool? On);
 
 /// <summary>
 /// Turns outbounds between the shape the panel holds and the shape the interface reads.

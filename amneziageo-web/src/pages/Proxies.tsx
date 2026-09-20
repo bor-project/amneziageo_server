@@ -1,11 +1,12 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { useProxies, useProxyCertificate } from "@/api/proxies"
+import { useProxies, useProxyCertificate, useSwitchProxy } from "@/api/proxies"
 import type { Proxy } from "@/api/proxies"
 import { scopes } from "@/api/scopes"
 import { ProxyState } from "@/components/ProxyState"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { proxyFault, proxyKind, proxyPoint } from "@/components/proxy"
+import { Knob } from "@/components/fields"
 import { card, fieldBox, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
@@ -19,6 +20,7 @@ export function Proxies() {
   const [params, setParams] = useSearchParams()
   const proxies = useProxies()
   const tls = useProxyCertificate()
+  const turn = useSwitchProxy()
   const may = holds(user, scopes.manageRouting)
   const find = params.get("find") ?? ""
   const all = proxies.data ?? []
@@ -63,6 +65,18 @@ export function Proxies() {
             />
           }
           columns={[
+            {
+              key: "on",
+              caption: t("action.on"),
+              cell: (one) => (
+                <Knob
+                  value={one.isEnabled}
+                  title={one.isEnabled ? t("action.turnOff") : t("action.turnOn")}
+                  disabled={!may || turn.isPending}
+                  onChange={(on) => void turn.mutateAsync({ id: one.id, on })}
+                />
+              ),
+            },
             {
               key: "name",
               caption: t("proxies.name"),

@@ -21,6 +21,8 @@ public class RouteTests
     [InlineData("Youtube.com", GeoRuleKind.Domain, "youtube.com")]
     [InlineData("domain:Ifconfig.me", GeoRuleKind.Domain, "ifconfig.me")]
     [InlineData(" domain:youtube.com ", GeoRuleKind.Domain, "youtube.com")]
+    [InlineData("keyword:Ads", GeoRuleKind.Keyword, "ads")]
+    [InlineData(" KEYWORD:double-click ", GeoRuleKind.Keyword, "double-click")]
     public void ATargetIsReadAsWhatItLooksLike(string text, GeoRuleKind kind, string value)
     {
         var target = RouteRules.Target(text);
@@ -35,11 +37,27 @@ public class RouteTests
     [InlineData("geoip:")]
     [InlineData("domain:")]
     [InlineData("domain:no dots here")]
+    [InlineData("keyword:")]
+    [InlineData("keyword:two words")]
     [InlineData("1.2.3.0/44")]
     [InlineData("no dots here")]
     [InlineData(".leading.dot")]
     [InlineData("trailing.dot.")]
     public void ATargetThatMeansNothingIsRefused(string text) => Assert.Null(RouteRules.Target(text));
+
+    [Fact]
+    public void AKeywordTargetMatchesEveryNameThatCarriesIt()
+    {
+        var rule = RouteRules.Target("keyword:ads");
+        var targets = GeoMaterializer.Materialize([rule!], GeoIndex.Load([], new MemoryGeoFiles()));
+        var matcher = new DomainMatcher(targets.Domains);
+
+        Assert.Empty(targets.Cidrs);
+        Assert.Equal(GeoDomainKind.Plain, Assert.Single(targets.Domains).Kind);
+        Assert.True(matcher.Matches("ads.example.com"));
+        Assert.True(matcher.Matches("doubleclick-ads.net"));
+        Assert.False(matcher.Matches("example.com"));
+    }
 
     [Theory]
     [InlineData("443", 443, 443)]

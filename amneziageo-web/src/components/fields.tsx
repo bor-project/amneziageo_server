@@ -137,6 +137,15 @@ export function Pick({
   )
 }
 
+export function Folded({ caption, children }: { caption: string; children: ReactNode }) {
+  return (
+    <details className="sm:col-span-2">
+      <summary className="cursor-pointer text-sm text-muted">{caption}</summary>
+      <div className="mt-3 grid grid-cols-1 gap-3.5 sm:grid-cols-2">{children}</div>
+    </details>
+  )
+}
+
 export function Count({
   id,
   caption,

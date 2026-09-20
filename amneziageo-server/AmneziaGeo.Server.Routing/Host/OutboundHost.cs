@@ -87,13 +87,26 @@ public sealed class OutboundHost
     }
 
     /// <summary>
-    /// Brings up the interface of an outbound the host holds down, telling whether it had to.
+    /// Brings up the interface of an outbound the host holds down or lost, telling whether it had to.
     /// </summary>
     public async Task<bool> MendAsync(OutboundConfig outbound, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(outbound);
 
-        if (!outbound.IsEnabled || !IsDown(outbound))
+        if (!outbound.IsEnabled || !OutboundKind.HasLink(outbound.Kind))
+        {
+            return false;
+        }
+
+        // Lays a gone interface again with its keys and its carrier.
+        if (!_network.HasLink(outbound.Name))
+        {
+            await RaiseAsync(outbound, ct).ConfigureAwait(false);
+
+            return true;
+        }
+
+        if (!IsDown(outbound))
         {
             return false;
         }
@@ -178,6 +191,11 @@ public sealed class OutboundHost
                 Probe = reading,
             };
 
+            if (outbound.IsEnabled && !_network.HasLink(outbound.Name))
+            {
+                return state with { IsAlive = false, Fault = $"the interface '{outbound.Name}' is gone" };
+            }
+
             return IsDown(outbound)
                 ? state with { IsAlive = false, Fault = $"the interface '{outbound.Name}' is down" }
                 : state;
@@ -196,6 +214,16 @@ public sealed class OutboundHost
         ArgumentNullException.ThrowIfNull(outbounds);
 
         return [.. outbounds.Select(State)];
+    }
+
+    /// <summary>
+    /// Names the outbounds the host carries traffic through right now.
+    /// </summary>
+    public IReadOnlyList<string> Carrying(IReadOnlyList<OutboundConfig> outbounds)
+    {
+        ArgumentNullException.ThrowIfNull(outbounds);
+
+        return [.. States(outbounds).Where(state => state.Carries).Select(state => state.Name)];
     }
 
     private async Task RaiseAsync(OutboundConfig outbound, CancellationToken ct)

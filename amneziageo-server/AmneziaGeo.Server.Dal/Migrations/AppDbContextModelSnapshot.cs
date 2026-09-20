@@ -531,6 +531,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<int>("S4")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("TemplateId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTimeOffset>("UpdatedUtc")
                         .HasColumnType("TEXT");
 
@@ -538,6 +541,8 @@ namespace AmneziaGeo.Server.Dal.Migrations
 
                     b.HasIndex("Name")
                         .IsUnique();
+
+                    b.HasIndex("TemplateId");
 
                     b.ToTable("Configs");
                 });
@@ -595,6 +600,31 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Resolver");
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.DnsStandingEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RuleId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("SeenUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RuleId", "Address")
+                        .IsUnique();
+
+                    b.ToTable("Standings");
                 });
 
             modelBuilder.Entity("AmneziaGeo.Server.Dal.GeoSourceEntity", b =>
@@ -660,6 +690,150 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.HasIndex("Position");
 
                     b.ToTable("GeoSources");
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.InterfaceTemplateEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AllowedIps")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Blocked")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ClientTemplateId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContentPaddingAddition")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("DisableCookies")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Dns")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("H1")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("H2")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("H3")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("H4")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HeaderProtectionKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("I1")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("I2")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("I3")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("I4")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("I5")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Jc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Jmax")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Jmin")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Keepalive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("KeepaliveTimeout")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ListenPort")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MaxHandshakeAttempts")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Mtu")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("OfflineAfter")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("RandomTrailers")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RejectAfterTime")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RekeyAfterTime")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RekeyTimeout")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("S1")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("S2")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("S3")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("S4")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Subnet")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientTemplateId");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("InterfaceTemplates");
                 });
 
             modelBuilder.Entity("AmneziaGeo.Server.Dal.OutboundEntity", b =>
@@ -947,6 +1121,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("TemplateId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTimeOffset>("UpdatedUtc")
                         .HasColumnType("TEXT");
 
@@ -955,10 +1132,60 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
+                    b.HasIndex("TemplateId");
+
                     b.HasIndex("Kind", "Port")
                         .IsUnique();
 
                     b.ToTable("Proxy");
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.ProxyTemplateEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("MakePath")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Opened")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Port")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Sources")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ProxyTemplates");
                 });
 
             modelBuilder.Entity("AmneziaGeo.Server.Dal.RefreshTokenEntity", b =>

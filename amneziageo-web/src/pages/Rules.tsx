@@ -5,6 +5,7 @@ import { useMoveRule, usePlaceRule, useRules, useSwitchRule } from "@/api/rules"
 import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
 import { Knob } from "@/components/fields"
+import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { card, fieldBox } from "@/components/styles"
@@ -163,23 +164,21 @@ export function Rules() {
               tail: true,
               cell: (one) =>
                 may && (
-                  <RowActions
-                    title={t("rules.actions")}
-                    actions={[
-                      { label: t("rules.edit"), onPick: () => navigate(`/routing/rules/${one.id}/edit`) },
-                      ...((number.get(one.id) ?? 1) > 1
-                        ? [{ label: t("rules.up"), onPick: () => void move.mutateAsync({ id: one.id, up: true }) }]
-                        : []),
-                      ...((number.get(one.id) ?? 1) - 1 < last
-                        ? [{ label: t("rules.down"), onPick: () => void move.mutateAsync({ id: one.id, up: false }) }]
-                        : []),
-                      {
-                        label: t("rules.remove"),
-                        onPick: () => navigate(`/routing/rules/${one.id}/delete`),
-                        alarming: true,
-                      },
-                    ]}
-                  />
+                  <div className="flex items-center justify-end gap-1">
+                    <Move
+                      first={(number.get(one.id) ?? 1) === 1}
+                      last={(number.get(one.id) ?? 1) - 1 === last}
+                      upTitle={t("rules.up")}
+                      downTitle={t("rules.down")}
+                      onMove={(up) => void move.mutateAsync({ id: one.id, up })}
+                    />
+                    <RowActions
+                      title={t("rules.actions")}
+                      actions={[
+                        { label: t("action.settings"), onPick: () => navigate(`/routing/rules/${one.id}/edit`) },
+                      ]}
+                    />
+                  </div>
                 ),
             },
           ]}

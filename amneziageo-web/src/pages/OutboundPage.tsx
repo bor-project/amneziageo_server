@@ -1,7 +1,16 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom"
-import { draftOf, useAddOutbound, useChangeOutbound, useFreshOutbound, useOutbounds } from "@/api/outbounds"
+import {
+  draftOf,
+  useAddOutbound,
+  useApplyOutbound,
+  useChangeOutbound,
+  useFreshOutbound,
+  useOutbounds,
+  useProbeOutbound,
+} from "@/api/outbounds"
 import type { Outbound } from "@/api/outbounds"
 import { OutboundForm } from "@/components/OutboundForm"
+import { secondary } from "@/components/styles"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
 
@@ -41,6 +50,8 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
   const navigate = useNavigate()
   const outbounds = useOutbounds()
   const change = useChangeOutbound()
+  const apply = useApplyOutbound()
+  const probe = useProbeOutbound()
   const all = outbounds.data ?? []
   const held = all.find((one) => one.id === outboundId)
 
@@ -55,14 +66,36 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
   }
 
   return (
-    <OutboundForm
-      start={draftOf(held)}
-      publicKey={held.publicKey}
-      pending={change.isPending}
-      error={change.error}
-      onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate("/routing/channels"))}
-      onClose={() => navigate("/routing/channels")}
-    />
+    <div>
+      <div className="mt-4 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => void probe.mutateAsync(held.id)}
+          disabled={probe.isPending}
+          className={secondary}
+        >
+          {t("outbounds.probeNow")}
+        </button>
+        <button
+          type="button"
+          onClick={() => void apply.mutateAsync(held.id)}
+          disabled={apply.isPending}
+          className={secondary}
+        >
+          {t("outbounds.apply")}
+        </button>
+      </div>
+
+      <OutboundForm
+        start={draftOf(held)}
+        publicKey={held.publicKey}
+        pending={change.isPending}
+        error={change.error}
+        onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate("/routing/channels"))}
+        onClose={() => navigate("/routing/channels")}
+        onRemove={() => navigate(`/routing/channels/${held.id}/delete`)}
+      />
+    </div>
   )
 }
 

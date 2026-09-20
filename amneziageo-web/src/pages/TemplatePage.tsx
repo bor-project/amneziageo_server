@@ -23,7 +23,7 @@ export function TemplatePage() {
   const change = useChangeTemplate()
   const refresh = useRefreshTemplate()
   const held = templateId === undefined ? undefined : templates.data?.find((one) => one.id === Number(templateId))
-  const back = lastSpot("connections", "/connections/templates")
+  const back = lastSpot("connections", "/connections/templates/clients")
 
   useTail(
     held === undefined
@@ -59,7 +59,7 @@ export function TemplatePage() {
           onClick={() =>
             void add
               .mutateAsync({ ...draftOf(held), name: t("templates.copyName", { name: held.name }) })
-              .then((made) => navigate(`/connections/templates/${made.id}/edit`))
+              .then((made) => navigate(`/connections/templates/clients/${made.id}/edit`))
           }
           disabled={add.isPending}
           className={secondary}
@@ -88,7 +88,7 @@ export function TemplatePage() {
         error={change.error}
         onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}
         onClose={() => navigate(back)}
-        onRemove={() => navigate(`/connections/templates/${held.id}/delete`)}
+        onRemove={() => navigate(`/connections/templates/clients/${held.id}/delete`)}
       />
     </div>
   )

@@ -105,6 +105,22 @@ public class ConfigTests
     }
 
     [Fact]
+    public async Task AnEndpointIsTurnedOffAndOnWithoutItsOtherSettingsMoving()
+    {
+        using var bench = new Bench();
+        var added = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), default);
+
+        var off = await bench.Configs.SwitchAsync(added.Record!.Id, false, default);
+        var on = await bench.Configs.SwitchAsync(added.Record.Id, true, default);
+
+        Assert.False(off.Record!.IsEnabled);
+        Assert.True(on.Record!.IsEnabled);
+        Assert.Equal(added.Record.PrivateKey, on.Record.PrivateKey);
+        Assert.Equal(added.Record.ListenPort, on.Record.ListenPort);
+        Assert.Equal(ConfigOutcome.Unknown, (await bench.Configs.SwitchAsync(added.Record.Id + 100, true, default)).Outcome);
+    }
+
+    [Fact]
     public async Task AnEndpointTakesTheNameOfAnotherOnlyOnce()
     {
         using var bench = new Bench();

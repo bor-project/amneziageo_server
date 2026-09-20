@@ -1,3 +1,4 @@
+using System.Net;
 using AmneziaGeo.Server.Routing.Dns;
 
 namespace AmneziaGeo.Server.Tests;
@@ -65,6 +66,24 @@ public class DnsStoreTests
 
         Assert.Equal(5301, (await bench.Resolver.ReadAsync(CancellationToken.None)).Port);
         Assert.Single(bench.Db.Resolver);
+    }
+
+    [Fact]
+    public async Task TheAddressesTheRulesStandOnAreReadBackAsTheyWereSaved()
+    {
+        using var bench = new Bench();
+        var seen = bench.Clock.GetUtcNow();
+
+        await bench.Standings.SaveAsync(
+            [new DnsStanding(5, IPAddress.Parse("1.2.3.4"), seen), new DnsStanding(-1, IPAddress.Parse("2a02:6b8::1"), seen)],
+            CancellationToken.None);
+        await bench.Standings.SaveAsync([new DnsStanding(5, IPAddress.Parse("1.2.3.4"), seen)], CancellationToken.None);
+        var held = await bench.Standings.ListAsync(CancellationToken.None);
+
+        Assert.Single(held);
+        Assert.Equal(5L, held[0].Rule);
+        Assert.Equal("1.2.3.4", held[0].Address.ToString());
+        Assert.Equal(seen, held[0].Seen);
     }
 
     [Fact]

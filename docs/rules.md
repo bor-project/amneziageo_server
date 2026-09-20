@@ -58,7 +58,10 @@ balancer renamed is written into the rules the same way, see `outbounds.md` and 
 A target is read as what it looks like: `geoip:ru` is a country, `geosite:youtube` a category,
 `1.2.3.0/24` and `8.8.8.8` are ranges, and anything else with a dot in it is a domain. A domain is also taken
 as `domain:ifconfig.me`, the form the console client of AmneziaGeo writes its lists in, so one list carries
-over to the other side unchanged. A rule with no targets matches every address, a rule with no client
+over to the other side unchanged. `keyword:ads` matches every name the word occurs in, as in 3x-ui; a keyword
+brings no range of its own, so the addresses of a rule that carries one arrive only from the answers the
+resolver sees. Ranges come from `geoip:` and from the networks written into the targets; `geosite:` gives
+names. A rule with no targets matches every address, a rule with no client
 addresses matches every client.
 
 ## The order
@@ -121,11 +124,13 @@ otherwise:
 |---|---|
 | `unknown-outbound` | the rule names an outbound the panel does not hold |
 | `outbound-off` | the outbound of the rule is turned off |
+| `outbound-down` | the outbound of the rule carries nothing: its probe does not get through |
 | `empty-target` | the geo databases carry nothing for what the rule matches by |
 | `unknown-client` | the panel holds none of the clients the rule names |
 | `unknown-inbound` | the panel holds none of the interfaces the rule names |
 
-The first two say the rule itself is good and only its way out is gone. `Hold the traffic while the channel
+The first three say the rule itself is good and only its way out is gone, and a balancer whose members all
+carry nothing says the same with `no-live-member`. `Hold the traffic while the channel
 is down` decides what happens then, and a fresh rule holds: the rule still goes into the ruleset, but it
 drops what it matches instead of marking it, and the panel shows `traffic held` with the reason behind it.
 Turn the holding off and the traffic leaves through the way out of the host, under the address of the server
@@ -144,12 +149,16 @@ traffic then carries, or a bare address, whose interface is the configuration it
 protocol is `tcp` or `udp`, both ports may be left out.
 
 The guards of the resolver come first: with DoT blocked, port 853 is dropped, and with DoH blocked, port 443
-to a known name server is dropped. Then each rule is read in order: a rule off the host is passed over with
-its reason, a rule whose interface, client, protocol, port or source port does not fit is missed, and a rule
+to a known name server is dropped. Next comes the resolver itself: while it intercepts, every question on port
+53 that comes in on a client interface is answered by it, and the rules are not read at all. Then each rule is
+read in order: a rule off the host is passed over with its reason, a rule whose interface, client, protocol,
+port or source port does not fit is missed, and a rule
 whose targets take the traffic matches by a range, by the name or by an address the resolver laid into its
-set. The answer carries the verdict (`out`, `host`, `block`, `held` or `guard`), the rule that decided with
+set. The answer carries the verdict (`out`, `host`, `block`, `held`, `guard` or `dns`), the rule that decided with
 its place, the way out with the members of a balancer and which of them carry, the addresses the name
-resolved to and every rule read before the decision.
+resolved to and every rule read before the decision. Each member of the way out says whether it is on
+(`isEnabled`), whether it carries traffic at all (`carries`, the same measure the outbound itself reports)
+and whether this rule sends traffic to it (`isPicked`).
 
 ## What the panel shows
 

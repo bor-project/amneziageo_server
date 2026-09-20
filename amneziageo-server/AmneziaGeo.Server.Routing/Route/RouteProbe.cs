@@ -111,6 +111,11 @@ public static class RouteProbe
     public const string Guarded = "guard";
 
     /// <summary>
+    /// The question is taken by the resolver of the panel.
+    /// </summary>
+    public const string Resolver = "dns";
+
+    /// <summary>
     /// Returns where the rules send the traffic.
     /// </summary>
     public static RouteVerdict Test(RoutePlan plan, RouteQuery query, Func<long, IPAddress, bool> inSet)
@@ -122,6 +127,11 @@ public static class RouteProbe
         if (Guard(plan.Dns, query) is { } guard)
         {
             return new RouteVerdict(Guarded, guard, null, []);
+        }
+
+        if (Intercepted(plan, query))
+        {
+            return new RouteVerdict(Resolver, "intercept", null, []);
         }
 
         var named = query.Name.Length > 0 ? DnsNames.Build(plan).Match(query.Name).ToHashSet() : [];
@@ -159,6 +169,13 @@ public static class RouteProbe
 
         return false;
     }
+
+    // Every question leaving a client interface is turned into the resolver of the panel.
+    private static bool Intercepted(RoutePlan plan, RouteQuery query) =>
+        plan.Dns.IsEnabled
+        && plan.Dns.Intercept
+        && query.Port == 53
+        && plan.Inbound.Contains(query.Inbound, StringComparer.Ordinal);
 
     private static string? Guard(DnsSettings dns, RouteQuery query)
     {

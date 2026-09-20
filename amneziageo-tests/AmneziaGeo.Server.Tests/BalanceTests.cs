@@ -137,6 +137,52 @@ public class BalanceTests
     }
 
     [Fact]
+    public void AnOutboundThatCarriesNothingKeepsTheRuleOffTheHost()
+    {
+        var rule = RouteDefaults.Fresh("ru") with
+        {
+            Id = 1,
+            Outbound = "awgbor",
+            Targets = ["geoip:ru"],
+            HoldsWhenDown = false,
+        };
+
+        var leg = Assert.Single(Plan([], ["direct"], rule).Legs);
+
+        Assert.False(leg.IsLive);
+        Assert.False(leg.IsHeld);
+        Assert.Equal("outbound-down", leg.Fault?.Code);
+    }
+
+    [Fact]
+    public void ARuleThatHoldsItsTrafficDropsItWhileTheOutboundCarriesNothing()
+    {
+        var rule = RouteDefaults.Fresh("ru") with
+        {
+            Id = 1,
+            Outbound = "awgbor",
+            Targets = ["geoip:ru"],
+            HoldsWhenDown = true,
+        };
+
+        var leg = Assert.Single(Plan([], ["direct"], rule).Legs);
+
+        Assert.True(leg.IsHeld);
+        Assert.True(leg.IsOnHost);
+        Assert.Equal("outbound-down", leg.Fault?.Code);
+    }
+
+    [Fact]
+    public void AnOutboundThatCarriesTrafficTakesTheRule()
+    {
+        var rule = RouteDefaults.Fresh("ru") with { Id = 1, Outbound = "awgbor", Targets = ["geoip:ru"] };
+        var leg = Assert.Single(Plan([], ["awgbor"], rule).Legs);
+
+        Assert.True(leg.IsLive);
+        Assert.Equal(0xA602u, leg.Mark);
+    }
+
+    [Fact]
     public void ABalancerThatIsOffKeepsTheRuleOffTheHost()
     {
         var leg = Leg(Group(BalanceStrategy.Round) with { IsEnabled = false }, ["direct", "awgbor"]);

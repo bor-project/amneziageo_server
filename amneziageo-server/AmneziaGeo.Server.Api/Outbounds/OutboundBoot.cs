@@ -43,7 +43,7 @@ public sealed class OutboundBoot : BackgroundService
             var outbounds = await services.GetRequiredService<OutboundStore>().ListAsync(stoppingToken)
                 .ConfigureAwait(false);
             await LayAsync(outbounds, stoppingToken).ConfigureAwait(false);
-            _live.Keep(_host.States(outbounds).Where(state => state.Carries).Select(state => state.Name));
+            _live.Keep(_host.Carrying(outbounds));
             await services.GetRequiredService<RouteApplier>().SettleAsync(stoppingToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is HostNetworkException or NetlinkException or InvalidOperationException or IOException)

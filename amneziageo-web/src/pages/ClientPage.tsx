@@ -38,7 +38,7 @@ function NewClient() {
 
   return (
     <ClientForm
-      start={{ ...start, configId: asked > 0 ? asked : start.configId, address: [] }}
+      start={{ ...start, name: "", configId: asked > 0 ? asked : start.configId, address: [] }}
       pending={add.isPending}
       error={add.error}
       onSave={(body) => void add.mutateAsync(body).then((made) => navigate(`/connections/clients/${made.id}/export`))}

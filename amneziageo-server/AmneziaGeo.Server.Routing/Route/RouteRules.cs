@@ -99,6 +99,11 @@ public static class RouteRules
             return name.Length > 0 && Domain(name) ? new GeoRule(GeoRuleKind.Domain, name.ToLowerInvariant()) : null;
         }
 
+        if (Head(body, "keyword:") is { } word)
+        {
+            return Word(word) ? new GeoRule(GeoRuleKind.Keyword, word.ToLowerInvariant()) : null;
+        }
+
         if (AwgAllowedIp.TryParse(body, out var range))
         {
             return new GeoRule(GeoRuleKind.Cidr, range.ToString());
@@ -159,7 +164,9 @@ public static class RouteRules
         {
             if (Target(target) is null)
             {
-                return new RouteFault("bad-target", $"'{target}' is not a geo key, a domain or an address range");
+                return new RouteFault(
+                    "bad-target",
+                    $"'{target}' is not a geo key, a domain, a keyword or an address range");
             }
         }
 
@@ -249,6 +256,10 @@ public static class RouteRules
     private static bool Key(string value) =>
         value.Length is > 0 and <= 64
         && value.All(one => char.IsAsciiLetterOrDigit(one) || one is '-' or '_' or '.');
+
+    private static bool Word(string value) =>
+        value.Length is > 0 and <= MaxDomainLength
+        && value.All(one => char.IsLetterOrDigit(one) || one is '-' or '_' or '.');
 
     private static bool Domain(string value) =>
         value.Length <= MaxDomainLength

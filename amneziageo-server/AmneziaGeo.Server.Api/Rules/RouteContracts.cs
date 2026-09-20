@@ -86,7 +86,7 @@ public sealed record RouteTestRule(long Id, string Name, int Place, string Actio
 /// <summary>
 /// One outbound the traffic may leave through in the answer of the route tester.
 /// </summary>
-public sealed record RouteTestMember(string Name, bool IsEnabled, bool IsAlive, bool Carries);
+public sealed record RouteTestMember(string Name, bool IsEnabled, bool Carries, bool IsPicked);
 
 /// <summary>
 /// The way out of the rule that took the traffic.
@@ -110,7 +110,7 @@ public sealed record RouteTestResponse(
 /// <summary>
 /// Whether a rule is on.
 /// </summary>
-public sealed record RouteSwitchRequest(bool On);
+public sealed record RouteSwitchRequest(bool? On);
 
 /// <summary>
 /// The rules as the host takes them.

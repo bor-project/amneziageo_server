@@ -3,6 +3,10 @@
 A proxy is a way into the interfaces of the host that is not their own UDP port. The panel holds as many as
 the host needs, each on a port of its own, and runs one service per proxy. They are on the `Proxies` page.
 
+A proxy takes its constants from a proxy template: the kind, the open port, whether a path is drawn, the target
+and the addresses it takes come from the template it names in `templateId`, and changing the template restarts
+every proxy of it. The name, the port and the certificate stay with the proxy. See [templates.md](templates.md).
+
 A proxy comes in one of two kinds, picked when it is added:
 
 | Kind | What answers | What it takes in |

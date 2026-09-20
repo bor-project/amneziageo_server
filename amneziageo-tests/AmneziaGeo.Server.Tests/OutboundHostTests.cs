@@ -110,23 +110,49 @@ public class OutboundHostTests
     }
 
     [Fact]
-    public async Task AnInterfaceThatIsUpMissingOrTurnedOffIsNotMended()
+    public async Task AnInterfaceThatIsUpOrTurnedOffIsNotMended()
     {
         var up = new Ledger();
         up.Links.Add("awgbor");
         var off = new Ledger();
         off.Links.Add("awgbor");
         off.Down.Add("awgbor");
-        var missing = new Ledger();
 
         var upMended = await new OutboundHost(up, new Kernel(), new Clock(Now)).MendAsync(Tunnel(), CancellationToken.None);
         var offMended = await new OutboundHost(off, new Kernel(), new Clock(Now))
             .MendAsync(Tunnel() with { IsEnabled = false }, CancellationToken.None);
-        var missingMended = await new OutboundHost(missing, new Kernel(), new Clock(Now))
-            .MendAsync(Tunnel(), CancellationToken.None);
 
-        Assert.False(upMended || offMended || missingMended);
-        Assert.Empty(up.Steps.Concat(off.Steps).Concat(missing.Steps));
+        Assert.False(upMended || offMended);
+        Assert.Empty(up.Steps.Concat(off.Steps));
+    }
+
+    [Fact]
+    public async Task AnInterfaceThatIsGoneIsLaidAgainWithItsKeys()
+    {
+        var ledger = new Ledger();
+        var kernel = new Kernel();
+        var host = new OutboundHost(ledger, kernel, new Clock(Now));
+
+        var mended = await host.MendAsync(Tunnel(), CancellationToken.None);
+
+        Assert.True(mended);
+        Assert.Equal(
+            ["add awgbor", "address awgbor 10.8.1.5/32", "up awgbor 1380", "route awgbor 42601"],
+            ledger.Steps);
+        Assert.Equal("awgbor", Assert.Single(kernel.Updates).Name);
+        Assert.True(ledger.IsUp("awgbor"));
+    }
+
+    [Fact]
+    public async Task AnOutboundThroughTheHostItselfIsNotMended()
+    {
+        var ledger = new Ledger();
+
+        var mended = await new OutboundHost(ledger, new Kernel(), new Clock(Now))
+            .MendAsync(Tunnel() with { Kind = OutboundKind.Local }, CancellationToken.None);
+
+        Assert.False(mended);
+        Assert.Empty(ledger.Steps);
     }
 
     [Fact]
@@ -185,7 +211,9 @@ public class OutboundHostTests
                 },
             ],
         });
-        var host = new OutboundHost(new Ledger(), kernel, new Clock(Now));
+        var ledger = new Ledger();
+        ledger.Links.Add("awgbor");
+        var host = new OutboundHost(ledger, kernel, new Clock(Now));
 
         var state = host.State(Tunnel());
 
@@ -194,6 +222,34 @@ public class OutboundHostTests
         Assert.Equal("46.8.237.222:51821", state.Endpoint);
         Assert.Equal(4096ul, state.RxBytes);
         Assert.Equal(2048ul, state.TxBytes);
+    }
+
+    [Fact]
+    public void TheHostNamesTheOutboundsItCarries()
+    {
+        var kernel = new Kernel();
+        kernel.Hold(new AwgDevice
+        {
+            Name = "awgbor",
+            Peers =
+            [
+                new AwgPeer
+                {
+                    PublicKey = "eOWG0GXBLrpZOZ+FCwCJTvZ5rBEKHZ8NPvxNM3nJPl4=",
+                    Endpoint = new System.Net.IPEndPoint(System.Net.IPAddress.Parse("46.8.237.222"), 51821),
+                    LastHandshake = Now.AddMinutes(-1),
+                },
+            ],
+        });
+        var ledger = new Ledger();
+        ledger.Links.Add("awgbor");
+        var host = new OutboundHost(ledger, kernel, new Clock(Now));
+
+        var carrying = host.Carrying([Tunnel(), Tunnel() with { Name = "awgfar" }, OutboundDefaults.Direct()]);
+
+        Assert.Contains("awgbor", carrying);
+        Assert.Contains(OutboundDefaults.Direct().Name, carrying);
+        Assert.DoesNotContain("awgfar", carrying);
     }
 
     [Fact]
@@ -225,7 +281,20 @@ public class OutboundHostTests
 
         Assert.False(state.HasLink);
         Assert.False(state.IsAlive);
+        Assert.False(state.Carries);
         Assert.Null(state.LastHandshake);
+        Assert.Equal("the interface 'awgbor' is gone", state.Fault);
+    }
+
+    [Fact]
+    public void AnOutboundThatIsTurnedOffIsNotFaulted()
+    {
+        var host = new OutboundHost(new Ledger(), new Kernel(), new Clock(Now));
+
+        var state = host.State(Tunnel() with { IsEnabled = false });
+
+        Assert.False(state.HasLink);
+        Assert.Equal(string.Empty, state.Fault);
     }
 
     [Fact]

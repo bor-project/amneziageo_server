@@ -6,7 +6,7 @@ import { useConfigs } from "@/api/configs"
 import { useOutbounds } from "@/api/outbounds"
 import type { RuleAction, RuleDraft, RuleProtocol } from "@/api/rules"
 import { Flag, Line, Multi, Part } from "@/components/fields"
-import { card, field, label, primary, secondary } from "@/components/styles"
+import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 
@@ -16,12 +16,14 @@ export function RuleForm({
   error,
   onSave,
   onClose,
+  onRemove,
 }: {
   start: RuleDraft
   pending: boolean
   error: unknown
   onSave: (draft: RuleDraft) => void
   onClose: () => void
+  onRemove?: () => void
 }) {
   const t = useText()
   const outbounds = useOutbounds()
@@ -186,6 +188,11 @@ export function RuleForm({
       )}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        {onRemove !== undefined && (
+          <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
+            {t("rules.remove")}
+          </button>
+        )}
         <button type="button" onClick={onClose} className={secondary}>
           {t("rules.cancel")}
         </button>

@@ -159,6 +159,41 @@ public class RouteProbeTests
     }
 
     [Theory]
+    [InlineData(53, "awg1", "dns")]
+    [InlineData(53, "", "out")]
+    [InlineData(53, "awg9", "out")]
+    [InlineData(443, "awg1", "out")]
+    public void AQuestionFromAClientInterfaceGoesToTheResolver(int port, string inbound, string expected)
+    {
+        var dns = DnsDefaults.Settings with { IsEnabled = true, Intercept = true };
+        var plan = RoutePlan.Build([Rule(1, "0.0.0.0/0")], Ways, Index(), ["awg1"], dns);
+
+        var verdict = Test(plan, new RouteQuery
+        {
+            Addresses = [Ru],
+            Port = port,
+            Inbound = inbound,
+            Protocol = RouteProtocol.Udp,
+        });
+
+        Assert.Equal(expected, verdict.Verdict);
+    }
+
+    [Theory]
+    [InlineData(true, false, "out")]
+    [InlineData(false, true, "out")]
+    [InlineData(true, true, "dns")]
+    public void TheResolverTakesTheQuestionOnlyWhileItInterceptsThem(bool enabled, bool intercept, string expected)
+    {
+        var dns = DnsDefaults.Settings with { IsEnabled = enabled, Intercept = intercept };
+        var plan = RoutePlan.Build([Rule(1, "0.0.0.0/0")], Ways, Index(), ["awg1"], dns);
+
+        var verdict = Test(plan, new RouteQuery { Addresses = [Ru], Port = 53, Inbound = "awg1" });
+
+        Assert.Equal(expected, verdict.Verdict);
+    }
+
+    [Theory]
     [InlineData("10.9.1.0/24", "10.9.1.200", true)]
     [InlineData("10.9.1.7/24", "10.9.1.200", true)]
     [InlineData("10.9.1.0/24", "10.9.2.1", false)]

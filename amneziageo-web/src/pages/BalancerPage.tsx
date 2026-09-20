@@ -53,6 +53,7 @@ function HeldBalancer({ balancerId }: { balancerId: number }) {
       error={change.error}
       onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate("/routing/channels"))}
       onClose={() => navigate("/routing/channels")}
+      onRemove={() => navigate(`/routing/channels/groups/${held.id}/delete`)}
     />
   )
 }

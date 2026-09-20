@@ -27,6 +27,9 @@ A refusal comes back as `{ error, message }` with the status that fits it: 400 f
 something that is not there, 409 for a clash. A route the server does not know answers 404 with
 `unknown-route`.
 
+Every `POST /api/<area>/{id}/switch` takes `{ "on": true }` or `{ "on": false }`. A body that says nothing
+about `on` is refused with 400 and `incomplete`: silence no longer stands for "off".
+
 ## The description
 
 `GET /api/openapi.json` returns an OpenAPI 3.1 document of every route: its path, method, parameters and the

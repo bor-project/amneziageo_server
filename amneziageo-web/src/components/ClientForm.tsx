@@ -7,7 +7,7 @@ import type { Client, ClientDraft, Forward, Inbound } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useTemplates } from "@/api/templates"
-import { Flag, Help, Line, Multi, Part, Pick, Regenerate } from "@/components/fields"
+import { Flag, Folded, Help, Line, Multi, Part, Pick, Regenerate } from "@/components/fields"
 import { card, danger, field, fieldBox, label, note, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -38,6 +38,7 @@ export function ClientForm({
   const [number, setNumber] = useState<string | null>(null)
   const [text, setText] = useState<string | null>(null)
   const [limit, setLimit] = useState(gigabytes(start.dailyLimit))
+  const chosen = (templates.data ?? []).find((one) => one.id === draft.templateId)
   const spans = spansOf(configs, draft.configId)
   const taken = holders(others, draft.configId)
   const legacy = start.address.length > 0 && carried(spans, start.address) === null
@@ -147,11 +148,16 @@ export function ClientForm({
           </div>
         )}
 
+        <Line id="client-note" caption={t("clients.note")} value={draft.note} onChange={(note) => put({ note })} />
+      </Part>
+
+      <Part title={t("clients.template")}>
         <Pick
           id="client-template"
           caption={t("clients.template")}
           value={draft.templateId === null ? "" : String(draft.templateId)}
           onChange={(value) => put({ templateId: value === "" ? null : Number(value) })}
+          wide
         >
           <option value="">{t("clients.noTemplate")}</option>
           {(templates.data ?? []).map((one) => (
@@ -161,7 +167,22 @@ export function ClientForm({
           ))}
         </Pick>
 
-        <Line id="client-note" caption={t("clients.note")} value={draft.note} onChange={(note) => put({ note })} />
+        {chosen !== undefined && (
+          <Folded caption={t("templates.values")}>
+            <Fixed caption={t("templates.allowed")} value={chosen.entries.join(", ")} dash={t("clients.dash")} />
+            <Fixed caption={t("templates.dns")} value={chosen.dns.join(", ")} dash={t("clients.dash")} />
+            <Fixed
+              caption={t("templates.mtu")}
+              value={chosen.mtu === null ? "" : String(chosen.mtu)}
+              dash={t("clients.dash")}
+            />
+            <Fixed
+              caption={t("templates.keepalive")}
+              value={chosen.keepalive === null ? "" : String(chosen.keepalive)}
+              dash={t("clients.dash")}
+            />
+          </Folded>
+        )}
       </Part>
 
       <Part title={t("clients.partAccess")}>
@@ -306,6 +327,17 @@ export function ClientForm({
         >
           {pending ? t("clients.busy") : t("clients.save")}
         </button>
+      </div>
+    </div>
+  )
+}
+
+function Fixed({ caption, value, dash }: { caption: string; value: string; dash: string }) {
+  return (
+    <div>
+      <span className={label}>{caption}</span>
+      <div className={`mt-1 truncate ${field}`} title={value}>
+        {value.length === 0 ? dash : value}
       </div>
     </div>
   )

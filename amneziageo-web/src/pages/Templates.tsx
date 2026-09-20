@@ -37,7 +37,7 @@ export function Templates() {
   }
 
   function actions(one: Template): RowAction[] {
-    return [{ label: t("action.settings"), onPick: () => navigate(`/connections/templates/${one.id}/edit`) }]
+    return [{ label: t("action.settings"), onPick: () => navigate(`/connections/templates/clients/${one.id}/edit`) }]
   }
 
   function resolved(one: Template) {
@@ -84,7 +84,7 @@ export function Templates() {
                 lead: true,
                 body: "font-semibold text-ink",
                 cell: (one) => (
-                  <Link to={`/connections/templates/${one.id}/edit`} className="hover:text-brand-ink">
+                  <Link to={`/connections/templates/clients/${one.id}/edit`} className="hover:text-brand-ink">
                     {one.name}
                   </Link>
                 ),

@@ -5,7 +5,7 @@ import { useRoles } from "@/api/roles"
 import { fresh, useAddUser, useChangeUser, useUsers } from "@/api/users"
 import { useTail } from "@/components/crumbs"
 import { Flag, Line, Part, Pick } from "@/components/fields"
-import { card, field, label, primary, secondary } from "@/components/styles"
+import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 
 export function UserPage() {
@@ -137,6 +137,16 @@ function HeldUser({ name }: { name: string }) {
 
   return (
     <div className="mt-4 flex flex-col gap-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => navigate(`/settings/users/${name}/password`)}
+          className={secondary}
+        >
+          {t("users.password")}
+        </button>
+      </div>
+
       <Part title={t("users.partMain")}>
         <Pick id="edit-role" caption={t("users.role")} value={picked} onChange={setRole}>
           <option value="">{t("role.none")}</option>
@@ -173,6 +183,13 @@ function HeldUser({ name }: { name: string }) {
       {change.error !== null && <div className="text-sm text-alarm">{t(complaint(change.error))}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        <button
+          type="button"
+          onClick={() => navigate(`/settings/users/${name}/delete`)}
+          className={`mr-auto ${danger}`}
+        >
+          {t("users.remove")}
+        </button>
         <button type="button" onClick={() => navigate("/settings/users")} className={secondary}>
           {t("users.cancel")}
         </button>

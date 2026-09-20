@@ -50,6 +50,7 @@ export interface Config {
   privateKey: string | null
   presharedKey: string | null
   obfuscation: Obfuscation
+  templateId: number | null
   createdUtc: string
   updatedUtc: string
 }
@@ -72,6 +73,7 @@ export interface ConfigDraft {
   privateKey: string
   presharedKey: string
   obfuscation: Obfuscation
+  templateId: number | null
 }
 
 export interface ConfigSync {
@@ -114,6 +116,10 @@ export function useChangeConfig() {
   return useRefreshing(({ id, draft }: { id: number; draft: ConfigDraft }) =>
     client.put(`/configs/${id}`, draft),
   )
+}
+
+export function useSwitchConfig() {
+  return useRefreshing(({ id, on }: { id: number; on: boolean }) => client.post(`/configs/${id}/switch`, { on }))
 }
 
 export function useRemoveConfig() {
@@ -162,6 +168,7 @@ export function draftOf(config: Config): ConfigDraft {
     privateKey: config.privateKey ?? "",
     presharedKey: config.presharedKey ?? "",
     obfuscation: config.obfuscation,
+    templateId: config.templateId,
   }
 }
 

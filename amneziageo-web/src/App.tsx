@@ -23,6 +23,9 @@ import { Dns } from "@/pages/Dns"
 import { Geo } from "@/pages/Geo"
 import { GeoPage } from "@/pages/GeoPage"
 import { GeoRemove } from "@/pages/GeoRemove"
+import { InterfaceTemplatePage } from "@/pages/InterfaceTemplatePage"
+import { InterfaceTemplateRemove } from "@/pages/InterfaceTemplateRemove"
+import { InterfaceTemplates } from "@/pages/InterfaceTemplates"
 import { Login } from "@/pages/Login"
 import { OwnPassword } from "@/pages/OwnPassword"
 import { OutboundPage } from "@/pages/OutboundPage"
@@ -31,6 +34,9 @@ import { Password } from "@/pages/Password"
 import { Proxies } from "@/pages/Proxies"
 import { ProxyPage } from "@/pages/ProxyPage"
 import { ProxyRemove } from "@/pages/ProxyRemove"
+import { ProxyTemplatePage } from "@/pages/ProxyTemplatePage"
+import { ProxyTemplateRemove } from "@/pages/ProxyTemplateRemove"
+import { ProxyTemplates } from "@/pages/ProxyTemplates"
 import { RolePage } from "@/pages/RolePage"
 import { RoleRemove } from "@/pages/RoleRemove"
 import { RouteTest } from "@/pages/RouteTest"
@@ -67,7 +73,26 @@ const connections: Tab[] = [
     to: "/connections/templates",
     label: "tab.templates",
     scope: scopes.readState,
-    add: { to: "/connections/templates/new", scope: scopes.manageClients },
+    kids: [
+      {
+        to: "/connections/templates/clients",
+        label: "tab.templateClients",
+        scope: scopes.readState,
+        add: { to: "/connections/templates/clients/new", scope: scopes.manageClients },
+      },
+      {
+        to: "/connections/templates/interfaces",
+        label: "tab.templateInterfaces",
+        scope: scopes.readState,
+        add: { to: "/connections/templates/interfaces/new", scope: scopes.manageInterfaces },
+      },
+      {
+        to: "/connections/templates/proxies",
+        label: "tab.templateProxies",
+        scope: scopes.readState,
+        add: { to: "/connections/templates/proxies/new", scope: scopes.manageRouting },
+      },
+    ],
   },
   {
     to: "/connections/proxies",
@@ -152,12 +177,25 @@ export function App() {
                   <Route path="clients/:clientId/edit" element={<ClientPage />} />
                   <Route path="clients/:clientId/delete" element={<ClientRemove />} />
                 </Route>
-                <Route path="templates" element={<Templates />} />
-                <Route path="templates/:templateId" element={<Navigate to="edit" replace />} />
+                <Route path="templates" element={<Navigate to="clients" replace />} />
+                <Route path="templates/clients" element={<Templates />} />
+                <Route path="templates/clients/:templateId" element={<Navigate to="edit" replace />} />
                 <Route element={<RequireScope scope={scopes.manageClients} />}>
-                  <Route path="templates/new" element={<TemplatePage />} />
-                  <Route path="templates/:templateId/edit" element={<TemplatePage />} />
-                  <Route path="templates/:templateId/delete" element={<TemplateRemove />} />
+                  <Route path="templates/clients/new" element={<TemplatePage />} />
+                  <Route path="templates/clients/:templateId/edit" element={<TemplatePage />} />
+                  <Route path="templates/clients/:templateId/delete" element={<TemplateRemove />} />
+                </Route>
+                <Route path="templates/interfaces" element={<InterfaceTemplates />} />
+                <Route element={<RequireScope scope={scopes.manageInterfaces} />}>
+                  <Route path="templates/interfaces/new" element={<InterfaceTemplatePage />} />
+                  <Route path="templates/interfaces/:templateId/edit" element={<InterfaceTemplatePage />} />
+                  <Route path="templates/interfaces/:templateId/delete" element={<InterfaceTemplateRemove />} />
+                </Route>
+                <Route path="templates/proxies" element={<ProxyTemplates />} />
+                <Route element={<RequireScope scope={scopes.manageRouting} />}>
+                  <Route path="templates/proxies/new" element={<ProxyTemplatePage />} />
+                  <Route path="templates/proxies/:templateId/edit" element={<ProxyTemplatePage />} />
+                  <Route path="templates/proxies/:templateId/delete" element={<ProxyTemplateRemove />} />
                 </Route>
                 <Route path="proxies" element={<Proxies />} />
                 <Route path="proxies/:proxyId" element={<Navigate to="edit" replace />} />

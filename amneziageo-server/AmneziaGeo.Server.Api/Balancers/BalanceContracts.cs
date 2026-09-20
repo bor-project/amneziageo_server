@@ -39,7 +39,7 @@ public sealed record BalanceRequest(
 /// <summary>
 /// Whether a balancer is on.
 /// </summary>
-public sealed record BalanceSwitchRequest(bool On);
+public sealed record BalanceSwitchRequest(bool? On);
 
 /// <summary>
 /// Turns balancers into what the panel reads and back.

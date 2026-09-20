@@ -15,6 +15,8 @@ public sealed class DnsHost : BackgroundService
 {
     private static readonly TimeSpan Between = TimeSpan.FromMilliseconds(500);
 
+    private static readonly TimeSpan Saving = TimeSpan.FromMinutes(1);
+
     private const int WarmPerTick = 16;
 
     private readonly SemaphoreSlim _turn = new(1, 1);
@@ -41,6 +43,12 @@ public sealed class DnsHost : BackgroundService
 
     private long _turns;
 
+    private long _saved;
+
+    private DateTimeOffset _saving;
+
+    private bool _restored;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -64,6 +72,11 @@ public sealed class DnsHost : BackgroundService
     /// The settings the resolver runs with.
     /// </summary>
     public DnsSettings Settings => _settings;
+
+    /// <summary>
+    /// The outbound the resolver asks through right now, empty when it is off or leaves through the host.
+    /// </summary>
+    public string Asking => _settings.IsEnabled ? _settings.Outbound : string.Empty;
 
     /// <summary>
     /// Returns the addresses a name answers with through the way out of the resolver, or null when it is not running.
@@ -125,6 +138,7 @@ public sealed class DnsHost : BackgroundService
                 Look();
                 await WarmAsync(stopping).ConfigureAwait(false);
                 await FlushAsync(stopping).ConfigureAwait(false);
+                await SaveAsync(stopping).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -150,6 +164,7 @@ public sealed class DnsHost : BackgroundService
                 return;
             }
 
+            await RestoreAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
             if (_plans.Held is null)
             {
                 await scope.ServiceProvider.GetRequiredService<RouteApplier>().BuildAsync(ct).ConfigureAwait(false);
@@ -305,6 +320,52 @@ public sealed class DnsHost : BackgroundService
         catch (HostNetworkException ex)
         {
             _logger.LogWarning(ex, "the answered addresses did not reach the sets of the rules");
+        }
+    }
+
+    private async Task RestoreAsync(IServiceProvider services, CancellationToken ct)
+    {
+        if (_restored)
+        {
+            return;
+        }
+
+        _restored = true;
+        var standings = await services.GetRequiredService<DnsStandingStore>().ListAsync(ct).ConfigureAwait(false);
+        if (standings.Count == 0)
+        {
+            return;
+        }
+
+        _sets.Restore(standings, _settings.NameLifetime);
+        _logger.LogInformation("{Count} addresses the rules stand on came back", standings.Count);
+    }
+
+    private async Task SaveAsync(CancellationToken ct)
+    {
+        var now = _time.GetUtcNow();
+        if (now < _saving)
+        {
+            return;
+        }
+
+        _saving = now + Saving;
+        var stirs = _sets.Stirs;
+        if (stirs == _saved || _plans.Held is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            var store = scope.ServiceProvider.GetRequiredService<DnsStandingStore>();
+            await store.SaveAsync(_sets.Standings(_plans.Held), ct).ConfigureAwait(false);
+            _saved = stirs;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "the addresses the rules stand on did not reach the panel database");
         }
     }
 

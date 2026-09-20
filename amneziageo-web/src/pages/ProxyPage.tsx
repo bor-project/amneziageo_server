@@ -8,7 +8,6 @@ import {
   useProxyAddresses,
   useProxyCertificate,
 } from "@/api/proxies"
-import type { Proxy } from "@/api/proxies"
 import { ProxyForm } from "@/components/ProxyForm"
 import { ProxyState } from "@/components/ProxyState"
 import { useTail } from "@/components/crumbs"
@@ -29,21 +28,19 @@ function NewProxy() {
   const proxies = useProxies()
   const tls = useProxyCertificate()
   const local = useProxyAddresses()
-  const fresh = useFreshProxy(proxies.data !== undefined, nextName(proxies.data), "ws")
-  const relay = useFreshProxy(proxies.data !== undefined, nextName(proxies.data), "wg")
+  const fresh = useFreshProxy(proxies.data !== undefined)
   const add = useAddProxy()
   const back = lastSpot("connections", "/connections/proxies")
 
   useTail([{ label: t("proxies.newTitle") }])
 
-  if (fresh.data === undefined || relay.data === undefined) {
+  if (fresh.data === undefined) {
     return <div className="mt-4 text-sm text-muted">{t("proxies.loading")}</div>
   }
 
   return (
     <ProxyForm
-      start={draftOf(fresh.data)}
-      fresh={{ ws: draftOf(fresh.data), wg: draftOf(relay.data) }}
+      start={{ ...draftOf(fresh.data), name: "" }}
       panel={tls.data}
       addresses={local.data ?? []}
       pending={add.isPending}
@@ -90,6 +87,7 @@ function HeldProxy({ proxyId }: { proxyId: number }) {
         start={draftOf(held)}
         panel={tls.data}
         addresses={local.data ?? []}
+        self={held.id}
         pending={change.isPending}
         error={change.error}
         onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}
@@ -98,16 +96,4 @@ function HeldProxy({ proxyId }: { proxyId: number }) {
       />
     </div>
   )
-}
-
-function nextName(proxies: Proxy[] | undefined): string {
-  const taken = new Set((proxies ?? []).map((one) => one.name))
-  for (let at = 0; at < 100; at++) {
-    const name = `proxy${at}`
-    if (!taken.has(name)) {
-      return name
-    }
-  }
-
-  return "proxy0"
 }

@@ -95,11 +95,144 @@ public sealed class AuditEntity
 }
 
 /// <summary>
+/// The obfuscation columns a table carries.
+/// </summary>
+public interface IObfuscated
+{
+    /// <summary>
+    /// How many junk packets go before a handshake.
+    /// </summary>
+    int Jc { get; set; }
+
+    /// <summary>
+    /// The shortest junk packet, in bytes.
+    /// </summary>
+    int Jmin { get; set; }
+
+    /// <summary>
+    /// The longest junk packet, in bytes.
+    /// </summary>
+    int Jmax { get; set; }
+
+    /// <summary>
+    /// Junk prepended to a handshake initiation, in bytes.
+    /// </summary>
+    int S1 { get; set; }
+
+    /// <summary>
+    /// Junk prepended to a handshake response, in bytes.
+    /// </summary>
+    int S2 { get; set; }
+
+    /// <summary>
+    /// Junk prepended to a cookie reply, in bytes.
+    /// </summary>
+    int S3 { get; set; }
+
+    /// <summary>
+    /// Junk prepended to a transport packet, in bytes.
+    /// </summary>
+    int S4 { get; set; }
+
+    /// <summary>
+    /// The type written into a handshake initiation.
+    /// </summary>
+    string H1 { get; set; }
+
+    /// <summary>
+    /// The type written into a handshake response.
+    /// </summary>
+    string H2 { get; set; }
+
+    /// <summary>
+    /// The type written into a cookie reply.
+    /// </summary>
+    string H3 { get; set; }
+
+    /// <summary>
+    /// The type written into a transport packet.
+    /// </summary>
+    string H4 { get; set; }
+
+    /// <summary>
+    /// The first special junk packet.
+    /// </summary>
+    string? I1 { get; set; }
+
+    /// <summary>
+    /// The second special junk packet.
+    /// </summary>
+    string? I2 { get; set; }
+
+    /// <summary>
+    /// The third special junk packet.
+    /// </summary>
+    string? I3 { get; set; }
+
+    /// <summary>
+    /// The fourth special junk packet.
+    /// </summary>
+    string? I4 { get; set; }
+
+    /// <summary>
+    /// The fifth special junk packet.
+    /// </summary>
+    string? I5 { get; set; }
+
+    /// <summary>
+    /// The key the packet header is hidden with.
+    /// </summary>
+    string HeaderProtectionKey { get; set; }
+
+    /// <summary>
+    /// Padding added to the content of a transport packet.
+    /// </summary>
+    string ContentPaddingAddition { get; set; }
+
+    /// <summary>
+    /// When a session is renewed.
+    /// </summary>
+    string RekeyAfterTime { get; set; }
+
+    /// <summary>
+    /// How long a handshake attempt waits before it repeats.
+    /// </summary>
+    string RekeyTimeout { get; set; }
+
+    /// <summary>
+    /// When a session stops being accepted.
+    /// </summary>
+    string RejectAfterTime { get; set; }
+
+    /// <summary>
+    /// How long a quiet path is held open.
+    /// </summary>
+    string KeepaliveTimeout { get; set; }
+
+    /// <summary>
+    /// How many handshakes are attempted before the peer is given up on.
+    /// </summary>
+    string MaxHandshakeAttempts { get; set; }
+
+    /// <summary>
+    /// Whether random bytes are appended to packets.
+    /// </summary>
+    bool RandomTrailers { get; set; }
+
+    /// <summary>
+    /// Whether cookie replies are turned off.
+    /// </summary>
+    bool DisableCookies { get; set; }
+}
+
+/// <summary>
 /// The settings of one server endpoint the panel holds.
 /// </summary>
-public sealed class ConfigEntity
+public sealed class ConfigEntity : IObfuscated
 {
     public long Id { get; set; }
+
+    public long? TemplateId { get; set; }
 
     public string Name { get; set; } = string.Empty;
 
@@ -411,6 +544,8 @@ public sealed class ProxyEntity
 {
     public long Id { get; set; }
 
+    public long? TemplateId { get; set; }
+
     public string Name { get; set; } = string.Empty;
 
     public string Kind { get; set; } = string.Empty;
@@ -466,6 +601,20 @@ public sealed class DnsSettingsEntity
     public bool BlockDoh { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// One address a rule stands on as the database holds it.
+/// </summary>
+public sealed class DnsStandingEntity
+{
+    public long Id { get; set; }
+
+    public long RuleId { get; set; }
+
+    public string Address { get; set; } = string.Empty;
+
+    public DateTimeOffset SeenUtc { get; set; }
 }
 
 /// <summary>
@@ -606,6 +755,114 @@ public sealed class TemplateEntity
     public int? Keepalive { get; set; }
 
     public DateTimeOffset? RefreshedUtc { get; set; }
+
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// One endpoint template as the database holds it.
+/// </summary>
+public sealed class InterfaceTemplateEntity : IObfuscated
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public int ListenPort { get; set; }
+
+    public string Subnet { get; set; } = string.Empty;
+
+    public string Dns { get; set; } = string.Empty;
+
+    public string AllowedIps { get; set; } = string.Empty;
+
+    public int Mtu { get; set; }
+
+    public int Keepalive { get; set; }
+
+    public int OfflineAfter { get; set; }
+
+    public string Blocked { get; set; } = string.Empty;
+
+    public long? ClientTemplateId { get; set; }
+
+    public int Jc { get; set; }
+
+    public int Jmin { get; set; }
+
+    public int Jmax { get; set; }
+
+    public int S1 { get; set; }
+
+    public int S2 { get; set; }
+
+    public int S3 { get; set; }
+
+    public int S4 { get; set; }
+
+    public string H1 { get; set; } = string.Empty;
+
+    public string H2 { get; set; } = string.Empty;
+
+    public string H3 { get; set; } = string.Empty;
+
+    public string H4 { get; set; } = string.Empty;
+
+    public string? I1 { get; set; }
+
+    public string? I2 { get; set; }
+
+    public string? I3 { get; set; }
+
+    public string? I4 { get; set; }
+
+    public string? I5 { get; set; }
+
+    public string HeaderProtectionKey { get; set; } = string.Empty;
+
+    public string ContentPaddingAddition { get; set; } = string.Empty;
+
+    public string RekeyAfterTime { get; set; } = string.Empty;
+
+    public string RekeyTimeout { get; set; } = string.Empty;
+
+    public string RejectAfterTime { get; set; } = string.Empty;
+
+    public string KeepaliveTimeout { get; set; } = string.Empty;
+
+    public string MaxHandshakeAttempts { get; set; } = string.Empty;
+
+    public bool RandomTrailers { get; set; }
+
+    public bool DisableCookies { get; set; }
+
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// One proxy template as the database holds it.
+/// </summary>
+public sealed class ProxyTemplateEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Kind { get; set; } = string.Empty;
+
+    public int Port { get; set; }
+
+    public bool Opened { get; set; }
+
+    public bool MakePath { get; set; }
+
+    public string Target { get; set; } = string.Empty;
+
+    public string Sources { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedUtc { get; set; }
 

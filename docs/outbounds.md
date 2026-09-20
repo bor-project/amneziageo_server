@@ -148,7 +148,9 @@ Adding, changing, turning on and off, and removing an outbound each put it on th
 Renaming an outbound writes the new name into the rules and the balancers that name it and into the settings of
 the resolver, the saved and the running ones alike, so nothing that left through the outbound loses it. An
 outbound that a rule, a balancer or the resolver leaves through is not removed: the panel answers
-`outbound-in-use` and names what holds it.
+`outbound-in-use` and names what holds it. The resolver holds both the outbound its settings name and the one
+it asks through right now: while the two differ, that is while `pending` stands, neither of them is removed,
+and the refusal of the running one ends with `until it is restarted`.
 `POST /api/outbounds/apply` goes over every outbound, rewrites the firewall table and lays the rules again;
 the panel does the same when it starts, so the outbounds and the rules come back after a reboot. An interface
 that already carries the server of its outbound and no other peer keeps it, with the handshake and the
@@ -157,8 +159,8 @@ host: the rule goes, the table is cleared, and the interface is removed.
 
 The panel looks at the interfaces of the outbounds that are on every five seconds, and one that was brought
 down behind its back, with `ip link set down` or otherwise, is brought up again with its addresses and its
-route. An interface that is gone altogether is laid again by `Apply` or `POST /api/outbounds/apply`; until then
-the outbound carries nothing.
+route. An interface that is gone altogether is laid again by the same round, with its keys, its addresses, its
+route and, for a `ws` outbound, its carrier; the outbound carries nothing until the round comes.
 
 Raising an interface, writing keys to it and changing routing rules need `CAP_NET_ADMIN`. A server that
 runs without it answers with the outbound and the reason on it instead of failing the request. Setting
@@ -169,6 +171,9 @@ runs without it answers with the outbound and the reason on it instead of failin
 The table names the kind, the server, the mark and the table, the last handshake and the traffic each way.
 A `ws` outbound names the server behind the proxy, and the proxy itself stands in the form.
 A tunnel counts as alive while its handshake is under three minutes old and its interface is up; while the
-interface is down the state says so in `fault`. An outbound through the host has no
-interface of its own, so there is nothing to count the bytes on: `rxBytes` and `txBytes` come back empty rather
+interface is down or gone the state says which of the two it is in `fault`, and the panel shows the outbound
+as refused with that text behind it. `isAlive` is that handshake alone, and `carries` is what the
+rules go by: alive and with a probe that gets through. A rule straight into an outbound that carries nothing
+stays off the host with `outbound-down`, exactly as a rule into a balancer none of whose members carries.
+An outbound through the host has no interface of its own, so there is nothing to count the bytes on: `rxBytes` and `txBytes` come back empty rather
 than as zeros, and the panel leaves the traffic of such an outbound blank.

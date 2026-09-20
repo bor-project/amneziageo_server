@@ -218,6 +218,10 @@ function badge(one: string): TextKey {
     return "templates.kindDomain"
   }
 
+  if (one.startsWith("keyword:")) {
+    return "templates.kindKeyword"
+  }
+
   const body = one.replace(/^cidr:/, "")
   if (body.includes("/")) {
     return "templates.kindNetwork"

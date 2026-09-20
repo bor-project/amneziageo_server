@@ -154,6 +154,7 @@ const complaints: Record<string, TextKey> = {
   "unknown-rule": "error.unknownRule",
   "empty-target": "error.emptyTarget",
   "outbound-off": "error.outboundOff",
+  "outbound-down": "error.outboundDown",
   "url-taken": "error.urlTaken",
   "unknown-source": "error.unknownSource",
   invalid: "error.invalid",

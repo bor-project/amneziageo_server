@@ -181,7 +181,12 @@ public static class OutboundEndpoints
         RouteApplier routes,
         CancellationToken ct)
     {
-        var result = await store.SwitchAsync(id, request.On, ct).ConfigureAwait(false);
+        if (request.On is not { } on)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a switch needs the on field");
+        }
+
+        var result = await store.SwitchAsync(id, on, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -212,9 +217,10 @@ public static class OutboundEndpoints
         OutboundStore store,
         OutboundHost host,
         RouteApplier routes,
+        DnsHost resolver,
         CancellationToken ct)
     {
-        var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
+        var result = await store.RemoveAsync(id, resolver.Asking, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);

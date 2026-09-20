@@ -55,6 +55,8 @@ public sealed class RouteApplier
 
     private readonly ClientStore _clients;
 
+    private readonly OutboundHost _host;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -70,7 +72,8 @@ public sealed class RouteApplier
         RoutePlans plans,
         BalanceLive live,
         DnsSets sets,
-        ClientStore clients)
+        ClientStore clients,
+        OutboundHost host)
     {
         _rules = rules;
         _outbounds = outbounds;
@@ -84,6 +87,7 @@ public sealed class RouteApplier
         _live = live;
         _sets = sets;
         _clients = clients;
+        _host = host;
     }
 
     /// <summary>
@@ -99,6 +103,7 @@ public sealed class RouteApplier
         var resolver = _resolver.Settings ?? await _dns.ReadAsync(ct).ConfigureAwait(false);
         var clients = await _clients.ListAsync(ct).ConfigureAwait(false);
         var basic = await _rules.ReadBasicAsync(ct).ConfigureAwait(false);
+        _live.Keep(_host.Carrying(outbounds));
         var plan = RoutePlan.Build(
             rules,
             outbounds,

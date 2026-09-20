@@ -1,15 +1,10 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { useBalancers, useSwitchBalancer } from "@/api/balancers"
+import { useBalancers } from "@/api/balancers"
 import type { Balancer, BalancerMember } from "@/api/balancers"
-import {
-  useApplyOutbound,
-  useMoveOutbound,
-  useOutbounds,
-  useProbeOutbound,
-  useSwitchOutbound,
-} from "@/api/outbounds"
+import { useMoveOutbound, useOutbounds } from "@/api/outbounds"
 import type { Outbound, OutboundKind, OutboundState } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
+import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { card, fieldBox, secondary } from "@/components/styles"
@@ -30,10 +25,6 @@ export function Channels() {
   const outbounds = useOutbounds()
   const balancers = useBalancers()
   const move = useMoveOutbound()
-  const turn = useSwitchOutbound()
-  const apply = useApplyOutbound()
-  const probe = useProbeOutbound()
-  const turnGroup = useSwitchBalancer()
   const may = holds(user, scopes.manageRouting)
   const find = params.get("find") ?? ""
   const channels = outbounds.data ?? []
@@ -168,58 +159,31 @@ export function Channels() {
               cell: (line, at) =>
                 may &&
                 (line.kind === "channel" ? (
-                  <RowActions
-                    title={t("outbounds.actions")}
-                    actions={[
-                      { label: t("outbounds.apply"), onPick: () => void apply.mutateAsync(line.channel.id) },
-                      { label: t("outbounds.probeNow"), onPick: () => void probe.mutateAsync(line.channel.id) },
-                      {
-                        label: line.channel.isEnabled ? t("outbounds.turnOff") : t("outbounds.turnOn"),
-                        onPick: () => void turn.mutateAsync({ id: line.channel.id, on: !line.channel.isEnabled }),
-                      },
-                      {
-                        label: t("outbounds.edit"),
-                        onPick: () => navigate(`/routing/channels/${line.channel.id}/edit`),
-                      },
-                      ...(at > 0
-                        ? [
-                            {
-                              label: t("outbounds.up"),
-                              onPick: () => void move.mutateAsync({ id: line.channel.id, up: true }),
-                            },
-                          ]
-                        : []),
-                      ...(at < last
-                        ? [
-                            {
-                              label: t("outbounds.down"),
-                              onPick: () => void move.mutateAsync({ id: line.channel.id, up: false }),
-                            },
-                          ]
-                        : []),
-                      {
-                        label: t("outbounds.remove"),
-                        onPick: () => navigate(`/routing/channels/${line.channel.id}/delete`),
-                        alarming: true,
-                      },
-                    ]}
-                  />
+                  <div className="flex items-center justify-end gap-1">
+                    <Move
+                      first={at === 0}
+                      last={at === last}
+                      upTitle={t("outbounds.up")}
+                      downTitle={t("outbounds.down")}
+                      onMove={(up) => void move.mutateAsync({ id: line.channel.id, up })}
+                    />
+                    <RowActions
+                      title={t("outbounds.actions")}
+                      actions={[
+                        {
+                          label: t("action.settings"),
+                          onPick: () => navigate(`/routing/channels/${line.channel.id}/edit`),
+                        },
+                      ]}
+                    />
+                  </div>
                 ) : (
                   <RowActions
                     title={t("balancers.actions")}
                     actions={[
                       {
-                        label: line.group.isEnabled ? t("balancers.turnOff") : t("balancers.turnOn"),
-                        onPick: () => void turnGroup.mutateAsync({ id: line.group.id, on: !line.group.isEnabled }),
-                      },
-                      {
-                        label: t("balancers.edit"),
+                        label: t("action.settings"),
                         onPick: () => navigate(`/routing/channels/groups/${line.group.id}/edit`),
-                      },
-                      {
-                        label: t("balancers.remove"),
-                        onPick: () => navigate(`/routing/channels/groups/${line.group.id}/delete`),
-                        alarming: true,
                       },
                     ]}
                   />

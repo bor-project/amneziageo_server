@@ -79,11 +79,11 @@ export interface RouteStep {
 export interface RouteMember {
   name: string
   isEnabled: boolean
-  isAlive: boolean
   carries: boolean
+  isPicked: boolean
 }
 
-export type RouteVerdict = "out" | "host" | "block" | "held" | "guard"
+export type RouteVerdict = "out" | "host" | "block" | "held" | "guard" | "dns"
 
 export interface RouteAnswer {
   verdict: RouteVerdict

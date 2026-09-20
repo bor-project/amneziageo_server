@@ -1,16 +1,20 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
-import { uncertified } from "@/api/proxies"
+import { uncertified, useProxies } from "@/api/proxies"
 import type { ProxyCertificate, ProxyDraft, ProxyKind } from "@/api/proxies"
-import { Count, Flag, Line, Multi, Part, Pick, Switch } from "@/components/fields"
-import { card, danger, label, note, primary, secondary } from "@/components/styles"
+import { useProxyTemplates } from "@/api/proxyTemplates"
+import type { ProxyTemplate } from "@/api/proxyTemplates"
+import { Count, Flag, Folded, Line, Multi, Part, Pick, Switch } from "@/components/fields"
+import { portFault, usePortHolders } from "@/components/ports"
+import { card, danger, field, label, note, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
+import type { Text } from "@/i18n"
 
 export function ProxyForm({
   start,
-  fresh,
   panel,
   addresses,
+  self,
   pending,
   error,
   onSave,
@@ -18,9 +22,9 @@ export function ProxyForm({
   onRemove,
 }: {
   start: ProxyDraft
-  fresh?: Record<ProxyKind, ProxyDraft>
   panel: ProxyCertificate | undefined
   addresses: string[]
+  self?: number
   pending: boolean
   error: unknown
   onSave: (draft: ProxyDraft) => void
@@ -28,28 +32,44 @@ export function ProxyForm({
   onRemove?: () => void
 }) {
   const t = useText()
+  const templates = useProxyTemplates().data ?? []
+  const others = (useProxies().data ?? []).filter((one) => one.id !== self)
+  const held = usePortHolders({ proxy: self })
   const [draft, setDraft] = useState<ProxyDraft>(start)
+  const chosen = templates.find((one) => one.id === draft.templateId)
   const bare = uncertified(panel, draft)
+  const port = portFault(t, draft.port, held)
+  const name = others.some((one) => one.name === draft.name.trim()) ? t("error.nameTaken") : ""
   const fault = error !== null && error !== undefined ? complaint(error) : null
+  const ready = !pending && draft.name.trim().length > 0 && port.length === 0 && name.length === 0
 
   function put(part: Partial<ProxyDraft>) {
     setDraft({ ...draft, ...part })
   }
 
   function take(kind: ProxyKind) {
-    const port = fresh !== undefined && draft.port === fresh[draft.kind].port ? fresh[kind].port : draft.port
-    put(
-      kind === "wg"
-        ? {
-            kind,
-            port,
-            path: "",
-            certificate: "",
-            certificateKey: "",
-            target: draft.target || fresh?.wg.target || start.target,
-          }
-        : { kind, port, target: "", path: draft.path || fresh?.ws.path || start.path },
-    )
+    put(kind === "wg" ? { kind, path: "", certificate: "", certificateKey: "" } : { kind, target: "" })
+  }
+
+  function choose(value: string) {
+    const templateId = value === "" ? null : Number(value)
+    const found = templates.find((one) => one.id === templateId)
+
+    if (found === undefined) {
+      put({ templateId })
+
+      return
+    }
+
+    put({
+      templateId,
+      kind: found.kind,
+      opened: found.opened,
+      target: found.target,
+      sources: found.sources,
+      port: self === undefined ? found.port : draft.port,
+      path: found.kind === "wg" ? "" : draft.path,
+    })
   }
 
   return (
@@ -69,17 +89,8 @@ export function ProxyForm({
           value={draft.name}
           onChange={(v) => put({ name: v })}
           hint={t("proxies.nameHint")}
+          fault={name}
         />
-        <Pick
-          id="proxy-kind"
-          caption={t("proxies.kind")}
-          value={draft.kind}
-          onChange={(v) => take(v as ProxyKind)}
-          hint={t("proxies.kindHint")}
-        >
-          <option value="ws">{t("proxies.kindWs")}</option>
-          <option value="wg">{t("proxies.kindWg")}</option>
-        </Pick>
         <Count
           id="proxy-port"
           caption={t("proxies.port")}
@@ -87,12 +98,7 @@ export function ProxyForm({
           onChange={(v) => put({ port: v })}
           hint={t("proxies.portHint")}
         />
-        <Flag
-          id="proxy-opened"
-          caption={t("proxies.opened")}
-          value={draft.opened}
-          onChange={(v) => put({ opened: v })}
-        />
+        {port.length > 0 && <div className="-mt-2 text-xs text-alarm">{port}</div>}
         {draft.kind === "ws" && (
           <Line
             id="proxy-path"
@@ -103,31 +109,75 @@ export function ProxyForm({
             wide
           />
         )}
-        {draft.kind === "wg" && (
-          <Line
-            id="proxy-target"
-            caption={t("proxies.target")}
-            value={draft.target}
-            onChange={(v) => put({ target: v })}
-            hint={t("proxies.targetHint")}
-            wide
-          />
+      </Part>
+
+      <Part title={t("proxies.template")}>
+        <Pick
+          id="proxy-template"
+          caption={t("proxies.template")}
+          value={draft.templateId === null ? "" : String(draft.templateId)}
+          onChange={choose}
+          wide
+        >
+          <option value="">{t("proxies.noTemplate")}</option>
+          {templates.map((one) => (
+            <option key={one.id} value={one.id}>
+              {one.name}
+            </option>
+          ))}
+        </Pick>
+
+        {chosen !== undefined && (
+          <Folded caption={t("templates.values")}>
+            <Inherited t={t} template={chosen} />
+          </Folded>
         )}
-        <div className="sm:col-span-2">
-          <label className={label} htmlFor="proxy-sources">
-            {t("proxies.sources")}
-          </label>
-          <div className="mt-1">
-            <Multi
-              id="proxy-sources"
-              value={draft.sources}
-              offers={addresses}
-              placeholder={t("proxies.anySource")}
-              onChange={(sources) => put({ sources })}
+
+        {draft.templateId === null && (
+          <>
+            <Pick
+              id="proxy-kind"
+              caption={t("proxies.kind")}
+              value={draft.kind}
+              onChange={(v) => take(v as ProxyKind)}
+              hint={t("proxies.kindHint")}
+            >
+              <option value="ws">{t("proxies.kindWs")}</option>
+              <option value="wg">{t("proxies.kindWg")}</option>
+            </Pick>
+            <Flag
+              id="proxy-opened"
+              caption={t("proxies.opened")}
+              value={draft.opened}
+              onChange={(v) => put({ opened: v })}
             />
-          </div>
-          <div className={note}>{t("proxies.sourcesHint")}</div>
-        </div>
+            {draft.kind === "wg" && (
+              <Line
+                id="proxy-target"
+                caption={t("proxies.target")}
+                value={draft.target}
+                onChange={(v) => put({ target: v })}
+                hint={t("proxies.targetHint")}
+                wide
+              />
+            )}
+            <div className="sm:col-span-2">
+              <label className={label} htmlFor="proxy-sources">
+                {t("proxies.sources")}
+              </label>
+              <div className="mt-1">
+                <Multi
+                  id="proxy-sources"
+                  value={draft.sources}
+                  offers={addresses}
+                  placeholder={t("proxies.anySource")}
+                  onChange={(sources) => put({ sources })}
+                />
+              </div>
+              <div className={note}>{t("proxies.sourcesHint")}</div>
+            </div>
+          </>
+        )}
       </Part>
 
       {draft.kind === "ws" && (
@@ -167,9 +217,42 @@ export function ProxyForm({
         <button type="button" onClick={onClose} className={secondary}>
           {t("proxies.cancel")}
         </button>
-        <button type="button" onClick={() => onSave(draft)} disabled={pending} className={primary}>
+        <button
+          type="button"
+          onClick={() => onSave({ ...draft, name: draft.name.trim() })}
+          disabled={!ready}
+          className={primary}
+        >
           {t("proxies.save")}
         </button>
+      </div>
+    </div>
+  )
+}
+
+function Inherited({ t, template }: { t: Text; template: ProxyTemplate }) {
+  return (
+    <>
+      <Fixed
+        caption={t("proxies.kind")}
+        value={template.kind === "wg" ? t("proxies.kindWg") : t("proxies.kindWs")}
+      />
+      <Fixed caption={t("proxies.opened")} value={template.opened ? t("action.yes") : t("action.no")} />
+      {template.kind === "wg" && <Fixed caption={t("proxies.target")} value={template.target} />}
+      <Fixed
+        caption={t("proxies.sources")}
+        value={template.sources.length === 0 ? t("proxies.anySource") : template.sources.join(", ")}
+      />
+    </>
+  )
+}
+
+function Fixed({ caption, value }: { caption: string; value: string }) {
+  return (
+    <div>
+      <span className={label}>{caption}</span>
+      <div className={`mt-1 truncate ${field}`} title={value}>
+        {value}
       </div>
     </div>
   )

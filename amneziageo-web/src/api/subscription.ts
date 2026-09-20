@@ -21,10 +21,11 @@ export interface Subscription extends SubscriptionDraft {
   fault: string
 }
 
-export function useSubscription() {
+export function useSubscription(enabled = true) {
   return useQuery({
     queryKey: ["subscription"],
     queryFn: async () => (await client.get<Subscription>("/subscription")).data,
+    enabled,
   })
 }
 

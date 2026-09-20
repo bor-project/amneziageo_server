@@ -180,9 +180,14 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
         var name = rule.Outbound.Trim();
         if (ways.Outbound(name) is { } outbound)
         {
-            return outbound.IsEnabled
+            if (!outbound.IsEnabled)
+            {
+                return (RouteExit.None, new RouteFault("outbound-off", $"the outbound '{name}' is turned off"));
+            }
+
+            return ways.IsAlive(name)
                 ? (RouteExit.One(outbound.Mark), null)
-                : (RouteExit.None, new RouteFault("outbound-off", $"the outbound '{name}' is turned off"));
+                : (RouteExit.None, new RouteFault("outbound-down", $"the outbound '{name}' carries nothing"));
         }
 
         return ways.Balancer(name) is { } balancer

@@ -55,6 +55,7 @@ function HeldRule({ ruleId }: { ruleId: number }) {
       error={change.error}
       onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate("/routing/rules"))}
       onClose={() => navigate("/routing/rules")}
+      onRemove={() => navigate(`/routing/rules/${held.id}/delete`)}
     />
   )
 }

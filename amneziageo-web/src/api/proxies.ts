@@ -14,6 +14,7 @@ export interface ProxyDraft {
   sources: string[]
   certificate: string
   certificateKey: string
+  templateId: number | null
 }
 
 export interface Proxy extends ProxyDraft {
@@ -54,11 +55,13 @@ export function useProxies() {
   })
 }
 
-export function useFreshProxy(enabled: boolean, name: string, kind: ProxyKind) {
+export function useFreshProxy(enabled: boolean) {
   return useQuery({
-    queryKey: ["proxies", "draft", name, kind],
-    queryFn: async () => (await client.get<Proxy>(`/proxies/draft?name=${name}&kind=${kind}`)).data,
+    queryKey: ["proxies", "draft"],
+    queryFn: async () => (await client.get<Proxy>("/proxies/draft")).data,
     enabled,
+    gcTime: 0,
+    staleTime: 0,
   })
 }
 
@@ -90,6 +93,7 @@ export function draftOf(proxy: Proxy): ProxyDraft {
     sources: proxy.sources,
     certificate: proxy.certificate,
     certificateKey: proxy.certificateKey,
+    templateId: proxy.templateId,
   }
 }
 

@@ -11,6 +11,11 @@ public sealed record ProxyConfig
     public long Id { get; init; }
 
     /// <summary>
+    /// The template the proxy takes its constants from, or null for values of its own.
+    /// </summary>
+    public long? TemplateId { get; init; }
+
+    /// <summary>
     /// The name of the proxy, which its service and its files are named after.
     /// </summary>
     public string Name { get; init; } = string.Empty;

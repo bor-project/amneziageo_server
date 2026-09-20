@@ -2,7 +2,7 @@ import { useState } from "react"
 import { complaint } from "@/api/auth"
 import type { GeoKind, GeoSourceDraft } from "@/api/geo"
 import { Flag, Line, Part } from "@/components/fields"
-import { card, field, label, primary, secondary } from "@/components/styles"
+import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 
@@ -12,12 +12,14 @@ export function GeoForm({
   error,
   onSave,
   onClose,
+  onRemove,
 }: {
   start: GeoSourceDraft
   pending: boolean
   error: unknown
   onSave: (draft: GeoSourceDraft) => void
   onClose: () => void
+  onRemove?: () => void
 }) {
   const t = useText()
   const [draft, setDraft] = useState(start)
@@ -63,6 +65,11 @@ export function GeoForm({
       )}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        {onRemove !== undefined && (
+          <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
+            {t("geo.remove")}
+          </button>
+        )}
         <button type="button" onClick={onClose} className={secondary}>
           {t("geo.cancel")}
         </button>

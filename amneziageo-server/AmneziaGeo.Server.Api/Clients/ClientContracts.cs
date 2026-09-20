@@ -75,7 +75,7 @@ public sealed record ClientRequest(
 /// <summary>
 /// Whether a client is on.
 /// </summary>
-public sealed record ClientSwitchRequest(bool On);
+public sealed record ClientSwitchRequest(bool? On);
 
 /// <summary>
 /// The text the clients of an endpoint are imported from.

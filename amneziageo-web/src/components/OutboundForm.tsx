@@ -5,7 +5,7 @@ import { useImportOutbound, useOutboundKeys } from "@/api/outbounds"
 import type { OutboundDraft, OutboundKind } from "@/api/outbounds"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { Count, Flag, Line, Part } from "@/components/fields"
-import { card, field, label, primary, secondary } from "@/components/styles"
+import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -17,6 +17,7 @@ export function OutboundForm({
   error,
   onSave,
   onClose,
+  onRemove,
 }: {
   start: OutboundDraft
   publicKey: string
@@ -24,6 +25,7 @@ export function OutboundForm({
   error: unknown
   onSave: (draft: OutboundDraft) => void
   onClose: () => void
+  onRemove?: () => void
 }) {
   const t = useText()
   const keys = useOutboundKeys()
@@ -248,6 +250,11 @@ export function OutboundForm({
       )}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        {onRemove !== undefined && (
+          <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
+            {t("outbounds.remove")}
+          </button>
+        )}
         <button type="button" onClick={onClose} className={secondary}>
           {t("outbounds.cancel")}
         </button>

@@ -86,6 +86,7 @@ function HeldConfig({ configId }: { configId: number }) {
       <ConfigForm
         start={draftOf(held)}
         publicKey={held.publicKey}
+        self={held.id}
         pending={change.isPending}
         error={change.error}
         onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}

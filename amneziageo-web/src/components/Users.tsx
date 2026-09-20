@@ -82,13 +82,7 @@ export function Users() {
                 <RowActions
                   title={t("users.actions")}
                   actions={[
-                    { label: t("users.edit"), onPick: () => navigate(`/settings/users/${one.name}/edit`) },
-                    { label: t("users.password"), onPick: () => navigate(`/settings/users/${one.name}/password`) },
-                    {
-                      label: t("users.remove"),
-                      onPick: () => navigate(`/settings/users/${one.name}/delete`),
-                      alarming: true,
-                    },
+                    { label: t("action.settings"), onPick: () => navigate(`/settings/users/${one.name}/edit`) },
                   ]}
                 />
               ),

@@ -18,19 +18,25 @@ public static class TemplateEndpoints
     {
         ArgumentNullException.ThrowIfNull(routes);
 
-        var reading = routes.MapGroup("/api/templates").RequireScope(Scopes.ReadState);
+        Map(routes, "/api/templates");
+        Map(routes, "/api/templates/clients");
+
+        return routes;
+    }
+
+    private static void Map(IEndpointRouteBuilder routes, string prefix)
+    {
+        var reading = routes.MapGroup(prefix).RequireScope(Scopes.ReadState);
         reading.MapGet("/", ListAsync);
         reading.MapGet("/defaults", DefaultsAsync);
         reading.MapGet("/{id:long}", FindAsync);
 
-        var writing = routes.MapGroup("/api/templates").RequireScope(Scopes.ManageClients);
+        var writing = routes.MapGroup(prefix).RequireScope(Scopes.ManageClients);
         writing.MapPost("/", AddAsync);
         writing.MapPost("/preview", PreviewAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapPost("/{id:long}/refresh", RefreshAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
-
-        return routes;
     }
 
     private static async Task<IResult> ListAsync(TemplateStore store, CancellationToken ct)

@@ -69,12 +69,7 @@ export function Roles() {
                 <RowActions
                   title={t("roles.actions")}
                   actions={[
-                    { label: t("roles.edit"), onPick: () => navigate(`/settings/users/roles/${one.name}/edit`) },
-                    {
-                      label: t("roles.remove"),
-                      onPick: () => navigate(`/settings/users/roles/${one.name}/delete`),
-                      alarming: true,
-                    },
+                    { label: t("action.settings"), onPick: () => navigate(`/settings/users/roles/${one.name}/edit`) },
                   ]}
                 />
               ),

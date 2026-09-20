@@ -23,6 +23,7 @@ public class TemplateListTests
     [InlineData("not a thing")]
     [InlineData("geoip:")]
     [InlineData("youtube")]
+    [InlineData("keyword:ads")]
     public void TextThatIsNoEntryReadsAsNone(string written)
     {
         Assert.Null(TemplateList.Entry(written));

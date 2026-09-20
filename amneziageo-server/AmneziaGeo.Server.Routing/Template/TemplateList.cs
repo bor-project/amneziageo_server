@@ -38,7 +38,8 @@ public static class TemplateList
             GeoRuleKind.GeoIp => "geoip:" + rule.Value.ToLowerInvariant(),
             GeoRuleKind.GeoSite => "geosite:" + rule.Value.ToLowerInvariant(),
             GeoRuleKind.Cidr => "cidr:" + Range(body),
-            _ => "domain:" + rule.Value,
+            GeoRuleKind.Domain => "domain:" + rule.Value,
+            _ => null,
         };
     }
 

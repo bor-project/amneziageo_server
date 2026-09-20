@@ -144,7 +144,8 @@ public class TemplateStoreTests
         var removed = await bench.Templates.RemoveAsync(template.Id, CancellationToken.None);
 
         Assert.True(removed.IsOk, removed.Message);
-        Assert.Empty(await bench.Templates.ListAsync(CancellationToken.None));
+        var held = await bench.Templates.ListAsync(CancellationToken.None);
+        Assert.Equal(TemplateDefaults.Name, Assert.Single(held).Name);
     }
 
     [Fact]

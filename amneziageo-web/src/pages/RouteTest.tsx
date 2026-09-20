@@ -248,7 +248,7 @@ function tone(answer: RouteAnswer): string {
     return "text-good"
   }
 
-  if (answer.verdict === "host") {
+  if (answer.verdict === "host" || answer.verdict === "dns") {
     return "text-ink"
   }
 
@@ -265,6 +265,8 @@ function verdict(answer: RouteAnswer, t: Text): string {
       return t("test.block")
     case "held":
       return t("test.held", { name: answer.rule?.outbound ?? "" })
+    case "dns":
+      return t("test.dns")
     default:
       return t("test.guard", { guard: answer.guard === "dot" ? "DoT" : "DoH" })
   }
@@ -283,11 +285,11 @@ function standing(member: RouteMember): TextKey {
     return "test.memberOff"
   }
 
-  if (!member.isAlive) {
+  if (!member.carries) {
     return "test.memberDown"
   }
 
-  return member.carries ? "test.memberCarries" : "test.memberSpare"
+  return member.isPicked ? "test.memberCarries" : "test.memberSpare"
 }
 
 function outcome(step: RouteStep): TextKey {

@@ -56,23 +56,69 @@ public static class ProxyEndpoints
     private static async Task<IResult> DraftAsync(
         string? name,
         string? kind,
+        long? templateId,
+        ProxyStore store,
+        ProxyTemplateStore templates,
         ProxyApplier applier,
         CancellationToken ct)
     {
         var taken = string.IsNullOrWhiteSpace(name) ? ProxyDefaults.FirstName : name.Trim();
-        var draft = await applier.FreshAsync(taken, kind, ct).ConfigureAwait(false);
+        var template = await TemplateAsync(templates, templateId, ct).ConfigureAwait(false);
+        var draft = await applier.FreshAsync(taken, template?.Kind ?? kind, ct).ConfigureAwait(false);
+        if (template is not null)
+        {
+            var port = await FreePortAsync(store, template.Port, template.Kind, ct).ConfigureAwait(false);
+            draft = template.Over(draft) with { Port = port };
+        }
 
         return Results.Ok(ProxyAnswers.Proxy(draft, ProxyState.Down));
+    }
+
+    private static async Task<ProxyTemplate?> TemplateAsync(
+        ProxyTemplateStore templates,
+        long? id,
+        CancellationToken ct) =>
+        id is { } wanted
+            ? await templates.FindAsync(wanted, ct).ConfigureAwait(false)
+            : await templates.FindByNameAsync(ProxyTemplateDefaults.Name, ct).ConfigureAwait(false);
+
+    private static async Task<int> FreePortAsync(ProxyStore store, int wanted, string kind, CancellationToken ct)
+    {
+        var held = await store.ListAsync(ct).ConfigureAwait(false);
+        var taken = held
+            .Where(one => string.Equals(one.Kind, kind, StringComparison.Ordinal))
+            .Select(one => one.Port)
+            .ToHashSet();
+
+        var port = wanted;
+        while (port < 65535 && taken.Contains(port))
+        {
+            port++;
+        }
+
+        return port;
     }
 
     private static async Task<IResult> AddAsync(
         ProxyRequest request,
         ProxyStore store,
+        ProxyTemplateStore templates,
         ProxyApplier applier,
         FirewallApplier firewall,
         CancellationToken ct)
     {
         var draft = ProxyAnswers.Draft(request);
+        if (draft.TemplateId is { } wanted)
+        {
+            var template = await templates.FindAsync(wanted, ct).ConfigureAwait(false);
+            if (template is null)
+            {
+                return Unknown(wanted);
+            }
+
+            draft = template.Over(draft);
+        }
+
         if (await ReadyAsync(draft, applier, ct).ConfigureAwait(false) is { } missing)
         {
             return missing;
@@ -94,11 +140,23 @@ public static class ProxyEndpoints
         long id,
         ProxyRequest request,
         ProxyStore store,
+        ProxyTemplateStore templates,
         ProxyApplier applier,
         FirewallApplier firewall,
         CancellationToken ct)
     {
         var draft = ProxyAnswers.Draft(request);
+        if (draft.TemplateId is { } wanted)
+        {
+            var template = await templates.FindAsync(wanted, ct).ConfigureAwait(false);
+            if (template is null)
+            {
+                return Unknown(wanted);
+            }
+
+            draft = template.Over(draft);
+        }
+
         if (await ReadyAsync(draft, applier, ct).ConfigureAwait(false) is { } missing)
         {
             return missing;
@@ -130,15 +188,20 @@ public static class ProxyEndpoints
         FirewallApplier firewall,
         CancellationToken ct)
     {
+        if (request.On is not { } on)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a switch needs the on field");
+        }
+
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
         if (held is not null
-            && request.On
+            && on
             && await ReadyAsync(held with { IsEnabled = true }, applier, ct).ConfigureAwait(false) is { } missing)
         {
             return missing;
         }
 
-        var result = await store.SwitchAsync(id, request.On, ct).ConfigureAwait(false);
+        var result = await store.SwitchAsync(id, on, ct).ConfigureAwait(false);
         if (!result.IsOk || result.Record is null)
         {
             return Explain(result);
@@ -181,6 +244,11 @@ public static class ProxyEndpoints
             ? Refuse(StatusCodes.Status400BadRequest, missing.Code, missing.Message)
             : null;
     }
+
+    private static IResult Unknown(long id) => Refuse(
+        StatusCodes.Status400BadRequest,
+        "unknown-template",
+        $"there is no proxy template under the number {id}");
 
     private static IResult Explain(ProxyResult result) => Refuse(Status(result.Outcome), result.Code, result.Message);
 

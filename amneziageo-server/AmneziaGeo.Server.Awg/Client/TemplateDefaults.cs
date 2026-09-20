@@ -10,6 +10,11 @@ namespace AmneziaGeo.Server.Awg.Client;
 public static class TemplateDefaults
 {
     /// <summary>
+    /// The name the built in template takes.
+    /// </summary>
+    public const string Name = "default";
+
+    /// <summary>
     /// The range that carries the whole of IPv4.
     /// </summary>
     public const string AnyFour = "0.0.0.0/0";
@@ -33,6 +38,18 @@ public static class TemplateDefaults
     /// The name servers.
     /// </summary>
     public static IReadOnlyList<string> Dns => ConfigDefaults.Dns;
+
+    /// <summary>
+    /// Returns the template a fresh database starts with.
+    /// </summary>
+    public static ClientTemplate Fresh() => new()
+    {
+        Name = Name,
+        AllowedIps = [AnyFour, AnySix],
+        Dns = [.. Dns],
+        Mtu = Mtu,
+        Keepalive = Keepalive,
+    };
 
     /// <summary>
     /// Returns the ranges a holder of the given addresses routes into the tunnel.

@@ -86,7 +86,7 @@ public static class ConfigDefaults
 
         return new ObfuscationSettings
         {
-            Jc = RandomNumberGenerator.GetInt32(3, 11),
+            Jc = RandomNumberGenerator.GetInt32(4, 13),
             Jmin = 50,
             Jmax = 1000,
             S1 = first,
