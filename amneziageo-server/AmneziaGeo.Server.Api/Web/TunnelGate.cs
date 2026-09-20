@@ -1,7 +1,7 @@
 using System.Net;
 using AmneziaGeo.Server.Dal;
 
-namespace AmneziaGeo.Server.Api.Hello;
+namespace AmneziaGeo.Server.Api.Web;
 
 /// <summary>
 /// The addresses the interfaces of the endpoints carry, read again now and then.
@@ -88,6 +88,18 @@ public sealed class TunnelAddresses
 /// </summary>
 public static class TunnelGate
 {
+    /// <summary>
+    /// Adds the addresses of the interfaces the gate reads.
+    /// </summary>
+    public static IServiceCollection AddTunnelGate(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddSingleton<TunnelAddresses>();
+
+        return services;
+    }
+
     /// <summary>
     /// Answers nothing to a request that arrives on an address of an interface.
     /// </summary>

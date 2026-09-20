@@ -4,7 +4,6 @@ import { useOutbounds, useRemoveOutbound } from "@/api/outbounds"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import { outboundTrail } from "@/pages/trails"
 
 export function OutboundRemove() {
   const t = useText()
@@ -15,7 +14,7 @@ export function OutboundRemove() {
   const all = outbounds.data ?? []
   const held = all.find((one) => one.id === Number(outboundId))
 
-  useTail(held === undefined ? [] : [outboundTrail(held, all), { label: t("outbounds.remove") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("outbounds.remove") }])
 
   if (held === undefined) {
     return outbounds.data === undefined ? (

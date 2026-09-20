@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 
 namespace AmneziaGeo.Server.Awg.Client;
@@ -28,6 +29,23 @@ public static class ClientDefaults
             SubscriptionId = SubscriptionId(),
             Inbound = ClientInbound.Endpoint,
         };
+    }
+
+    /// <summary>
+    /// Returns the endpoint a new client starts on: the one of the newest client, else the first.
+    /// </summary>
+    public static ServerConfig? Endpoint(IReadOnlyList<ServerConfig> endpoints, IReadOnlyList<TunnelClient> clients)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+        ArgumentNullException.ThrowIfNull(clients);
+
+        var newest = clients
+            .Where(client => endpoints.Any(endpoint => endpoint.Id == client.ConfigId))
+            .MaxBy(client => client.Id);
+
+        return newest is null
+            ? endpoints.FirstOrDefault()
+            : endpoints.First(endpoint => endpoint.Id == newest.ConfigId);
     }
 
     /// <summary>

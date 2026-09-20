@@ -4,7 +4,6 @@ import { draftOf, freshRule, useAddRule, useChangeRule, useRules } from "@/api/r
 import { RuleForm } from "@/components/RuleForm"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
-import { ruleTrail } from "@/pages/trails"
 
 export function RulePage() {
   const { ruleId } = useParams()
@@ -39,7 +38,7 @@ function HeldRule({ ruleId }: { ruleId: number }) {
   const all = rules.data ?? []
   const held = all.find((one) => one.id === ruleId)
 
-  useTail(held === undefined ? [] : [ruleTrail(held, all), { label: t("rules.edit") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("rules.edit") }])
 
   if (held === undefined) {
     return rules.data === undefined ? (

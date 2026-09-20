@@ -4,7 +4,6 @@ import type { Outbound } from "@/api/outbounds"
 import { OutboundForm } from "@/components/OutboundForm"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
-import { outboundTrail } from "@/pages/trails"
 
 export function OutboundPage() {
   const { outboundId } = useParams()
@@ -45,7 +44,7 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
   const all = outbounds.data ?? []
   const held = all.find((one) => one.id === outboundId)
 
-  useTail(held === undefined ? [] : [outboundTrail(held, all), { label: t("outbounds.edit") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("outbounds.edit") }])
 
   if (held === undefined) {
     return outbounds.data === undefined ? (

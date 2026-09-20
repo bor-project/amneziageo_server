@@ -4,7 +4,6 @@ import { useRemoveTemplate, useTemplates } from "@/api/templates"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import { templateTrail } from "@/pages/trails"
 
 export function TemplateRemove() {
   const t = useText()
@@ -14,7 +13,7 @@ export function TemplateRemove() {
   const remove = useRemoveTemplate()
   const held = templates.data?.find((one) => one.id === Number(templateId))
 
-  useTail(held === undefined ? [] : [templateTrail(held, templates.data ?? []), { label: t("templates.remove") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("templates.remove") }])
 
   if (held === undefined) {
     return templates.data === undefined ? (

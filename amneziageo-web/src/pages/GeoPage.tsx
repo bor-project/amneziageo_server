@@ -4,7 +4,6 @@ import type { GeoSourceDraft } from "@/api/geo"
 import { GeoForm } from "@/components/GeoForm"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
-import { geoTrail } from "@/pages/trails"
 
 const fresh: GeoSourceDraft = { name: "", kind: "geoip", url: "", isEnabled: true }
 
@@ -40,7 +39,7 @@ function HeldSource({ sourceId }: { sourceId: number }) {
   const all = sources.data ?? []
   const held = all.find((one) => one.id === sourceId)
 
-  useTail(held === undefined ? [] : [geoTrail(held, all), { label: t("geo.edit") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("geo.edit") }])
 
   if (held === undefined) {
     return sources.data === undefined ? (

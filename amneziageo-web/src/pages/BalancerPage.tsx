@@ -3,7 +3,6 @@ import { draftOf, freshBalancer, useAddBalancer, useBalancers, useChangeBalancer
 import { BalancerForm } from "@/components/BalancerForm"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
-import { balancerTrail } from "@/pages/trails"
 
 export function BalancerPage() {
   const { balancerId } = useParams()
@@ -37,7 +36,7 @@ function HeldBalancer({ balancerId }: { balancerId: number }) {
   const all = balancers.data ?? []
   const held = all.find((one) => one.id === balancerId)
 
-  useTail(held === undefined ? [] : [balancerTrail(held, all), { label: t("balancers.edit") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("balancers.edit") }])
 
   if (held === undefined) {
     return balancers.data === undefined ? (

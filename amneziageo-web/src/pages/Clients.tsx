@@ -1,5 +1,5 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { useAddDevice, useClients, useSwitchClient } from "@/api/clients"
+import { useClients } from "@/api/clients"
 import type { Client } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import { scopes } from "@/api/scopes"
@@ -21,8 +21,6 @@ export function Clients() {
   const configs = useConfigs()
   const clients = useClients()
   const templates = useTemplates()
-  const turn = useSwitchClient()
-  const addDevice = useAddDevice()
   const may = holds(user, scopes.manageClients)
   const picked = Number(params.get("config") ?? 0)
   const find = params.get("find") ?? ""
@@ -48,35 +46,14 @@ export function Clients() {
 
   function actionsOf(one: Client): RowAction[] {
     const actions: RowAction[] = [
-      { label: t("clients.config"), onPick: () => navigate(`/connections/clients/${one.id}?tab=config`) },
-      {
-        label: one.isEnabled ? t("clients.turnOff") : t("clients.turnOn"),
-        onPick: () => void turn.mutateAsync({ id: one.id, on: !one.isEnabled }),
-      },
+      { label: t("action.export"), onPick: () => navigate(`/connections/clients/${one.id}/export`) },
     ]
-
-    if (one.parentId === null && one.multiDevice) {
-      actions.push({
-        label: t("clients.addDevice"),
-        onPick: () =>
-          void addDevice
-            .mutateAsync(one.id)
-            .then((made) => navigate(`/connections/clients/${made.id}?tab=config`)),
-      })
-    }
 
     if (one.parentId === null) {
-      actions.push({ label: t("clients.edit"), onPick: () => navigate(`/connections/clients/${one.id}/edit`) })
+      actions.push({ label: t("action.settings"), onPick: () => navigate(`/connections/clients/${one.id}/edit`) })
     }
 
-    return [
-      ...actions,
-      {
-        label: t("clients.remove"),
-        onPick: () => navigate(`/connections/clients/${one.id}/delete`),
-        alarming: true,
-      },
-    ]
+    return actions
   }
 
   return (
@@ -124,7 +101,7 @@ export function Clients() {
               body: "font-semibold text-ink",
               cell: (one) => (
                 <span className={one.parentId === null ? "" : "pl-6"}>
-                  <Link to={`/connections/clients/${one.id}`} className="hover:text-brand-ink">
+                  <Link to={`/connections/clients/${one.id}/export`} className="hover:text-brand-ink">
                     {one.name}
                   </Link>
                   {one.state.isOnline && <span className="ml-2 text-xs text-good">{t("clients.online")}</span>}
@@ -146,7 +123,7 @@ export function Clients() {
                 one.templateId === null ? (
                   t("clients.dash")
                 ) : (
-                  <Link to={`/connections/templates/${one.templateId}`} className="text-brand-ink hover:text-brand-lit">
+                  <Link to={`/connections/templates/${one.templateId}/edit`} className="text-brand-ink hover:text-brand-lit">
                     {named(one)}
                   </Link>
                 ),

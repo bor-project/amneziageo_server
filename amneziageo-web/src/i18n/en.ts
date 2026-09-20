@@ -313,6 +313,10 @@ export const en = {
 
   "layout.nav": "Menu",
   "action.add": "Add",
+  "action.export": "Export",
+  "action.settings": "Settings",
+  "action.copyText": "Copy the text",
+  "action.copyImage": "Copy the picture",
   "action.search": "Search",
   "action.yes": "Yes",
   "action.no": "No",

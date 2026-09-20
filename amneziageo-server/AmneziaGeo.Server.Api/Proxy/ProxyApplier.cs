@@ -101,12 +101,16 @@ public sealed class ProxyApplier
     /// </summary>
     public async Task<ProxyConfig> FreshAsync(string name, string? kind, CancellationToken ct)
     {
-        var draft = ProxyDefaults.Fresh(name, kind) with { Path = ProxyDefaults.Secret() };
+        var draft = ProxyDefaults.Fresh(name, kind);
         var ports = await PortsAsync(ct).ConfigureAwait(false);
+        if (ports.Length == 0)
+        {
+            return draft;
+        }
 
-        return ports.Length == 0
-            ? draft
-            : draft with { Target = $"{ProxyDefaults.Loopback}:{ports[0].ToString(CultureInfo.InvariantCulture)}" };
+        return ProxyKind.HasTarget(draft.Kind)
+            ? draft with { Target = $"{ProxyDefaults.Loopback}:{ports[0].ToString(CultureInfo.InvariantCulture)}" }
+            : draft with { Port = ports[0] };
     }
 
     /// <summary>

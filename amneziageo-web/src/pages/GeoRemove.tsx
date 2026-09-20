@@ -4,7 +4,6 @@ import { useGeoSources, useRemoveGeoSource } from "@/api/geo"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import { geoTrail } from "@/pages/trails"
 
 export function GeoRemove() {
   const t = useText()
@@ -15,7 +14,7 @@ export function GeoRemove() {
   const all = sources.data ?? []
   const held = all.find((one) => one.id === Number(sourceId))
 
-  useTail(held === undefined ? [] : [geoTrail(held, all), { label: t("geo.remove") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("geo.remove") }])
 
   if (held === undefined) {
     return sources.data === undefined ? (

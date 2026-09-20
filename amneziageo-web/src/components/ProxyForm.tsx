@@ -3,25 +3,29 @@ import { complaint } from "@/api/auth"
 import { uncertified } from "@/api/proxies"
 import type { ProxyCertificate, ProxyDraft, ProxyKind } from "@/api/proxies"
 import { Count, Flag, Line, Multi, Part, Pick, Switch } from "@/components/fields"
-import { card, label, note, primary, secondary } from "@/components/styles"
+import { card, danger, label, note, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 
 export function ProxyForm({
   start,
+  fresh,
   panel,
   addresses,
   pending,
   error,
   onSave,
   onClose,
+  onRemove,
 }: {
   start: ProxyDraft
+  fresh?: Record<ProxyKind, ProxyDraft>
   panel: ProxyCertificate | undefined
   addresses: string[]
   pending: boolean
   error: unknown
   onSave: (draft: ProxyDraft) => void
   onClose: () => void
+  onRemove?: () => void
 }) {
   const t = useText()
   const [draft, setDraft] = useState<ProxyDraft>(start)
@@ -33,10 +37,18 @@ export function ProxyForm({
   }
 
   function take(kind: ProxyKind) {
+    const port = fresh !== undefined && draft.port === fresh[draft.kind].port ? fresh[kind].port : draft.port
     put(
       kind === "wg"
-        ? { kind, path: "", certificate: "", certificateKey: "", target: draft.target || start.target }
-        : { kind, target: "", path: draft.path || start.path },
+        ? {
+            kind,
+            port,
+            path: "",
+            certificate: "",
+            certificateKey: "",
+            target: draft.target || fresh?.wg.target || start.target,
+          }
+        : { kind, port, target: "", path: draft.path || fresh?.ws.path || start.path },
     )
   }
 
@@ -147,6 +159,11 @@ export function ProxyForm({
       )}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        {onRemove !== undefined && (
+          <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
+            {t("proxies.remove")}
+          </button>
+        )}
         <button type="button" onClick={onClose} className={secondary}>
           {t("proxies.cancel")}
         </button>

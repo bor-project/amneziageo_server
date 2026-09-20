@@ -159,11 +159,6 @@ public sealed record ServerConfig
     public int ListenPort { get; init; }
 
     /// <summary>
-    /// Returns the tcp port the point of the server answers on inside the interface.
-    /// </summary>
-    public int HelloPort(int configured) => configured is > 0 and <= 65535 ? configured : ListenPort;
-
-    /// <summary>
     /// The address ranges the interface itself carries.
     /// </summary>
     public IReadOnlyList<string> Address { get; init; } = [];

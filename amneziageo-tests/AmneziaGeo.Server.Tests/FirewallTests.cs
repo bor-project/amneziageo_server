@@ -22,7 +22,7 @@ public class FirewallTests
             new SubscriptionSettings { IsEnabled = true, Port = 8444, Opened = true });
 
         Assert.Equal(
-            [("udp", 51820), ("tcp", 51820), ("tcp", 8446), ("tcp", 8443), ("tcp", 8444)],
+            [("udp", 51820), ("tcp", 8446), ("tcp", 8443), ("tcp", 8444)],
             plan.Ports.Select(port => (port.Protocol, port.Port)).ToArray());
         Assert.Equal(["awg0"], plan.Interfaces);
     }
@@ -81,18 +81,9 @@ public class FirewallTests
             new SubscriptionSettings()));
 
         Assert.Equal(
-            ["allow 51820/udp", "allow in on awg0 to any port 51820 proto tcp", "route allow in on awg0", "route allow out on awg0"],
+            ["allow 51820/udp", "route allow in on awg0", "route allow out on awg0"],
             wanted.Select(rule => string.Join(" ", rule.Arguments)).ToArray());
-        Assert.Equal(["amneziageo awg0", "amneziageo hello awg0"], wanted.Select(rule => rule.Note).Distinct().ToArray());
-    }
-
-    [Fact]
-    public void ThePortOfThePointNamedByTheServiceOutranksThePortOfTheInterface()
-    {
-        var plan = FirewallPlan.Of([Endpoint()], [], new PanelSettings(), new SubscriptionSettings(), 9443);
-
-        Assert.Contains(new FirewallPort("tcp", 9443, "hello awg0", "awg0"), plan.Ports);
-        Assert.DoesNotContain(plan.Ports, port => port is { Protocol: "tcp", Port: 51820 });
+        Assert.Equal(["amneziageo awg0"], wanted.Select(rule => rule.Note).Distinct().ToArray());
     }
 
     [Fact]
@@ -117,7 +108,6 @@ public class FirewallTests
         tools.Answers["ufw show added"] = new CommandResult(
             0,
             "ufw allow 51820/udp comment 'amneziageo awg0'\n"
-            + "ufw allow in on awg0 to any port 51820 proto tcp comment 'amneziageo hello awg0'\n"
             + "ufw route allow in on awg0 comment 'amneziageo awg0'\n"
             + "ufw route allow out on awg0 comment 'amneziageo awg0'\n",
             string.Empty);
@@ -181,7 +171,7 @@ public class FirewallTests
         Assert.Equal("nft", sync.Engine);
         Assert.Contains("table inet amneziageo_open", ledger.Ruleset, StringComparison.Ordinal);
         Assert.Contains("udp dport 51820 accept", ledger.Ruleset, StringComparison.Ordinal);
-        Assert.Contains("iifname \"awg0\" tcp dport 51820 accept", ledger.Ruleset, StringComparison.Ordinal);
+        Assert.DoesNotContain("tcp dport 51820", ledger.Ruleset, StringComparison.Ordinal);
         Assert.Contains("tcp dport 8446 accept", ledger.Ruleset, StringComparison.Ordinal);
         Assert.Contains("iifname \"awg0\" accept", ledger.Ruleset, StringComparison.Ordinal);
         Assert.Contains("oifname \"awg0\" accept", ledger.Ruleset, StringComparison.Ordinal);

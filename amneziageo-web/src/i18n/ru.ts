@@ -315,6 +315,10 @@ export const ru: Dictionary = {
 
   "layout.nav": "Меню",
   "action.add": "Добавить",
+  "action.export": "Экспорт",
+  "action.settings": "Настройки",
+  "action.copyText": "Копировать текст",
+  "action.copyImage": "Копировать картинку",
   "action.search": "Поиск",
   "action.yes": "Да",
   "action.no": "Нет",

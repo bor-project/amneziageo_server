@@ -41,6 +41,37 @@ public class ClientTests
     }
 
     [Fact]
+    public void ANewClientStartsOnTheOnlyEndpoint()
+    {
+        var only = Endpoint();
+
+        Assert.Same(only, ClientDefaults.Endpoint([only], []));
+        Assert.Same(only, ClientDefaults.Endpoint([only], [Client() with { Id = 7 }]));
+    }
+
+    [Fact]
+    public void ANewClientStartsOnTheEndpointOfTheNewestClient()
+    {
+        var first = Endpoint();
+        var second = Endpoint() with { Id = 2, Name = "awg2" };
+        var clients = new[] { Client() with { Id = 3, ConfigId = 2 }, Client("bogdan") with { Id = 9, ConfigId = 1 } };
+
+        Assert.Same(first, ClientDefaults.Endpoint([first, second], clients));
+        Assert.Same(second, ClientDefaults.Endpoint([first, second], [clients[0]]));
+    }
+
+    [Fact]
+    public void ANewClientStartsOnTheFirstEndpointWhenNoClientHoldsOne()
+    {
+        var first = Endpoint() with { Id = 4, Name = "awg0" };
+        var second = Endpoint() with { Id = 2, Name = "awg2" };
+
+        Assert.Same(first, ClientDefaults.Endpoint([first, second], []));
+        Assert.Same(first, ClientDefaults.Endpoint([first, second], [Client() with { Id = 5, ConfigId = 8 }]));
+        Assert.Null(ClientDefaults.Endpoint([], [Client() with { Id = 5 }]));
+    }
+
+    [Fact]
     public void AFreshClientCarriesAKeyPairOfItsOwn()
     {
         var client = ClientDefaults.Fresh(1, "milena");
@@ -98,7 +129,7 @@ public class ClientTests
     [Fact]
     public void TheConfigurationOfAClientCarriesTheResolverOfThePanel()
     {
-        var text = ClientText.Text(Endpoint(), Client(), null, 0, ["10.8.0.1"]);
+        var text = ClientText.Text(Endpoint(), Client(), null, null, ["10.8.0.1"]);
 
         Assert.Contains("DNS = 10.8.0.1", text, StringComparison.Ordinal);
     }
@@ -107,7 +138,7 @@ public class ClientTests
     public void ATemplateWithNamesOfItsOwnOutweighsTheResolver()
     {
         var template = new ClientTemplate { Name = "own", Dns = ["9.9.9.9"] };
-        var text = ClientText.Text(Endpoint(), Client(), template, 0, ["10.8.0.1"]);
+        var text = ClientText.Text(Endpoint(), Client(), template, null, ["10.8.0.1"]);
 
         Assert.Contains("DNS = 9.9.9.9", text, StringComparison.Ordinal);
     }
@@ -115,7 +146,7 @@ public class ClientTests
     [Fact]
     public void ATemplateWithoutNamesTakesTheResolver()
     {
-        var text = ClientText.Text(Endpoint(), Client(), new ClientTemplate { Name = "plain" }, 0, ["10.8.0.1"]);
+        var text = ClientText.Text(Endpoint(), Client(), new ClientTemplate { Name = "plain" }, null, ["10.8.0.1"]);
 
         Assert.Contains("DNS = 10.8.0.1", text, StringComparison.Ordinal);
     }
@@ -597,18 +628,27 @@ public class ClientTests
     }
 
     [Fact]
-    public void TheFileOfAClientNamesWhereThePointOfTheServerAnswersInsideTheTunnel()
+    public void TheFileOfAClientNamesTheWebSocketFrontOfTheServer()
     {
+        const string front = "wss://vpn.example:8443/secret_path";
         var endpoint = Endpoint() with { Address = ["10.8.0.1/24", "fd00::1/64"] };
 
-        Assert.Contains("# AmneziaGeo Api = 10.8.0.1:51820, [fd00::1]:51820\n", ClientText.Text(endpoint, Client()), StringComparison.Ordinal);
-        Assert.Contains("# AmneziaGeo Api = 10.8.0.1:9443, [fd00::1]:9443\n", ClientText.Text(endpoint, Client(), helloPort: 9443), StringComparison.Ordinal);
-        Assert.DoesNotContain("AmneziaGeo Api", ClientText.Text(endpoint with { Address = [] }, Client()), StringComparison.Ordinal);
+        var text = ClientText.Text(endpoint, Client(), webSocket: front);
 
-        using var document = Opened(ClientLink.Link(endpoint, Client(), helloPort: 9443));
-        var api = document.RootElement.GetProperty("amneziageo").GetProperty("api");
+        Assert.Contains("# AmneziaGeo WebSocket = wss://vpn.example:8443/secret_path\n", text, StringComparison.Ordinal);
+        Assert.True(text.IndexOf("# AmneziaGeo WebSocket", StringComparison.Ordinal) < text.IndexOf("[Peer]", StringComparison.Ordinal));
+        Assert.DoesNotContain("AmneziaGeo WebSocket", ClientText.Text(endpoint, Client()), StringComparison.Ordinal);
+        Assert.DoesNotContain("AmneziaGeo Api", text, StringComparison.Ordinal);
 
-        Assert.Equal(["10.8.0.1:9443", "[fd00::1]:9443"], api.EnumerateArray().Select(point => point.GetString()));
+        using var document = Opened(ClientLink.Link(endpoint, Client(), webSocket: front));
+        var extras = document.RootElement.GetProperty("amneziageo");
+
+        Assert.Equal(front, extras.GetProperty("websocket").GetString());
+        Assert.False(extras.TryGetProperty("api", out _));
+
+        using var plain = Opened(ClientLink.Link(endpoint, Client()));
+
+        Assert.False(plain.RootElement.GetProperty("amneziageo").TryGetProperty("websocket", out _));
     }
 
     [Fact]

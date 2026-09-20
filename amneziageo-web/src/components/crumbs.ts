@@ -1,15 +1,8 @@
 import { createContext, useContext, useEffect } from "react"
 
-export interface CrumbOption {
-  label: string
-  to: string
-  mark?: boolean
-}
-
 export interface Crumb {
   label: string
   to?: string
-  options?: CrumbOption[]
 }
 
 export interface Kept {

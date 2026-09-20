@@ -1,6 +1,6 @@
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Dns;
-using AmneziaGeo.Server.Api.Hello;
+using AmneziaGeo.Server.Api.Proxy;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
@@ -111,7 +111,11 @@ public static class ClientEndpoints
         ClientStore store,
         CancellationToken ct)
     {
-        var endpoint = config is null ? null : await configs.FindAsync(config.Value, ct).ConfigureAwait(false);
+        var endpoint = config is null
+            ? ClientDefaults.Endpoint(
+                await configs.ListAsync(ct).ConfigureAwait(false),
+                await store.ListAsync(ct).ConfigureAwait(false))
+            : await configs.FindAsync(config.Value, ct).ConfigureAwait(false);
         if (config is not null && endpoint is null)
         {
             return Missing(config.Value);
@@ -120,7 +124,7 @@ public static class ClientEndpoints
         var wanted = string.IsNullOrWhiteSpace(name) ? "client" : name.Trim();
         var free = await store.FreeNameAsync(wanted, ct).ConfigureAwait(false);
         var address = await FreeAddressAsync(endpoint, store, ct).ConfigureAwait(false);
-        var fresh = ClientDefaults.Fresh(config ?? 0, free) with { Address = address };
+        var fresh = ClientDefaults.Fresh(endpoint?.Id ?? 0, free) with { Address = address };
 
         return Results.Ok(ClientAnswers.Client(
             fresh,
@@ -181,7 +185,7 @@ public static class ClientEndpoints
         SubscriptionState subscriptions,
         PanelSettings panel,
         WebOptions options,
-        HelloOptions hello,
+        WebSocketFronts fronts,
         CancellationToken ct)
     {
         var client = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -201,11 +205,12 @@ public static class ClientEndpoints
             : null;
 
         var names = DnsHandout.For(endpoint, resolver.Settings ?? await dns.ReadAsync(ct).ConfigureAwait(false));
+        var front = (await fronts.ReadAsync(ct).ConfigureAwait(false))(endpoint);
 
         return Results.Ok(new ClientConfigResponse(
             ClientText.FileName(endpoint, client),
-            ClientText.Text(endpoint, client, template, hello.Port, names),
-            ClientLink.Link(endpoint, client, template, hello.Port, names),
+            ClientText.Text(endpoint, client, template, front, names),
+            ClientLink.Link(endpoint, client, template, front, names),
             SubscriptionAnswer.Address(
                 subscriptions.Current,
                 panel,

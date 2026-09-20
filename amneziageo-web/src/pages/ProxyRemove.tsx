@@ -5,7 +5,6 @@ import { useTail } from "@/components/crumbs"
 import { proxyKind, proxyPoint } from "@/components/proxy"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import { proxyTrail } from "@/pages/trails"
 
 export function ProxyRemove() {
   const t = useText()
@@ -16,7 +15,7 @@ export function ProxyRemove() {
   const all = proxies.data ?? []
   const held = all.find((one) => one.id === Number(proxyId))
 
-  useTail(held === undefined ? [] : [proxyTrail(held, all), { label: t("proxies.remove") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("proxies.remove") }])
 
   if (held === undefined) {
     return proxies.data === undefined ? (

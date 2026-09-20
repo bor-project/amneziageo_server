@@ -10,9 +10,12 @@ import {
 } from "@/api/proxies"
 import type { Proxy } from "@/api/proxies"
 import { ProxyForm } from "@/components/ProxyForm"
+import { ProxyState } from "@/components/ProxyState"
 import { useTail } from "@/components/crumbs"
+import { proxyFault } from "@/components/proxy"
+import { chip } from "@/components/styles"
 import { useText } from "@/i18n"
-import { proxyTrail } from "@/pages/trails"
+import { lastSpot } from "@/store/spots"
 
 export function ProxyPage() {
   const { proxyId } = useParams()
@@ -26,24 +29,27 @@ function NewProxy() {
   const proxies = useProxies()
   const tls = useProxyCertificate()
   const local = useProxyAddresses()
-  const fresh = useFreshProxy(proxies.data !== undefined, nextName(proxies.data))
+  const fresh = useFreshProxy(proxies.data !== undefined, nextName(proxies.data), "ws")
+  const relay = useFreshProxy(proxies.data !== undefined, nextName(proxies.data), "wg")
   const add = useAddProxy()
+  const back = lastSpot("connections", "/connections/proxies")
 
   useTail([{ label: t("proxies.newTitle") }])
 
-  if (fresh.data === undefined) {
+  if (fresh.data === undefined || relay.data === undefined) {
     return <div className="mt-4 text-sm text-muted">{t("proxies.loading")}</div>
   }
 
   return (
     <ProxyForm
       start={draftOf(fresh.data)}
+      fresh={{ ws: draftOf(fresh.data), wg: draftOf(relay.data) }}
       panel={tls.data}
       addresses={local.data ?? []}
       pending={add.isPending}
       error={add.error}
-      onSave={(draft) => void add.mutateAsync(draft).then((made) => navigate(`/connections/proxies/${made.id}`))}
-      onClose={() => navigate("/connections/proxies")}
+      onSave={(draft) => void add.mutateAsync(draft).then(() => navigate(back))}
+      onClose={() => navigate(back)}
     />
   )
 }
@@ -57,29 +63,40 @@ function HeldProxy({ proxyId }: { proxyId: number }) {
   const change = useChangeProxy()
   const all = proxies.data ?? []
   const held = all.find((one) => one.id === proxyId)
+  const back = lastSpot("connections", "/connections/proxies")
 
-  useTail(held === undefined ? [] : [proxyTrail(held, all), { label: t("proxies.edit") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("proxies.edit") }])
 
   if (held === undefined) {
     return proxies.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("proxies.loading")}</div>
     ) : (
-      <Navigate to="/connections/proxies" replace />
+      <Navigate to={back} replace />
     )
   }
 
-  const card = `/connections/proxies/${held.id}`
+  const fault = proxyFault(t, held, tls.data)
 
   return (
-    <ProxyForm
-      start={draftOf(held)}
-      panel={tls.data}
-      addresses={local.data ?? []}
-      pending={change.isPending}
-      error={change.error}
-      onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(card))}
-      onClose={() => navigate(card)}
-    />
+    <div>
+      <div className="mt-4 flex items-center gap-2">
+        <span className={chip}>
+          <ProxyState one={held} fault={fault} />
+        </span>
+        {fault.length > 0 && <span className="text-sm text-alarm">{fault}</span>}
+      </div>
+
+      <ProxyForm
+        start={draftOf(held)}
+        panel={tls.data}
+        addresses={local.data ?? []}
+        pending={change.isPending}
+        error={change.error}
+        onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}
+        onClose={() => navigate(back)}
+        onRemove={() => navigate(`/connections/proxies/${held.id}/delete`)}
+      />
+    </div>
   )
 }
 

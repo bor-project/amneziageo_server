@@ -1,5 +1,5 @@
 using AmneziaGeo.Server.Api.Dns;
-using AmneziaGeo.Server.Api.Hello;
+using AmneziaGeo.Server.Api.Proxy;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Dns;
@@ -24,7 +24,7 @@ public sealed class SubscriptionFeed
 
     private readonly DnsState _resolver;
 
-    private readonly HelloOptions _hello;
+    private readonly WebSocketFronts _fronts;
 
     /// <summary>
     /// ctor
@@ -36,7 +36,7 @@ public sealed class SubscriptionFeed
         TrafficLedger ledger,
         DnsStore dns,
         DnsState resolver,
-        HelloOptions hello)
+        WebSocketFronts fronts)
     {
         _clients = clients;
         _configs = configs;
@@ -44,7 +44,7 @@ public sealed class SubscriptionFeed
         _ledger = ledger;
         _dns = dns;
         _resolver = resolver;
-        _hello = hello;
+        _fronts = fronts;
     }
 
     /// <summary>
@@ -67,7 +67,7 @@ public sealed class SubscriptionFeed
             members,
             templates.ToDictionary(one => one.Id),
             _ledger.Group,
-            _hello.Port,
+            await _fronts.ReadAsync(ct).ConfigureAwait(false),
             endpoint => DnsHandout.For(endpoint, settings));
     }
 }

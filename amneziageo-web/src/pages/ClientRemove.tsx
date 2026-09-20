@@ -4,7 +4,6 @@ import { useClients, useRemoveClient } from "@/api/clients"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import { clientTrail } from "@/pages/trails"
 
 export function ClientRemove() {
   const t = useText()
@@ -15,7 +14,7 @@ export function ClientRemove() {
   const all = clients.data ?? []
   const held = all.find((one) => one.id === Number(clientId))
 
-  useTail(held === undefined ? [] : [clientTrail(held, all), { label: t("clients.remove") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("clients.remove") }])
 
   if (held === undefined) {
     return clients.data === undefined ? (

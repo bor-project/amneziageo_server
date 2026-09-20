@@ -4,7 +4,7 @@ import { useTemplateDefaults, useTemplatePreview } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
 import { EntryList } from "@/components/EntryList"
 import { Line, Part } from "@/components/fields"
-import { card, field, label, primary, secondary } from "@/components/styles"
+import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
 
@@ -18,6 +18,7 @@ export function TemplateForm({
   error,
   onSave,
   onClose,
+  onRemove,
 }: {
   start: TemplateDraft
   held?: Template
@@ -25,6 +26,7 @@ export function TemplateForm({
   error: unknown
   onSave: (draft: TemplateDraft) => void
   onClose: () => void
+  onRemove?: () => void
 }) {
   const t = useText()
   const defaults = useTemplateDefaults().data
@@ -126,6 +128,11 @@ export function TemplateForm({
       {error !== null && error !== undefined && <div className="text-sm text-alarm">{t(complaint(error))}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        {onRemove !== undefined && (
+          <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
+            {t("templates.remove")}
+          </button>
+        )}
         <button type="button" onClick={onClose} className={secondary}>
           {t("templates.cancel")}
         </button>

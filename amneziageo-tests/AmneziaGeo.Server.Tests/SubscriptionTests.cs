@@ -1,5 +1,4 @@
 using System.Text;
-using AmneziaGeo.Server.Api.Hello;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Client;
@@ -163,22 +162,6 @@ public class SubscriptionTests
     }
 
     [Fact]
-    public async Task TheServerOffersTheSubscriptionAtTheHostTheClientDials()
-    {
-        var subscriptions = new SubscriptionState { Current = SubscriptionDefaults.Settings with { IsEnabled = true } };
-        var offer = new SubscriptionOffer(subscriptions, PanelDefaults.Settings, new WebOptions());
-        var context = new DefaultHttpContext();
-        context.Request.Host = new HostString("10.8.0.1", 51820);
-        var client = new TunnelClient { Name = "milena", PrivateKey = "qA3cEwnAVQIDQTRPDGmDN6fzrDwARw2mnJ4jswPibnY=", SubscriptionId = "abc" };
-
-        var named = await offer.OfferAsync(new HelloPeer(client, new ServerConfig { Name = "awg1", Host = "bor.sytes.net" }, context), CancellationToken.None);
-        var bare = await offer.OfferAsync(new HelloPeer(client, new ServerConfig { Name = "awg1" }, context), CancellationToken.None);
-
-        Assert.Equal("http://bor.sytes.net:2096/sub/abc", Assert.IsType<SubscriptionFeature>(named).Url);
-        Assert.Equal("http://10.8.0.1:2096/sub/abc", Assert.IsType<SubscriptionFeature>(bare).Url);
-    }
-
-    [Fact]
     public void NoAddressWhileTheSubscriptionsAreOffOrTheClientCarriesNone()
     {
         var on = SubscriptionDefaults.Settings with { IsEnabled = true };
@@ -216,6 +199,10 @@ public class SubscriptionTests
         Assert.Equal([ClientLink.Link(on, milena)], feed.Links);
         Assert.Equal(5UL, feed.Upload);
         Assert.Equal(7UL, feed.Download);
+
+        var fronted = ClientFeed.Of([on], [milena], new Dictionary<long, ClientTemplate>(), _ => new ClientUsage(5, 7), _ => "wss://vpn.example:8443/secret");
+
+        Assert.Equal([ClientLink.Link(on, milena, null, "wss://vpn.example:8443/secret")], fronted.Links);
     }
 
     [Fact]

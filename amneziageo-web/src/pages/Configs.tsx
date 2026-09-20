@@ -1,7 +1,6 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { complaint } from "@/api/auth"
 import { useClients } from "@/api/clients"
-import { useApplyConfig, useConfigs } from "@/api/configs"
+import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { scopes } from "@/api/scopes"
 import { RowActions } from "@/components/RowActions"
@@ -18,7 +17,6 @@ export function Configs() {
   const [params, setParams] = useSearchParams()
   const configs = useConfigs()
   const clients = useClients()
-  const apply = useApplyConfig()
   const may = holds(user, scopes.manageInterfaces)
   const find = params.get("find") ?? ""
   const all = configs.data ?? []
@@ -42,10 +40,6 @@ export function Configs() {
 
   return (
     <div className={`mt-4 ${card}`}>
-      {apply.error !== null && (
-        <div className="border-b border-line px-4 py-2 text-sm text-alarm">{t(complaint(apply.error))}</div>
-      )}
-
       {all.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("configs.empty")}</div>}
 
       {all.length > 0 && (
@@ -69,7 +63,7 @@ export function Configs() {
               lead: true,
               body: "font-semibold text-ink",
               cell: (one) => (
-                <Link to={`/connections/interfaces/${one.id}`} className="hover:text-brand-ink">
+                <Link to={`/connections/interfaces/${one.id}/edit`} className="hover:text-brand-ink">
                   {one.name}
                 </Link>
               ),
@@ -120,14 +114,8 @@ export function Configs() {
                     title={t("configs.actions")}
                     actions={[
                       {
-                        label: t("configs.edit"),
+                        label: t("action.settings"),
                         onPick: () => navigate(`/connections/interfaces/${one.id}/edit`),
-                      },
-                      { label: t("configs.apply"), onPick: () => void apply.mutateAsync(one.id) },
-                      {
-                        label: t("configs.remove"),
-                        onPick: () => navigate(`/connections/interfaces/${one.id}/delete`),
-                        alarming: true,
                       },
                     ]}
                   />

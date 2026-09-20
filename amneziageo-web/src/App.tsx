@@ -3,18 +3,17 @@ import { scopes } from "@/api/scopes"
 import { Boot } from "@/components/Boot"
 import { Layout } from "@/components/Layout"
 import { RequireAuth, RequireScope } from "@/components/RequireAuth"
-import { Tabbed } from "@/components/Tabs"
+import { Landing, Tabbed } from "@/components/Tabs"
 import type { Tab } from "@/components/Tabs"
 import { Accounts } from "@/pages/Accounts"
 import { BalancerPage } from "@/pages/BalancerPage"
 import { BasicRouting } from "@/pages/BasicRouting"
 import { BalancerRemove } from "@/pages/BalancerRemove"
 import { Channels } from "@/pages/Channels"
-import { ClientCard } from "@/pages/ClientCard"
+import { ClientExport } from "@/pages/ClientExport"
 import { ClientPage } from "@/pages/ClientPage"
 import { ClientRemove } from "@/pages/ClientRemove"
 import { Clients } from "@/pages/Clients"
-import { ConfigCard } from "@/pages/ConfigCard"
 import { ConfigPage } from "@/pages/ConfigPage"
 import { ConfigRemove } from "@/pages/ConfigRemove"
 import { Configs } from "@/pages/Configs"
@@ -30,7 +29,6 @@ import { OutboundPage } from "@/pages/OutboundPage"
 import { OutboundRemove } from "@/pages/OutboundRemove"
 import { Password } from "@/pages/Password"
 import { Proxies } from "@/pages/Proxies"
-import { ProxyCard } from "@/pages/ProxyCard"
 import { ProxyPage } from "@/pages/ProxyPage"
 import { ProxyRemove } from "@/pages/ProxyRemove"
 import { RolePage } from "@/pages/RolePage"
@@ -42,7 +40,6 @@ import { Rules } from "@/pages/Rules"
 import { Ruleset } from "@/pages/Ruleset"
 import { PanelCertificates, PanelServer } from "@/pages/Settings"
 import { Subscriptions } from "@/pages/Subscriptions"
-import { TemplateCard } from "@/pages/TemplateCard"
 import { TemplatePage } from "@/pages/TemplatePage"
 import { TemplateRemove } from "@/pages/TemplateRemove"
 import { Templates } from "@/pages/Templates"
@@ -139,30 +136,31 @@ export function App() {
             <Route element={<RequireScope scope={scopes.readState} />}>
               <Route index element={<Dashboard />} />
               <Route path="connections" element={<Tabbed title="nav.connections" tabs={connections} />}>
-                <Route index element={<Navigate to="/connections/interfaces" replace />} />
+                <Route index element={<Landing section="connections" to="/connections/interfaces" />} />
                 <Route path="interfaces" element={<Configs />} />
-                <Route path="interfaces/:configId" element={<ConfigCard />} />
+                <Route path="interfaces/:configId" element={<Navigate to="edit" replace />} />
                 <Route element={<RequireScope scope={scopes.manageInterfaces} />}>
                   <Route path="interfaces/new" element={<ConfigPage />} />
                   <Route path="interfaces/:configId/edit" element={<ConfigPage />} />
                   <Route path="interfaces/:configId/delete" element={<ConfigRemove />} />
                 </Route>
                 <Route path="clients" element={<Clients />} />
-                <Route path="clients/:clientId" element={<ClientCard />} />
+                <Route path="clients/:clientId" element={<Navigate to="export" replace />} />
+                <Route path="clients/:clientId/export" element={<ClientExport />} />
                 <Route element={<RequireScope scope={scopes.manageClients} />}>
                   <Route path="clients/new" element={<ClientPage />} />
                   <Route path="clients/:clientId/edit" element={<ClientPage />} />
                   <Route path="clients/:clientId/delete" element={<ClientRemove />} />
                 </Route>
                 <Route path="templates" element={<Templates />} />
-                <Route path="templates/:templateId" element={<TemplateCard />} />
+                <Route path="templates/:templateId" element={<Navigate to="edit" replace />} />
                 <Route element={<RequireScope scope={scopes.manageClients} />}>
                   <Route path="templates/new" element={<TemplatePage />} />
                   <Route path="templates/:templateId/edit" element={<TemplatePage />} />
                   <Route path="templates/:templateId/delete" element={<TemplateRemove />} />
                 </Route>
                 <Route path="proxies" element={<Proxies />} />
-                <Route path="proxies/:proxyId" element={<ProxyCard />} />
+                <Route path="proxies/:proxyId" element={<Navigate to="edit" replace />} />
                 <Route element={<RequireScope scope={scopes.manageRouting} />}>
                   <Route path="proxies/new" element={<ProxyPage />} />
                   <Route path="proxies/:proxyId/edit" element={<ProxyPage />} />
@@ -170,7 +168,7 @@ export function App() {
                 </Route>
               </Route>
               <Route path="routing" element={<Tabbed title="nav.routing" tabs={routing} />}>
-                <Route index element={<Navigate to="/routing/rules" replace />} />
+                <Route index element={<Landing section="routing" to="/routing/rules" />} />
                 <Route path="rules" element={<Rules />} />
                 <Route element={<RequireScope scope={scopes.manageRouting} />}>
                   <Route path="rules/new" element={<RulePage />} />

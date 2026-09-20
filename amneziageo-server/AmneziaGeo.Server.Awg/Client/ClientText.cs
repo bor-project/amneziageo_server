@@ -18,7 +18,7 @@ public static class ClientText
         ServerConfig config,
         TunnelClient client,
         ClientTemplate? template = null,
-        int helloPort = 0,
+        string? webSocket = null,
         IReadOnlyList<string>? resolver = null)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -42,8 +42,8 @@ public static class ClientText
         }
 
         Obfuscation(text, config.Obfuscation);
-        Line(text, "# AmneziaGeo Api", string.Join(", ", ApiPoints(config, helloPort)));
         Reverse(text, config, client);
+        Line(text, "# AmneziaGeo WebSocket", webSocket);
 
         text.Append("\n[Peer]\n");
         Line(text, "PublicKey", config.PublicKey);
@@ -56,33 +56,6 @@ public static class ClientText
         }
 
         return text.ToString();
-    }
-
-    /// <summary>
-    /// Returns the addresses inside the tunnel the point of the server answers a client at.
-    /// </summary>
-    public static IReadOnlyList<string> ApiPoints(ServerConfig config, int helloPort = 0)
-    {
-        ArgumentNullException.ThrowIfNull(config);
-
-        var port = Number(config.HelloPort(helloPort));
-        var points = new List<string>();
-        foreach (var range in config.Address)
-        {
-            if (!IPAddress.TryParse(range.Split('/')[0].Trim(), out var address))
-            {
-                continue;
-            }
-
-            var host = address.AddressFamily == AddressFamily.InterNetworkV6 ? $"[{address}]" : address.ToString();
-            var point = host + ":" + port;
-            if (!points.Contains(point, StringComparer.Ordinal))
-            {
-                points.Add(point);
-            }
-        }
-
-        return points;
     }
 
     /// <summary>

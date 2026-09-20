@@ -39,8 +39,9 @@ The private key of a client is written out only to a caller that holds `clients:
 | Port forwarding | ports of the host carried to a port of the client over tcp or udp |
 
 `GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair, a subscription of its own and
-a name no other client carries. With `?config=<id>` it also carries the first number free in every range of the
-endpoint, as an address out of each.
+a name no other client carries. It stands on the endpoint `?config=<id>` names; without it, on the endpoint of the
+newest client, else on the first one by name, so a panel with one endpoint has it chosen at once. It also carries
+the first number free in every range of that endpoint, as an address out of each.
 
 `POST /api/clients` fills in what the body leaves out: with no keys it makes a pair, with a private key alone it
 works out the public one, and with no address it takes the first free number of the endpoint. So a caller of its
@@ -79,10 +80,9 @@ alone is enough (`amneziageo config inbound <name> host`).
 The file and the `vpn://` link of the client name what it takes from the tunnel, so the application turns
 the flags of its own operating system on without being told twice: the file carries the lines
 `# AmneziaGeo Inbound = <off|server|network>` and `# AmneziaGeo Routes = <ranges>`, and the link carries the
-same under `amneziageo`. The line `# AmneziaGeo Api = <address>:<port>, ...` names every address of the
-interface of the endpoint with the port the point of the server answers on there, see [hello.md](hello.md),
-and the link carries it as `api`. A client of another application reads these lines as comments and passes
-them by. A device of a client takes the access of the client it belongs to, while the
+same under `amneziageo`. The line `# AmneziaGeo WebSocket = wss://<host>:<port>/<path>` names the websocket
+front the client carries its tunnel through, see [proxy.md](proxy.md), and the link carries it as `websocket`.
+A client of another application reads these lines as comments and passes them by. A device of a client takes the access of the client it belongs to, while the
 networks behind a client and the ports of the host stay with the record that carries them.
 
 ## What the client is handed

@@ -47,7 +47,7 @@ Each entry is an address or an interface of the host with a port:
 ```
 
 The tunnel is one the panel does not serve. On an address of the interface of an endpoint the panel answers
-404 to every request, see [hello.md](hello.md).
+404 to every request, so the clients of the tunnels do not reach it.
 
 Addresses of an interface are read once, at start. An interface brought up later carries no listener until
 the server is restarted, and one the host does not carry at all is written down in the log and skipped. When

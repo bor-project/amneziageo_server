@@ -5,7 +5,6 @@ import { useConfigs, useRemoveConfig } from "@/api/configs"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import { configTrail } from "@/pages/trails"
 
 export function ConfigRemove() {
   const t = useText()
@@ -17,7 +16,7 @@ export function ConfigRemove() {
   const all = configs.data ?? []
   const held = all.find((one) => one.id === Number(configId))
 
-  useTail(held === undefined ? [] : [configTrail(held, all), { label: t("configs.remove") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("configs.remove") }])
 
   if (held === undefined) {
     return configs.data === undefined ? (

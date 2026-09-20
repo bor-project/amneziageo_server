@@ -5,7 +5,7 @@ import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { Count, Flag, Help, Line, Part, Pick, Switch } from "@/components/fields"
-import { card, field, label, primary, secondary } from "@/components/styles"
+import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -17,6 +17,7 @@ export function ConfigForm({
   error,
   onSave,
   onClose,
+  onRemove,
   importable = false,
 }: {
   start: ConfigDraft
@@ -25,6 +26,7 @@ export function ConfigForm({
   error: unknown
   onSave: (draft: ConfigDraft) => void
   onClose: () => void
+  onRemove?: () => void
   importable?: boolean
 }) {
   const t = useText()
@@ -224,6 +226,11 @@ export function ConfigForm({
       )}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        {onRemove !== undefined && (
+          <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
+            {t("configs.remove")}
+          </button>
+        )}
         <button type="button" onClick={onClose} className={secondary}>
           {t("configs.cancel")}
         </button>

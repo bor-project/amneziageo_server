@@ -54,10 +54,10 @@ export function useProxies() {
   })
 }
 
-export function useFreshProxy(enabled: boolean, name: string) {
+export function useFreshProxy(enabled: boolean, name: string, kind: ProxyKind) {
   return useQuery({
-    queryKey: ["proxies", "draft", name],
-    queryFn: async () => (await client.get<Proxy>(`/proxies/draft?name=${name}`)).data,
+    queryKey: ["proxies", "draft", name, kind],
+    queryFn: async () => (await client.get<Proxy>(`/proxies/draft?name=${name}&kind=${kind}`)).data,
     enabled,
   })
 }

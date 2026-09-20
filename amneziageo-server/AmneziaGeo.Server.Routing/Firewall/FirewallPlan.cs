@@ -42,11 +42,6 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
     public const string Subscriptions = "subscriptions";
 
     /// <summary>
-    /// What the port of the point of the server is noted as.
-    /// </summary>
-    public const string Hello = "hello";
-
-    /// <summary>
     /// A plan that holds nothing open.
     /// </summary>
     public static readonly FirewallPlan None = new([], []);
@@ -58,8 +53,7 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         IReadOnlyList<ServerConfig> configs,
         IReadOnlyList<ProxyConfig> proxies,
         PanelSettings panel,
-        SubscriptionSettings subscriptions,
-        int helloPort = 0)
+        SubscriptionSettings subscriptions)
     {
         ArgumentNullException.ThrowIfNull(configs);
         ArgumentNullException.ThrowIfNull(proxies);
@@ -71,7 +65,6 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         foreach (var config in configs.Where(one => one.IsEnabled && one.Opened))
         {
             Take(ports, new FirewallPort(Udp, config.ListenPort, config.Name));
-            Take(ports, new FirewallPort(Tcp, config.HelloPort(helloPort), Hello + " " + config.Name, config.Name));
             interfaces.Add(config.Name);
         }
 

@@ -14,7 +14,7 @@ A proxy comes in one of two kinds, picked when it is added:
 |---|---|---|
 | Name | both | The name the service and the files of the proxy are named after |
 | Kind | both | Which of the two the proxy is |
-| Port | both | The port the proxy listens on, 443 by default |
+| Port | both | The port the proxy listens on: for a fresh `ws` proxy the port of the first interface that is turned on, for a fresh `wg` proxy and on a host with no interface on 443 |
 | Enabled | both | Whether the host runs the service of the proxy |
 | Open the port in the firewall | both | Whether the panel holds the port of the proxy open in the firewall of the host, see [firewall.md](firewall.md) |
 | Allowed from | both | The addresses and the networks the proxy takes, empty for any |
@@ -23,11 +23,12 @@ A proxy comes in one of two kinds, picked when it is added:
 | Forward to | `wg` | The host and the port the datagrams go on to |
 
 Two proxies of the same kind cannot share a port; a `ws` proxy and a `wg` proxy can, since one listens on TCP
-and the other on UDP.
+and the other on UDP. A `ws` proxy can take the port of an endpoint for the same reason, and a fresh one takes the
+port of the first endpoint that is on.
 
 ## The websocket kind
 
-A fresh `ws` proxy comes with a path of 24 random characters. It is the secret of the proxy: a request under
+A fresh `ws` proxy comes with no target and a path of 24 random characters. The path is the secret of the proxy: a request under
 any other path is refused before a tunnel is opened. The certificate of the panel stands in the two fields as
 a placeholder, since that is what a proxy takes when it names none of its own. The proxy answers under TLS,
 so turning it on without a certificate of its own and without one on the panel is refused with
@@ -53,7 +54,8 @@ itself with the same arguments and starts one again three seconds after it falls
 with the panel, see [docker.md](docker.md).
 
 A client names the proxy as `wss://<host>:<port>/<path>` and the endpoint it wants as the port of the
-interface. A client of AmneziaGeo learns all of it from the server itself, see [hello.md](hello.md). The same shape works the other way round, for an outbound of the `ws` kind that leaves through a
+interface. A client of AmneziaGeo reads the front from the line `# AmneziaGeo WebSocket` of its file, see
+[clients.md](clients.md), and dials the host and the port of the endpoint when the file names none. The same shape works the other way round, for an outbound of the `ws` kind that leaves through a
 proxy elsewhere, see [outbounds.md](outbounds.md).
 
 ## The wireguard kind

@@ -1,5 +1,5 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { useProxies, useProxyCertificate, useSwitchProxy } from "@/api/proxies"
+import { useProxies, useProxyCertificate } from "@/api/proxies"
 import type { Proxy } from "@/api/proxies"
 import { scopes } from "@/api/scopes"
 import { ProxyState } from "@/components/ProxyState"
@@ -19,7 +19,6 @@ export function Proxies() {
   const [params, setParams] = useSearchParams()
   const proxies = useProxies()
   const tls = useProxyCertificate()
-  const turn = useSwitchProxy()
   const may = holds(user, scopes.manageRouting)
   const find = params.get("find") ?? ""
   const all = proxies.data ?? []
@@ -72,7 +71,7 @@ export function Proxies() {
               body: "font-semibold text-ink",
               cell: (one) => (
                 <>
-                  <Link to={`/connections/proxies/${one.id}`} className="hover:text-brand-ink">
+                  <Link to={`/connections/proxies/${one.id}/edit`} className="hover:text-brand-ink">
                     {one.name}
                   </Link>
                   {!one.isEnabled && <span className="ml-2 text-xs text-muted">{t("proxies.off")}</span>}
@@ -113,14 +112,8 @@ export function Proxies() {
                     title={t("proxies.actions")}
                     actions={[
                       {
-                        label: one.isEnabled ? t("proxies.turnOff") : t("proxies.turnOn"),
-                        onPick: () => void turn.mutateAsync({ id: one.id, on: !one.isEnabled }),
-                      },
-                      { label: t("proxies.edit"), onPick: () => navigate(`/connections/proxies/${one.id}/edit`) },
-                      {
-                        label: t("proxies.remove"),
-                        onPick: () => navigate(`/connections/proxies/${one.id}/delete`),
-                        alarming: true,
+                        label: t("action.settings"),
+                        onPick: () => navigate(`/connections/proxies/${one.id}/edit`),
                       },
                     ]}
                   />

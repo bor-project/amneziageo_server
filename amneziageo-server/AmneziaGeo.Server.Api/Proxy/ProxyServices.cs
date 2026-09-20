@@ -47,6 +47,7 @@ public static class ProxyServices
                 options.Directory,
                 provider.GetRequiredService<IProxyRunner>()));
         services.AddScoped<ProxyApplier>();
+        services.AddScoped<WebSocketFronts>();
 
         return services;
     }

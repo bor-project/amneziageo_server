@@ -4,7 +4,6 @@ import { useRemoveRule, useRules } from "@/api/rules"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import { ruleTrail } from "@/pages/trails"
 
 export function RuleRemove() {
   const t = useText()
@@ -15,7 +14,7 @@ export function RuleRemove() {
   const all = rules.data ?? []
   const held = all.find((one) => one.id === Number(ruleId))
 
-  useTail(held === undefined ? [] : [ruleTrail(held, all), { label: t("rules.remove") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("rules.remove") }])
 
   if (held === undefined) {
     return rules.data === undefined ? (

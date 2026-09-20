@@ -5,7 +5,6 @@ using AmneziaGeo.Server.Api.Configs;
 using AmneziaGeo.Server.Api.Diagnostics;
 using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Api.Firewall;
-using AmneziaGeo.Server.Api.Hello;
 using AmneziaGeo.Server.Api.Proxy;
 using AmneziaGeo.Server.Api.Geo;
 using AmneziaGeo.Server.Api.Outbounds;
@@ -30,7 +29,7 @@ builder.Services.AddResolver();
 builder.Services.AddPanel();
 builder.Services.AddProxies(builder.Configuration);
 builder.Services.AddFirewall();
-builder.Services.AddHello(builder.Configuration);
+builder.Services.AddTunnelGate();
 builder.Services.AddSubscriptions();
 builder.Services.AddApiDescription();
 

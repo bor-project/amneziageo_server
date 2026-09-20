@@ -1,7 +1,6 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using AmneziaGeo.Server.Api.Hello;
 using AmneziaGeo.Server.Api.Proxy;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Proxy;
@@ -9,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AmneziaGeo.Server.Tests;
 
-public sealed class WebSocketOfferTests : IDisposable
+public sealed class WebSocketFrontsTests : IDisposable
 {
     private readonly DirectoryInfo _folder = Directory.CreateTempSubdirectory("amneziageo-front-");
 
@@ -19,7 +18,7 @@ public sealed class WebSocketOfferTests : IDisposable
     }
 
     [Fact]
-    public void TheFrontOpenToEverySourceIsOfferedUnderTheNameOfTheEndpoint()
+    public void TheFrontOpenToEverySourceGoesUnderTheNameOfTheEndpoint()
     {
         var panel = Pair("panel", names => names.AddDnsName("vpn.example"));
         var proxies = new[]
@@ -30,9 +29,9 @@ public sealed class WebSocketOfferTests : IDisposable
             Proxy(4, "open") with { Port = 8443, Path = "/secret_path/" },
         };
 
-        var front = WebSocketOffer.Front(proxies, Endpoint("vpn.example"), panel, NullLogger.Instance);
+        var front = WebSocketFronts.Front(proxies, Endpoint("vpn.example"), panel, NullLogger.Instance);
 
-        Assert.Equal(new WebSocketFeature("vpn.example", 8443, "secret_path", 51821), front);
+        Assert.Equal("wss://vpn.example:8443/secret_path", front);
     }
 
     [Fact]
@@ -45,24 +44,24 @@ public sealed class WebSocketOfferTests : IDisposable
         });
         var addressed = Pair("addressed", names => names.AddIpAddress(IPAddress.Parse("203.0.113.7")));
 
-        Assert.Equal("vpn.example", WebSocketOffer.Front([Proxy(1, "open")], Endpoint("203.0.113.7"), named, NullLogger.Instance)?.Host);
-        Assert.Equal("203.0.113.7", WebSocketOffer.Front([Proxy(1, "open")], Endpoint("203.0.113.7"), addressed, NullLogger.Instance)?.Host);
+        Assert.Equal("wss://vpn.example:443/path1", WebSocketFronts.Front([Proxy(1, "open")], Endpoint("203.0.113.7"), named, NullLogger.Instance));
+        Assert.Equal("wss://203.0.113.7:443/path1", WebSocketFronts.Front([Proxy(1, "open")], Endpoint("203.0.113.7"), addressed, NullLogger.Instance));
     }
 
     [Fact]
-    public void AFrontWithNoCertificateIsNotOffered()
+    public void AFrontWithNoCertificateIsNotNamed()
     {
         var own = Pair("own", names => names.AddDnsName("front.example"));
         var proxy = Proxy(1, "open");
 
-        Assert.Null(WebSocketOffer.Front([proxy], Endpoint("vpn.example"), new ProxyCertificate(string.Empty, string.Empty), NullLogger.Instance));
+        Assert.Empty(WebSocketFronts.Front([proxy], Endpoint("vpn.example"), new ProxyCertificate(string.Empty, string.Empty), NullLogger.Instance));
         Assert.Equal(
-            "front.example",
-            WebSocketOffer.Front(
+            "wss://front.example:443/path1",
+            WebSocketFronts.Front(
                 [proxy with { Certificate = own.Chain, CertificateKey = own.Key }],
                 Endpoint("vpn.example"),
                 new ProxyCertificate(string.Empty, string.Empty),
-                NullLogger.Instance)?.Host);
+                NullLogger.Instance));
     }
 
     [Fact]
@@ -70,9 +69,24 @@ public sealed class WebSocketOfferTests : IDisposable
     {
         var gone = Path.Combine(_folder.FullName, "gone.pem");
 
-        var front = WebSocketOffer.Front([Proxy(1, "open")], Endpoint("vpn.example"), new ProxyCertificate(gone, gone), NullLogger.Instance);
+        var front = WebSocketFronts.Front([Proxy(1, "open")], Endpoint("vpn.example"), new ProxyCertificate(gone, gone), NullLogger.Instance);
 
-        Assert.Equal("vpn.example", front?.Host);
+        Assert.Equal("wss://vpn.example:443/path1", front);
+    }
+
+    [Fact]
+    public void AnEndpointWithNoHostAndACertificateWithNoNameNamesNoFront()
+    {
+        var gone = Path.Combine(_folder.FullName, "gone.pem");
+
+        Assert.Empty(WebSocketFronts.Front([Proxy(1, "open")], Endpoint(string.Empty), new ProxyCertificate(gone, gone), NullLogger.Instance));
+    }
+
+    [Fact]
+    public void AnAddressOfVersionSixGoesInBrackets()
+    {
+        Assert.Equal("wss://[2001:db8::1]:8080/secret", WebSocketFronts.Address("2001:db8::1", 8080, "secret"));
+        Assert.Equal("wss://vpn.example:8080/secret", WebSocketFronts.Address("vpn.example", 8080, "secret"));
     }
 
     private static ProxyConfig Proxy(long id, string name) => new()

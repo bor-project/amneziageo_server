@@ -4,7 +4,6 @@ import { useBalancers, useRemoveBalancer } from "@/api/balancers"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import { balancerTrail } from "@/pages/trails"
 
 export function BalancerRemove() {
   const t = useText()
@@ -15,7 +14,7 @@ export function BalancerRemove() {
   const all = balancers.data ?? []
   const held = all.find((one) => one.id === Number(balancerId))
 
-  useTail(held === undefined ? [] : [balancerTrail(held, all), { label: t("balancers.remove") }])
+  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("balancers.remove") }])
 
   if (held === undefined) {
     return balancers.data === undefined ? (

@@ -8,7 +8,7 @@ import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useTemplates } from "@/api/templates"
 import { Flag, Help, Line, Multi, Part, Pick, Regenerate } from "@/components/fields"
-import { card, field, fieldBox, label, note, primary, quiet, secondary } from "@/components/styles"
+import { card, danger, field, fieldBox, label, note, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { randomId, randomKey } from "@/keys"
@@ -20,6 +20,7 @@ export function ClientForm({
   error,
   onSave,
   onClose,
+  onRemove,
 }: {
   start: ClientDraft
   self?: number
@@ -27,6 +28,7 @@ export function ClientForm({
   error: unknown
   onSave: (draft: ClientDraft) => void
   onClose: () => void
+  onRemove?: () => void
 }) {
   const t = useText()
   const configs = useConfigs().data ?? []
@@ -288,6 +290,11 @@ export function ClientForm({
       )}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        {onRemove !== undefined && (
+          <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
+            {t("clients.remove")}
+          </button>
+        )}
         <button type="button" onClick={onClose} className={secondary}>
           {t("clients.cancel")}
         </button>
