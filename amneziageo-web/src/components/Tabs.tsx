@@ -41,7 +41,7 @@ export function Tabbed({ title, tabs }: { title: TextKey; tabs: Tab[] }) {
     }
   }, [listed, pathname, search])
 
-  useCrumbs(trail(t, title, open, now, kid, pathname))
+  useCrumbs(trail(t, title, open, now, kid, pathname, listed))
 
   return (
     <div>
@@ -93,6 +93,7 @@ function trail(
   open: Tab | undefined,
   kid: Tab | undefined,
   pathname: string,
+  listed: boolean,
 ): Crumb[] {
   const root = tabs.find((one) => one.end === true)?.to ?? tabs[0]?.to
 
@@ -103,10 +104,10 @@ function trail(
   const spot = lastSpot(sectionOf(pathname), root)
 
   if (open === undefined) {
-    return [{ label: t(title), to: spot }]
+    return listed ? [{ label: t(title) }] : [{ label: t(title), to: spot }]
   }
 
-  const trace = [
+  const trace: Crumb[] = [
     { label: t(title), to: spot },
     { label: t(open.label), to: spot.startsWith(open.to) ? spot : open.to },
   ]
@@ -115,9 +116,13 @@ function trail(
     trace.push({ label: t(kid.label), to: spot.startsWith(kid.to) ? spot : kid.to })
   }
 
-  return trace
+  return listed ? trace.map((one) => ({ label: one.label })) : trace
 }
 
 export function Landing({ section, to }: { section: string; to: string }) {
-  return <Navigate to={lastSpot(section, to)} replace />
+  const { pathname } = useLocation()
+  const spot = lastSpot(section, to)
+  const self = spot === pathname || spot.startsWith(`${pathname}?`)
+
+  return <Navigate to={self ? to : spot} replace />
 }

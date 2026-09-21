@@ -24,12 +24,13 @@ public static class ClientText
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
+        // A field the template leaves empty takes what the endpoint holds, and only then the built in value.
         var dns = Names(config, template, resolver);
         var ranges = template is null
             ? config.AllowedIps
-            : Either(template.AllowedIps, TemplateDefaults.AllowedIps(client.Address));
-        var mtu = template is null ? config.Mtu : template.Mtu ?? TemplateDefaults.Mtu;
-        var keepalive = template is null ? config.Keepalive : template.Keepalive ?? TemplateDefaults.Keepalive;
+            : Either(template.AllowedIps, Either(config.AllowedIps, TemplateDefaults.AllowedIps(client.Address)));
+        var mtu = template?.Mtu ?? config.Mtu;
+        var keepalive = template?.Keepalive ?? config.Keepalive;
 
         var text = new StringBuilder();
         text.Append("[Interface]\n");
@@ -133,7 +134,7 @@ public static class ClientText
 
         return template is null
             ? own ?? config.Dns
-            : Either(template.Dns, own ?? TemplateDefaults.Dns);
+            : Either(template.Dns, own ?? Either(config.Dns, TemplateDefaults.Dns));
     }
 
     private static void Obfuscation(StringBuilder text, ObfuscationSettings obfuscation)

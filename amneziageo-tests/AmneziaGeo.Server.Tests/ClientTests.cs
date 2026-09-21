@@ -457,16 +457,49 @@ public class ClientTests
     }
 
     [Fact]
-    public void AnEmptyTemplateGivesTheDefaultsOfThePanel()
+    public void AnEmptyTemplateTakesTheSettingsOfTheEndpoint()
     {
         var endpoint = Endpoint() with { Dns = ["10.8.0.1"], AllowedIps = ["10.0.0.0/8"], Mtu = 1280, Keepalive = 0 };
 
         var text = ClientText.Text(endpoint, Client(), new ClientTemplate { Name = "plain" });
 
+        Assert.Contains("DNS = 10.8.0.1\n", text, StringComparison.Ordinal);
+        Assert.Contains("MTU = 1280\n", text, StringComparison.Ordinal);
+        Assert.Contains("AllowedIPs = 10.0.0.0/8\n", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("PersistentKeepalive", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEmptyTemplateFallsToTheBuiltInValuesWhereTheEndpointHoldsNone()
+    {
+        var endpoint = Endpoint() with { Dns = [], AllowedIps = [] };
+
+        var text = ClientText.Text(endpoint, Client(), new ClientTemplate { Name = "plain" });
+
         Assert.Contains("DNS = 1.1.1.1, 1.0.0.1\n", text, StringComparison.Ordinal);
-        Assert.Contains("MTU = 1420\n", text, StringComparison.Ordinal);
         Assert.Contains("AllowedIPs = 0.0.0.0/0\n", text, StringComparison.Ordinal);
-        Assert.Contains("PersistentKeepalive = 25\n", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheConstantsOfAnInterfaceTemplateReachTheFileOfAClientOfItsOwnTemplate()
+    {
+        var template = InterfaceTemplateDefaults.Fresh() with
+        {
+            Mtu = 1234,
+            Keepalive = 21,
+            AllowedIps = ["10.66.9.0/24"],
+            Dns = ["9.9.9.9"],
+        };
+
+        var text = ClientText.Text(
+            template.Fresh("t66i") with { Host = "bor.sytes.net" },
+            Client(),
+            new ClientTemplate { Name = "plain" });
+
+        Assert.Contains("DNS = 9.9.9.9\n", text, StringComparison.Ordinal);
+        Assert.Contains("MTU = 1234\n", text, StringComparison.Ordinal);
+        Assert.Contains("AllowedIPs = 10.66.9.0/24\n", text, StringComparison.Ordinal);
+        Assert.Contains("PersistentKeepalive = 21\n", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -487,7 +520,7 @@ public class ClientTests
     {
         var client = Client() with { Address = ["10.8.0.2/32", "fdcc:ad94:bacf:61a5::2/128"] };
 
-        var text = ClientText.Text(Endpoint(), client, new ClientTemplate { Name = "plain" });
+        var text = ClientText.Text(Endpoint() with { AllowedIps = [] }, client, new ClientTemplate { Name = "plain" });
 
         Assert.Contains("AllowedIPs = 0.0.0.0/0, ::/0\n", text, StringComparison.Ordinal);
         Assert.Equal(["0.0.0.0/0"], TemplateDefaults.AllowedIps(["10.8.0.1/24"]));

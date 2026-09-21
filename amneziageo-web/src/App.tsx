@@ -128,7 +128,7 @@ const routing: Tab[] = [
 ]
 
 const settings: Tab[] = [
-  { to: "/settings", label: "tab.server", scope: scopes.manageAccess, end: true },
+  { to: "/settings/server", label: "tab.server", scope: scopes.manageAccess },
   { to: "/settings/certificates", label: "tab.certificates", scope: scopes.manageAccess },
   { to: "/settings/subscriptions", label: "tab.subscriptions", scope: scopes.manageAccess },
   { to: "/settings/users", label: "tab.users", scope: scopes.manageAccess },
@@ -241,7 +241,8 @@ export function App() {
             </Route>
             <Route element={<RequireScope scope={scopes.manageAccess} />}>
               <Route path="settings" element={<Tabbed title="nav.settings" tabs={settings} />}>
-                <Route index element={<PanelServer />} />
+                <Route index element={<Landing section="settings" to="/settings/server" />} />
+                <Route path="server" element={<PanelServer />} />
                 <Route path="certificates" element={<PanelCertificates />} />
                 <Route path="subscriptions" element={<Subscriptions />} />
                 <Route path="users" element={<Accounts />} />
