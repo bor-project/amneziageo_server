@@ -1,0 +1,233 @@
+# Builds a release of the panel from a tag vX.Y.Z.W: the packages for x64 and arm64, the image for both in
+# ghcr.io, and update.json signed with UPDATE_SIGNING_KEY, which the panels read to update themselves. A tag with a
+# fourth number above zero, or with a suffix, makes a prerelease that only panels on the test channel take.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/amneziageo-server
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      channel: ${{ steps.read.outputs.channel }}
+    steps:
+      - id: read
+        shell: bash
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          version=${tag%%-*}
+          if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "the tag $GITHUB_REF_NAME names no version of four numbers" >&2
+            exit 1
+          fi
+
+          channel=stable
+          if [[ $tag == *-* || ${version##*.} != 0 ]]; then
+            channel=test
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+
+  package:
+    needs: version
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+            runtime: linux-x64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            runtime: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: amneziageo-web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Tools the websocket tool is built with
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake libclang-dev
+      - name: Web dependencies
+        run: npm --prefix amneziageo-web ci --no-audit --no-fund
+      - name: Package
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          RUNTIME: ${{ matrix.runtime }}
+        run: |
+          deploy/publish.sh
+          mkdir -p dist
+          mv out/amneziageo-server.tar.gz "dist/amneziageo-server-$VERSION-linux-${{ matrix.arch }}.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  image:
+    needs: version
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            name: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            name: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: VERSION=${{ needs.version.outputs.version }}
+          provenance: false
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+      - name: Keep the digest
+        shell: bash
+        run: |
+          mkdir -p digests
+          digest='${{ steps.build.outputs.digest }}'
+          touch "digests/${digest#sha256:}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.name }}
+          path: digests/*
+          if-no-files-found: error
+
+  manifest:
+    needs: [version, image]
+    runs-on: ubuntu-24.04
+    outputs:
+      digest: ${{ steps.merge.outputs.digest }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: merge
+        shell: bash
+        working-directory: digests
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
+        run: |
+          tags=(-t "$IMAGE:$VERSION")
+          if [ "$CHANNEL" = stable ]; then
+            tags+=(-t "$IMAGE:latest")
+          fi
+
+          sources=()
+          for digest in *; do
+            sources+=("$IMAGE@sha256:$digest")
+          done
+
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
+          digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: [version, package, manifest]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: release
+          merge-multiple: true
+      - name: Signed manifest
+        shell: bash
+        working-directory: release
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
+          DIGEST: ${{ needs.manifest.outputs.digest }}
+          SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "the secret UPDATE_SIGNING_KEY is not set" >&2
+            exit 1
+          fi
+
+          packages=$(
+            for file in amneziageo-server-*.tar.gz; do
+              arch=${file%.tar.gz}
+              jq -n \
+                --arg name "$file" \
+                --arg arch "${arch##*-linux-}" \
+                --argjson size "$(stat -c %s "$file")" \
+                --arg sha256 "$(sha256sum "$file" | cut -d' ' -f1)" \
+                '{name: $name, arch: $arch, size: $size, sha256: $sha256}'
+            done | jq -s .
+          )
+
+          jq -n \
+            --arg version "$VERSION" \
+            --arg channel "$CHANNEL" \
+            --arg published "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg commit "$GITHUB_SHA" \
+            --arg image "$IMAGE@$DIGEST" \
+            --argjson packages "$packages" \
+            '{version: $version, channel: $channel, published: $published, commit: $commit, image: $image, packages: $packages}' \
+            > update.json
+
+          key=$RUNNER_TEMP/update-signing.pem
+          printf '%s\n' "$SIGNING_KEY" > "$key"
+          openssl dgst -sha256 -sign "$key" -out update.json.sig update.json
+          rm -f "$key"
+          cat update.json
+      - name: Release
+        shell: bash
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
+        run: |
+          flags=(--repo "$GITHUB_REPOSITORY" --title "$VERSION" --generate-notes --verify-tag)
+          if [ "$CHANNEL" = test ]; then
+            flags+=(--prerelease)
+          else
+            flags+=(--latest)
+          fi
+
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}" amneziageo-server-*.tar.gz update.json update.json.sig

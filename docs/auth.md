@@ -23,6 +23,7 @@ account may do is the claims of its role plus the claims given to the account it
 | `interfaces:write` | managing interfaces |
 | `routing:write` | managing routing |
 | `access:write` | managing accounts and roles |
+| `updates:write` | putting a release of the panel on |
 
 The server carries one role of its own, `admin`, and it is the one every right belongs to. It is neither
 removed nor stripped: on every start the claims of `admin` are brought level with the rights the build knows,

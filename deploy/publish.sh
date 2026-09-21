@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Builds the panel into a package a server takes as it is, whole or its web interface alone.
+# VERSION names the version of the build, RUNTIME the platform it runs on.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
+version=${VERSION:-}
+runtime=${RUNTIME:-linux-x64}
 kind=whole
 if [ "${1:-}" = --ui ]; then
   kind=ui
@@ -51,9 +54,10 @@ else
   for project in Api Cli; do
     dotnet publish "$root/amneziageo-server/AmneziaGeo.Server.$project" \
       --configuration Release \
-      --runtime linux-x64 \
+      --runtime "$runtime" \
       --self-contained true \
       --nologo \
+      ${version:+-p:Version=$version} \
       --output "$out/publish"
   done
 

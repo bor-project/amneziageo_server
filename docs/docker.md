@@ -68,13 +68,15 @@ the new one in `AMNEZIAGEO_HEALTH`.
 |---|---|
 | volume `data`, `/var/lib/amneziageo-server` | the database and the geo files |
 | volume `settings`, `/etc/amneziageo-server` | the signing key and the files of the proxies |
+| `/var/run/docker.sock` of the host | the daemon the panel moves itself onto a new image through |
 | `/etc/amnezia/amneziawg` of the host | the files of the interfaces |
 | `/opt/amneziageo-server` in the image | the server, the console and the web interface |
 | `/usr/local/bin/wstunnel` in the image | the websocket tool |
 
 ## Keeping it up to date
 
-A version of the panel is a tag of the image:
+The panel moves itself onto the image of a newer release from its `Overview` when `compose.yaml` hands it the
+socket of the daemon, see [updates.md](updates.md). By hand, a version of the panel is a tag of the image:
 
 ```
 git pull --recurse-submodules

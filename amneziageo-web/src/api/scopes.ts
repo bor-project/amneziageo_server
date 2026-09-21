@@ -4,5 +4,6 @@ export const scopes = {
   manageInterfaces: "interfaces:write",
   manageRouting: "routing:write",
   manageAccess: "access:write",
+  manageUpdates: "updates:write",
   changePassword: "password:change",
 } as const

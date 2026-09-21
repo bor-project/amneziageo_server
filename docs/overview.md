@@ -18,7 +18,8 @@ right `state:read`. The answer carries the numbers of the host and the window th
 | Addresses | the unicast addresses of every interface that is up |
 
 The head of the page reads `/sys/module/amneziawg`: the version the module reports and the interfaces
-whose `uevent` carries `DEVTYPE=amneziawg`.
+whose `uevent` carries `DEVTYPE=amneziawg`. Beside the version of the panel it shows the release newer than the
+panel, see [updates.md](updates.md).
 
 ## The window
 

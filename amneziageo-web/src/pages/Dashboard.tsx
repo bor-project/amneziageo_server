@@ -1,13 +1,24 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { complaint } from "@/api/auth"
 import { useHealth } from "@/api/health"
 import { useOverview } from "@/api/overview"
 import type { Overview } from "@/api/overview"
+import { scopes } from "@/api/scopes"
+import { busy, useApplyUpdate, useCheckUpdate, useUpdate } from "@/api/update"
 import { Sparkline } from "@/components/Chart"
 import type { Trace } from "@/components/Chart"
 import { useCrumbs } from "@/components/crumbs"
 import { card, quiet } from "@/components/styles"
 import { average, bytes, peak, percent, rate, share, span } from "@/format"
 import { useText } from "@/i18n"
+import type { TextKey } from "@/i18n"
+import { holds } from "@/store/authSlice"
+import { useAppSelector } from "@/store/hooks"
+
+const small = "rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-hover disabled:opacity-50"
+
+const smallQuiet =
+  "rounded-md border border-line-button px-2.5 py-0.75 text-xs text-ink-soft hover:bg-active disabled:opacity-50"
 
 export function Dashboard() {
   const t = useText()
@@ -152,17 +163,151 @@ export function Dashboard() {
 
 function Head({ data, version }: { data: Overview; version?: string }) {
   const t = useText()
+  const seen = useRef<string | undefined>(undefined)
+
+  useEffect(() => {
+    if (!version) {
+      return
+    }
+
+    if (seen.current === undefined) {
+      seen.current = version
+    } else if (seen.current !== version) {
+      window.location.reload()
+    }
+  }, [version])
 
   return (
-    <div className={`flex flex-wrap items-center gap-3 px-4 py-3 ${card}`}>
-      <span className={`size-2 rounded-full ${data.tunnel.loaded ? "bg-good" : "bg-alarm"}`} />
-      <span className="text-sm font-medium text-ink">{t("overview.kernel")}</span>
-      <span className="text-sm text-muted">
-        {data.tunnel.loaded ? t("overview.loaded", { version: data.tunnel.version }) : t("overview.missing")}
-      </span>
-      <span className="text-sm text-muted">{t("overview.interfaces", { count: data.tunnel.interfaces })}</span>
-      {version && <span className="ml-auto text-sm text-muted">{t("overview.version", { version })}</span>}
+    <div className={`px-4 py-3 ${card}`}>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className={`size-2 rounded-full ${data.tunnel.loaded ? "bg-good" : "bg-alarm"}`} />
+        <span className="text-sm font-medium text-ink">{t("overview.kernel")}</span>
+        <span className="text-sm text-muted">
+          {data.tunnel.loaded ? t("overview.loaded", { version: data.tunnel.version }) : t("overview.missing")}
+        </span>
+        <span className="text-sm text-muted">{t("overview.interfaces", { count: data.tunnel.interfaces })}</span>
+        <div className="ml-auto flex flex-wrap items-center gap-3 text-sm text-muted">
+          {version && <span>{t("overview.version", { version })}</span>}
+          <Update />
+        </div>
+      </div>
+
+      <Failed />
     </div>
+  )
+}
+
+function Update() {
+  const t = useText()
+  const user = useAppSelector((s) => s.auth.user)
+  const may = holds(user, scopes.manageUpdates)
+  const update = useUpdate()
+  const check = useCheckUpdate()
+  const apply = useApplyUpdate()
+  const [asked, setAsked] = useState(false)
+  const [fault, setFault] = useState<TextKey | null>(null)
+  const state = update.data
+
+  if (!state) {
+    return null
+  }
+
+  if (busy(state)) {
+    return (
+      <span className="flex items-center gap-2 text-ink">
+        <span className="size-2 animate-pulse rounded-full bg-brand" />
+        {t("update.running", { version: state.run?.to ?? state.latest?.version ?? "" })}
+      </span>
+    )
+  }
+
+  const latest = state.latest
+  const ready = latest !== null && may && state.blocker === ""
+
+  async function go(version: string) {
+    setFault(null)
+    try {
+      await apply.mutateAsync(version)
+      setAsked(false)
+    } catch (error) {
+      setFault(complaint(error))
+    }
+  }
+
+  return (
+    <>
+      {latest && (
+        <a
+          href={latest.notes.length > 0 ? latest.notes : undefined}
+          target="_blank"
+          rel="noreferrer"
+          className="text-brand hover:underline"
+        >
+          {t("update.available", { version: latest.version })}
+        </a>
+      )}
+
+      {latest && state.blocker !== "" && (
+        <span title={t(`update.blocker.${state.blocker}` as TextKey)}>{t("update.manual")}</span>
+      )}
+
+      {ready && !asked && (
+        <button type="button" className={small} onClick={() => setAsked(true)}>
+          {t("update.apply")}
+        </button>
+      )}
+
+      {ready && asked && (
+        <>
+          <button type="button" className={smallQuiet} disabled={apply.isPending} onClick={() => setAsked(false)}>
+            {t("update.cancel")}
+          </button>
+          <button type="button" className={small} disabled={apply.isPending} onClick={() => void go(latest.version)}>
+            {t("update.confirm", { version: latest.version })}
+          </button>
+        </>
+      )}
+
+      {fault !== null && <span className="text-alarm">{t(fault)}</span>}
+
+      {check.isError && <span className="text-alarm">{t(complaint(check.error))}</span>}
+
+      {state.fault && (
+        <span className="text-alarm" title={state.fault.message}>
+          {t("update.fault")}
+        </span>
+      )}
+
+      {may && (
+        <button
+          type="button"
+          className={quiet}
+          title={t("update.check")}
+          aria-label={t("update.check")}
+          disabled={check.isPending}
+          onClick={() => check.mutate()}
+        >
+          <Again spinning={check.isPending} />
+        </button>
+      )}
+    </>
+  )
+}
+
+function Failed() {
+  const t = useText()
+  const update = useUpdate()
+  const run = update.data?.run
+
+  if (!run || run.state !== "failed") {
+    return null
+  }
+
+  return (
+    <details className="mt-3 border-t border-line pt-3 text-sm">
+      <summary className="cursor-pointer text-alarm">{t("update.failed", { version: run.to })}</summary>
+      <pre className="mt-2 max-h-64 overflow-auto text-xs whitespace-pre-wrap text-muted">{run.log.join("\n")}</pre>
+    </details>
   )
 }
 
@@ -289,6 +434,20 @@ function Disk() {
       <ellipse cx="12" cy="6" rx="8" ry="3" />
       <path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6" />
       <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+    </svg>
+  )
+}
+
+function Again({ spinning }: { spinning: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`size-4 ${spinning ? "animate-spin" : ""}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

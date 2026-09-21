@@ -25,6 +25,7 @@ services:
       - data:/var/lib/amneziageo-server
       - settings:/etc/amneziageo-server
       - /etc/amnezia/amneziawg:/etc/amnezia/amneziawg
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
 volumes:

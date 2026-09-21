@@ -41,15 +41,21 @@ RUN case "$TARGETARCH" in \
  && rm -rf /out/wwwroot
 
 FROM mcr.microsoft.com/dotnet/aspnet:$DOTNET
+ARG VERSION=0.0.1
+LABEL org.opencontainers.image.source=https://github.com/bor-project/amneziageo_server \
+      org.opencontainers.image.version=$VERSION
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl iproute2 nftables tini tzdata \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get install -y --no-install-recommends curl docker-compose-v2 iproute2 nftables tini tzdata \
+ && rm -rf /var/lib/apt/lists/* \
+ && ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
 COPY --from=server /out/ /opt/amneziageo-server/
 COPY --from=web /src/amneziageo-server/AmneziaGeo.Server.Api/wwwroot/ /opt/amneziageo-server/wwwroot/
 COPY --from=tunnel /wstunnel /usr/local/bin/wstunnel
 COPY --chmod=755 deploy/docker/entrypoint.sh /usr/local/bin/amneziageo-server-entrypoint
+COPY --chmod=755 deploy/docker/update.sh /usr/local/bin/amneziageo-server-update
 RUN ln -s /opt/amneziageo-server/AmneziaGeo.Server.Cli /usr/local/bin/amneziageo-server
 ENV DOTNET_NOLOGO=1 \
+    AMNEZIAGEO_CONTAINER=1 \
     ASPNETCORE_HTTP_PORTS= \
     ASPNETCORE_WEBROOT=/opt/amneziageo-server/wwwroot \
     AMNEZIAGEO_DB=/var/lib/amneziageo-server/server.db \

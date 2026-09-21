@@ -23,6 +23,9 @@ export interface Session {
 
 const complaints: Record<string, TextKey> = {
   "wrong-credentials": "error.wrongCredentials",
+  "update-busy": "error.updateBusy",
+  "update-unknown": "error.updateUnknown",
+  "update-blocked": "error.updateBlocked",
   "wrong-password": "error.wrongPassword",
   locked: "error.locked",
   disabled: "error.disabled",

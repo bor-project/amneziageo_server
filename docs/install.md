@@ -133,7 +133,9 @@ it does the same job.
 
 ## Keeping it up to date
 
-Build a new package, copy it over and run its `install.sh`, the same way as the first time. The interfaces and
+The panel puts a newer release on by itself from its `Overview`, see [updates.md](updates.md); it runs the
+`install.sh` of the new package the way this section describes. By hand, build a new package, copy it over and
+run its `install.sh`, the same way as the first time. The interfaces and
 their clients live in the kernel and do not go down with the server, so the clients keep their connections
 through an update.
 
