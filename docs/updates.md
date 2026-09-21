@@ -5,8 +5,9 @@ or in a container.
 
 ## Where the releases come from
 
-A release is a tag `vX.Y.Z.W` of `bor-project/amneziageo_server`. The workflow `.github/workflows/release.yml`
-builds it: the packages for x64 and arm64, the image `ghcr.io/bor-project/amneziageo-server` for both, and
+A release is a tag `vX.Y.Z.W` on a commit of the branch `master` of `bor-project/amneziageo_server`; a tag outside
+`master` builds nothing. The workflow `.github/workflows/release.yml` builds it: the packages for x64 and arm64,
+the image `ghcr.io/bor-project/amneziageo-server` for both, and
 `update.json`, which names the version, the image pinned to its digest and the digest of every package.
 `update.json.sig` signs the manifest with the key of the releases. A tag whose fourth number is above zero, or
 that carries a suffix, makes a prerelease.

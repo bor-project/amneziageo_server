@@ -1,6 +1,6 @@
-# Builds a release of the panel from a tag vX.Y.Z.W: the packages for x64 and arm64, the image for both in
-# ghcr.io, and update.json signed with UPDATE_SIGNING_KEY, which the panels read to update themselves. A tag with a
-# fourth number above zero, or with a suffix, makes a prerelease that only panels on the test channel take.
+# Builds a release of the panel from a tag vX.Y.Z.W on master: the packages for x64 and arm64, the image for both
+# in ghcr.io, and update.json signed with UPDATE_SIGNING_KEY, which the panels read to update themselves. A tag
+# with a fourth number above zero, or with a suffix, makes a prerelease that only panels on the test channel take.
 name: release
 
 on:
@@ -21,9 +21,17 @@ jobs:
       version: ${{ steps.read.outputs.version }}
       channel: ${{ steps.read.outputs.channel }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - id: read
         shell: bash
         run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA^{commit}" origin/master; then
+            echo "the tag $GITHUB_REF_NAME stands on a commit outside master" >&2
+            exit 1
+          fi
+
           tag=${GITHUB_REF_NAME#v}
           version=${tag%%-*}
           if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
