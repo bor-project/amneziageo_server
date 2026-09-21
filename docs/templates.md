@@ -1,17 +1,15 @@
 # Templates
 
-The panel holds three kinds of template, one table each: client templates, interface templates and proxy
-templates. A template carries the values that are not the own of one instance, and an instance points at it
+The panel holds two kinds of template, one table each: client templates and interface templates. A template carries the values that are not the own of one instance, and an instance points at it
 instead of keeping a copy: changing a template changes every instance that takes it, and the subscription of a
 client hands out the new file at once, because the file is built when it is asked for.
 
-A fresh database starts with one template of each kind: the client template `default`, the interface template
-`amnezia-3.1` and the proxy template `websocket`. A template no instance takes can be removed, a template an
-instance takes is refused with `template-in-use` (409). An install that already carries interfaces or proxies
-gets a template for the values each of them holds, so nothing changes under a running tunnel; interfaces that
+A fresh database starts with one template of each kind: the client template `default` and the interface template
+`amnezia-3.1`. A template no instance takes can be removed, a template an instance takes is refused with
+`template-in-use` (409). An install that already carries interfaces gets a template for the values each of them holds, so nothing changes under a running tunnel; interfaces that
 hold the same values share one template, named after the first of them.
 
-The panel holds the three kinds under `Connections`, `Templates`, one subsection each. A list names the
+The panel holds the two kinds under `Connections`, `Templates`, one subsection each. A list names the
 template and how many instances take it; the name and the menu of the row lead into the settings, where the
 template is changed and removed. Saving an interface template answers with every interface it was written into
 and whether it came up, and the form keeps the page when one of them did not.
@@ -28,6 +26,10 @@ template leaves empty takes the default of the panel: `0.0.0.0/0`, and `::/0` to
 address, the name servers `1.1.1.1` and `1.0.0.1`, the packet size 1420 and the keepalive 25. A client without a
 template keeps the settings of its interface. The keys, the address of the client, the endpoint and the
 obfuscation always come from the interface: they have to match the server.
+
+A template also says whether a client of AmneziaGeo may route by lists of its own, on by default. A client
+takes the word of its template or says `on` or `off` itself, and learns the outcome from the hello of its
+endpoint, see [services.md](services.md).
 
 ## Where the ranges come from
 
@@ -126,30 +128,3 @@ and `DELETE /api/templates/interfaces/{id}` need `interfaces:write`. An interfac
 `templateId` of `POST /api/configs` and `PUT /api/configs/{id}`, and `GET /api/configs/draft?templateId=`
 returns a draft of that template; without a number the draft takes the built in template. A number the panel
 does not hold is refused with `unknown-template`.
-
-## Proxy templates
-
-A proxy template carries the way the proxy takes tunnels in, whether the port is held open in the firewall,
-whether a path no one guesses is drawn for a websocket proxy, where a wireguard proxy passes the datagrams on,
-and the addresses it takes. The port is in the template as the value a fresh proxy starts from, because two
-proxies of one kind cannot listen on the same port. The name, the path and the certificate of a proxy are its
-own.
-
-| Setting | Holds |
-|---|---|
-| Name | up to 64 characters, one of a kind |
-| Kind | `ws` or `wg` |
-| Port | 1 to 65535, the port a fresh proxy starts from, 443 in the built in template |
-| Opened | whether the panel holds the port open in the firewall |
-| MakePath | whether a websocket proxy takes a path of its own |
-| Target | where a wireguard proxy passes the datagrams on |
-| Sources | the addresses and the networks the proxy takes, empty for any |
-
-Changing a proxy template writes its values into every proxy that takes it and starts each of them again; the
-answer carries the template and, per proxy, whether it runs and what the host said.
-
-`GET /api/templates/proxies` and `GET /api/templates/proxies/{id}` need `state:read`;
-`GET /api/templates/proxies/draft`, `POST /api/templates/proxies`, `PUT /api/templates/proxies/{id}` and
-`DELETE /api/templates/proxies/{id}` need `routing:write`. A proxy names its template in `templateId` of
-`POST /api/proxies` and `PUT /api/proxies/{id}`, and `GET /api/proxies/draft?templateId=` returns a draft of
-that template, on the first free port from the one the template names.

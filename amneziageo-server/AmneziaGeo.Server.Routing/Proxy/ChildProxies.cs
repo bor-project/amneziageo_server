@@ -13,17 +13,12 @@ namespace AmneziaGeo.Server.Routing.Proxy;
 public sealed record ProxyCommand(string File, IReadOnlyList<string> Arguments);
 
 /// <summary>
-/// Runs the proxies as processes of the server, on a host that carries no systemd.
+/// Runs the websocket fronts as processes of the server, on a host that carries no systemd.
 /// </summary>
 public sealed class ChildProxies : IProxyRunner, IDisposable
 {
     /// <summary>
-    /// The console a wireguard proxy runs as.
-    /// </summary>
-    public const string Console = "AmneziaGeo.Server.Cli";
-
-    /// <summary>
-    /// The tool a websocket proxy runs as.
+    /// The tool a websocket front runs as.
     /// </summary>
     public const string Tunnel = "wstunnel";
 
@@ -34,8 +29,6 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
 
     private readonly string _directory;
 
-    private readonly string _console;
-
     private readonly string _tunnel;
 
     private readonly TimeSpan _pause;
@@ -45,24 +38,21 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
     /// <summary>
     /// ctor
     /// </summary>
-    public ChildProxies(string? directory = null, string? console = null, string? tunnel = null, TimeSpan? pause = null)
+    public ChildProxies(string? directory = null, string? tunnel = null, TimeSpan? pause = null)
     {
         _directory = string.IsNullOrWhiteSpace(directory) ? ProxyDefaults.Directory : directory;
-        _console = string.IsNullOrWhiteSpace(console) ? Path.Combine(AppContext.BaseDirectory, Console) : console;
         _tunnel = string.IsNullOrWhiteSpace(tunnel) ? Tunnel : tunnel;
         _pause = pause ?? Pause;
     }
 
     /// <summary>
-    /// Returns the command a proxy of a kind runs with the arguments of its file.
+    /// Returns the command a front runs with the arguments of its file.
     /// </summary>
-    public static ProxyCommand Command(string kind, string console, string tunnel, IReadOnlyList<string> arguments)
+    public static ProxyCommand Command(string tunnel, IReadOnlyList<string> arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
-        return ProxyKind.HasTarget(kind)
-            ? new ProxyCommand(console, ["relay", .. arguments])
-            : new ProxyCommand(tunnel, ["server", .. arguments]);
+        return new ProxyCommand(tunnel, ["server", .. arguments]);
     }
 
     /// <summary>
@@ -86,15 +76,15 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
     /// <summary>
     /// Makes the service of a proxy start with the host.
     /// </summary>
-    public Task<ProxyState> EnableAsync(string name, string kind, CancellationToken ct) =>
+    public Task<ProxyState> EnableAsync(string name, CancellationToken ct) =>
         Task.FromResult(ProxyState.Down);
 
     /// <summary>
     /// Starts the service of a proxy over.
     /// </summary>
-    public async Task<ProxyState> StartAsync(string name, string kind, CancellationToken ct)
+    public async Task<ProxyState> StartAsync(string name, CancellationToken ct)
     {
-        Drop(name, kind);
+        Drop(name);
 
         var file = ProxyFile.Arguments(name);
         var read = await ReadAsync(Path.Combine(_directory, file), ct).ConfigureAwait(false);
@@ -109,11 +99,11 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
             return new ProxyState(false, $"{file} names no {ProxyFile.Variable}");
         }
 
-        var child = new Child(Command(kind, _console, _tunnel, arguments), _pause);
+        var child = new Child(Command(_tunnel, arguments), _pause);
         var state = child.Start();
         if (state.IsRunning)
         {
-            _children[ProxyHost.Unit(name, kind)] = child;
+            _children[ProxyHost.Unit(name)] = child;
         }
         else
         {
@@ -126,9 +116,9 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
     /// <summary>
     /// Takes the service of a proxy down and keeps it from starting with the host.
     /// </summary>
-    public Task<ProxyState> StopAsync(string name, string kind, CancellationToken ct)
+    public Task<ProxyState> StopAsync(string name, CancellationToken ct)
     {
-        Drop(name, kind);
+        Drop(name);
 
         return Task.FromResult(ProxyState.Down);
     }
@@ -136,8 +126,8 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
     /// <summary>
     /// Returns whether the service of a proxy is up.
     /// </summary>
-    public Task<ProxyState> StateAsync(string name, string kind, CancellationToken ct) =>
-        Task.FromResult(_children.TryGetValue(ProxyHost.Unit(name, kind), out var child) ? child.State : ProxyState.Down);
+    public Task<ProxyState> StateAsync(string name, CancellationToken ct) =>
+        Task.FromResult(_children.TryGetValue(ProxyHost.Unit(name), out var child) ? child.State : ProxyState.Down);
 
     /// <summary>
     /// Takes every proxy down.
@@ -169,9 +159,9 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
         }
     }
 
-    private void Drop(string name, string kind)
+    private void Drop(string name)
     {
-        if (_children.TryRemove(ProxyHost.Unit(name, kind), out var child))
+        if (_children.TryRemove(ProxyHost.Unit(name), out var child))
         {
             child.Dispose();
         }

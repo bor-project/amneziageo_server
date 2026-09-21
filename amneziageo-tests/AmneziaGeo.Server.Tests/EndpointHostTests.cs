@@ -1,6 +1,7 @@
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
+using AmneziaGeo.Server.Awg.Netlink;
 using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Tests;
@@ -75,6 +76,56 @@ public class EndpointHostTests
 
         Assert.False(sync.IsDone);
         Assert.Contains("add awg0", sync.Message, StringComparison.Ordinal);
+        Assert.Equal(EndpointFault.Failed, sync.Fault);
+    }
+
+    [Fact]
+    public async Task APortHeldByAnotherProgramIsReportedAsBusy()
+    {
+        var ledger = new Ledger { Refuses = "up", Complaint = "RTNETLINK answers: Address already in use" };
+        var host = new EndpointHost(ledger, new Kernel());
+
+        var sync = await host.ApplyAsync(Endpoint(), CancellationToken.None);
+
+        Assert.False(sync.IsDone);
+        Assert.Equal(EndpointFault.PortBusy, sync.Fault);
+    }
+
+    [Theory]
+    [InlineData(98, EndpointFault.PortBusy)]
+    [InlineData(1, EndpointFault.NoRights)]
+    [InlineData(13, EndpointFault.NoRights)]
+    [InlineData(22, EndpointFault.Failed)]
+    public void AKernelRefusalIsNamedByItsErrno(int error, string fault)
+    {
+        Assert.Equal(fault, EndpointHost.Fault(new NetlinkException("the kernel refused the netlink request", error)));
+    }
+
+    [Theory]
+    [InlineData("'up awg0 1360' was refused: RTNETLINK answers: Address already in use", EndpointFault.PortBusy)]
+    [InlineData("'add awg0' was refused: Error: Unknown device type.", EndpointFault.NoModule)]
+    [InlineData("'add awg0' was refused: RTNETLINK answers: Operation not supported", EndpointFault.NoModule)]
+    [InlineData("'add awg0' was refused: RTNETLINK answers: Operation not permitted", EndpointFault.NoRights)]
+    [InlineData("'address awg0' was refused: Error: ipv4: Address already assigned.", EndpointFault.Failed)]
+    public void AToolRefusalIsNamedByItsWords(string message, string fault)
+    {
+        Assert.Equal(fault, EndpointHost.Fault(new HostNetworkException(message)));
+    }
+
+    [Fact]
+    public void AKernelWithoutTheFamilyHasNoModule()
+    {
+        Assert.Equal(
+            EndpointFault.NoModule,
+            EndpointHost.Fault(new NetlinkException("the kernel does not carry the 'amneziawg' family")));
+    }
+
+    [Fact]
+    public void ForwardingTheHostKeepsOffIsNamed()
+    {
+        var refusal = new HostNetworkException("forwarding is off", new IOException("Read-only file system"));
+
+        Assert.Equal(EndpointFault.Forwarding, EndpointHost.Fault(refusal));
     }
 
     [Fact]

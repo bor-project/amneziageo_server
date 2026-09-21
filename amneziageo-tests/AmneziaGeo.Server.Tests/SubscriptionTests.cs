@@ -199,10 +199,6 @@ public class SubscriptionTests
         Assert.Equal([ClientLink.Link(on, milena)], feed.Links);
         Assert.Equal(5UL, feed.Upload);
         Assert.Equal(7UL, feed.Download);
-
-        var fronted = ClientFeed.Of([on], [milena], new Dictionary<long, ClientTemplate>(), _ => new ClientUsage(5, 7), _ => "wss://vpn.example:8443/secret");
-
-        Assert.Equal([ClientLink.Link(on, milena, null, "wss://vpn.example:8443/secret")], fronted.Links);
     }
 
     [Fact]

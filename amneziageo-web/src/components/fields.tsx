@@ -2,7 +2,7 @@ import { useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
 import { card, field, label, note } from "@/components/styles"
 
-export function Part({ title, children }: { title: string; children: ReactNode }) {
+export function Part({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
     <div className={`flex flex-col gap-3.5 p-4.5 ${card}`}>
       <div className="text-sm font-semibold text-ink-soft">{title}</div>
@@ -137,27 +137,20 @@ export function Pick({
   )
 }
 
-export function Folded({ caption, children }: { caption: string; children: ReactNode }) {
-  return (
-    <details className="sm:col-span-2">
-      <summary className="cursor-pointer text-sm text-muted">{caption}</summary>
-      <div className="mt-3 grid grid-cols-1 gap-3.5 sm:grid-cols-2">{children}</div>
-    </details>
-  )
-}
-
 export function Count({
   id,
   caption,
   value,
   onChange,
   hint = "",
+  unset = "",
 }: {
   id: string
   caption: ReactNode
   value: number
   onChange: (value: number) => void
   hint?: string
+  unset?: string
 }) {
   return (
     <div>
@@ -167,7 +160,8 @@ export function Count({
       <input
         id={id}
         type="number"
-        value={value}
+        value={unset.length > 0 && value === 0 ? "" : value}
+        placeholder={unset}
         onChange={(e) => onChange(Number(e.target.value))}
         className={`mt-1 ${field}`}
       />

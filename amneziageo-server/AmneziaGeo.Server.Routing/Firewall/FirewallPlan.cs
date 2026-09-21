@@ -1,7 +1,6 @@
 using System.Net;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
-using AmneziaGeo.Server.Core.Proxy;
 
 namespace AmneziaGeo.Server.Routing.Firewall;
 
@@ -22,12 +21,12 @@ public sealed record FirewallPort(string Protocol, int Port, string Note, string
 public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyList<string> Interfaces)
 {
     /// <summary>
-    /// The protocol a proxy and the panel take.
+    /// The protocol the services of an endpoint and the panel take.
     /// </summary>
     public const string Tcp = "tcp";
 
     /// <summary>
-    /// The protocol an endpoint and a relay take.
+    /// The protocol an endpoint takes.
     /// </summary>
     public const string Udp = "udp";
 
@@ -47,16 +46,14 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
     public static readonly FirewallPlan None = new([], []);
 
     /// <summary>
-    /// Returns what the panel holds open for the endpoints, the proxies, itself and the subscriptions.
+    /// Returns what the panel holds open for the endpoints with their services, itself and the subscriptions.
     /// </summary>
     public static FirewallPlan Of(
         IReadOnlyList<ServerConfig> configs,
-        IReadOnlyList<ProxyConfig> proxies,
         PanelSettings panel,
         SubscriptionSettings subscriptions)
     {
         ArgumentNullException.ThrowIfNull(configs);
-        ArgumentNullException.ThrowIfNull(proxies);
         ArgumentNullException.ThrowIfNull(panel);
         ArgumentNullException.ThrowIfNull(subscriptions);
 
@@ -65,12 +62,8 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         foreach (var config in configs.Where(one => one.IsEnabled && one.Opened))
         {
             Take(ports, new FirewallPort(Udp, config.ListenPort, config.Name));
+            Take(ports, new FirewallPort(Tcp, ConfigServices.Port(config), config.Name));
             interfaces.Add(config.Name);
-        }
-
-        foreach (var proxy in proxies.Where(one => one.IsEnabled && one.Opened))
-        {
-            Take(ports, new FirewallPort(ProxyKind.HasTarget(proxy.Kind) ? Udp : Tcp, proxy.Port, proxy.Name));
         }
 
         if (panel.Opened && Reached(panel.Listen))

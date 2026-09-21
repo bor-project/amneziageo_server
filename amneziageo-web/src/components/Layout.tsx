@@ -1,32 +1,29 @@
 import { useEffect, useState } from "react"
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom"
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { signOut } from "@/api/auth"
 import { useHealth } from "@/api/health"
 import { usePanel } from "@/api/panel"
-import { scopes } from "@/api/scopes"
 import { queryClient } from "@/api/queryClient"
 import { Crumbs, CrumbsHolder } from "@/components/Crumbs"
 import { LanguagePicker } from "@/components/LanguagePicker"
 import { RestartButton } from "@/components/RestartButton"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { sections, under } from "@/components/menu"
+import type { Item, Section } from "@/components/menu"
 import { menu, menuItem } from "@/components/styles"
 import { isLanguageChoice, useText } from "@/i18n"
-import type { Text, TextKey } from "@/i18n"
+import type { Text } from "@/i18n"
 import { useAbove, wideQuery } from "@/theme/width"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { holds, sessionClosed } from "@/store/authSlice"
+import { lastSpot, sectionOf } from "@/store/spots"
 import { languageServed, sidebarSet, sidebarToggled } from "@/store/uiSlice"
 
-const links: { to: string; label: TextKey; scope: string }[] = [
-  { to: "/", label: "nav.overview", scope: scopes.readState },
-  { to: "/connections", label: "nav.connections", scope: scopes.readState },
-  { to: "/routing", label: "nav.routing", scope: scopes.readState },
-  { to: "/settings", label: "nav.settings", scope: scopes.manageAccess },
-]
-
 const item = "rounded-lg px-2.5 py-2 text-sm"
+const leaf = "rounded-lg py-1.5 pr-2.5 text-[13px]"
 const active = "bg-active font-medium text-ink"
 const idle = "text-muted hover:bg-nav hover:text-ink"
+const opened = "font-medium text-ink hover:bg-nav"
 const column = "flex w-54 shrink-0 flex-col gap-6 border-r border-line bg-chrome px-3 py-5"
 const drawer = "fixed inset-y-0 left-0 z-50 flex w-64 flex-col gap-6 border-r border-line bg-chrome px-3 py-5 shadow-xl"
 
@@ -48,6 +45,12 @@ export function Layout() {
   useEffect(() => {
     dispatch(sidebarSet(wide))
   }, [dispatch, wide])
+
+  function shut() {
+    if (!wide) {
+      dispatch(sidebarSet(false))
+    }
+  }
 
   useEffect(() => {
     const escape = (event: KeyboardEvent) => {
@@ -75,19 +78,11 @@ export function Layout() {
               <span className="text-sm font-semibold tracking-[-0.01em] text-ink">{t("app.name")}</span>
             </div>
 
-            <nav className="flex flex-1 flex-col gap-1">
-              {links
-                .filter((l) => holds(user, l.scope))
-                .map((l) => (
-                  <NavLink
-                    key={l.to}
-                    to={l.to}
-                    end={l.to === "/"}
-                    onClick={() => !wide && dispatch(sidebarSet(false))}
-                    className={({ isActive }) => `${item} ${isActive ? active : idle}`}
-                  >
-                    {t(l.label)}
-                  </NavLink>
+            <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
+              {sections
+                .filter((one) => holds(user, one.scope))
+                .map((one) => (
+                  <Group key={one.to} section={one} shut={shut} />
                 ))}
             </nav>
 
@@ -127,6 +122,71 @@ export function Layout() {
         </div>
       </div>
     </CrumbsHolder>
+  )
+}
+
+function Group({ section, shut }: { section: Section; shut: () => void }) {
+  const t = useText()
+  const user = useAppSelector((s) => s.auth.user)
+  const { pathname } = useLocation()
+  const items = section.items.filter((one) => holds(user, one.scope))
+
+  if (items.length === 0) {
+    return (
+      <NavLink to={section.to} end onClick={shut} className={({ isActive }) => `${item} ${isActive ? active : idle}`}>
+        {t(section.label)}
+      </NavLink>
+    )
+  }
+
+  const inside = under(pathname, section.to)
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <Link
+        to={section.to}
+        aria-expanded={inside}
+        className={`flex items-center justify-between gap-2 ${item} ${inside ? opened : idle}`}
+      >
+        {t(section.label)}
+        <Caret open={inside} />
+      </Link>
+      {inside && items.map((one) => <Leaf key={one.to} one={one} depth={1} shut={shut} />)}
+    </div>
+  )
+}
+
+function Leaf({ one, depth, shut }: { one: Item; depth: number; shut: () => void }) {
+  const t = useText()
+  const user = useAppSelector((s) => s.auth.user)
+  const { pathname } = useLocation()
+  const kids = (one.kids ?? []).filter((kid) => holds(user, kid.scope))
+  const spot = lastSpot(sectionOf(one.to), one.to)
+  const to = under(spot, one.to) ? spot : one.to
+  const indent = depth > 1 ? "pl-9" : "pl-6"
+
+  if (kids.length === 0) {
+    return (
+      <NavLink to={to} onClick={shut} className={({ isActive }) => `${leaf} ${indent} ${isActive ? active : idle}`}>
+        {t(one.label)}
+      </NavLink>
+    )
+  }
+
+  const inside = under(pathname, one.to)
+
+  return (
+    <>
+      <Link
+        to={to}
+        aria-expanded={inside}
+        className={`flex items-center justify-between gap-2 ${leaf} ${indent} ${inside ? opened : idle}`}
+      >
+        {t(one.label)}
+        <Caret open={inside} />
+      </Link>
+      {inside && kids.map((kid) => <Leaf key={kid.to} one={kid} depth={depth + 1} shut={shut} />)}
+    </>
   )
 }
 
@@ -213,6 +273,21 @@ function Chevron({ open }: { open: boolean }) {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.6"
+    >
+      <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function Caret({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`size-3.5 shrink-0 text-faint ${open ? "rotate-90" : ""}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden
     >
       <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>

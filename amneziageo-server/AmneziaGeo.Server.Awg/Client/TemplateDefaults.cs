@@ -35,6 +35,11 @@ public static class TemplateDefaults
     public const int Keepalive = ConfigDefaults.Keepalive;
 
     /// <summary>
+    /// Whether the application of the client routes on its own.
+    /// </summary>
+    public const bool Routing = true;
+
+    /// <summary>
     /// The name servers.
     /// </summary>
     public static IReadOnlyList<string> Dns => ConfigDefaults.Dns;

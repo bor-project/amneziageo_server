@@ -119,6 +119,11 @@ public sealed class ConfigStore
                 $"the panel already listens on port {draft.ListenPort}");
         }
 
+        if (await ServicesTakenAsync(draft, 0, ct).ConfigureAwait(false) is { } busy)
+        {
+            return busy;
+        }
+
         var now = _time.GetUtcNow();
         var entity = new ConfigEntity { CreatedUtc = now, UpdatedUtc = now };
         Write(entity, draft);
@@ -160,6 +165,11 @@ public sealed class ConfigStore
                 ConfigOutcome.PortTaken,
                 "port-taken",
                 $"the panel already listens on port {draft.ListenPort}");
+        }
+
+        if (await ServicesTakenAsync(draft, id, ct).ConfigureAwait(false) is { } busy)
+        {
+            return busy;
         }
 
         var old = entity.Name;
@@ -211,6 +221,25 @@ public sealed class ConfigStore
     private static ConfigResult Missing(long id) =>
         ConfigResult.No(ConfigOutcome.Unknown, "unknown-config", $"there is no endpoint under the number {id}");
 
+    // Returns the refusal when another endpoint already serves on the TCP port the draft serves on.
+    private async Task<ConfigResult?> ServicesTakenAsync(ServerConfig draft, long id, CancellationToken ct)
+    {
+        var port = ConfigServices.Port(draft);
+        var taken = await _db.Configs
+            .AnyAsync(
+                config => config.Id != id
+                    && (config.ServicesPort == port || (config.ServicesPort == 0 && config.ListenPort == port)),
+                ct)
+            .ConfigureAwait(false);
+
+        return taken
+            ? ConfigResult.No(
+                ConfigOutcome.PortTaken,
+                "services-port-taken",
+                $"another endpoint already serves on TCP port {port}")
+            : null;
+    }
+
     private static ServerConfig Read(ConfigEntity entity) => new()
     {
         Id = entity.Id,
@@ -228,6 +257,8 @@ public sealed class ConfigStore
         Nat = entity.Nat,
         Opened = entity.Opened,
         Inbound = (ClientInbound)entity.Inbound,
+        WebSocket = entity.WebSocket,
+        ServicesPort = entity.ServicesPort,
         Blocked = Parts(entity.Blocked),
         PrivateKey = entity.PrivateKey,
         PublicKey = entity.PublicKey,
@@ -253,6 +284,8 @@ public sealed class ConfigStore
         entity.Nat = config.Nat;
         entity.Opened = config.Opened;
         entity.Inbound = (int)config.Inbound;
+        entity.WebSocket = config.WebSocket;
+        entity.ServicesPort = config.ServicesPort;
         entity.Blocked = string.Join(", ", config.Blocked);
         entity.PrivateKey = config.PrivateKey;
         entity.PublicKey = Curve25519.PublicOf(config.PrivateKey);

@@ -245,6 +245,7 @@ public class ClientStoreTests
             Fresh(endpoint, "milena") with
             {
                 Inbound = ClientInbound.Network,
+                Routing = ClientRouting.Off,
                 Routes = ["192.168.88.0/24", "10.1.0.0/16"],
                 Forwards = [new PortForward("tcp", 2222, 22), new PortForward("udp", 5353, 53)],
             },
@@ -252,6 +253,7 @@ public class ClientStoreTests
         var held = await bench.Clients.FindAsync(added.Record!.Id, CancellationToken.None);
 
         Assert.Equal(ClientInbound.Network, held?.Inbound);
+        Assert.Equal(ClientRouting.Off, held?.Routing);
         Assert.Equal(["192.168.88.0/24", "10.1.0.0/16"], held?.Routes);
         Assert.Equal(["tcp:2222:22", "udp:5353:53"], held?.Forwards.Select(one => one.ToString()));
     }
@@ -268,10 +270,28 @@ public class ClientStoreTests
 
         await bench.Clients.ChangeAsync(
             added.Record.Id,
-            added.Record with { MultiDevice = true, Inbound = ClientInbound.Server },
+            added.Record with { MultiDevice = true, Inbound = ClientInbound.Server, Routing = ClientRouting.Off },
             CancellationToken.None);
         var held = await bench.Clients.FindAsync(device.Record!.Id, CancellationToken.None);
 
+        Assert.Equal(ClientInbound.Server, held?.Inbound);
+        Assert.Equal(ClientRouting.Off, held?.Routing);
+    }
+
+    [Fact]
+    public async Task ADeviceIsAddedWithTheRoutingAndTheAccessOfItsClient()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+        var added = await bench.Clients.AddAsync(
+            Fresh(endpoint, "milena") with { MultiDevice = true, Routing = ClientRouting.On, Inbound = ClientInbound.Server },
+            CancellationToken.None);
+
+        var device = await bench.Clients.AddDeviceAsync(added.Record!.Id, CancellationToken.None);
+        var held = await bench.Clients.FindAsync(device.Record!.Id, CancellationToken.None);
+
+        Assert.Equal(ClientRouting.On, device.Record.Routing);
+        Assert.Equal(ClientInbound.Server, device.Record.Inbound);
         Assert.Equal(ClientInbound.Server, held?.Inbound);
     }
 

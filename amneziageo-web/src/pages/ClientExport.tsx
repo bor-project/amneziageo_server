@@ -1,9 +1,9 @@
-import { Navigate, useParams } from "react-router-dom"
+import { Link, Navigate, useParams } from "react-router-dom"
 import { useClients } from "@/api/clients"
 import { scopes } from "@/api/scopes"
 import { ClientConfig } from "@/components/ClientConfig"
-import { ClientTabs } from "@/components/ClientTabs"
 import { useTail } from "@/components/crumbs"
+import { secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
@@ -26,10 +26,18 @@ export function ClientExport() {
     )
   }
 
+  const may = holds(user, scopes.manageClients) && held.parentId === null
+
   return (
     <div className="mt-4 flex flex-col gap-4">
-      <ClientTabs id={held.id} may={holds(user, scopes.manageClients) && held.parentId === null} />
-      <ClientConfig id={held.id} />
+      {may && (
+        <div className="flex justify-end">
+          <Link to={`/connections/clients/${held.id}/edit`} className={secondary}>
+            {t("action.settings")}
+          </Link>
+        </div>
+      )}
+      <ClientConfig id={held.id} editable={may} />
     </div>
   )
 }

@@ -1,6 +1,5 @@
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
-using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Dal;
 
 namespace AmneziaGeo.Server.Tests;
@@ -14,11 +13,9 @@ public class TemplateKindsTests
 
         var clients = await bench.Templates.ListAsync(CancellationToken.None);
         var interfaces = await bench.InterfaceTemplates.ListAsync(CancellationToken.None);
-        var proxies = await bench.ProxyTemplates.ListAsync(CancellationToken.None);
 
         Assert.Equal(TemplateDefaults.Name, Assert.Single(clients).Name);
         Assert.Equal(InterfaceTemplateDefaults.Name, Assert.Single(interfaces).Name);
-        Assert.Equal(ProxyTemplateDefaults.Name, Assert.Single(proxies).Name);
     }
 
     [Fact]
@@ -39,19 +36,6 @@ public class TemplateKindsTests
         Assert.Null(template.ClientTemplateId);
         Assert.Null(ConfigRules.CheckObfuscation(template.Obfuscation));
         Assert.Null(InterfaceTemplateRules.Check(template));
-    }
-
-    [Fact]
-    public async Task TheBuiltInProxyTemplateListensOn443()
-    {
-        using var bench = new Bench();
-
-        var template = Assert.Single(await bench.ProxyTemplates.ListAsync(CancellationToken.None));
-
-        Assert.Equal(ProxyDefaults.Port, template.Port);
-        Assert.Equal(ProxyKind.Ws, template.Kind);
-        Assert.True(template.MakePath);
-        Assert.Null(ProxyTemplateRules.Check(template));
     }
 
     [Fact]
@@ -173,54 +157,6 @@ public class TemplateKindsTests
         var other = await bench.Configs.FindAsync(second.Record!.Id, CancellationToken.None);
         Assert.Equal(one!.TemplateId, other!.TemplateId);
         Assert.Equal(2, (await bench.InterfaceTemplates.ListAsync(CancellationToken.None)).Count);
-    }
-
-    [Fact]
-    public void AProxyOfAWebsocketTemplateTakesAPathOfItsOwn()
-    {
-        var template = ProxyTemplateDefaults.Fresh() with { Id = 3, Opened = true };
-
-        var one = template.Fresh("proxy0");
-        var other = template.Fresh("proxy1");
-
-        Assert.Equal(3, one.TemplateId);
-        Assert.Equal(ProxyDefaults.Port, one.Port);
-        Assert.True(one.Opened);
-        Assert.NotEmpty(one.Path);
-        Assert.NotEqual(one.Path, other.Path);
-        Assert.Null(ProxyRules.Check(one));
-    }
-
-    [Fact]
-    public void AProxyOfAWireguardTemplateCarriesATargetAndNoPath()
-    {
-        var template = ProxyTemplateDefaults.Fresh() with
-        {
-            Kind = ProxyKind.Wg,
-            Port = 8080,
-            Target = "127.0.0.1:51820",
-        };
-
-        var proxy = template.Fresh("relay0");
-
-        Assert.Equal(ProxyKind.Wg, proxy.Kind);
-        Assert.Equal(8080, proxy.Port);
-        Assert.Equal("127.0.0.1:51820", proxy.Target);
-        Assert.Empty(proxy.Path);
-        Assert.Null(ProxyRules.Check(proxy));
-    }
-
-    [Fact]
-    public async Task AProxyTemplateAProxyTakesIsNotRemoved()
-    {
-        using var bench = new Bench();
-        var template = Assert.Single(await bench.ProxyTemplates.ListAsync(CancellationToken.None));
-        var added = await bench.Proxies.AddAsync(template.Fresh("proxy0"), CancellationToken.None);
-        Assert.True(added.IsOk, added.Message);
-
-        var gone = await bench.ProxyTemplates.RemoveAsync(template.Id, CancellationToken.None);
-
-        Assert.Equal(TemplateOutcome.InUse, gone.Outcome);
     }
 
     [Fact]

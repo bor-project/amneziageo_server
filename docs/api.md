@@ -51,7 +51,7 @@ for a token like any other route. The shapes of the answers are not in it; the p
 | rules | [rules.md](rules.md) |
 | DNS | [dns.md](dns.md) |
 | geo sources | [geo.md](geo.md) |
-| proxies | [proxy.md](proxy.md) |
+| services of an endpoint | [services.md](services.md) |
 | where the panel listens | [serving.md](serving.md) |
 | diagnostics | [diagnostics.md](diagnostics.md) |
 | the overview | [overview.md](overview.md) |
@@ -61,7 +61,6 @@ for a token like any other route. The shapes of the answers are not in it; the p
 
 - `init`: the first administrator, made before any account can sign in.
 - `device` and `family`: the kernel as it is, for debugging.
-- `relay`: the process the relay services run.
 
 The imports are in both: the console reads the files of the host, the API takes their text
 (`POST /api/configs/import`, `POST /api/clients/import`).

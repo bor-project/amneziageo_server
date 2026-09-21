@@ -46,6 +46,7 @@ public sealed record ClientResponse(
     bool MultiDevice,
     long DailyLimit,
     string Inbound,
+    string Routing,
     IReadOnlyList<string> Routes,
     IReadOnlyList<ForwardBody> Forwards,
     ClientStateBody State,
@@ -70,7 +71,8 @@ public sealed record ClientRequest(
     long? DailyLimit = null,
     string? Inbound = null,
     IReadOnlyList<string>? Routes = null,
-    IReadOnlyList<ForwardBody>? Forwards = null);
+    IReadOnlyList<ForwardBody>? Forwards = null,
+    string? Routing = null);
 
 /// <summary>
 /// Whether a client is on.
@@ -83,9 +85,14 @@ public sealed record ClientSwitchRequest(bool? On);
 public sealed record ClientImportRequest(long ConfigId, string? Text, string? Prefix = null);
 
 /// <summary>
-/// The configuration a client connects with and the address of its subscription.
+/// The configuration a client connects with, the address of its subscription and why the address is empty.
 /// </summary>
-public sealed record ClientConfigResponse(string FileName, string Text, string Link, string Subscription);
+public sealed record ClientConfigResponse(
+    string FileName,
+    string Text,
+    string Link,
+    string Subscription,
+    string SubscriptionMiss);
 
 /// <summary>
 /// What putting the clients of one endpoint on the host produced.
@@ -132,6 +139,7 @@ public static class ClientAnswers
             client.MultiDevice,
             client.DailyLimit,
             InboundName.Of(client.Inbound),
+            RoutingName.Of(client.Routing),
             client.Routes,
             [.. client.Forwards.Select(forward => new ForwardBody(forward.Protocol, forward.From, forward.To))],
             new ClientStateBody(
@@ -174,6 +182,7 @@ public static class ClientAnswers
             MultiDevice = request.MultiDevice ?? held?.MultiDevice ?? false,
             DailyLimit = request.DailyLimit ?? held?.DailyLimit ?? 0,
             Inbound = InboundName.Read(request.Inbound, held?.Inbound ?? ClientInbound.Endpoint),
+            Routing = RoutingName.Read(request.Routing, held?.Routing ?? ClientRouting.Template),
             Routes = request.Routes is null ? held?.Routes ?? [] : Clean(request.Routes),
             Forwards = request.Forwards is null ? held?.Forwards ?? [] : Carried(request.Forwards),
         };

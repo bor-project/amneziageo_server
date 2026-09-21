@@ -46,6 +46,11 @@ public sealed record ClientTemplate
     public int? Keepalive { get; init; }
 
     /// <summary>
+    /// Whether the application of the client routes on its own.
+    /// </summary>
+    public bool Routing { get; init; } = TemplateDefaults.Routing;
+
+    /// <summary>
     /// When the ranges were last worked out.
     /// </summary>
     public DateTimeOffset? RefreshedUtc { get; init; }

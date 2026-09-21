@@ -53,6 +53,11 @@ A bare name takes the port of the server; an address carries the port, the path 
 credentials. Changing the proxy opens a new carrier and drops the old one; turning the outbound off takes
 the carrier down. Every other setting is the one a `wg` outbound carries.
 
+Another AmneziaGeo server takes the websocket on the port of the services of its endpoint, under `/v1`, and only
+with the token of the keys, see [services.md](services.md). A proxy that names no credentials gets that token,
+counted from the private key of the outbound and the public key of the server, and then takes whatever
+certificate the front presents; such a proxy is named as the host and the port of the services, without a path.
+
 ## The settings of a tunnel
 
 | Setting | Holds |

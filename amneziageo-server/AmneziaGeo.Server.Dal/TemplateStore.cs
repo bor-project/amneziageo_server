@@ -232,6 +232,7 @@ public sealed class TemplateStore
         Dns = Parts(entity.Dns),
         Mtu = entity.Mtu,
         Keepalive = entity.Keepalive,
+        Routing = !entity.LocksRouting,
         RefreshedUtc = entity.RefreshedUtc,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
@@ -246,6 +247,7 @@ public sealed class TemplateStore
         entity.Dns = string.Join(", ", template.Dns);
         entity.Mtu = template.Mtu;
         entity.Keepalive = template.Keepalive;
+        entity.LocksRouting = !template.Routing;
         entity.RefreshedUtc = template.RefreshedUtc;
     }
 

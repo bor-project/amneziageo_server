@@ -219,6 +219,16 @@ public sealed record ServerConfig
     public ClientInbound Inbound { get; init; }
 
     /// <summary>
+    /// Whether the clients may carry the tunnel inside a websocket on the port of the services.
+    /// </summary>
+    public bool WebSocket { get; init; }
+
+    /// <summary>
+    /// The TCP port the services of the endpoint answer on, zero for the port of the endpoint.
+    /// </summary>
+    public int ServicesPort { get; init; }
+
+    /// <summary>
     /// The private key of the interface, in base64.
     /// </summary>
     public string PrivateKey { get; init; } = string.Empty;

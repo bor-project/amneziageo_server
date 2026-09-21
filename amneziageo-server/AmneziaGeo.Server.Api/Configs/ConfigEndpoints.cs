@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Api.Dns;
-using AmneziaGeo.Server.Api.Proxy;
+using AmneziaGeo.Server.Api.Services;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Config;
@@ -109,7 +109,7 @@ public static class ConfigEndpoints
         EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
-        ProxyApplier proxy,
+        ServiceServer services,
         FirewallApplier firewall,
         CancellationToken ct)
     {
@@ -131,13 +131,15 @@ public static class ConfigEndpoints
             return Explain(result);
         }
 
-        await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
+        var raised = await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
-        await proxy.SettleAsync(ct).ConfigureAwait(false);
+        await services.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
 
-        return Results.Created($"/api/configs/{result.Record!.Id}", ConfigAnswers.Config(result.Record, true));
+        return raised.IsDone
+            ? Results.Created($"/api/configs/{result.Record!.Id}", ConfigAnswers.Config(result.Record, true))
+            : Downed(raised, result.Record!.Id);
     }
 
     private static async Task<IResult> ChangeAsync(
@@ -149,7 +151,7 @@ public static class ConfigEndpoints
         EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
-        ProxyApplier proxy,
+        ServiceServer services,
         FirewallApplier firewall,
         CancellationToken ct)
     {
@@ -177,13 +179,13 @@ public static class ConfigEndpoints
             await host.WithdrawAsync(held.Name, ct).ConfigureAwait(false);
         }
 
-        await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
+        var raised = await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
-        await proxy.SettleAsync(ct).ConfigureAwait(false);
+        await services.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(ConfigAnswers.Config(result.Record!, true));
+        return raised.IsDone ? Results.Ok(ConfigAnswers.Config(result.Record!, true)) : Downed(raised, id);
     }
 
     private static async Task<IResult> SwitchAsync(
@@ -194,7 +196,7 @@ public static class ConfigEndpoints
         EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
-        ProxyApplier proxy,
+        ServiceServer services,
         FirewallApplier firewall,
         CancellationToken ct)
     {
@@ -209,13 +211,13 @@ public static class ConfigEndpoints
             return Explain(result);
         }
 
-        await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
+        var raised = await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
-        await proxy.SettleAsync(ct).ConfigureAwait(false);
+        await services.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(ConfigAnswers.Config(result.Record!, true));
+        return raised.IsDone ? Results.Ok(ConfigAnswers.Config(result.Record!, true)) : Downed(raised, id);
     }
 
     private static async Task<IResult> RemoveAsync(
@@ -225,7 +227,7 @@ public static class ConfigEndpoints
         EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
-        ProxyApplier proxy,
+        ServiceServer services,
         FirewallApplier firewall,
         CancellationToken ct)
     {
@@ -239,7 +241,7 @@ public static class ConfigEndpoints
         await FirewallAsync(store, clients, host, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
-        await proxy.SettleAsync(ct).ConfigureAwait(false);
+        await services.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.NoContent();
@@ -250,7 +252,7 @@ public static class ConfigEndpoints
         ConfigStore store,
         ClientStore clients,
         EndpointHost host,
-        ProxyApplier proxy,
+        ServiceServer services,
         FirewallApplier firewall,
         CancellationToken ct)
     {
@@ -262,7 +264,7 @@ public static class ConfigEndpoints
 
         var sync = await host.ApplyAsync(found, ct).ConfigureAwait(false);
         await FirewallAsync(store, clients, host, ct).ConfigureAwait(false);
-        await proxy.SettleAsync(ct).ConfigureAwait(false);
+        await services.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(new ConfigSyncResponse(sync.Name, sync.IsDone, sync.Message));
@@ -272,28 +274,36 @@ public static class ConfigEndpoints
         ConfigStore store,
         ClientStore clients,
         EndpointHost host,
-        ProxyApplier proxy,
+        ServiceServer services,
         FirewallApplier firewall,
         CancellationToken ct)
     {
         var found = await store.ListAsync(ct).ConfigureAwait(false);
         var done = await host.SyncAsync(found, await clients.ListAsync(ct).ConfigureAwait(false), ct)
             .ConfigureAwait(false);
-        await proxy.SettleAsync(ct).ConfigureAwait(false);
+        await services.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(done.Select(sync => new ConfigSyncResponse(sync.Name, sync.IsDone, sync.Message)).ToArray());
     }
 
-    private static async Task RaiseAsync(
+    private static async Task<EndpointSync> RaiseAsync(
         ConfigStore store,
         ClientStore clients,
         EndpointHost host,
         ServerConfig config,
         CancellationToken ct)
     {
-        await host.ApplyAsync(config, ct).ConfigureAwait(false);
+        var sync = await host.ApplyAsync(config, ct).ConfigureAwait(false);
+        if (!sync.IsDone && config.IsEnabled)
+        {
+            await host.WithdrawAsync(config.Name, ct).ConfigureAwait(false);
+            await store.SwitchAsync(config.Id, false, ct).ConfigureAwait(false);
+        }
+
         await FirewallAsync(store, clients, host, ct).ConfigureAwait(false);
+
+        return sync;
     }
 
     private static async Task FirewallAsync(
@@ -316,6 +326,10 @@ public static class ConfigEndpoints
         StatusCodes.Status400BadRequest,
         "unknown-template",
         $"there is no endpoint template under the number {id}");
+
+    private static IResult Downed(EndpointSync sync, long id) => Results.Json(
+        new ConfigRaiseFailure(sync.Fault, sync.Message, id),
+        statusCode: StatusCodes.Status409Conflict);
 
     private static IResult Explain(ConfigResult result) => Refuse(Status(result.Outcome), result.Code, result.Message);
 

@@ -68,7 +68,6 @@ else
 
   cp "$root/deploy/amneziageo-server.service" "$out/"
   cp "$root/deploy/amneziageo-proxy@.service" "$out/"
-  cp "$root/deploy/amneziageo-relay@.service" "$out/"
 fi
 
 tar -czf "$out.tar.gz" -C "$(dirname "$out")" "$(basename "$out")"

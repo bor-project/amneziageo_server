@@ -3,8 +3,8 @@ import { scopes } from "@/api/scopes"
 import { Boot } from "@/components/Boot"
 import { Layout } from "@/components/Layout"
 import { RequireAuth, RequireScope } from "@/components/RequireAuth"
-import { Landing, Tabbed } from "@/components/Tabs"
-import type { Tab } from "@/components/Tabs"
+import { Landing, Sectioned } from "@/components/Section"
+import { connections, routing, settings } from "@/components/menu"
 import { Accounts } from "@/pages/Accounts"
 import { BalancerPage } from "@/pages/BalancerPage"
 import { BasicRouting } from "@/pages/BasicRouting"
@@ -18,6 +18,7 @@ import { ConfigPage } from "@/pages/ConfigPage"
 import { ConfigRemove } from "@/pages/ConfigRemove"
 import { Configs } from "@/pages/Configs"
 import { Dashboard } from "@/pages/Dashboard"
+import { DefaultTemplate } from "@/pages/DefaultTemplate"
 import { Diagnostics } from "@/pages/Diagnostics"
 import { Dns } from "@/pages/Dns"
 import { Geo } from "@/pages/Geo"
@@ -31,12 +32,6 @@ import { OwnPassword } from "@/pages/OwnPassword"
 import { OutboundPage } from "@/pages/OutboundPage"
 import { OutboundRemove } from "@/pages/OutboundRemove"
 import { Password } from "@/pages/Password"
-import { Proxies } from "@/pages/Proxies"
-import { ProxyPage } from "@/pages/ProxyPage"
-import { ProxyRemove } from "@/pages/ProxyRemove"
-import { ProxyTemplatePage } from "@/pages/ProxyTemplatePage"
-import { ProxyTemplateRemove } from "@/pages/ProxyTemplateRemove"
-import { ProxyTemplates } from "@/pages/ProxyTemplates"
 import { RolePage } from "@/pages/RolePage"
 import { RoleRemove } from "@/pages/RoleRemove"
 import { RouteTest } from "@/pages/RouteTest"
@@ -56,89 +51,10 @@ import { UserPassword } from "@/pages/UserPassword"
 import { UserRemove } from "@/pages/UserRemove"
 import { useAppearance } from "@/theme/theme"
 
-const connections: Tab[] = [
-  {
-    to: "/connections/interfaces",
-    label: "tab.interfaces",
-    scope: scopes.readState,
-    add: { to: "/connections/interfaces/new", scope: scopes.manageInterfaces },
-  },
-  {
-    to: "/connections/clients",
-    label: "tab.clients",
-    scope: scopes.readState,
-    add: { to: "/connections/clients/new", scope: scopes.manageClients },
-  },
-  {
-    to: "/connections/templates",
-    label: "tab.templates",
-    scope: scopes.readState,
-    kids: [
-      {
-        to: "/connections/templates/clients",
-        label: "tab.templateClients",
-        scope: scopes.readState,
-        add: { to: "/connections/templates/clients/new", scope: scopes.manageClients },
-      },
-      {
-        to: "/connections/templates/interfaces",
-        label: "tab.templateInterfaces",
-        scope: scopes.readState,
-        add: { to: "/connections/templates/interfaces/new", scope: scopes.manageInterfaces },
-      },
-      {
-        to: "/connections/templates/proxies",
-        label: "tab.templateProxies",
-        scope: scopes.readState,
-        add: { to: "/connections/templates/proxies/new", scope: scopes.manageRouting },
-      },
-    ],
-  },
-  {
-    to: "/connections/proxies",
-    label: "tab.proxies",
-    scope: scopes.readState,
-    add: { to: "/connections/proxies/new", scope: scopes.manageRouting },
-  },
-]
-
-const routing: Tab[] = [
-  {
-    to: "/routing/rules",
-    label: "tab.rules",
-    scope: scopes.readState,
-    add: { to: "/routing/rules/new", scope: scopes.manageRouting },
-  },
-  { to: "/routing/basic", label: "tab.basic", scope: scopes.readState },
-  { to: "/routing/test", label: "tab.test", scope: scopes.readState },
-  {
-    to: "/routing/channels",
-    label: "tab.channels",
-    scope: scopes.readState,
-    add: { to: "/routing/channels/new", scope: scopes.manageRouting },
-  },
-  {
-    to: "/routing/geo",
-    label: "tab.geo",
-    scope: scopes.readState,
-    add: { to: "/routing/geo/new", scope: scopes.manageRouting },
-  },
-  { to: "/routing/dns", label: "tab.dns", scope: scopes.readState },
-  { to: "/routing/ruleset", label: "tab.ruleset", scope: scopes.manageRouting },
-]
-
-const settings: Tab[] = [
-  { to: "/settings/server", label: "tab.server", scope: scopes.manageAccess },
-  { to: "/settings/certificates", label: "tab.certificates", scope: scopes.manageAccess },
-  { to: "/settings/subscriptions", label: "tab.subscriptions", scope: scopes.manageAccess },
-  { to: "/settings/users", label: "tab.users", scope: scopes.manageAccess },
-  { to: "/settings/diagnostics", label: "tab.diagnostics", scope: scopes.manageAccess },
-]
-
 const moved: { from: string; to: string }[] = [
   { from: "configs", to: "/connections" },
   { from: "clients", to: "/connections/clients" },
-  { from: "proxies", to: "/connections/proxies" },
+  { from: "proxies", to: "/connections" },
   { from: "rules", to: "/routing" },
   { from: "outbounds", to: "/routing/channels" },
   { from: "balancers", to: "/routing/channels" },
@@ -160,7 +76,7 @@ export function App() {
             <Route path="account/password" element={<OwnPassword />} />
             <Route element={<RequireScope scope={scopes.readState} />}>
               <Route index element={<Dashboard />} />
-              <Route path="connections" element={<Tabbed title="nav.connections" tabs={connections} />}>
+              <Route path="connections" element={<Sectioned title="nav.connections" items={connections} />}>
                 <Route index element={<Landing section="connections" to="/connections/interfaces" />} />
                 <Route path="interfaces" element={<Configs />} />
                 <Route path="interfaces/:configId" element={<Navigate to="edit" replace />} />
@@ -179,6 +95,7 @@ export function App() {
                 </Route>
                 <Route path="templates" element={<Navigate to="clients" replace />} />
                 <Route path="templates/clients" element={<Templates />} />
+                <Route path="templates/clients/default" element={<DefaultTemplate />} />
                 <Route path="templates/clients/:templateId" element={<Navigate to="edit" replace />} />
                 <Route element={<RequireScope scope={scopes.manageClients} />}>
                   <Route path="templates/clients/new" element={<TemplatePage />} />
@@ -191,21 +108,8 @@ export function App() {
                   <Route path="templates/interfaces/:templateId/edit" element={<InterfaceTemplatePage />} />
                   <Route path="templates/interfaces/:templateId/delete" element={<InterfaceTemplateRemove />} />
                 </Route>
-                <Route path="templates/proxies" element={<ProxyTemplates />} />
-                <Route element={<RequireScope scope={scopes.manageRouting} />}>
-                  <Route path="templates/proxies/new" element={<ProxyTemplatePage />} />
-                  <Route path="templates/proxies/:templateId/edit" element={<ProxyTemplatePage />} />
-                  <Route path="templates/proxies/:templateId/delete" element={<ProxyTemplateRemove />} />
-                </Route>
-                <Route path="proxies" element={<Proxies />} />
-                <Route path="proxies/:proxyId" element={<Navigate to="edit" replace />} />
-                <Route element={<RequireScope scope={scopes.manageRouting} />}>
-                  <Route path="proxies/new" element={<ProxyPage />} />
-                  <Route path="proxies/:proxyId/edit" element={<ProxyPage />} />
-                  <Route path="proxies/:proxyId/delete" element={<ProxyRemove />} />
-                </Route>
               </Route>
-              <Route path="routing" element={<Tabbed title="nav.routing" tabs={routing} />}>
+              <Route path="routing" element={<Sectioned title="nav.routing" items={routing} />}>
                 <Route index element={<Landing section="routing" to="/routing/rules" />} />
                 <Route path="rules" element={<Rules />} />
                 <Route element={<RequireScope scope={scopes.manageRouting} />}>
@@ -240,7 +144,7 @@ export function App() {
               ))}
             </Route>
             <Route element={<RequireScope scope={scopes.manageAccess} />}>
-              <Route path="settings" element={<Tabbed title="nav.settings" tabs={settings} />}>
+              <Route path="settings" element={<Sectioned title="nav.settings" items={settings} />}>
                 <Route index element={<Landing section="settings" to="/settings/server" />} />
                 <Route path="server" element={<PanelServer />} />
                 <Route path="certificates" element={<PanelCertificates />} />

@@ -18,7 +18,6 @@ public static class ClientText
         ServerConfig config,
         TunnelClient client,
         ClientTemplate? template = null,
-        string? webSocket = null,
         IReadOnlyList<string>? resolver = null)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -43,8 +42,10 @@ public static class ClientText
         }
 
         Obfuscation(text, config.Obfuscation);
-        Reverse(text, config, client);
-        Line(text, "# AmneziaGeo WebSocket", webSocket);
+        if (ConfigServices.Moved(config))
+        {
+            Line(text, "# AmneziaGeo Services", Number(config.ServicesPort));
+        }
 
         text.Append("\n[Peer]\n");
         Line(text, "PublicKey", config.PublicKey);
@@ -106,23 +107,6 @@ public static class ClientText
             : config.Host;
 
         return $"{host}:{Number(config.ListenPort)}";
-    }
-
-    /// <summary>
-    /// Writes what the application of the client turns on for the traffic that comes from the tunnel.
-    /// </summary>
-    private static void Reverse(StringBuilder text, ServerConfig config, TunnelClient client)
-    {
-        var inbound = InboundName.Taken(client.Inbound, config.Inbound);
-        if (inbound != ClientInbound.Off)
-        {
-            Line(text, "# AmneziaGeo Inbound", InboundName.Of(inbound));
-        }
-
-        if (client.Routes.Count > 0)
-        {
-            Line(text, "# AmneziaGeo Routes", string.Join(", ", client.Routes));
-        }
     }
 
     private static IReadOnlyList<string> Either(IReadOnlyList<string> own, IReadOnlyList<string> otherwise) =>

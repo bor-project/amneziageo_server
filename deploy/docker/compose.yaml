@@ -1,5 +1,5 @@
 # The panel in the network of the host: it raises the interfaces of the endpoints in the kernel, lays the rules of the
-# firewall and runs the proxies itself. The host carries the amneziawg module and nothing else of the panel.
+# firewall and runs the websocket fronts itself. The host carries the amneziawg module and nothing else of the panel.
 #
 #   docker compose up -d --build
 #   docker compose exec panel amneziageo-server init --user <name>

@@ -10,6 +10,7 @@ export interface Template {
   dns: string[]
   mtu: number | null
   keepalive: number | null
+  routing: boolean
   clients: number
   refreshedUtc: string | null
   createdUtc: string
@@ -22,6 +23,7 @@ export interface TemplateDraft {
   dns: string[]
   mtu: number | null
   keepalive: number | null
+  routing: boolean
 }
 
 export interface TemplatePart {
@@ -42,6 +44,7 @@ export interface TemplateDefaults {
   dns: string[]
   mtu: number
   keepalive: number
+  routing: boolean
 }
 
 const slow = { timeout: 120000 }
@@ -94,6 +97,7 @@ export function draftOf(template: Template): TemplateDraft {
     dns: template.dns,
     mtu: template.mtu,
     keepalive: template.keepalive,
+    routing: template.routing,
   }
 }
 
@@ -103,6 +107,7 @@ export const freshTemplate: TemplateDraft = {
   dns: [],
   mtu: null,
   keepalive: null,
+  routing: true,
 }
 
 function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) {

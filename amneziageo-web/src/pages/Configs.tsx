@@ -1,6 +1,7 @@
+import { useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { useClients } from "@/api/clients"
-import { useConfigs, useSwitchConfig } from "@/api/configs"
+import { failure, useConfigs, useSwitchConfig } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { scopes } from "@/api/scopes"
 import { RowActions } from "@/components/RowActions"
@@ -19,6 +20,7 @@ export function Configs() {
   const configs = useConfigs()
   const clients = useClients()
   const turn = useSwitchConfig()
+  const [faults, setFaults] = useState<Record<number, string>>({})
   const may = holds(user, scopes.manageInterfaces)
   const find = params.get("find") ?? ""
   const all = configs.data ?? []
@@ -34,6 +36,13 @@ export function Configs() {
     }
 
     setParams(kept, { replace: true })
+  }
+
+  function flip(one: Config, on: boolean) {
+    setFaults((held) => ({ ...held, [one.id]: "" }))
+    void turn
+      .mutateAsync({ id: one.id, on })
+      .catch((error: unknown) => setFaults((held) => ({ ...held, [one.id]: failure(t, error) })))
   }
 
   function count(one: Config): number {
@@ -62,12 +71,15 @@ export function Configs() {
               key: "on",
               caption: t("action.on"),
               cell: (one) => (
-                <Knob
-                  value={one.isEnabled}
-                  title={one.isEnabled ? t("action.turnOff") : t("action.turnOn")}
-                  disabled={!may || turn.isPending}
-                  onChange={(on) => void turn.mutateAsync({ id: one.id, on })}
-                />
+                <div className="flex max-w-56 flex-col gap-1">
+                  <Knob
+                    value={one.isEnabled}
+                    title={one.isEnabled ? t("action.turnOff") : t("action.turnOn")}
+                    disabled={!may || turn.isPending}
+                    onChange={(on) => flip(one, on)}
+                  />
+                  {(faults[one.id] ?? "").length > 0 && <div className="text-xs text-alarm">{faults[one.id]}</div>}
+                </div>
               ),
             },
             {
@@ -95,28 +107,10 @@ export function Configs() {
               cell: (one) => one.address.join(", "),
             },
             {
-              key: "public",
-              caption: t("configs.public"),
-              sort: (one) => one.publicKey,
-              body: "max-w-56",
-              cell: (one) => <span className="block truncate font-mono text-xs text-mono">{one.publicKey}</span>,
-            },
-            {
               key: "count",
               caption: t("configs.count"),
               sort: (one) => count(one),
               cell: (one) => count(one),
-            },
-            {
-              key: "status",
-              caption: t("configs.status"),
-              sort: (one) => (one.isEnabled ? 0 : 1),
-              cell: (one) =>
-                one.isEnabled ? (
-                  <span className="text-good">{t("configs.running")}</span>
-                ) : (
-                  <span className="text-muted">{t("configs.stopped")}</span>
-                ),
             },
             {
               key: "actions",

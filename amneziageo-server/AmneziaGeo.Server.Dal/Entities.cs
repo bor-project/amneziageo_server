@@ -262,6 +262,10 @@ public sealed class ConfigEntity : IObfuscated
 
     public int Inbound { get; set; }
 
+    public bool WebSocket { get; set; }
+
+    public int ServicesPort { get; set; }
+
     public string PrivateKey { get; set; } = string.Empty;
 
     public string PublicKey { get; set; } = string.Empty;
@@ -538,38 +542,6 @@ public sealed class PanelEntity
 }
 
 /// <summary>
-/// The websocket proxy as the database holds it.
-/// </summary>
-public sealed class ProxyEntity
-{
-    public long Id { get; set; }
-
-    public long? TemplateId { get; set; }
-
-    public string Name { get; set; } = string.Empty;
-
-    public string Kind { get; set; } = string.Empty;
-
-    public bool IsEnabled { get; set; }
-
-    public int Port { get; set; }
-
-    public bool Opened { get; set; }
-
-    public string Path { get; set; } = string.Empty;
-
-    public string Target { get; set; } = string.Empty;
-
-    public string Sources { get; set; } = string.Empty;
-
-    public string Certificate { get; set; } = string.Empty;
-
-    public string CertificateKey { get; set; } = string.Empty;
-
-    public DateTimeOffset UpdatedUtc { get; set; }
-}
-
-/// <summary>
 /// The resolver the panel runs for the clients of the tunnels.
 /// </summary>
 public sealed class DnsSettingsEntity
@@ -674,6 +646,8 @@ public sealed class ClientEntity
 
     public int Inbound { get; set; }
 
+    public int Routing { get; set; }
+
     public string Routes { get; set; } = string.Empty;
 
     public string Forwards { get; set; } = string.Empty;
@@ -753,6 +727,8 @@ public sealed class TemplateEntity
     public int? Mtu { get; set; }
 
     public int? Keepalive { get; set; }
+
+    public bool LocksRouting { get; set; }
 
     public DateTimeOffset? RefreshedUtc { get; set; }
 
@@ -837,32 +813,6 @@ public sealed class InterfaceTemplateEntity : IObfuscated
     public bool RandomTrailers { get; set; }
 
     public bool DisableCookies { get; set; }
-
-    public DateTimeOffset CreatedUtc { get; set; }
-
-    public DateTimeOffset UpdatedUtc { get; set; }
-}
-
-/// <summary>
-/// One proxy template as the database holds it.
-/// </summary>
-public sealed class ProxyTemplateEntity
-{
-    public long Id { get; set; }
-
-    public string Name { get; set; } = string.Empty;
-
-    public string Kind { get; set; } = string.Empty;
-
-    public int Port { get; set; }
-
-    public bool Opened { get; set; }
-
-    public bool MakePath { get; set; }
-
-    public string Target { get; set; } = string.Empty;
-
-    public string Sources { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedUtc { get; set; }
 

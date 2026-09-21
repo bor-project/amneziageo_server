@@ -77,13 +77,11 @@ through the tunnel whatever ranges it routes there, and sees the server rather t
 came from. A client of AmneziaGeo takes it only while it lets connections in from the tunnel; the server
 alone is enough (`amneziageo config inbound <name> host`).
 
-The file and the `vpn://` link of the client name what it takes from the tunnel, so the application turns
-the flags of its own operating system on without being told twice: the file carries the lines
-`# AmneziaGeo Inbound = <off|server|network>` and `# AmneziaGeo Routes = <ranges>`, and the link carries the
-same under `amneziageo`. The line `# AmneziaGeo WebSocket = wss://<host>:<port>/<path>` names the websocket
-front the client carries its tunnel through, see [proxy.md](proxy.md), and the link carries it as `websocket`.
-A client of another application reads these lines as comments and passes them by. A device of a client takes the access of the client it belongs to, while the
-networks behind a client and the ports of the host stay with the record that carries them.
+A client of AmneziaGeo asks the endpoint what it takes from the tunnel and which networks stand behind it, so
+the application turns the flags of its own operating system on without being told twice, see
+[services.md](services.md); the file and the `vpn://` link carry none of it. A device of a client takes the
+access of the client it belongs to from the moment it is added, while the networks behind a client and the
+ports of the host stay with the record that carries them.
 
 ## What the client is handed
 

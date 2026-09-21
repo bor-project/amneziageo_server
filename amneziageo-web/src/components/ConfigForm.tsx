@@ -1,13 +1,13 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { span } from "@/address"
 import { complaint } from "@/api/auth"
-import { useConfigs, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
+import { failure, useConfigs, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
 import { useInterfaceTemplates } from "@/api/interfaceTemplates"
-import type { InterfaceTemplate } from "@/api/interfaceTemplates"
 import { ObfuscationFields } from "@/components/Obfuscation"
-import { Count, Flag, Folded, Help, Line, Part, Pick, Switch } from "@/components/fields"
+import { Count, Flag, Help, Line, Part, Pick, Switch } from "@/components/fields"
 import { portFault, usePortHolders } from "@/components/ports"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
@@ -20,6 +20,7 @@ export function ConfigForm({
   self,
   pending,
   error,
+  fault = "",
   onSave,
   onClose,
   onRemove,
@@ -30,6 +31,7 @@ export function ConfigForm({
   self?: number
   pending: boolean
   error: unknown
+  fault?: string
   onSave: (draft: ConfigDraft) => void
   onClose: () => void
   onRemove?: () => void
@@ -45,13 +47,14 @@ export function ConfigForm({
   const [shown, setShown] = useState(publicKey)
   const read = useImportConfig()
   const [text, setText] = useState("")
-  const chosen = templates.find((one) => one.id === draft.templateId)
+  const said = error !== null && error !== undefined ? failure(t, error) : fault
   const port = portFault(t, draft.listenPort, held)
+  const services = draft.servicesPort === 0 ? "" : portFault(t, draft.servicesPort, held)
   const name = nameFault(t, draft.name, others.map((one) => one.name))
   const address = addressFault(t, draft.address)
   const host = draft.host.length > 255 ? t("error.badHost") : ""
   const ready =
-    !pending && draft.name.length > 0 && [port, name, address, host].every((one) => one.length === 0)
+    !pending && draft.name.length > 0 && [port, services, name, address, host].every((one) => one.length === 0)
 
   function put(change: Partial<ConfigDraft>) {
     setDraft({ ...draft, ...change })
@@ -164,6 +167,22 @@ export function ConfigForm({
           <option value="server">{t("clients.inboundServer")}</option>
           <option value="network">{t("clients.inboundNetwork")}</option>
         </Pick>
+        <Flag
+          id="config-websocket"
+          caption={t("configs.webSocket")}
+          value={draft.webSocket}
+          onChange={(value) => put({ webSocket: value })}
+        />
+        <div>
+          <Count
+            id="config-services-port"
+            caption={t("configs.servicesPort")}
+            value={draft.servicesPort}
+            unset={String(draft.listenPort)}
+            onChange={(value) => put({ servicesPort: value })}
+          />
+          {services.length > 0 && <div className="mt-1 text-xs text-alarm">{services}</div>}
+        </div>
       </Part>
 
       <Part title={t("configs.template")}>
@@ -182,10 +201,15 @@ export function ConfigForm({
           ))}
         </Pick>
 
-        {chosen !== undefined && (
-          <Folded caption={t("templates.values")}>
-            <Inherited t={t} template={chosen} />
-          </Folded>
+        {draft.templateId !== null && (
+          <div className="-mt-2 flex justify-end sm:col-span-2">
+            <Link
+              to={`/connections/templates/interfaces/${draft.templateId}/edit`}
+              className="text-sm text-brand-ink hover:text-brand-lit"
+            >
+              {t("action.goTo")}
+            </Link>
+          </div>
         )}
       </Part>
 
@@ -299,9 +323,7 @@ export function ConfigForm({
         </Part>
       )}
 
-      {error !== null && error !== undefined && (
-        <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
-      )}
+      {said.length > 0 && <div className="text-sm text-alarm">{said}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
         {onRemove !== undefined && (
@@ -315,30 +337,6 @@ export function ConfigForm({
         <button type="button" onClick={() => onSave(draft)} disabled={!ready} className={primary}>
           {pending ? t("configs.busy") : t("configs.save")}
         </button>
-      </div>
-    </div>
-  )
-}
-
-function Inherited({ t, template }: { t: Text; template: InterfaceTemplate }) {
-  return (
-    <>
-      <Fixed caption={t("configs.allowed")} value={template.allowedIps.join(", ")} />
-      <Fixed caption={t("configs.dns")} value={template.dns.join(", ")} />
-      <Fixed caption={t("configs.mtu")} value={String(template.mtu)} />
-      <Fixed caption={t("configs.keepalive")} value={String(template.keepalive)} />
-      <Fixed caption={t("configs.offlineAfter")} value={String(template.offlineAfter)} />
-      <Fixed caption={t("configs.blocked")} value={template.blocked.join(", ")} />
-    </>
-  )
-}
-
-function Fixed({ caption, value }: { caption: string; value: string }) {
-  return (
-    <div>
-      <span className={label}>{caption}</span>
-      <div className={`mt-1 truncate ${field}`} title={value}>
-        {value}
       </div>
     </div>
   )
