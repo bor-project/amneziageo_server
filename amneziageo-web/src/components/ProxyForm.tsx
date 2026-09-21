@@ -1,14 +1,13 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { uncertified, useProxies } from "@/api/proxies"
 import type { ProxyCertificate, ProxyDraft, ProxyKind } from "@/api/proxies"
 import { useProxyTemplates } from "@/api/proxyTemplates"
-import type { ProxyTemplate } from "@/api/proxyTemplates"
-import { Count, Flag, Folded, Line, Multi, Part, Pick, Switch } from "@/components/fields"
+import { Count, Flag, Line, Multi, Part, Pick, Switch } from "@/components/fields"
 import { portFault, usePortHolders } from "@/components/ports"
-import { card, danger, field, label, note, primary, secondary } from "@/components/styles"
+import { card, danger, label, note, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import type { Text } from "@/i18n"
 
 export function ProxyForm({
   start,
@@ -36,7 +35,6 @@ export function ProxyForm({
   const others = (useProxies().data ?? []).filter((one) => one.id !== self)
   const held = usePortHolders({ proxy: self })
   const [draft, setDraft] = useState<ProxyDraft>(start)
-  const chosen = templates.find((one) => one.id === draft.templateId)
   const bare = uncertified(panel, draft)
   const port = portFault(t, draft.port, held)
   const name = others.some((one) => one.name === draft.name.trim()) ? t("error.nameTaken") : ""
@@ -127,10 +125,15 @@ export function ProxyForm({
           ))}
         </Pick>
 
-        {chosen !== undefined && (
-          <Folded caption={t("templates.values")}>
-            <Inherited t={t} template={chosen} />
-          </Folded>
+        {draft.templateId !== null && (
+          <div className="-mt-2 flex justify-end sm:col-span-2">
+            <Link
+              to={`/connections/templates/proxies/${draft.templateId}/edit`}
+              className="text-sm text-brand-ink hover:text-brand-lit"
+            >
+              {t("action.goTo")}
+            </Link>
+          </div>
         )}
 
         {draft.templateId === null && (
@@ -225,34 +228,6 @@ export function ProxyForm({
         >
           {t("proxies.save")}
         </button>
-      </div>
-    </div>
-  )
-}
-
-function Inherited({ t, template }: { t: Text; template: ProxyTemplate }) {
-  return (
-    <>
-      <Fixed
-        caption={t("proxies.kind")}
-        value={template.kind === "wg" ? t("proxies.kindWg") : t("proxies.kindWs")}
-      />
-      <Fixed caption={t("proxies.opened")} value={template.opened ? t("action.yes") : t("action.no")} />
-      {template.kind === "wg" && <Fixed caption={t("proxies.target")} value={template.target} />}
-      <Fixed
-        caption={t("proxies.sources")}
-        value={template.sources.length === 0 ? t("proxies.anySource") : template.sources.join(", ")}
-      />
-    </>
-  )
-}
-
-function Fixed({ caption, value }: { caption: string; value: string }) {
-  return (
-    <div>
-      <span className={label}>{caption}</span>
-      <div className={`mt-1 truncate ${field}`} title={value}>
-        {value}
       </div>
     </div>
   )

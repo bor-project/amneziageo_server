@@ -3,7 +3,6 @@ import { draftOf, useAddClient, useAddDevice, useChangeClient, useClientDraft, u
 import type { Client } from "@/api/clients"
 import { scopes } from "@/api/scopes"
 import { ClientForm } from "@/components/ClientForm"
-import { ClientTabs } from "@/components/ClientTabs"
 import { Handshake, Traffic } from "@/components/ClientStats"
 import { Rows } from "@/components/Rows"
 import { useTail } from "@/components/crumbs"
@@ -77,7 +76,11 @@ function HeldClient({ clientId }: { clientId: number }) {
 
   return (
     <div className="mt-4 flex flex-col gap-4">
-      <ClientTabs id={held.id} may={may} />
+      <div className="flex justify-end">
+        <Link to={`/connections/clients/${held.id}/export`} className={secondary}>
+          {t("action.export")}
+        </Link>
+      </div>
 
       <ClientForm
         start={draftOf(held)}

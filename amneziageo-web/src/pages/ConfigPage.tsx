@@ -1,11 +1,10 @@
-import { Navigate, useNavigate, useParams } from "react-router-dom"
-import { complaint } from "@/api/auth"
-import { draftOf, useAddConfig, useApplyConfig, useChangeConfig, useConfigs, useFreshConfig } from "@/api/configs"
+import { useState } from "react"
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
+import { downedOf, draftOf, failure, useAddConfig, useChangeConfig, useConfigs, useFreshConfig } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { scopes } from "@/api/scopes"
 import { ConfigForm } from "@/components/ConfigForm"
 import { useTail } from "@/components/crumbs"
-import { secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
@@ -37,7 +36,17 @@ function NewConfig() {
       publicKey={fresh.data.publicKey}
       pending={add.isPending}
       error={add.error}
-      onSave={(draft) => void add.mutateAsync(draft).then(() => navigate(back))}
+      onSave={(draft) =>
+        void add.mutateAsync(draft).then(
+          () => navigate(back),
+          (error: unknown) => {
+            const downed = downedOf(error)
+            if (downed !== null) {
+              navigate(`/connections/interfaces/${downed.id}/edit`, { state: { fault: failure(t, error) } })
+            }
+          },
+        )
+      }
       onClose={() => navigate(back)}
       importable
     />
@@ -48,10 +57,12 @@ function HeldConfig({ configId }: { configId: number }) {
   const t = useText()
   const navigate = useNavigate()
   const user = useAppSelector((s) => s.auth.user)
+  const { state } = useLocation()
   const configs = useConfigs()
   const change = useChangeConfig()
-  const apply = useApplyConfig()
+  const [round, setRound] = useState(0)
   const may = holds(user, scopes.manageInterfaces)
+  const arrived = (state as { fault?: string } | null)?.fault ?? ""
   const all = configs.data ?? []
   const held = all.find((one) => one.id === configId)
   const back = lastSpot("connections", "/connections/interfaces")
@@ -67,33 +78,27 @@ function HeldConfig({ configId }: { configId: number }) {
   }
 
   return (
-    <div>
-      {may && (
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={() => void apply.mutateAsync(held.id)}
-            disabled={apply.isPending}
-            className={secondary}
-          >
-            {t("configs.apply")}
-          </button>
-        </div>
-      )}
-
-      {apply.error !== null && <div className="mt-2 text-sm text-alarm">{t(complaint(apply.error))}</div>}
-
-      <ConfigForm
-        start={draftOf(held)}
-        publicKey={held.publicKey}
-        self={held.id}
-        pending={change.isPending}
-        error={change.error}
-        onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}
-        onClose={() => navigate(back)}
-        onRemove={may ? () => navigate(`/connections/interfaces/${held.id}/delete`) : undefined}
-      />
-    </div>
+    <ConfigForm
+      key={round}
+      start={draftOf(held)}
+      publicKey={held.publicKey}
+      self={held.id}
+      pending={change.isPending}
+      error={change.error}
+      fault={change.error === null ? arrived : ""}
+      onSave={(draft) =>
+        void change.mutateAsync({ id: held.id, draft }).then(
+          () => navigate(back),
+          (error: unknown) => {
+            if (downedOf(error) !== null) {
+              setRound((one) => one + 1)
+            }
+          },
+        )
+      }
+      onClose={() => navigate(back)}
+      onRemove={may ? () => navigate(`/connections/interfaces/${held.id}/delete`) : undefined}
+    />
   )
 }
 

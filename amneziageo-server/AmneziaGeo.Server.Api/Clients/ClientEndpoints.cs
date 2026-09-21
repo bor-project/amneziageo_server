@@ -232,8 +232,17 @@ public static class ClientEndpoints
                 panel,
                 Listening.Chain(options, panel).Length > 0,
                 context.Request.Host.Host,
-                client.PrivateKey.Length > 0 ? client.SubscriptionId : string.Empty)));
+                client.PrivateKey.Length > 0 ? client.SubscriptionId : string.Empty),
+            Miss(subscriptions.Current, client)));
     }
+
+    private static string Miss(SubscriptionSettings settings, TunnelClient client) => settings switch
+    {
+        { IsEnabled: false } => "off",
+        _ when client.SubscriptionId.Length == 0 => "no-id",
+        _ when client.PrivateKey.Length == 0 => "no-key",
+        _ => string.Empty,
+    };
 
     private static async Task<IResult> AddAsync(
         ClientRequest request,

@@ -95,6 +95,11 @@ public sealed record ConfigSwitchRequest(bool? On);
 public sealed record ConfigSyncResponse(string Name, bool IsDone, string Message);
 
 /// <summary>
+/// The refusal of the host to raise an endpoint the panel kept and turned off.
+/// </summary>
+public sealed record ConfigRaiseFailure(string Error, string Message, long Id);
+
+/// <summary>
 /// The interface file an endpoint is read from.
 /// </summary>
 public sealed record ConfigImportRequest(string? Name, string? Text);

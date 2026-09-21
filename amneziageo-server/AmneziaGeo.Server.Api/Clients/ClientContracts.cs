@@ -83,9 +83,14 @@ public sealed record ClientSwitchRequest(bool? On);
 public sealed record ClientImportRequest(long ConfigId, string? Text, string? Prefix = null);
 
 /// <summary>
-/// The configuration a client connects with and the address of its subscription.
+/// The configuration a client connects with, the address of its subscription and why the address is empty.
 /// </summary>
-public sealed record ClientConfigResponse(string FileName, string Text, string Link, string Subscription);
+public sealed record ClientConfigResponse(
+    string FileName,
+    string Text,
+    string Link,
+    string Subscription,
+    string SubscriptionMiss);
 
 /// <summary>
 /// What putting the clients of one endpoint on the host produced.

@@ -44,6 +44,11 @@ public sealed class Ledger : IHostNetwork
     public string Refuses { get; set; } = string.Empty;
 
     /// <summary>
+    /// What the host says when it refuses, empty for its plain refusal.
+    /// </summary>
+    public string Complaint { get; set; } = string.Empty;
+
+    /// <summary>
     /// Tells whether the host carries an interface.
     /// </summary>
     public bool HasLink(string name) => Links.Contains(name);
@@ -155,7 +160,8 @@ public sealed class Ledger : IHostNetwork
         Steps.Add(step);
 
         return Refuses.Length > 0 && step.StartsWith(Refuses, StringComparison.Ordinal)
-            ? throw new HostNetworkException($"the host refused '{step}'")
+            ? throw new HostNetworkException(
+                Complaint.Length > 0 ? $"'{step}' was refused: {Complaint}" : $"the host refused '{step}'")
             : Task.CompletedTask;
     }
 }

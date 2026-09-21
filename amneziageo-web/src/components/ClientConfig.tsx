@@ -1,9 +1,14 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { useClientConfig } from "@/api/clients"
-import { card, chip, quiet, secondary } from "@/components/styles"
+import type { Miss } from "@/api/clients"
+import { scopes } from "@/api/scopes"
+import { card, chip, quiet } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
+import { holds } from "@/store/authSlice"
+import { useAppSelector } from "@/store/hooks"
 
 type Kind = "subscription" | "file" | "link"
 
@@ -12,14 +17,26 @@ interface Picture {
   modules: number
 }
 
-const kinds: { kind: Kind; label: TextKey }[] = [
-  { kind: "subscription", label: "clients.qrSubscription" },
-  { kind: "file", label: "clients.qrFile" },
-  { kind: "link", label: "clients.qrLink" },
+interface Missing {
+  says: string
+  to: string | null
+}
+
+const kinds: { kind: Kind; label: TextKey; tail: string }[] = [
+  { kind: "subscription", label: "clients.qrSubscription", tail: "-subscription.png" },
+  { kind: "file", label: "clients.qrFile", tail: ".conf" },
+  { kind: "link", label: "clients.qrLink", tail: "-link.png" },
 ]
 
-export function ClientConfig({ id }: { id: number }) {
+const misses: Record<Miss, TextKey> = {
+  off: "clients.subscriptionOff",
+  "no-id": "clients.subscriptionNoId",
+  "no-key": "clients.subscriptionNoKey",
+}
+
+export function ClientConfig({ id, editable }: { id: number; editable: boolean }) {
   const t = useText()
+  const user = useAppSelector((s) => s.auth.user)
   const config = useClientConfig(id)
   const words: Record<Kind, string> = {
     subscription: config.data?.subscription ?? "",
@@ -35,28 +52,34 @@ export function ClientConfig({ id }: { id: number }) {
     }),
     enabled: words.file.length > 0,
   })
-  const offered = kinds.filter((one) => words[one.kind].length > 0)
+  const name = config.data?.fileName ?? "client.conf"
+  const stem = name.endsWith(".conf") ? name.slice(0, -".conf".length) : name
+  const miss = config.data?.subscriptionMiss ?? ""
+  const offered = kinds.filter((one) => words[one.kind].length > 0 || (one.kind === "subscription" && miss !== ""))
+
+  function missing(kind: Kind): Missing | null {
+    if (kind !== "subscription" || miss === "" || words.subscription.length > 0) {
+      return null
+    }
+
+    if (miss === "off") {
+      return { says: t(misses[miss]), to: holds(user, scopes.manageAccess) ? "/settings/subscriptions" : null }
+    }
+
+    return { says: t(misses[miss]), to: miss === "no-id" && editable ? `/connections/clients/${id}/edit` : null }
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className={`flex items-center justify-between gap-4 px-4 py-3 ${card}`}>
-        <div className="truncate font-mono text-xs text-mono">{config.data?.fileName ?? ""}</div>
-        <button
-          type="button"
-          onClick={() => save(config.data?.fileName ?? "client.conf", words.file)}
-          disabled={words.file.length === 0}
-          className={secondary}
-        >
-          {t("clients.download")}
-        </button>
-      </div>
-
       {offered.map((one) => (
         <Sheet
           key={one.kind}
           caption={t(one.label)}
           text={words[one.kind]}
           picture={pictures.data?.[one.kind] ?? null}
+          name={one.kind === "file" ? name : stem + one.tail}
+          plain={one.kind === "file"}
+          missing={missing(one.kind)}
           t={t}
         />
       ))}
@@ -64,7 +87,23 @@ export function ClientConfig({ id }: { id: number }) {
   )
 }
 
-function Sheet({ caption, text, picture, t }: { caption: string; picture: Picture | null; text: string; t: Text }) {
+function Sheet({
+  caption,
+  text,
+  picture,
+  name,
+  plain,
+  missing,
+  t,
+}: {
+  caption: string
+  text: string
+  picture: Picture | null
+  name: string
+  plain: boolean
+  missing: Missing | null
+  t: Text
+}) {
   const [open, setOpen] = useState(true)
   const [taken, setTaken] = useState("")
   const room = Math.min(440, Math.max(280, 3 * (picture?.modules ?? 0)))
@@ -72,6 +111,16 @@ function Sheet({ caption, text, picture, t }: { caption: string; picture: Pictur
   async function put(what: "text" | "image") {
     const done = what === "text" ? await copyText(text) : await copyImage(picture)
     setTaken(done ? what : "")
+  }
+
+  function keep() {
+    if (plain) {
+      const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }))
+      save(name, url)
+      URL.revokeObjectURL(url)
+    } else if (picture !== null) {
+      save(name, picture.url)
+    }
   }
 
   return (
@@ -82,14 +131,25 @@ function Sheet({ caption, text, picture, t }: { caption: string; picture: Pictur
         className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-ink"
       >
         <span className="text-[10px] text-faint" aria-hidden>
-          {open ? "\u25be" : "\u25b8"}
+          {open ? "▾" : "▸"}
         </span>
         <span className="truncate">{caption}</span>
       </button>
 
-      {open && (
+      {open && missing !== null && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-4 text-sm text-muted">
+          {missing.says}
+          {missing.to !== null && (
+            <Link to={missing.to} className="text-brand-ink hover:text-brand-lit">
+              {t("action.settings")}
+            </Link>
+          )}
+        </div>
+      )}
+
+      {open && missing === null && (
         <div className="flex flex-col items-center gap-3 border-t border-line px-4 py-4">
-          <div className="flex items-center gap-2 self-start">
+          <div className="flex min-w-0 items-center gap-2 self-start">
             <span className={chip}>{caption}</span>
             <button
               type="button"
@@ -110,6 +170,17 @@ function Sheet({ caption, text, picture, t }: { caption: string; picture: Pictur
             >
               <Frame />
             </button>
+            <button
+              type="button"
+              title={t("clients.download")}
+              aria-label={t("clients.download")}
+              onClick={keep}
+              disabled={!plain && picture === null}
+              className={quiet}
+            >
+              <Arrow />
+            </button>
+            {plain && <span className="truncate font-mono text-xs text-mono">{name}</span>}
           </div>
 
           {picture === null ? (
@@ -149,6 +220,15 @@ function Frame() {
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <circle cx="8.5" cy="9.5" r="1.5" />
       <path d="m4 17 5-5 4 4 3-3 4 4" />
+    </svg>
+  )
+}
+
+function Arrow() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path d="M12 4v11m-4-4 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 19h14" strokeLinecap="round" />
     </svg>
   )
 }
@@ -197,12 +277,9 @@ async function copyImage(picture: Picture | null): Promise<boolean> {
   }
 }
 
-function save(name: string, text: string) {
-  const blob = new Blob([text], { type: "text/plain" })
-  const url = URL.createObjectURL(blob)
+function save(name: string, url: string) {
   const link = document.createElement("a")
   link.href = url
   link.download = name
   link.click()
-  URL.revokeObjectURL(url)
 }

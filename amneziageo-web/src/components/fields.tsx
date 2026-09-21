@@ -2,7 +2,7 @@ import { useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
 import { card, field, label, note } from "@/components/styles"
 
-export function Part({ title, children }: { title: string; children: ReactNode }) {
+export function Part({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
     <div className={`flex flex-col gap-3.5 p-4.5 ${card}`}>
       <div className="text-sm font-semibold text-ink-soft">{title}</div>
@@ -134,15 +134,6 @@ export function Pick({
       </select>
       {hint.length > 0 && <div className={note}>{hint}</div>}
     </div>
-  )
-}
-
-export function Folded({ caption, children }: { caption: string; children: ReactNode }) {
-  return (
-    <details className="sm:col-span-2">
-      <summary className="cursor-pointer text-sm text-muted">{caption}</summary>
-      <div className="mt-3 grid grid-cols-1 gap-3.5 sm:grid-cols-2">{children}</div>
-    </details>
   )
 }
 

@@ -67,11 +67,14 @@ export interface ClientDraft {
   forwards: Forward[]
 }
 
+export type Miss = "off" | "no-id" | "no-key"
+
 export interface ClientConfig {
   fileName: string
   text: string
   link: string
   subscription: string
+  subscriptionMiss: Miss | ""
 }
 
 export function useClients() {

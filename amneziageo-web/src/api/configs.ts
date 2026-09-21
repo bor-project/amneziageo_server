@@ -1,4 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import axios from "axios"
+import type { Text } from "@/i18n"
+import { complaint } from "./auth"
 import type { Inbound } from "./clients"
 import { client } from "./client"
 
@@ -126,10 +129,6 @@ export function useRemoveConfig() {
   return useRefreshing((id: number) => client.delete(`/configs/${id}`))
 }
 
-export function useApplyConfig() {
-  return useRefreshing((id: number) => client.post<ConfigSync>(`/configs/${id}/apply`))
-}
-
 export function usePresharedKey() {
   return useMutation({
     mutationFn: async () => (await client.post<SingleKey>("/configs/preshared")).data,
@@ -147,6 +146,32 @@ export function useImportConfig() {
     mutationFn: async ({ name, text }: { name: string; text: string }) =>
       (await client.post<Config>("/configs/import", { name, text })).data,
   })
+}
+
+export interface Downed {
+  error: string
+  message: string
+  id: number
+}
+
+const downs = ["port-busy", "no-module", "no-rights", "forwarding-off", "raise-failed"]
+
+export function downedOf(error: unknown): Downed | null {
+  if (!axios.isAxiosError(error)) {
+    return null
+  }
+
+  const said = error.response?.data as Partial<Downed> | undefined
+
+  return said !== undefined && downs.includes(said.error ?? "") && typeof said.id === "number"
+    ? { error: said.error ?? "", message: said.message ?? "", id: said.id }
+    : null
+}
+
+export function failure(t: Text, error: unknown): string {
+  const downed = downedOf(error)
+
+  return downed?.error === "raise-failed" ? t("error.raiseFailed", { reason: downed.message }) : t(complaint(error))
 }
 
 export function draftOf(config: Config): ConfigDraft {
@@ -177,7 +202,7 @@ function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) 
 
   return useMutation({
     mutationFn: call,
-    onSuccess: async () => {
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["configs"] })
     },
   })

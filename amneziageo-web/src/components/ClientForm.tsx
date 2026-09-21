@@ -1,14 +1,15 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { nth, numberOf, parse, reserved, span, write } from "@/address"
 import type { Span } from "@/address"
 import { complaint } from "@/api/auth"
 import { useClients } from "@/api/clients"
-import type { Client, ClientDraft, Forward, Inbound } from "@/api/clients"
+import type { Client, ClientDraft, Inbound } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useTemplates } from "@/api/templates"
-import { Flag, Folded, Help, Line, Multi, Part, Pick, Regenerate } from "@/components/fields"
-import { card, danger, field, fieldBox, label, note, primary, quiet, secondary } from "@/components/styles"
+import { Flag, Help, Line, Part, Pick, Regenerate } from "@/components/fields"
+import { card, chip, danger, field, label, note, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { randomId, randomKey } from "@/keys"
@@ -38,7 +39,6 @@ export function ClientForm({
   const [number, setNumber] = useState<string | null>(null)
   const [text, setText] = useState<string | null>(null)
   const [limit, setLimit] = useState(gigabytes(start.dailyLimit))
-  const chosen = (templates.data ?? []).find((one) => one.id === draft.templateId)
   const spans = spansOf(configs, draft.configId)
   const taken = holders(others, draft.configId)
   const legacy = start.address.length > 0 && carried(spans, start.address) === null
@@ -69,10 +69,6 @@ export function ClientForm({
 
   function put(change: Partial<ClientDraft>) {
     setDraft({ ...draft, ...change })
-  }
-
-  function carry(at: number, change: Partial<Forward>) {
-    put({ forwards: draft.forwards.map((one, index) => (index === at ? { ...one, ...change } : one)) })
   }
 
   function pick(configId: number) {
@@ -167,22 +163,18 @@ export function ClientForm({
           ))}
         </Pick>
 
-        {chosen !== undefined && (
-          <Folded caption={t("templates.values")}>
-            <Fixed caption={t("templates.allowed")} value={chosen.entries.join(", ")} dash={t("clients.dash")} />
-            <Fixed caption={t("templates.dns")} value={chosen.dns.join(", ")} dash={t("clients.dash")} />
-            <Fixed
-              caption={t("templates.mtu")}
-              value={chosen.mtu === null ? "" : String(chosen.mtu)}
-              dash={t("clients.dash")}
-            />
-            <Fixed
-              caption={t("templates.keepalive")}
-              value={chosen.keepalive === null ? "" : String(chosen.keepalive)}
-              dash={t("clients.dash")}
-            />
-          </Folded>
-        )}
+        <div className="-mt-2 flex justify-end sm:col-span-2">
+          <Link
+            to={
+              draft.templateId === null
+                ? "/connections/templates/clients/default"
+                : `/connections/templates/clients/${draft.templateId}/edit`
+            }
+            className="text-sm text-brand-ink hover:text-brand-lit"
+          >
+            {t("action.goTo")}
+          </Link>
+        </div>
       </Part>
 
       <Part title={t("clients.partAccess")}>
@@ -237,71 +229,27 @@ export function ClientForm({
         </div>
       </Part>
 
-      <Part title={t("clients.partNetwork")}>
+      <Part
+        title={
+          <span className="flex items-center gap-2">
+            {t("clients.partNetwork")}
+            <span className={chip}>{t("clients.inProgress")}</span>
+          </span>
+        }
+      >
         <div className="sm:col-span-2">
-          <label className={label} htmlFor="client-routes">
-            {t("clients.routes")}
-          </label>
-          <div className="mt-1">
-            <Multi
-              id="client-routes"
-              value={draft.routes}
-              offers={[]}
-              placeholder={t("clients.noRoutes")}
-              onChange={(routes) => put({ routes })}
-            />
-          </div>
+          <Fixed caption={t("clients.routes")} value={draft.routes.join(", ")} dash={t("clients.noRoutes")} />
           <div className={note}>{t("clients.routesNote")}</div>
         </div>
 
         <div className="sm:col-span-2">
-          <div className={label}>{t("clients.forwards")}</div>
-          <div className="mt-1 flex flex-col gap-2">
-            {draft.forwards.map((one, at) => (
-              <div key={at} className="flex items-center gap-2">
-                <select
-                  value={one.protocol}
-                  onChange={(e) => carry(at, { protocol: e.target.value as Forward["protocol"] })}
-                  className={`w-24 shrink-0 ${fieldBox}`}
-                >
-                  <option value="tcp">tcp</option>
-                  <option value="udp">udp</option>
-                </select>
-                <input
-                  inputMode="numeric"
-                  value={one.from === 0 ? "" : String(one.from)}
-                  placeholder={t("clients.forwardFrom")}
-                  onChange={(e) => carry(at, { from: portOf(e.target.value) })}
-                  className={`w-28 shrink-0 ${fieldBox}`}
-                />
-                <span className="text-sm text-muted">{t("clients.forwardTo")}</span>
-                <input
-                  inputMode="numeric"
-                  value={one.to === 0 ? "" : String(one.to)}
-                  placeholder={t("clients.forwardPort")}
-                  onChange={(e) => carry(at, { to: portOf(e.target.value) })}
-                  className={`w-28 shrink-0 ${fieldBox}`}
-                />
-                <button
-                  type="button"
-                  className={quiet}
-                  title={t("clients.forwardRemove")}
-                  onClick={() => put({ forwards: draft.forwards.filter((_, index) => index !== at) })}
-                >
-                  &times;
-                </button>
-              </div>
-            ))}
-            <div>
-              <button
-                type="button"
-                className={secondary}
-                onClick={() => put({ forwards: [...draft.forwards, { protocol: "tcp", from: 0, to: 0 }] })}
-              >
-                {t("clients.forwardAdd")}
-              </button>
-            </div>
-          </div>
+          <Fixed
+            caption={t("clients.forwards")}
+            value={draft.forwards
+              .map((one) => `${one.protocol} ${one.from} ${t("clients.forwardTo")} ${one.to}`)
+              .join(", ")}
+            dash={t("clients.dash")}
+          />
           <div className={note}>{t("clients.forwardsNote")}</div>
         </div>
       </Part>
@@ -345,12 +293,6 @@ function Fixed({ caption, value, dash }: { caption: string; value: string; dash:
 
 function isPort(value: number): boolean {
   return Number.isInteger(value) && value > 0 && value <= 65535
-}
-
-function portOf(text: string): number {
-  const digits = text.replace(/\D/g, "")
-
-  return digits.length === 0 ? 0 : Math.min(Number(digits), 65535)
 }
 
 function spansOf(configs: Config[], configId: number): Span[] {
