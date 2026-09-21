@@ -1,35 +1,36 @@
+using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Routing.Proxy;
 
 /// <summary>
-/// Runs the services of the proxies.
+/// Runs the services of the websocket fronts.
 /// </summary>
 public interface IProxyRunner
 {
     /// <summary>
-    /// Makes the service of a proxy start with the host.
+    /// Makes the service of a front start with the host.
     /// </summary>
-    Task<ProxyState> EnableAsync(string name, string kind, CancellationToken ct);
+    Task<ProxyState> EnableAsync(string name, CancellationToken ct);
 
     /// <summary>
-    /// Starts the service of a proxy over.
+    /// Starts the service of a front over.
     /// </summary>
-    Task<ProxyState> StartAsync(string name, string kind, CancellationToken ct);
+    Task<ProxyState> StartAsync(string name, CancellationToken ct);
 
     /// <summary>
-    /// Takes the service of a proxy down and keeps it from starting with the host.
+    /// Takes the service of a front down and keeps it from starting with the host.
     /// </summary>
-    Task<ProxyState> StopAsync(string name, string kind, CancellationToken ct);
+    Task<ProxyState> StopAsync(string name, CancellationToken ct);
 
     /// <summary>
-    /// Returns whether the service of a proxy is up.
+    /// Returns whether the service of a front is up.
     /// </summary>
-    Task<ProxyState> StateAsync(string name, string kind, CancellationToken ct);
+    Task<ProxyState> StateAsync(string name, CancellationToken ct);
 }
 
 /// <summary>
-/// Runs the proxies as services of systemd.
+/// Runs the fronts as services of systemd.
 /// </summary>
 public sealed class SystemdProxies : IProxyRunner
 {
@@ -53,29 +54,34 @@ public sealed class SystemdProxies : IProxyRunner
     public static bool Runs => Directory.Exists(Marker);
 
     /// <summary>
-    /// Makes the service of a proxy start with the host.
+    /// Makes the service of a front start with the host.
     /// </summary>
-    public Task<ProxyState> EnableAsync(string name, string kind, CancellationToken ct) =>
-        RunAsync(["enable", ProxyHost.Unit(name, kind)], ProxyState.Down, ct);
+    public Task<ProxyState> EnableAsync(string name, CancellationToken ct) =>
+        RunAsync(["enable", ProxyHost.Unit(name)], ProxyState.Down, ct);
 
     /// <summary>
-    /// Starts the service of a proxy over.
+    /// Starts the service of a front over.
     /// </summary>
-    public Task<ProxyState> StartAsync(string name, string kind, CancellationToken ct) =>
-        RunAsync(["restart", ProxyHost.Unit(name, kind)], ProxyState.Up, ct);
+    public Task<ProxyState> StartAsync(string name, CancellationToken ct) =>
+        RunAsync(["restart", ProxyHost.Unit(name)], ProxyState.Up, ct);
 
     /// <summary>
-    /// Takes the service of a proxy down and keeps it from starting with the host.
+    /// Takes the service of a front down, with the relay of the same name a release before ran, and keeps both from
+    /// starting with the host.
     /// </summary>
-    public Task<ProxyState> StopAsync(string name, string kind, CancellationToken ct) =>
-        RunAsync(["disable", "--now", ProxyHost.Unit(name, kind)], ProxyState.Down, ct);
-
-    /// <summary>
-    /// Returns whether the service of a proxy is up.
-    /// </summary>
-    public async Task<ProxyState> StateAsync(string name, string kind, CancellationToken ct)
+    public async Task<ProxyState> StopAsync(string name, CancellationToken ct)
     {
-        var active = await _commands.RunAsync(Tool, ["is-active", ProxyHost.Unit(name, kind)], null, ct)
+        await _commands.RunAsync(Tool, ["disable", "--now", $"{ProxyDefaults.RelayService}@{name}"], null, ct).ConfigureAwait(false);
+
+        return await RunAsync(["disable", "--now", ProxyHost.Unit(name)], ProxyState.Down, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Returns whether the service of a front is up.
+    /// </summary>
+    public async Task<ProxyState> StateAsync(string name, CancellationToken ct)
+    {
+        var active = await _commands.RunAsync(Tool, ["is-active", ProxyHost.Unit(name)], null, ct)
             .ConfigureAwait(false);
 
         return active.IsOk ? ProxyState.Up : new ProxyState(false, active.Complaint);

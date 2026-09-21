@@ -10,8 +10,6 @@ public sealed class FirewallApplier
 {
     private readonly ConfigStore _configs;
 
-    private readonly ProxyStore _proxies;
-
     private readonly PanelStore _panel;
 
     private readonly SubscriptionStore _subscriptions;
@@ -25,14 +23,12 @@ public sealed class FirewallApplier
     /// </summary>
     public FirewallApplier(
         ConfigStore configs,
-        ProxyStore proxies,
         PanelStore panel,
         SubscriptionStore subscriptions,
         FirewallHost host,
         ILogger<FirewallApplier> logger)
     {
         _configs = configs;
-        _proxies = proxies;
         _panel = panel;
         _subscriptions = subscriptions;
         _host = host;
@@ -46,7 +42,6 @@ public sealed class FirewallApplier
     {
         var plan = FirewallPlan.Of(
             await _configs.ListAsync(ct).ConfigureAwait(false),
-            await _proxies.ListAsync(ct).ConfigureAwait(false),
             await _panel.ReadAsync(ct).ConfigureAwait(false),
             await _subscriptions.ReadAsync(ct).ConfigureAwait(false));
         var sync = await _host.ApplyAsync(plan, ct).ConfigureAwait(false);

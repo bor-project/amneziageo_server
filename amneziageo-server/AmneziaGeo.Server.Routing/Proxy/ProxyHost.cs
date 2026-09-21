@@ -4,10 +4,15 @@ using AmneziaGeo.Server.Routing.Host;
 namespace AmneziaGeo.Server.Routing.Proxy;
 
 /// <summary>
-/// Holds the proxies of the host: writes what each may reach and runs its service.
+/// Holds the websocket fronts of the endpoints: writes what each may reach and runs its service.
 /// </summary>
 public sealed class ProxyHost
 {
+    /// <summary>
+    /// The firewall table the rules of the proxies of the releases before lived in.
+    /// </summary>
+    public const string SourcesTable = "amneziageo_proxy";
+
     private readonly IProxyRunner _runner;
 
     private readonly IHostNetwork _network;
@@ -17,60 +22,59 @@ public sealed class ProxyHost
     /// <summary>
     /// ctor
     /// </summary>
-    public ProxyHost(IHostCommands commands, IHostNetwork network, string? directory = null, IProxyRunner? runner = null)
+    public ProxyHost(IHostNetwork network, IProxyRunner runner, string? directory = null)
     {
-        _runner = runner ?? new SystemdProxies(commands);
         _network = network;
+        _runner = runner;
         _directory = string.IsNullOrWhiteSpace(directory) ? ProxyDefaults.Directory : directory;
     }
 
     /// <summary>
-    /// Returns the service a proxy of a kind runs as.
+    /// Returns the service the front of an interface runs as.
     /// </summary>
-    public static string Unit(string name, string? kind = null)
-    {
-        var service = ProxyKind.HasTarget(kind) ? ProxyDefaults.RelayService : ProxyDefaults.Service;
-
-        return $"{service}@{name}";
-    }
+    public static string Unit(string name) => $"{ProxyDefaults.Service}@{name}";
 
     /// <summary>
-    /// Returns the file the allowed targets of a proxy are written to.
+    /// Returns the file the allowed target of a front is written to.
     /// </summary>
     public string RulesPath(string name) => Path.Combine(_directory, ProxyFile.Rules(name));
 
     /// <summary>
-    /// Returns the file the arguments of a proxy are written to.
+    /// Returns the file the arguments of a front are written to.
     /// </summary>
     public string ArgumentsPath(string name) => Path.Combine(_directory, ProxyFile.Arguments(name));
 
     /// <summary>
-    /// Puts a proxy on the host, starting its service over only when its files change or it is down.
+    /// Lists the names the directory holds arguments for.
     /// </summary>
-    public async Task<ProxyState> ApplyAsync(
-        ProxyConfig proxy,
-        IReadOnlyList<int> ports,
-        string certificate,
-        string key,
-        CancellationToken ct)
+    public IReadOnlyList<string> Held()
     {
-        ArgumentNullException.ThrowIfNull(proxy);
-        ArgumentNullException.ThrowIfNull(ports);
-
         try
         {
-            if (!proxy.IsEnabled)
-            {
-                return await _runner.StopAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
-            }
+            return Directory.Exists(_directory)
+                ? [.. Directory.EnumerateFiles(_directory).Select(ProxyFile.Name).OfType<string>().Order(StringComparer.Ordinal)]
+                : [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
 
-            var written = await WriteAsync(proxy, ports, certificate, key, ct).ConfigureAwait(false);
+    /// <summary>
+    /// Puts the front of an interface on the host, starting its service over only when its files change or it is down.
+    /// </summary>
+    public async Task<ProxyState> ApplyAsync(string name, int front, int target, CancellationToken ct)
+    {
+        try
+        {
+            var written = await WriteAsync(name, front, target, ct).ConfigureAwait(false);
             if (written.Fault.Length > 0)
             {
                 return new ProxyState(false, written.Fault);
             }
 
-            var enabled = await _runner.EnableAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
+            var enabled = await _runner.EnableAsync(name, ct).ConfigureAwait(false);
             if (enabled.Message.Length > 0)
             {
                 return enabled;
@@ -78,18 +82,18 @@ public sealed class ProxyHost
 
             if (!written.IsChanged)
             {
-                var running = await StateAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
+                var running = await StateAsync(name, ct).ConfigureAwait(false);
                 if (running.IsRunning)
                 {
                     return running;
                 }
             }
 
-            var started = await _runner.StartAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
+            var started = await _runner.StartAsync(name, ct).ConfigureAwait(false);
 
             return started.Message.Length > 0
                 ? started
-                : await StateAsync(proxy.Name, proxy.Kind, ct).ConfigureAwait(false);
+                : await StateAsync(name, ct).ConfigureAwait(false);
         }
         catch (HostNetworkException ex)
         {
@@ -98,13 +102,13 @@ public sealed class ProxyHost
     }
 
     /// <summary>
-    /// Takes the service of a proxy down and clears its files.
+    /// Takes the service of a front down and clears its files.
     /// </summary>
-    public async Task<ProxyState> WithdrawAsync(string name, string kind, CancellationToken ct)
+    public async Task<ProxyState> WithdrawAsync(string name, CancellationToken ct)
     {
         try
         {
-            var stopped = await _runner.StopAsync(name, kind, ct).ConfigureAwait(false);
+            var stopped = await _runner.StopAsync(name, ct).ConfigureAwait(false);
             Clear(name);
 
             return stopped;
@@ -116,32 +120,27 @@ public sealed class ProxyHost
     }
 
     /// <summary>
-    /// Lays the rules that hold every proxy to the sources it names.
+    /// Drops the rules the proxies of the releases before held their sources with.
     /// </summary>
-    public async Task<string> FirewallAsync(IReadOnlyList<ProxyConfig> proxies, CancellationToken ct)
+    public async Task ForgetSourcesAsync(CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(proxies);
-
         try
         {
-            await _network.FirewallAsync(ProxyRuleset.Text(proxies), ct).ConfigureAwait(false);
-
-            return string.Empty;
+            await _network.FirewallAsync($"table inet {SourcesTable}\ndelete table inet {SourcesTable}\n", ct).ConfigureAwait(false);
         }
-        catch (HostNetworkException ex)
+        catch (HostNetworkException)
         {
-            return ex.Message;
         }
     }
 
     /// <summary>
-    /// Returns whether the service of a proxy is up.
+    /// Returns whether the service of a front is up.
     /// </summary>
-    public async Task<ProxyState> StateAsync(string name, string kind, CancellationToken ct)
+    public async Task<ProxyState> StateAsync(string name, CancellationToken ct)
     {
         try
         {
-            return await _runner.StateAsync(name, kind, ct).ConfigureAwait(false);
+            return await _runner.StateAsync(name, ct).ConfigureAwait(false);
         }
         catch (HostNetworkException ex)
         {
@@ -149,29 +148,18 @@ public sealed class ProxyHost
         }
     }
 
-    private async Task<Written> WriteAsync(
-        ProxyConfig proxy,
-        IReadOnlyList<int> ports,
-        string certificate,
-        string key,
-        CancellationToken ct)
+    private async Task<Written> WriteAsync(string name, int front, int target, CancellationToken ct)
     {
         try
         {
             Directory.CreateDirectory(_directory);
-            var rules = RulesPath(proxy.Name);
-            var whitelist = ProxyKind.HasPath(proxy.Kind)
-                && await PutAsync(rules, ProxyFile.Whitelist(proxy.Path, ports), ct).ConfigureAwait(false);
-            var arguments = await PutAsync(ArgumentsPath(proxy.Name), ProxyFile.Line(proxy, certificate, key, rules), ct)
-                .ConfigureAwait(false);
+            var rules = RulesPath(name);
+            var whitelist = await PutAsync(rules, ProxyFile.Whitelist(target), ct).ConfigureAwait(false);
+            var arguments = await PutAsync(ArgumentsPath(name), ProxyFile.Line(front, rules), ct).ConfigureAwait(false);
 
             return new Written(whitelist || arguments, string.Empty);
         }
-        catch (IOException ex)
-        {
-            return new Written(false, ex.Message);
-        }
-        catch (UnauthorizedAccessException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return new Written(false, ex.Message);
         }
@@ -196,10 +184,7 @@ public sealed class ProxyHost
             File.Delete(RulesPath(name));
             File.Delete(ArgumentsPath(name));
         }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
         }
     }

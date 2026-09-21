@@ -129,7 +129,7 @@ public class ClientTests
     [Fact]
     public void TheConfigurationOfAClientCarriesTheResolverOfThePanel()
     {
-        var text = ClientText.Text(Endpoint(), Client(), null, null, ["10.8.0.1"]);
+        var text = ClientText.Text(Endpoint(), Client(), null, ["10.8.0.1"]);
 
         Assert.Contains("DNS = 10.8.0.1", text, StringComparison.Ordinal);
     }
@@ -138,7 +138,7 @@ public class ClientTests
     public void ATemplateWithNamesOfItsOwnOutweighsTheResolver()
     {
         var template = new ClientTemplate { Name = "own", Dns = ["9.9.9.9"] };
-        var text = ClientText.Text(Endpoint(), Client(), template, null, ["10.8.0.1"]);
+        var text = ClientText.Text(Endpoint(), Client(), template, ["10.8.0.1"]);
 
         Assert.Contains("DNS = 9.9.9.9", text, StringComparison.Ordinal);
     }
@@ -146,7 +146,7 @@ public class ClientTests
     [Fact]
     public void ATemplateWithoutNamesTakesTheResolver()
     {
-        var text = ClientText.Text(Endpoint(), Client(), new ClientTemplate { Name = "plain" }, null, ["10.8.0.1"]);
+        var text = ClientText.Text(Endpoint(), Client(), new ClientTemplate { Name = "plain" }, ["10.8.0.1"]);
 
         Assert.Contains("DNS = 10.8.0.1", text, StringComparison.Ordinal);
     }
@@ -648,68 +648,42 @@ public class ClientTests
     }
 
     [Fact]
-    public void TheFileOfAClientNamesWhatItTakesFromTheTunnel()
+    public void TheFileOfAClientCarriesNoLineOfTheServerButTheMovedServices()
     {
-        var client = Client() with { Inbound = ClientInbound.Network, Routes = ["192.168.88.0/24"] };
+        var client = Client() with { Inbound = ClientInbound.Network, Routes = ["192.168.88.0/24"], Routing = ClientRouting.Off };
 
-        var text = ClientText.Text(Endpoint(), client);
+        var plain = ClientText.Text(Endpoint(), client, new ClientTemplate { Name = "closed", Routing = false });
+        var moved = ClientText.Text(Endpoint() with { ServicesPort = 8446 }, Client());
+        var same = ClientText.Text(Endpoint() with { ServicesPort = Endpoint().ListenPort }, Client());
 
-        Assert.Contains("# AmneziaGeo Inbound = network\n", text, StringComparison.Ordinal);
-        Assert.Contains("# AmneziaGeo Routes = 192.168.88.0/24\n", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("AmneziaGeo Inbound", ClientText.Text(Endpoint(), Client()), StringComparison.Ordinal);
-        Assert.DoesNotContain("AmneziaGeo Routes", ClientText.Text(Endpoint(), Client()), StringComparison.Ordinal);
+        Assert.DoesNotContain("# AmneziaGeo", plain, StringComparison.Ordinal);
+        Assert.Contains("# AmneziaGeo Services = 8446\n", moved, StringComparison.Ordinal);
+        Assert.True(moved.IndexOf("# AmneziaGeo Services", StringComparison.Ordinal) < moved.IndexOf("[Peer]", StringComparison.Ordinal));
+        Assert.DoesNotContain("# AmneziaGeo", same, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void TheFileOfAClientNamesTheWebSocketFrontOfTheServer()
-    {
-        const string front = "wss://vpn.example:8443/secret_path";
-        var endpoint = Endpoint() with { Address = ["10.8.0.1/24", "fd00::1/64"] };
-
-        var text = ClientText.Text(endpoint, Client(), webSocket: front);
-
-        Assert.Contains("# AmneziaGeo WebSocket = wss://vpn.example:8443/secret_path\n", text, StringComparison.Ordinal);
-        Assert.True(text.IndexOf("# AmneziaGeo WebSocket", StringComparison.Ordinal) < text.IndexOf("[Peer]", StringComparison.Ordinal));
-        Assert.DoesNotContain("AmneziaGeo WebSocket", ClientText.Text(endpoint, Client()), StringComparison.Ordinal);
-        Assert.DoesNotContain("AmneziaGeo Api", text, StringComparison.Ordinal);
-
-        using var document = Opened(ClientLink.Link(endpoint, Client(), webSocket: front));
-        var extras = document.RootElement.GetProperty("amneziageo");
-
-        Assert.Equal(front, extras.GetProperty("websocket").GetString());
-        Assert.False(extras.TryGetProperty("api", out _));
-
-        using var plain = Opened(ClientLink.Link(endpoint, Client()));
-
-        Assert.False(plain.RootElement.GetProperty("amneziageo").TryGetProperty("websocket", out _));
-    }
-
-    [Fact]
-    public void TheLinkCarriesWhatTheClientTakesFromTheTunnel()
+    public void TheLinkCarriesTheFileWithoutExtras()
     {
         var client = Client() with { Inbound = ClientInbound.Server, Routes = ["192.168.88.0/24"] };
 
-        using var document = Opened(ClientLink.Link(Endpoint(), client));
-        var reverse = document.RootElement.GetProperty("amneziageo");
+        using var document = Opened(ClientLink.Link(Endpoint() with { WebSocket = true }, client));
 
-        Assert.Equal("server", reverse.GetProperty("inbound").GetString());
-        Assert.Equal("192.168.88.0/24", reverse.GetProperty("routes")[0].GetString());
+        Assert.False(document.RootElement.TryGetProperty("amneziageo", out _));
     }
 
     [Fact]
-    public void TheFileOfAClientNamesWhatTheEndpointLetsIn()
+    public void TheRoutingOfAClientIsReadByName()
     {
-        var endpoint = Endpoint() with { Inbound = ClientInbound.Network };
-        var client = Client() with { Inbound = ClientInbound.Endpoint };
-
-        var text = ClientText.Text(endpoint, client);
-
-        Assert.Contains("# AmneziaGeo Inbound = network", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("endpoint", text, StringComparison.Ordinal);
-
-        using var document = Opened(ClientLink.Link(endpoint, client));
-
-        Assert.Equal("network", document.RootElement.GetProperty("amneziageo").GetProperty("inbound").GetString());
+        Assert.Equal(ClientRouting.Off, RoutingName.Read(" OFF ", ClientRouting.Template));
+        Assert.Equal(ClientRouting.On, RoutingName.Read("on", ClientRouting.Template));
+        Assert.Equal(ClientRouting.Template, RoutingName.Read("template", ClientRouting.Off));
+        Assert.Equal(ClientRouting.Off, RoutingName.Read(null, ClientRouting.Off));
+        Assert.Equal((ClientRouting)(-1), RoutingName.Read("maybe", ClientRouting.Template));
+        Assert.Equal("template", RoutingName.Of(ClientRouting.Template));
+        Assert.Equal("off", RoutingName.Of(ClientRouting.Off));
+        Assert.Equal("bad-client-routing", ClientRules.Check(Client() with { Routing = (ClientRouting)7 })!.Code);
+        Assert.Null(ClientRules.Check(Client() with { Routing = ClientRouting.Off }));
     }
 
     [Fact]

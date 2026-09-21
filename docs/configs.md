@@ -37,6 +37,8 @@ go only to a caller that holds `interfaces:write`; to anyone else they come back
 | Name | the name of the interface, up to 15 characters |
 | Host | the address or the host name clients come to, empty when it is not known yet |
 | Port | the UDP port the endpoint listens on |
+| Services port | the TCP port hello, the measurement and the websocket answer on, empty for the number of the UDP port, see [services.md](services.md) |
+| WebSocket | whether the endpoint takes the tunnel inside a websocket on the port of its services |
 | MTU | the packet size clients take, 0 leaves it to the system |
 | Interface address | the address ranges the interface carries |
 | Closed to clients | the ranges clients of the endpoint are not let into |
@@ -106,6 +108,8 @@ the code into a phrase of its own language.
 | `bad-header-key` | the header protection key is not 32 bytes in base64 |
 | `name-taken` | the panel already carries an endpoint under this name |
 | `port-taken` | the panel already listens on this port |
+| `bad-services-port` | the port of the services is outside 1 to 65535 |
+| `services-port-taken` | another endpoint already serves on this TCP port |
 | `unknown-config` | there is no endpoint under this number |
 | `bad-import` | the interface file carries no private key, or nothing at all |
 

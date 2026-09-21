@@ -1,6 +1,5 @@
 import { useConfigs } from "@/api/configs"
 import { usePanel } from "@/api/panel"
-import { useProxies } from "@/api/proxies"
 import { scopes } from "@/api/scopes"
 import { useSubscription } from "@/api/subscription"
 import { useText } from "@/i18n"
@@ -13,12 +12,11 @@ export interface PortHolder {
   name: string
 }
 
-export function usePortHolders(mine: { config?: number; proxy?: number } = {}): PortHolder[] {
+export function usePortHolders(mine: { config?: number } = {}): PortHolder[] {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
   const may = holds(user, scopes.manageAccess)
   const configs = useConfigs().data ?? []
-  const proxies = useProxies().data ?? []
   const panel = usePanel(may).data
   const subscription = useSubscription(may).data
   const held: PortHolder[] = []
@@ -26,12 +24,9 @@ export function usePortHolders(mine: { config?: number; proxy?: number } = {}): 
   for (const one of configs) {
     if (one.id !== mine.config) {
       held.push({ port: one.listenPort, name: one.name })
-    }
-  }
-
-  for (const one of proxies) {
-    if (one.id !== mine.proxy) {
-      held.push({ port: one.port, name: one.name })
+      if (one.servicesPort > 0 && one.servicesPort !== one.listenPort) {
+        held.push({ port: one.servicesPort, name: one.name })
+      }
     }
   }
 

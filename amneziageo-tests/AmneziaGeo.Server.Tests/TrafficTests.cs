@@ -296,6 +296,18 @@ public class TrafficTests
     }
 
     [Fact]
+    public void ARequestWithoutRoutingKeepsTheOneTheClientHeld()
+    {
+        var held = ClientDefaults.Fresh(1, "milena") with { Routing = ClientRouting.Off };
+        var request = new ClientRequest(1, "milena", held.PrivateKey, null, null, ["10.8.0.2/32"], true, null);
+
+        Assert.Equal(ClientRouting.Off, ClientAnswers.Draft(request, held).Routing);
+        Assert.Equal(ClientRouting.Template, ClientAnswers.Draft(request, null).Routing);
+        Assert.Equal(ClientRouting.On, ClientAnswers.Draft(request with { Routing = "on" }, held).Routing);
+        Assert.Equal(ClientRouting.Template, ClientAnswers.Draft(request with { Routing = "template" }, held).Routing);
+    }
+
+    [Fact]
     public async Task TheMeterTakesOffAClientThatUsedUpItsLimitAndLaysItBackTheNextDay()
     {
         using var bench = new Bench(now: new DateTimeOffset(2026, 9, 14, 23, 59, 50, TimeSpan.Zero));

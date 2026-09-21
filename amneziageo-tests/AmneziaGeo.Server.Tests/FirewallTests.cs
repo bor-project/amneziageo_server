@@ -1,6 +1,5 @@
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
-using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Routing.Firewall;
 using AmneziaGeo.Server.Routing.Host;
 
@@ -17,12 +16,11 @@ public class FirewallTests
                 Endpoint() with { Name = "awg1", ListenPort = 51821, Opened = false },
                 Endpoint() with { Name = "awg2", ListenPort = 51822, IsEnabled = false },
             ],
-            [Proxy(), Proxy() with { Name = "proxy1", Port = 8447, Opened = false }],
             new PanelSettings { Port = 8443, Opened = true },
             new SubscriptionSettings { IsEnabled = true, Port = 8444, Opened = true });
 
         Assert.Equal(
-            [("udp", 51820), ("tcp", 8446), ("tcp", 8443), ("tcp", 8444)],
+            [("udp", 51820), ("tcp", 51820), ("tcp", 8443), ("tcp", 8444)],
             plan.Ports.Select(port => (port.Protocol, port.Port)).ToArray());
         Assert.Equal(["awg0"], plan.Interfaces);
     }
@@ -31,7 +29,6 @@ public class FirewallTests
     public void SubscriptionsThatAreOffOpenNoPort()
     {
         var plan = FirewallPlan.Of(
-            [],
             [],
             new PanelSettings { Port = 8443 },
             new SubscriptionSettings { IsEnabled = false, Port = 8444, Opened = true });
@@ -44,11 +41,9 @@ public class FirewallTests
     {
         var closed = FirewallPlan.Of(
             [],
-            [],
             new PanelSettings { Port = 8443, Opened = true, Listen = ["127.0.0.1", "::1"] },
             new SubscriptionSettings());
         var open = FirewallPlan.Of(
-            [],
             [],
             new PanelSettings { Port = 8443, Opened = true, Listen = ["127.0.0.1", "10.0.0.1"] },
             new SubscriptionSettings());
@@ -58,17 +53,13 @@ public class FirewallTests
     }
 
     [Fact]
-    public void ARelayTakesItsPortOverUdp()
+    public void TheServicesOfAnEndpointTakeTheirOwnPortWhereTheyMoved()
     {
-        var plan = FirewallPlan.Of(
-            [],
-            [Proxy() with { Name = "relay0", Kind = ProxyKind.Wg, Port = 8500 }],
-            new PanelSettings(),
-            new SubscriptionSettings());
+        var plan = FirewallPlan.Of([Endpoint() with { ServicesPort = 8446 }], new PanelSettings(), new SubscriptionSettings());
 
-        var port = Assert.Single(plan.Ports);
-        Assert.Equal("udp", port.Protocol);
-        Assert.Equal(8500, port.Port);
+        Assert.Equal(
+            [("udp", 51820), ("tcp", 8446)],
+            plan.Ports.Select(port => (port.Protocol, port.Port)).ToArray());
     }
 
     [Fact]
@@ -76,12 +67,11 @@ public class FirewallTests
     {
         var wanted = UfwRules.Wanted(FirewallPlan.Of(
             [Endpoint()],
-            [],
             new PanelSettings(),
             new SubscriptionSettings()));
 
         Assert.Equal(
-            ["allow 51820/udp", "route allow in on awg0", "route allow out on awg0"],
+            ["allow 51820/udp", "allow 51820/tcp", "route allow in on awg0", "route allow out on awg0"],
             wanted.Select(rule => string.Join(" ", rule.Arguments)).ToArray());
         Assert.Equal(["amneziageo awg0"], wanted.Select(rule => rule.Note).Distinct().ToArray());
     }
@@ -108,13 +98,14 @@ public class FirewallTests
         tools.Answers["ufw show added"] = new CommandResult(
             0,
             "ufw allow 51820/udp comment 'amneziageo awg0'\n"
+            + "ufw allow 51820/tcp comment 'amneziageo awg0'\n"
             + "ufw route allow in on awg0 comment 'amneziageo awg0'\n"
             + "ufw route allow out on awg0 comment 'amneziageo awg0'\n",
             string.Empty);
         var host = new FirewallHost(tools, new Ledger(), "ufw");
 
         var sync = await host.ApplyAsync(
-            FirewallPlan.Of([Endpoint()], [], new PanelSettings(), new SubscriptionSettings()),
+            FirewallPlan.Of([Endpoint()], new PanelSettings(), new SubscriptionSettings()),
             CancellationToken.None);
 
         Assert.True(sync.IsDone);
@@ -135,10 +126,10 @@ public class FirewallTests
         var host = new FirewallHost(tools, new Ledger(), "ufw");
 
         await host.ApplyAsync(
-            FirewallPlan.Of([], [Proxy()], new PanelSettings(), new SubscriptionSettings()),
+            FirewallPlan.Of([Endpoint() with { ServicesPort = 8446 }], new PanelSettings(), new SubscriptionSettings()),
             CancellationToken.None);
 
-        Assert.True(tools.Called("ufw allow 8446/tcp comment amneziageo proxy0"));
+        Assert.True(tools.Called("ufw allow 8446/tcp comment amneziageo awg0"));
         Assert.True(tools.Called("ufw delete allow 8447/tcp"));
         Assert.True(tools.Called("ufw route delete allow in on awg1"));
         Assert.DoesNotContain(tools.Calls, line => line.StartsWith("ufw delete allow 22/tcp", StringComparison.Ordinal));
@@ -164,7 +155,7 @@ public class FirewallTests
         var host = new FirewallHost(new Tools(), ledger, string.Empty);
 
         var sync = await host.ApplyAsync(
-            FirewallPlan.Of([Endpoint()], [Proxy()], new PanelSettings(), new SubscriptionSettings()),
+            FirewallPlan.Of([Endpoint() with { ServicesPort = 8446 }], new PanelSettings(), new SubscriptionSettings()),
             CancellationToken.None);
 
         Assert.True(sync.IsDone);
@@ -183,15 +174,6 @@ public class FirewallTests
         ListenPort = 51820,
         Address = ["10.0.0.1/24"],
         IsEnabled = true,
-        Opened = true,
-    };
-
-    private static ProxyConfig Proxy() => new()
-    {
-        Name = "proxy0",
-        Kind = ProxyKind.Ws,
-        IsEnabled = true,
-        Port = 8446,
         Opened = true,
     };
 }

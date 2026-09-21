@@ -1,6 +1,5 @@
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Dns;
-using AmneziaGeo.Server.Api.Proxy;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
@@ -201,7 +200,6 @@ public static class ClientEndpoints
         SubscriptionState subscriptions,
         PanelSettings panel,
         WebOptions options,
-        WebSocketFronts fronts,
         CancellationToken ct)
     {
         var client = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -221,12 +219,11 @@ public static class ClientEndpoints
             : null;
 
         var names = DnsHandout.For(endpoint, resolver.Settings ?? await dns.ReadAsync(ct).ConfigureAwait(false));
-        var front = (await fronts.ReadAsync(ct).ConfigureAwait(false))(endpoint);
 
         return Results.Ok(new ClientConfigResponse(
             ClientText.FileName(endpoint, client),
-            ClientText.Text(endpoint, client, template, front, names),
-            ClientLink.Link(endpoint, client, template, front, names),
+            ClientText.Text(endpoint, client, template, names),
+            ClientLink.Link(endpoint, client, template, names),
             SubscriptionAnswer.Address(
                 subscriptions.Current,
                 panel,

@@ -1,5 +1,5 @@
 [Unit]
-Description=AmneziaGeo websocket proxy %i
+Description=AmneziaGeo websocket front %i
 Documentation=https://github.com/bor-project/amneziageo_server
 After=network-online.target
 Wants=network-online.target

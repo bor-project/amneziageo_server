@@ -103,14 +103,19 @@ stage_web() {
   mv -T "$target.new" "$target"
 }
 
-# Puts the services and the websocket tool in place where they differ.
+# Puts the services and the websocket tool in place where they differ, and drops the unit of the relays.
 shared() {
   local reload= file
-  for file in amneziageo-server.service amneziageo-proxy@.service amneziageo-relay@.service; do
+  for file in amneziageo-server.service amneziageo-proxy@.service; do
     if put 644 "$here/$file" "/etc/systemd/system/$file"; then
       reload=1
     fi
   done
+
+  if [ -f /etc/systemd/system/amneziageo-relay@.service ]; then
+    rm -f /etc/systemd/system/amneziageo-relay@.service
+    reload=1
+  fi
 
   put 755 "$here/wstunnel" /usr/local/bin/wstunnel || true
   if [ -n "$reload" ]; then
@@ -167,24 +172,12 @@ start_server() {
   [ "$(systemctl is-active "$unit")" = active ] && [ "$(systemctl show -p MainPID --value "$unit")" = "$pid" ]
 }
 
-# Starts over the relays still running from a release about to be dropped, onto the current one.
-move_relays() {
-  local service pid
-  for service in $(systemctl list-units --plain --no-legend --state=active 'amneziageo-relay@*' | awk '{print $1}'); do
-    pid=$(systemctl show -p MainPID --value "$service")
-    case $(readlink -f "/proc/$pid/exe" 2>/dev/null || true) in
-      "$1"/*) systemctl restart "$service" ;;
-    esac
-  done
-}
-
 # Drops the releases and web interfaces the host no longer points at, and the oldest copies of the database.
 prune() {
   local keep dir
   keep=" $(readlink -f "$base/current") $(readlink -f "$base/previous" || true) "
   for dir in "$base"/releases/*; do
     if [ -d "$dir" ] && [[ $keep != *" $dir "* ]]; then
-      move_relays "$dir"
       rm -rf "$dir"
     fi
   done

@@ -81,6 +81,11 @@ public sealed record TunnelClient
     public ClientInbound Inbound { get; init; }
 
     /// <summary>
+    /// Whether the application of the client routes on its own.
+    /// </summary>
+    public ClientRouting Routing { get; init; }
+
+    /// <summary>
     /// The networks the client carries behind it.
     /// </summary>
     public IReadOnlyList<string> Routes { get; init; } = [];

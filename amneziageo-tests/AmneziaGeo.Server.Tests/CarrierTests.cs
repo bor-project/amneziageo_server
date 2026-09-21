@@ -31,6 +31,21 @@ public class CarrierTests
     }
 
     [Fact]
+    public void AnUpgradeProvesTheKeysUnlessTheProxyTakesCredentials()
+    {
+        var plain = WsCarrier.Handshake(WsEndpoint.Parse("proxy.example.net", 443, "46.8.237.222"), 51820, "key", "AmneziaGeo token");
+        var basic = WsCarrier.Handshake(
+            WsEndpoint.Parse("wss://user:secret@proxy.example.net:8443/path", 443, "46.8.237.222"), 51820, "key", "AmneziaGeo token");
+        var bare = WsCarrier.Handshake(WsEndpoint.Parse("proxy.example.net", 443, "46.8.237.222"), 51820, "key", null);
+
+        Assert.StartsWith("GET /v1/events HTTP/1.1\r\n", plain, StringComparison.Ordinal);
+        Assert.Contains("Authorization: AmneziaGeo token\r\n", plain, StringComparison.Ordinal);
+        Assert.Contains("Authorization: Basic ", basic, StringComparison.Ordinal);
+        Assert.DoesNotContain("AmneziaGeo", basic, StringComparison.Ordinal);
+        Assert.DoesNotContain("Authorization", bare, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnEmptyProxyFallsBackToTheServerItself()
     {
         var proxy = WsEndpoint.Parse(string.Empty, 51820, "46.8.237.222");

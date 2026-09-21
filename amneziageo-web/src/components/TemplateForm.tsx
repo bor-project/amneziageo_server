@@ -3,7 +3,7 @@ import { complaint } from "@/api/auth"
 import { useTemplateDefaults, useTemplatePreview } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
 import { EntryList } from "@/components/EntryList"
-import { Line, Part } from "@/components/fields"
+import { Flag, Line, Part } from "@/components/fields"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
@@ -96,6 +96,16 @@ export function TemplateForm({
         {preview.error !== null && (
           <div className="text-xs text-alarm sm:col-span-2">{t(complaint(preview.error))}</div>
         )}
+
+        <div className="sm:col-span-2">
+          <Flag
+            id="template-routing"
+            caption={t("templates.routing")}
+            value={draft.routing}
+            onChange={(routing) => put({ routing })}
+            hint={t("templates.routingHint")}
+          />
+        </div>
       </Part>
 
       <Part title={t("templates.partNetwork")}>

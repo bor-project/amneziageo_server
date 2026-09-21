@@ -52,6 +52,8 @@ public sealed record ConfigResponse(
     bool Nat,
     bool Opened,
     string Inbound,
+    bool WebSocket,
+    int ServicesPort,
     string[] Blocked,
     string PublicKey,
     string? PrivateKey,
@@ -81,7 +83,9 @@ public sealed record ConfigRequest(
     ObfuscationBody? Obfuscation,
     int? OfflineAfter = null,
     string? Inbound = null,
-    long? TemplateId = null);
+    long? TemplateId = null,
+    bool? WebSocket = null,
+    int? ServicesPort = null);
 
 /// <summary>
 /// What a request to turn an endpoint on or off carries.
@@ -138,6 +142,8 @@ public static class ConfigAnswers
         config.Nat,
         config.Opened,
         InboundName.Of(config.Inbound),
+        config.WebSocket,
+        config.ServicesPort,
         [.. config.Blocked],
         config.PublicKey,
         secrets ? config.PrivateKey : null,
@@ -195,6 +201,8 @@ public static class ConfigAnswers
         Nat = request.Nat ?? true,
         Opened = request.Opened ?? false,
         Inbound = InboundName.Read(request.Inbound, ClientInbound.Off),
+        WebSocket = request.WebSocket ?? false,
+        ServicesPort = request.ServicesPort ?? 0,
         Blocked = request.Blocked ?? [],
         PrivateKey = (request.PrivateKey ?? string.Empty).Trim(),
         PresharedKey = (request.PresharedKey ?? string.Empty).Trim(),

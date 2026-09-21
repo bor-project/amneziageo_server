@@ -32,12 +32,6 @@ import { OwnPassword } from "@/pages/OwnPassword"
 import { OutboundPage } from "@/pages/OutboundPage"
 import { OutboundRemove } from "@/pages/OutboundRemove"
 import { Password } from "@/pages/Password"
-import { Proxies } from "@/pages/Proxies"
-import { ProxyPage } from "@/pages/ProxyPage"
-import { ProxyRemove } from "@/pages/ProxyRemove"
-import { ProxyTemplatePage } from "@/pages/ProxyTemplatePage"
-import { ProxyTemplateRemove } from "@/pages/ProxyTemplateRemove"
-import { ProxyTemplates } from "@/pages/ProxyTemplates"
 import { RolePage } from "@/pages/RolePage"
 import { RoleRemove } from "@/pages/RoleRemove"
 import { RouteTest } from "@/pages/RouteTest"
@@ -60,7 +54,7 @@ import { useAppearance } from "@/theme/theme"
 const moved: { from: string; to: string }[] = [
   { from: "configs", to: "/connections" },
   { from: "clients", to: "/connections/clients" },
-  { from: "proxies", to: "/connections/proxies" },
+  { from: "proxies", to: "/connections" },
   { from: "rules", to: "/routing" },
   { from: "outbounds", to: "/routing/channels" },
   { from: "balancers", to: "/routing/channels" },
@@ -113,19 +107,6 @@ export function App() {
                   <Route path="templates/interfaces/new" element={<InterfaceTemplatePage />} />
                   <Route path="templates/interfaces/:templateId/edit" element={<InterfaceTemplatePage />} />
                   <Route path="templates/interfaces/:templateId/delete" element={<InterfaceTemplateRemove />} />
-                </Route>
-                <Route path="templates/proxies" element={<ProxyTemplates />} />
-                <Route element={<RequireScope scope={scopes.manageRouting} />}>
-                  <Route path="templates/proxies/new" element={<ProxyTemplatePage />} />
-                  <Route path="templates/proxies/:templateId/edit" element={<ProxyTemplatePage />} />
-                  <Route path="templates/proxies/:templateId/delete" element={<ProxyTemplateRemove />} />
-                </Route>
-                <Route path="proxies" element={<Proxies />} />
-                <Route path="proxies/:proxyId" element={<Navigate to="edit" replace />} />
-                <Route element={<RequireScope scope={scopes.manageRouting} />}>
-                  <Route path="proxies/new" element={<ProxyPage />} />
-                  <Route path="proxies/:proxyId/edit" element={<ProxyPage />} />
-                  <Route path="proxies/:proxyId/delete" element={<ProxyRemove />} />
                 </Route>
               </Route>
               <Route path="routing" element={<Sectioned title="nav.routing" items={routing} />}>

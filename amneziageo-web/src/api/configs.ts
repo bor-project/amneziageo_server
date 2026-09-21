@@ -48,6 +48,8 @@ export interface Config {
   nat: boolean
   opened: boolean
   inbound: Inbound
+  webSocket: boolean
+  servicesPort: number
   blocked: string[]
   publicKey: string
   privateKey: string | null
@@ -72,6 +74,8 @@ export interface ConfigDraft {
   nat: boolean
   opened: boolean
   inbound: Inbound
+  webSocket: boolean
+  servicesPort: number
   blocked: string[]
   privateKey: string
   presharedKey: string
@@ -189,6 +193,8 @@ export function draftOf(config: Config): ConfigDraft {
     nat: config.nat,
     opened: config.opened,
     inbound: config.inbound,
+    webSocket: config.webSocket,
+    servicesPort: config.servicesPort,
     blocked: config.blocked,
     privateKey: config.privateKey ?? "",
     presharedKey: config.presharedKey ?? "",

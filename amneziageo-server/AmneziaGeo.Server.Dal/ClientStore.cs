@@ -236,6 +236,8 @@ public sealed class ClientStore
             TemplateId = parent.TemplateId,
             IsEnabled = parent.IsEnabled,
             DailyLimit = parent.DailyLimit,
+            Inbound = parent.Inbound,
+            Routing = parent.Routing,
             ParentId = parent.Id,
         };
 
@@ -334,7 +336,7 @@ public sealed class ClientStore
         var now = _time.GetUtcNow();
         Write(entity, wanted);
         entity.UpdatedUtc = now;
-        await FollowAsync(id, wanted.IsEnabled, wanted.TemplateId, wanted.DailyLimit, wanted.Inbound, now, ct)
+        await FollowAsync(id, wanted.IsEnabled, wanted.TemplateId, wanted.DailyLimit, wanted.Inbound, wanted.Routing, now, ct)
             .ConfigureAwait(false);
         await NameFollow.ClientAsync(_db, old, entity.Name, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -356,7 +358,7 @@ public sealed class ClientStore
         var now = _time.GetUtcNow();
         entity.IsEnabled = on;
         entity.UpdatedUtc = now;
-        await FollowAsync(id, on, entity.TemplateId, entity.DailyLimit, (ClientInbound)entity.Inbound, now, ct)
+        await FollowAsync(id, on, entity.TemplateId, entity.DailyLimit, (ClientInbound)entity.Inbound, (ClientRouting)entity.Routing, now, ct)
             .ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
@@ -389,6 +391,7 @@ public sealed class ClientStore
         long? template,
         long limit,
         ClientInbound inbound,
+        ClientRouting routing,
         DateTimeOffset now,
         CancellationToken ct)
     {
@@ -399,6 +402,7 @@ public sealed class ClientStore
             device.TemplateId = template;
             device.DailyLimit = limit;
             device.Inbound = (int)inbound;
+            device.Routing = (int)routing;
             device.UpdatedUtc = now;
         }
     }
@@ -516,6 +520,7 @@ public sealed class ClientStore
         MultiDevice = entity.MultiDevice,
         DailyLimit = entity.DailyLimit,
         Inbound = (ClientInbound)entity.Inbound,
+        Routing = (ClientRouting)entity.Routing,
         Routes = Parts(entity.Routes),
         Forwards = Carried(entity.Forwards),
         CreatedUtc = entity.CreatedUtc,
@@ -537,6 +542,7 @@ public sealed class ClientStore
         entity.MultiDevice = client.MultiDevice;
         entity.DailyLimit = client.DailyLimit;
         entity.Inbound = (int)client.Inbound;
+        entity.Routing = (int)client.Routing;
         entity.Routes = string.Join(", ", client.Routes);
         entity.Forwards = string.Join(", ", client.Forwards.Select(forward => forward.ToString()));
     }

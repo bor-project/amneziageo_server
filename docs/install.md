@@ -157,8 +157,7 @@ What goes on while the server starts over:
 | Routing rules and firewall tables | stay on the host and are laid anew in one step at start |
 | Addresses the resolver put into the sets | are read back from the host at start and laid again with the rules |
 | The resolver | answers nothing for the seconds the server takes to start; clients ask again |
-| Proxies | keep running: a proxy is started over only when its files change |
-| Relays | keep running the release they started from, until that release is dropped |
+| Websocket fronts | keep running: a front is started over only when its files change |
 | The panel and the subscriptions | do not answer while the server starts |
 
 ### Only the web interface
@@ -201,8 +200,7 @@ the host keeps.
 | `/var/lib/amneziageo-server/backup` | the database as it was before each of the last five updates |
 
 The host keeps the current release and the one before it, each with its web interface, and the web interface
-served before the last one; the rest goes, a release that did not come up among it. A relay still running from a
-release that goes is started over on the current one first. `AmneziaGeo.Server.Api` and `AmneziaGeo.Server.Cli`
+served before the last one; the rest goes, a release that did not come up among it. `AmneziaGeo.Server.Api` and `AmneziaGeo.Server.Cli`
 in `/opt/amneziageo-server` lead to the current release, so the commands above work as they are.
 
 A panel put on before releases kept its files right in `/opt/amneziageo-server`. The first update moves them

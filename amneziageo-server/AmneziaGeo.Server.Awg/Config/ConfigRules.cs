@@ -73,6 +73,7 @@ public static partial class ConfigRules
         CheckName(config.Name)
         ?? CheckHost(config.Host)
         ?? CheckPort(config.ListenPort)
+        ?? CheckServicesPort(config.ServicesPort)
         ?? CheckRanges(config.Address, "bad-address", "the interface")
         ?? CheckRanges(config.AllowedIps, "bad-allowed", "the client")
         ?? CheckBlocked(config.Blocked)
@@ -288,6 +289,9 @@ public static partial class ConfigRules
 
     private static ConfigFault? CheckPort(int port) =>
         port is > 0 and <= 65535 ? null : Fault("bad-port", "the port is outside 1 to 65535");
+
+    private static ConfigFault? CheckServicesPort(int port) =>
+        port is >= 0 and <= 65535 ? null : Fault("bad-services-port", "the port of the services is outside 1 to 65535");
 
     private static ConfigFault? CheckRanges(IReadOnlyList<string> ranges, string code, string owner)
     {

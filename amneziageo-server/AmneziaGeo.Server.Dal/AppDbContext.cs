@@ -1,7 +1,6 @@
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
-using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Routing.Probe;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Geo;
@@ -55,13 +54,9 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<PanelEntity> Panel => Set<PanelEntity>();
 
-    public DbSet<ProxyEntity> Proxy => Set<ProxyEntity>();
-
     public DbSet<TemplateEntity> Templates => Set<TemplateEntity>();
 
     public DbSet<InterfaceTemplateEntity> InterfaceTemplates => Set<InterfaceTemplateEntity>();
-
-    public DbSet<ProxyTemplateEntity> ProxyTemplates => Set<ProxyTemplateEntity>();
 
     public DbSet<SubscriptionEntity> Subscription => Set<SubscriptionEntity>();
 
@@ -165,14 +160,6 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.HasIndex(template => template.ClientTemplateId);
         });
 
-        builder.Entity<ProxyTemplateEntity>(entity =>
-        {
-            entity.Property(template => template.Name).HasMaxLength(ProxyTemplateRules.MaxNameLength);
-            entity.Property(template => template.Kind).HasMaxLength(8);
-            entity.Property(template => template.Target).HasMaxLength(ProxyRules.MaxTargetLength);
-            entity.HasIndex(template => template.Name).IsUnique();
-        });
-
         builder.Entity<GeoSourceEntity>(entity =>
         {
             entity.Property(source => source.Name).HasMaxLength(GeoSourceRules.MaxNameLength);
@@ -223,19 +210,6 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(row => row.Certificate).HasMaxLength(PanelRules.MaxFileLength);
             entity.Property(row => row.CertificateKey).HasMaxLength(PanelRules.MaxFileLength);
             entity.Property(row => row.Title).HasMaxLength(SubscriptionRules.MaxTitleLength);
-        });
-
-        builder.Entity<ProxyEntity>(entity =>
-        {
-            entity.Property(row => row.Name).HasMaxLength(ProxyRules.MaxNameLength);
-            entity.Property(row => row.Kind).HasMaxLength(8);
-            entity.Property(row => row.Path).HasMaxLength(ProxyRules.MaxPathLength);
-            entity.Property(row => row.Target).HasMaxLength(ProxyRules.MaxTargetLength);
-            entity.Property(row => row.Certificate).HasMaxLength(ProxyRules.MaxFileLength);
-            entity.Property(row => row.CertificateKey).HasMaxLength(ProxyRules.MaxFileLength);
-            entity.HasIndex(row => row.Name).IsUnique();
-            entity.HasIndex(row => new { row.Kind, row.Port }).IsUnique();
-            entity.HasIndex(row => row.TemplateId);
         });
 
         builder.Entity<BalancerEntity>(entity =>

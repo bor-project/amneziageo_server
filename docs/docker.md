@@ -67,7 +67,7 @@ the new one in `AMNEZIAGEO_HEALTH`.
 | Where | Holds |
 |---|---|
 | volume `data`, `/var/lib/amneziageo-server` | the database and the geo files |
-| volume `settings`, `/etc/amneziageo-server` | the signing key and the files of the proxies |
+| volume `settings`, `/etc/amneziageo-server` | the signing key and the files of the websocket fronts |
 | `/var/run/docker.sock` of the host | the daemon the panel moves itself onto a new image through |
 | `/etc/amnezia/amneziawg` of the host | the files of the interfaces |
 | `/opt/amneziageo-server` in the image | the server, the console and the web interface |
@@ -109,7 +109,7 @@ The database stays as the newer panel left it. The copy from before the update g
 
 | What | In the container |
 |---|---|
-| Proxies | the panel runs `wstunnel` and the relays itself and starts one again three seconds after it falls over; they go down and come up with the container |
+| Websocket fronts | the panel runs `wstunnel` itself and starts it again three seconds after it falls over; the fronts go down and come up with the container |
 | Firewall | the image carries no ufw, so the panel lays its own nftables tables; on a host whose ufw is turned on, its `drop` wins, and the ports are opened in ufw by hand, see [firewall.md](firewall.md) |
 | Accounts of the host | turned off: `Auth__HostLogin=Off` and `Auth__HostUsers=false`, the panel signs in its own accounts alone and refuses to carry one to the host |
 | Restart from the panel | the server ends, and the restart policy of compose starts the container again |

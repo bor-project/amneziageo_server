@@ -31,7 +31,6 @@ public static class ClientLink
         ServerConfig config,
         TunnelClient client,
         ClientTemplate? template = null,
-        string? webSocket = null,
         IReadOnlyList<string>? resolver = null)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -39,7 +38,7 @@ public static class ClientLink
 
         var last = new JsonObject
         {
-            ["config"] = ClientText.Text(config, client, template, webSocket, resolver),
+            ["config"] = ClientText.Text(config, client, template, resolver),
             ["hostName"] = config.Host,
             ["port"] = config.ListenPort,
         };
@@ -59,31 +58,9 @@ public static class ClientLink
             ["defaultContainer"] = Container,
             ["description"] = ClientText.Title(config, client),
             ["hostName"] = config.Host,
-            ["amneziageo"] = Extras(config, client, webSocket),
         };
 
         return Scheme + Base64Url.EncodeToString(Packed(Encoding.UTF8.GetBytes(document.ToJsonString(Plain))));
-    }
-
-    private static JsonObject Extras(ServerConfig config, TunnelClient client, string? webSocket)
-    {
-        var routes = new JsonArray();
-        foreach (var route in client.Routes)
-        {
-            routes.Add(route);
-        }
-
-        var extras = new JsonObject
-        {
-            ["inbound"] = InboundName.Of(InboundName.Taken(client.Inbound, config.Inbound)),
-            ["routes"] = routes,
-        };
-        if (!string.IsNullOrEmpty(webSocket))
-        {
-            extras["websocket"] = webSocket;
-        }
-
-        return extras;
     }
 
     private static byte[] Packed(byte[] data)

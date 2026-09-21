@@ -46,5 +46,6 @@ cargo build --release --manifest-path wstunnel/wstunnel/Cargo.toml -p wstunnel-c
 ```
 
 `deploy/publish.sh` builds it the same way and puts the binary in the package, `deploy/install.sh` puts it
-at `/usr/local/bin/wstunnel` with a service of its own. The panel writes the arguments and the whitelist of
-targets the proxy takes; the tree of the fork stays as upstream wrote it.
+at `/usr/local/bin/wstunnel` with a service of its own, one instance per endpoint that takes the websocket. The
+panel writes the arguments and the whitelist of targets, see [services.md](services.md); the tree of the fork
+stays as upstream wrote it.

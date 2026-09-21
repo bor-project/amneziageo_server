@@ -46,6 +46,7 @@ public sealed record ClientResponse(
     bool MultiDevice,
     long DailyLimit,
     string Inbound,
+    string Routing,
     IReadOnlyList<string> Routes,
     IReadOnlyList<ForwardBody> Forwards,
     ClientStateBody State,
@@ -70,7 +71,8 @@ public sealed record ClientRequest(
     long? DailyLimit = null,
     string? Inbound = null,
     IReadOnlyList<string>? Routes = null,
-    IReadOnlyList<ForwardBody>? Forwards = null);
+    IReadOnlyList<ForwardBody>? Forwards = null,
+    string? Routing = null);
 
 /// <summary>
 /// Whether a client is on.
@@ -137,6 +139,7 @@ public static class ClientAnswers
             client.MultiDevice,
             client.DailyLimit,
             InboundName.Of(client.Inbound),
+            RoutingName.Of(client.Routing),
             client.Routes,
             [.. client.Forwards.Select(forward => new ForwardBody(forward.Protocol, forward.From, forward.To))],
             new ClientStateBody(
@@ -179,6 +182,7 @@ public static class ClientAnswers
             MultiDevice = request.MultiDevice ?? held?.MultiDevice ?? false,
             DailyLimit = request.DailyLimit ?? held?.DailyLimit ?? 0,
             Inbound = InboundName.Read(request.Inbound, held?.Inbound ?? ClientInbound.Endpoint),
+            Routing = RoutingName.Read(request.Routing, held?.Routing ?? ClientRouting.Template),
             Routes = request.Routes is null ? held?.Routes ?? [] : Clean(request.Routes),
             Forwards = request.Forwards is null ? held?.Forwards ?? [] : Carried(request.Forwards),
         };

@@ -15,6 +15,7 @@ public sealed record TemplateResponse(
     IReadOnlyList<string> Dns,
     int? Mtu,
     int? Keepalive,
+    bool Routing,
     int Clients,
     DateTimeOffset? RefreshedUtc,
     DateTimeOffset CreatedUtc,
@@ -28,7 +29,8 @@ public sealed record TemplateRequest(
     IReadOnlyList<string>? Entries,
     IReadOnlyList<string>? Dns,
     int? Mtu,
-    int? Keepalive);
+    int? Keepalive,
+    bool? Routing = null);
 
 /// <summary>
 /// The entries the panel asks what they come out as.
@@ -56,7 +58,8 @@ public sealed record TemplateDefaultsResponse(
     IReadOnlyList<string> AllowedIps,
     IReadOnlyList<string> Dns,
     int Mtu,
-    int Keepalive);
+    int Keepalive,
+    bool Routing);
 
 /// <summary>
 /// Turns client templates into what the panel reads and back.
@@ -91,6 +94,7 @@ public static class TemplateAnswers
             template.Dns,
             template.Mtu,
             template.Keepalive,
+            template.Routing,
             clients,
             template.RefreshedUtc,
             template.CreatedUtc,
@@ -101,7 +105,12 @@ public static class TemplateAnswers
     /// Returns the values a template gives where it names none.
     /// </summary>
     public static TemplateDefaultsResponse Defaults(IEnumerable<string> address) =>
-        new(TemplateDefaults.AllowedIps(address), TemplateDefaults.Dns, TemplateDefaults.Mtu, TemplateDefaults.Keepalive);
+        new(
+            TemplateDefaults.AllowedIps(address),
+            TemplateDefaults.Dns,
+            TemplateDefaults.Mtu,
+            TemplateDefaults.Keepalive,
+            TemplateDefaults.Routing);
 
     /// <summary>
     /// Returns what a request asks a template to become.
@@ -117,6 +126,7 @@ public static class TemplateAnswers
             Dns = Clean(request.Dns),
             Mtu = request.Mtu,
             Keepalive = request.Keepalive,
+            Routing = request.Routing ?? TemplateDefaults.Routing,
         };
     }
 

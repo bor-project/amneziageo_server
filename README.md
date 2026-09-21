@@ -57,8 +57,8 @@ what the geo databases carry is in [docs/geo.md](docs/geo.md),
 how traffic leaves the host is in [docs/outbounds.md](docs/outbounds.md), how it is spread over the
 ways out is in [docs/balancers.md](docs/balancers.md), where it is sent is in
 [docs/rules.md](docs/rules.md), how the names of the clients are answered is in
-[docs/dns.md](docs/dns.md), how the tunnels are carried inside a websocket is in
-[docs/proxy.md](docs/proxy.md), how the ports of the panel are opened in the firewall of the host is in
+[docs/dns.md](docs/dns.md), what an endpoint offers its clients on its TCP port, the tunnel inside a websocket
+among it, is in [docs/services.md](docs/services.md), how the ports of the panel are opened in the firewall of the host is in
 [docs/firewall.md](docs/firewall.md), how the panel goes on a server is in
 [docs/install.md](docs/install.md), or in a container in [docs/docker.md](docs/docker.md), and how it
 updates itself is in [docs/updates.md](docs/updates.md).

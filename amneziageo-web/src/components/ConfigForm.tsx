@@ -49,11 +49,12 @@ export function ConfigForm({
   const [text, setText] = useState("")
   const said = error !== null && error !== undefined ? failure(t, error) : fault
   const port = portFault(t, draft.listenPort, held)
+  const services = draft.servicesPort === 0 ? "" : portFault(t, draft.servicesPort, held)
   const name = nameFault(t, draft.name, others.map((one) => one.name))
   const address = addressFault(t, draft.address)
   const host = draft.host.length > 255 ? t("error.badHost") : ""
   const ready =
-    !pending && draft.name.length > 0 && [port, name, address, host].every((one) => one.length === 0)
+    !pending && draft.name.length > 0 && [port, services, name, address, host].every((one) => one.length === 0)
 
   function put(change: Partial<ConfigDraft>) {
     setDraft({ ...draft, ...change })
@@ -166,6 +167,22 @@ export function ConfigForm({
           <option value="server">{t("clients.inboundServer")}</option>
           <option value="network">{t("clients.inboundNetwork")}</option>
         </Pick>
+        <Flag
+          id="config-websocket"
+          caption={t("configs.webSocket")}
+          value={draft.webSocket}
+          onChange={(value) => put({ webSocket: value })}
+        />
+        <div>
+          <Count
+            id="config-services-port"
+            caption={t("configs.servicesPort")}
+            value={draft.servicesPort}
+            unset={String(draft.listenPort)}
+            onChange={(value) => put({ servicesPort: value })}
+          />
+          {services.length > 0 && <div className="mt-1 text-xs text-alarm">{services}</div>}
+        </div>
       </Part>
 
       <Part title={t("configs.template")}>

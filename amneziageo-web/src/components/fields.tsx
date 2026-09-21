@@ -143,12 +143,14 @@ export function Count({
   value,
   onChange,
   hint = "",
+  unset = "",
 }: {
   id: string
   caption: ReactNode
   value: number
   onChange: (value: number) => void
   hint?: string
+  unset?: string
 }) {
   return (
     <div>
@@ -158,7 +160,8 @@ export function Count({
       <input
         id={id}
         type="number"
-        value={value}
+        value={unset.length > 0 && value === 0 ? "" : value}
+        placeholder={unset}
         onChange={(e) => onChange(Number(e.target.value))}
         className={`mt-1 ${field}`}
       />

@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Outbound;
 
@@ -39,7 +40,7 @@ public sealed class CarrierHost : IDisposable
         }
 
         var address = await HostAddress.ResolveAsync(proxy.Host, ct).ConfigureAwait(false);
-        var mark = $"{proxy.Host}|{proxy.Port}|{proxy.PathPrefix}|{proxy.Credentials}|{address}|{outbound.Port}";
+        var mark = $"{proxy.Host}|{proxy.Port}|{proxy.PathPrefix}|{proxy.Credentials}|{address}|{outbound.Port}|{outbound.PublicKey}|{outbound.PeerKey}";
         var stale = default(WsCarrier);
         var carrier = default(WsCarrier);
         lock (_sync)
@@ -54,7 +55,7 @@ public sealed class CarrierHost : IDisposable
                 stale = live.Carrier;
             }
 
-            carrier = WsCarrier.Start(proxy, address, outbound.Port, null, _note);
+            carrier = WsCarrier.Start(proxy, address, outbound.Port, Token(outbound), null, _note);
             _held[outbound.Name] = new Held(carrier, mark);
         }
 
@@ -110,6 +111,12 @@ public sealed class CarrierHost : IDisposable
             carrier.Dispose();
         }
     }
+
+    // The header an outbound proves its keys with to the front of its server.
+    private static Func<string>? Token(OutboundConfig outbound) =>
+        Curve25519.IsKey(outbound.PrivateKey) && Curve25519.IsKey(outbound.PeerKey)
+            ? () => PeerToken.Header(outbound.PrivateKey, outbound.PeerKey, DateTimeOffset.UtcNow)
+            : null;
 
     private sealed record Held(WsCarrier Carrier, string Mark);
 }

@@ -19,6 +19,8 @@ export interface ClientState {
 
 export type Inbound = "off" | "server" | "network" | "endpoint"
 
+export type Routing = "template" | "on" | "off"
+
 export interface Forward {
   protocol: "tcp" | "udp"
   from: number
@@ -42,6 +44,7 @@ export interface Client {
   multiDevice: boolean
   dailyLimit: number
   inbound: Inbound
+  routing: Routing
   routes: string[]
   forwards: Forward[]
   state: ClientState
@@ -63,6 +66,7 @@ export interface ClientDraft {
   multiDevice: boolean
   dailyLimit: number
   inbound: Inbound
+  routing: Routing
   routes: string[]
   forwards: Forward[]
 }
@@ -137,6 +141,7 @@ export function draftOf(one: Client): ClientDraft {
     multiDevice: one.multiDevice,
     dailyLimit: one.dailyLimit,
     inbound: one.inbound,
+    routing: one.routing,
     routes: one.routes,
     forwards: one.forwards,
   }

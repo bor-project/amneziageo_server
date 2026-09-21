@@ -26,6 +26,11 @@ export function DefaultTemplate() {
 
       <Part title={t("templates.partRouting")}>
         <Shown id="template-entries" caption={t("templates.allowed")} value={defaults.allowedIps.join(", ")} wide />
+        <Shown
+          id="template-routing"
+          caption={t("templates.routing")}
+          value={t(defaults.routing ? "clients.routingOn" : "clients.routingOff")}
+        />
       </Part>
 
       <Part title={t("templates.partNetwork")}>

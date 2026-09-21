@@ -46,19 +46,7 @@ export const connections: Item[] = [
         scope: scopes.readState,
         add: { to: "/connections/templates/interfaces/new", scope: scopes.manageInterfaces },
       },
-      {
-        to: "/connections/templates/proxies",
-        label: "tab.templateProxies",
-        scope: scopes.readState,
-        add: { to: "/connections/templates/proxies/new", scope: scopes.manageRouting },
-      },
     ],
-  },
-  {
-    to: "/connections/proxies",
-    label: "tab.proxies",
-    scope: scopes.readState,
-    add: { to: "/connections/proxies/new", scope: scopes.manageRouting },
   },
 ]
 
