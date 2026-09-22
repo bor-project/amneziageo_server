@@ -341,6 +341,7 @@ public sealed class UpdateTests : IDisposable
             new[] { "/run/docker.sock:/var/run/docker.sock", "/opt/amneziageo-docker:/opt/amneziageo-docker", Data + ":" + Data },
             Words(spec["HostConfig"]!["Binds"]));
         Assert.Contains("AMNEZIAGEO_UPDATE_TAG=1.0.1.0", Words(spec["Env"]));
+        Assert.Contains("AMNEZIAGEO_UPDATE_CONTAINER=" + place!.Container, Words(spec["Env"]));
         Assert.Contains("AMNEZIAGEO_UPDATE_FILES=/opt/amneziageo-docker/compose.yaml", Words(spec["Env"]));
         Assert.Contains("AMNEZIAGEO_UPDATE_WORK=" + Data + "/update", Words(spec["Env"]));
         Assert.Equal(new[] { DockerUpdater.Tool }, Words(spec["Entrypoint"]));

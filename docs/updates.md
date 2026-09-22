@@ -75,11 +75,15 @@ want that leaves the line out and updates by hand, see [docker.md](docker.md).
 
 The panel pulls the image of the release by its digest, names it the way the project names the image of the
 panel, with the version as the tag, and starts a container of the new image, `amneziageo-server-update-<version>`,
-that moves the panel. It stops the panel, copies the database into `backup` of the data directory, writes
-`AMNEZIAGEO_TAG=<version>` into `.env` of the project and starts the panel on the new image. Where the panel does
-not come up healthy within two minutes, the database and `.env` go back and the panel starts on the image before.
-The compose file has to take the tag from `AMNEZIAGEO_TAG`, as the one in the repository does; the container
-checks that before it stops anything. The containers of the updates that ended are removed at the next look.
+that moves the panel. It copies the database into `backup` of the data directory, writes `AMNEZIAGEO_TAG=<version>`
+into `.env` of the project, stops the panel and makes its container over onto the new image through the daemon:
+the new one is created with the settings of the one that ran, and the image is all that changes. The old container
+waits under its name with the version it ran until the new one comes up healthy. Where that does not happen within
+three minutes, the new container goes away, the database and `.env` go back and the old one runs again.
+
+The files of compose are not read, so the update goes through wherever they lie and whatever they name; `.env`
+takes the tag so that `docker compose up -d` by hand later starts the same image. The containers of the updates
+that ended are removed at the next look.
 
 ## What the panel shows
 

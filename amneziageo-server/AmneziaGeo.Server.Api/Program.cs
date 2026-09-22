@@ -14,6 +14,11 @@ using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Updates;
 using AmneziaGeo.Server.Api.Web;
 
+if (args is [HandoverCommand.Name, ..])
+{
+    return await HandoverCommand.RunAsync(CancellationToken.None).ConfigureAwait(false);
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSystemd();
@@ -80,3 +85,5 @@ app.MapControllers();
 app.MapPanelPage();
 
 app.Run();
+
+return 0;

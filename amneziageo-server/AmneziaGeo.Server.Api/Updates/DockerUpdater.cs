@@ -50,7 +50,10 @@ public static partial class DockerUpdater
     /// </summary>
     public const string Tool = "/usr/local/bin/amneziageo-server-update";
 
-    private const string InnerSocket = "/var/run/docker.sock";
+    /// <summary>
+    /// Where the socket of the daemon lies in the container that moves the panel.
+    /// </summary>
+    public const string InnerSocket = "/var/run/docker.sock";
 
     private static readonly TimeSpan PullLimit = TimeSpan.FromMinutes(20);
 
@@ -169,6 +172,7 @@ public static partial class DockerUpdater
             ["Entrypoint"] = new JsonArray(Tool),
             ["Cmd"] = new JsonArray(),
             ["Env"] = new JsonArray(
+                "AMNEZIAGEO_UPDATE_CONTAINER=" + place.Container,
                 "AMNEZIAGEO_UPDATE_PROJECT=" + place.Project,
                 "AMNEZIAGEO_UPDATE_DIR=" + place.Folder,
                 "AMNEZIAGEO_UPDATE_FILES=" + string.Join(',', place.Files),
