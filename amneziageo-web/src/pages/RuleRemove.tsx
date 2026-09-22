@@ -14,7 +14,9 @@ export function RuleRemove() {
   const all = rules.data ?? []
   const held = all.find((one) => one.id === Number(ruleId))
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("rules.remove") }])
+  useTail(
+    held === undefined ? [] : [{ label: held.name, to: `/routing/rules/${held.id}/edit` }, { label: t("rules.remove") }],
+  )
 
   if (held === undefined) {
     return rules.data === undefined ? (

@@ -1,11 +1,9 @@
 import { useState } from "react"
-import { Link } from "react-router-dom"
 import { span } from "@/address"
 import { complaint } from "@/api/auth"
 import { failure, useConfigs, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
-import { useInterfaceTemplates } from "@/api/interfaceTemplates"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { Count, Flag, Help, Line, Part, Pick, Switch } from "@/components/fields"
 import { portFault, usePortHolders } from "@/components/ports"
@@ -40,7 +38,6 @@ export function ConfigForm({
   const t = useText()
   const keys = useKeyPair()
   const shared = usePresharedKey()
-  const templates = useInterfaceTemplates().data ?? []
   const others = (useConfigs().data ?? []).filter((one) => one.id !== self)
   const held = usePortHolders({ config: self })
   const [draft, setDraft] = useState(start)
@@ -55,6 +52,7 @@ export function ConfigForm({
   const host = draft.host.length > 255 ? t("error.badHost") : ""
   const ready =
     !pending && draft.name.length > 0 && [port, services, name, address, host].every((one) => one.length === 0)
+  const twisted = JSON.stringify(draft.obfuscation) !== JSON.stringify(start.obfuscation)
 
   function put(change: Partial<ConfigDraft>) {
     setDraft({ ...draft, ...change })
@@ -62,19 +60,6 @@ export function ConfigForm({
 
   function twist(change: Partial<Obfuscation>) {
     setDraft({ ...draft, obfuscation: { ...draft.obfuscation, ...change } })
-  }
-
-  function choose(value: string) {
-    const templateId = value === "" ? null : Number(value)
-    const found = templates.find((one) => one.id === templateId)
-
-    if (found === undefined || self !== undefined) {
-      put({ templateId })
-
-      return
-    }
-
-    put({ templateId, listenPort: found.listenPort, address: [found.subnet] })
   }
 
   async function pair() {
@@ -92,7 +77,6 @@ export function ConfigForm({
     const found = await read.mutateAsync({ name: draft.name, text })
     setDraft({
       ...draft,
-      templateId: null,
       listenPort: found.listenPort,
       address: found.address,
       dns: found.dns,
@@ -185,71 +169,42 @@ export function ConfigForm({
         </div>
       </Part>
 
-      <Part title={t("configs.template")}>
-        <Pick
-          id="config-template"
-          caption={t("configs.template")}
-          value={draft.templateId === null ? "" : String(draft.templateId)}
-          onChange={choose}
+      <Part title={t("configs.clients")}>
+        <Line
+          id="config-allowed"
+          caption={t("configs.allowed")}
+          value={draft.allowedIps.join(", ")}
+          onChange={(value) => put({ allowedIps: parts(value) })}
           wide
-        >
-          {draft.templateId === null && <option value="">{t("configs.noTemplate")}</option>}
-          {templates.map((one) => (
-            <option key={one.id} value={one.id}>
-              {one.name}
-            </option>
-          ))}
-        </Pick>
-
-        {draft.templateId !== null && (
-          <div className="-mt-2 flex justify-end sm:col-span-2">
-            <Link
-              to={`/connections/templates/interfaces/${draft.templateId}/edit`}
-              className="text-sm text-brand-ink hover:text-brand-lit"
-            >
-              {t("action.goTo")}
-            </Link>
-          </div>
-        )}
+        />
+        <Line
+          id="config-dns"
+          caption={t("configs.dns")}
+          value={draft.dns.join(", ")}
+          onChange={(value) => put({ dns: parts(value) })}
+        />
+        <Count id="config-mtu" caption={t("configs.mtu")} value={draft.mtu} onChange={(value) => put({ mtu: value })} />
+        <Count
+          id="config-keepalive"
+          caption={t("configs.keepalive")}
+          value={draft.keepalive}
+          onChange={(value) => put({ keepalive: value })}
+        />
+        <Count
+          id="config-online"
+          caption={t("configs.offlineAfter")}
+          value={draft.offlineAfter}
+          onChange={(value) => put({ offlineAfter: value })}
+          hint={t("configs.offlineAfterHint")}
+        />
+        <Line
+          id="config-blocked"
+          caption={t("configs.blocked")}
+          value={draft.blocked.join(", ")}
+          onChange={(value) => put({ blocked: parts(value) })}
+          wide
+        />
       </Part>
-
-      {draft.templateId === null && (
-        <Part title={t("configs.clients")}>
-          <Line
-            id="config-allowed"
-            caption={t("configs.allowed")}
-            value={draft.allowedIps.join(", ")}
-            onChange={(value) => put({ allowedIps: parts(value) })}
-            wide
-          />
-          <Line
-            id="config-dns"
-            caption={t("configs.dns")}
-            value={draft.dns.join(", ")}
-            onChange={(value) => put({ dns: parts(value) })}
-          />
-          <Count
-            id="config-keepalive"
-            caption={t("configs.keepalive")}
-            value={draft.keepalive}
-            onChange={(value) => put({ keepalive: value })}
-          />
-          <Count
-            id="config-online"
-            caption={t("configs.offlineAfter")}
-            value={draft.offlineAfter}
-            onChange={(value) => put({ offlineAfter: value })}
-            hint={t("configs.offlineAfterHint")}
-          />
-          <Line
-            id="config-blocked"
-            caption={t("configs.blocked")}
-            value={draft.blocked.join(", ")}
-            onChange={(value) => put({ blocked: parts(value) })}
-            wide
-          />
-        </Part>
-      )}
 
       <Part title={t("configs.keys")}>
         <Line
@@ -287,11 +242,12 @@ export function ConfigForm({
         </div>
       </Part>
 
-      {draft.templateId === null && (
-        <Part title={t("configs.obfuscation")}>
-          <ObfuscationFields id="config" cover={draft.obfuscation} onChange={twist} />
-        </Part>
-      )}
+      <Part title={t("configs.obfuscation")}>
+        <ObfuscationFields id="config" cover={draft.obfuscation} onChange={twist} />
+        {self !== undefined && twisted && (
+          <div className="text-xs text-alarm sm:col-span-2">{t("configs.obfuscationWarning")}</div>
+        )}
+      </Part>
 
       {importable && (
         <Part title={t("configs.import")}>

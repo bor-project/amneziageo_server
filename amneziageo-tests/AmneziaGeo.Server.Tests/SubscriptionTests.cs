@@ -12,11 +12,12 @@ namespace AmneziaGeo.Server.Tests;
 public class SubscriptionTests
 {
     [Fact]
-    public void TheSubscriptionsStartOffOnAPortOfTheirOwn()
+    public void TheSubscriptionsStartOnAtThePortsOfTheServices()
     {
         var settings = SubscriptionDefaults.Settings;
 
-        Assert.False(settings.IsEnabled);
+        Assert.True(settings.IsEnabled);
+        Assert.False(settings.Separate);
         Assert.Equal(["*:2096"], settings.Entries);
         Assert.Equal("/sub/", settings.Prefix);
         Assert.Equal(12, settings.UpdateHours);
@@ -42,10 +43,32 @@ public class SubscriptionTests
     public void APathThePanelAnswersUnderIsRefusedOnItsPort(string path)
     {
         var panel = PanelDefaults.Settings with { Path = "panel" };
-        var settings = SubscriptionDefaults.Settings with { Port = panel.Port, Path = path };
+        var settings = SubscriptionDefaults.Settings with { Separate = true, Port = panel.Port, Path = path };
 
         Assert.Equal("subscription-path-taken", SubscriptionRules.Check(settings, panel)?.Code);
         Assert.Null(SubscriptionRules.Check(settings with { Port = 2096 }, panel));
+    }
+
+    [Theory]
+    [InlineData("api", "subscription-path-taken")]
+    [InlineData("v1/sub", "subscription-path-taken")]
+    [InlineData("sub", null)]
+    [InlineData("panel", null)]
+    public void APathTheServicesAnswerUnderIsRefusedOnTheirPorts(string path, string? code)
+    {
+        var settings = SubscriptionDefaults.Settings with { Path = path };
+
+        Assert.Equal(code, SubscriptionRules.Check(settings, PanelDefaults.Settings with { Path = "panel" })?.Code);
+    }
+
+    [Fact]
+    public void TheCertificateAndThePortOfTheirOwnCountOnlyApart()
+    {
+        var settings = SubscriptionDefaults.Settings with { Port = PanelDefaults.Port, Path = "api", Certificate = "/srv/chain.pem" };
+
+        Assert.Equal("subscription-path-taken", SubscriptionRules.Check(settings, PanelDefaults.Settings)?.Code);
+        Assert.Null(SubscriptionRules.Check(settings with { Path = "sub" }, PanelDefaults.Settings));
+        Assert.Equal("bad-certificate", SubscriptionRules.Check(settings with { Path = "sub", Separate = true }, PanelDefaults.Settings)?.Code);
     }
 
     [Theory]
@@ -71,7 +94,7 @@ public class SubscriptionTests
     [Fact]
     public void ACertificateTakesBothPaths()
     {
-        var settings = SubscriptionDefaults.Settings with { Certificate = "/srv/chain.pem" };
+        var settings = SubscriptionDefaults.Settings with { Separate = true, Certificate = "/srv/chain.pem" };
 
         Assert.Equal("bad-certificate", SubscriptionRules.Check(settings, PanelDefaults.Settings)?.Code);
     }
@@ -92,6 +115,7 @@ public class SubscriptionTests
         Assert.True(settings.Rebinds(settings with { Listen = ["127.0.0.1"] }));
         Assert.True(settings.Rebinds(settings with { Certificate = "/srv/chain.pem", CertificateKey = "/srv/key.pem" }));
         Assert.True(settings.Rebinds(settings with { IsEnabled = false }));
+        Assert.True(settings.Rebinds(settings with { Separate = true }));
     }
 
     [Theory]
@@ -106,20 +130,43 @@ public class SubscriptionTests
     }
 
     [Fact]
+    public void TheAddressTakesThePortOfTheServicesOfTheEndpointAndItsHost()
+    {
+        var settings = SubscriptionDefaults.Settings;
+        var bare = Endpoint(1, "awg1") with { Host = string.Empty, ListenPort = 51820 };
+
+        Assert.Equal(
+            "https://vpn.example.org:51820/sub/abc",
+            SubscriptionAnswer.Address(settings, PanelDefaults.Settings, false, "10.0.0.1", Endpoint(1, "awg1") with { ListenPort = 51820 }, "abc"));
+        Assert.Equal(
+            "https://10.0.0.1:51820/sub/abc",
+            SubscriptionAnswer.Address(settings, PanelDefaults.Settings, false, "10.0.0.1", bare, "abc"));
+        Assert.Equal(
+            "https://panel.example.org:51820/feed/abc",
+            SubscriptionAnswer.Address(
+                settings with { Path = "feed" },
+                PanelDefaults.Settings with { Domains = ["panel.example.org"] },
+                true,
+                "10.0.0.1",
+                bare,
+                "abc"));
+    }
+
+    [Fact]
     public void TheAddressTakesThePortAndTheCertificateOfTheSubscriptions()
     {
-        var settings = SubscriptionDefaults.Settings with { IsEnabled = true };
+        var settings = SubscriptionDefaults.Settings with { Separate = true };
         var own = settings with { Certificate = "/srv/chain.pem", CertificateKey = "/srv/key.pem" };
 
         Assert.Equal(
             "https://10.0.0.1:2096/sub/abc",
-            SubscriptionAnswer.Address(settings, PanelDefaults.Settings, true, "10.0.0.1", "abc"));
+            SubscriptionAnswer.Address(settings, PanelDefaults.Settings, true, "10.0.0.1", Endpoint(1, "awg1"), "abc"));
         Assert.Equal(
             "http://10.0.0.1:2096/sub/abc",
-            SubscriptionAnswer.Address(settings, PanelDefaults.Settings, false, "10.0.0.1", "abc"));
+            SubscriptionAnswer.Address(settings, PanelDefaults.Settings, false, "10.0.0.1", Endpoint(1, "awg1"), "abc"));
         Assert.Equal(
             "https://10.0.0.1:2096/sub/abc",
-            SubscriptionAnswer.Address(own, PanelDefaults.Settings, false, "10.0.0.1", "abc"));
+            SubscriptionAnswer.Address(own, PanelDefaults.Settings, false, "10.0.0.1", Endpoint(1, "awg1"), "abc"));
     }
 
     [Fact]
@@ -127,7 +174,7 @@ public class SubscriptionTests
     {
         var settings = SubscriptionDefaults.Settings with
         {
-            IsEnabled = true,
+            Separate = true,
             Port = PanelDefaults.Port,
             Certificate = "/srv/chain.pem",
             CertificateKey = "/srv/key.pem",
@@ -136,7 +183,7 @@ public class SubscriptionTests
 
         Assert.Equal(
             "http://panel.example.org:8443/sub/abc",
-            SubscriptionAnswer.Address(settings, panel, false, "10.0.0.1", "abc"));
+            SubscriptionAnswer.Address(settings, panel, false, "10.0.0.1", Endpoint(1, "awg1"), "abc"));
     }
 
     [Fact]
@@ -144,30 +191,42 @@ public class SubscriptionTests
     {
         var named = SubscriptionDefaults.Settings with
         {
-            IsEnabled = true,
+            Separate = true,
             Port = 443,
             Domains = ["sub.example.org", "vpn.example.org"],
         };
-        var plain = SubscriptionDefaults.Settings with { IsEnabled = true };
+        var plain = SubscriptionDefaults.Settings with { Separate = true };
+        var endpoint = Endpoint(1, "awg1");
 
         Assert.Equal(
             "https://sub.example.org/sub/abc",
-            SubscriptionAnswer.Address(named, PanelDefaults.Settings, true, "10.0.0.1", "abc"));
+            SubscriptionAnswer.Address(named, PanelDefaults.Settings, true, "10.0.0.1", endpoint, "abc"));
         Assert.Equal(
             "http://[fd00::1]:2096/sub/abc",
-            SubscriptionAnswer.Address(plain, PanelDefaults.Settings, false, "fd00::1", "abc"));
+            SubscriptionAnswer.Address(plain, PanelDefaults.Settings, false, "fd00::1", endpoint, "abc"));
         Assert.Equal(
             "http://[fd00::1]:2096/sub/abc",
-            SubscriptionAnswer.Address(plain, PanelDefaults.Settings, false, "[fd00::1]", "abc"));
+            SubscriptionAnswer.Address(plain, PanelDefaults.Settings, false, "[fd00::1]", endpoint, "abc"));
     }
 
     [Fact]
     public void NoAddressWhileTheSubscriptionsAreOffOrTheClientCarriesNone()
     {
-        var on = SubscriptionDefaults.Settings with { IsEnabled = true };
+        var off = SubscriptionDefaults.Settings with { IsEnabled = false };
+        var endpoint = Endpoint(1, "awg1");
 
-        Assert.Empty(SubscriptionAnswer.Address(SubscriptionDefaults.Settings, PanelDefaults.Settings, true, "10.0.0.1", "abc"));
-        Assert.Empty(SubscriptionAnswer.Address(on, PanelDefaults.Settings, true, "10.0.0.1", string.Empty));
+        Assert.Empty(SubscriptionAnswer.Address(off, PanelDefaults.Settings, true, "10.0.0.1", endpoint, "abc"));
+        Assert.Empty(SubscriptionAnswer.Address(SubscriptionDefaults.Settings, PanelDefaults.Settings, true, "10.0.0.1", endpoint, string.Empty));
+    }
+
+    [Fact]
+    public void TheRevisionMarksWhatTheSubscriptionHandsOut()
+    {
+        var one = SubscriptionAnswer.Revision("dnBuOi8vb25l");
+
+        Assert.Matches("^[0-9a-f]{32}$", one);
+        Assert.Equal(one, SubscriptionAnswer.Revision("dnBuOi8vb25l"));
+        Assert.NotEqual(one, SubscriptionAnswer.Revision("dnBuOi8vdHdv"));
     }
 
     [Fact]
@@ -232,7 +291,8 @@ public class SubscriptionTests
         await store.SaveAsync(
             fresh with
             {
-                IsEnabled = true,
+                IsEnabled = false,
+                Separate = true,
                 Listen = ["127.0.0.1"],
                 Domains = ["vpn.example.org"],
                 Port = 2097,
@@ -243,8 +303,10 @@ public class SubscriptionTests
             CancellationToken.None);
         var read = await store.ReadAsync(CancellationToken.None);
 
-        Assert.False(fresh.IsEnabled);
-        Assert.True(read.IsEnabled);
+        Assert.True(fresh.IsEnabled);
+        Assert.False(fresh.Separate);
+        Assert.False(read.IsEnabled);
+        Assert.True(read.Separate);
         Assert.Equal(["127.0.0.1"], read.Listen);
         Assert.Equal(["vpn.example.org"], read.Domains);
         Assert.Equal(2097, read.Port);

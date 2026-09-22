@@ -13,7 +13,7 @@ export function UserRemove() {
   const remove = useRemoveUser()
   const held = (users.data ?? []).find((one) => one.name === name)
 
-  useTail([{ label: name }, { label: t("users.remove") }])
+  useTail([{ label: name, to: `/settings/users/${name}/edit` }, { label: t("users.remove") }])
 
   return (
     <div className="mt-4 flex max-w-[35rem] flex-col gap-4">

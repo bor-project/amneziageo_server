@@ -243,7 +243,6 @@ public sealed class ConfigStore
     private static ServerConfig Read(ConfigEntity entity) => new()
     {
         Id = entity.Id,
-        TemplateId = entity.TemplateId,
         Name = entity.Name,
         Host = entity.Host,
         ListenPort = entity.ListenPort,
@@ -270,7 +269,6 @@ public sealed class ConfigStore
 
     private static void Write(ConfigEntity entity, ServerConfig config)
     {
-        entity.TemplateId = config.TemplateId;
         entity.Name = config.Name;
         entity.Host = config.Host.Trim();
         entity.ListenPort = config.ListenPort;

@@ -14,7 +14,7 @@ export function TokenRemove() {
   const revoke = useRevokeApiToken()
   const held = (tokens.data ?? []).find((one) => String(one.id) === tokenId)
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("apiTokens.revoke") }])
+  useTail(held === undefined ? [] : [{ label: held.name, to: "/settings/users" }, { label: t("apiTokens.revoke") }])
 
   if (held === undefined) {
     return tokens.data === undefined ? (

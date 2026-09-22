@@ -14,7 +14,11 @@ export function BalancerRemove() {
   const all = balancers.data ?? []
   const held = all.find((one) => one.id === Number(balancerId))
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("balancers.remove") }])
+  useTail(
+    held === undefined
+      ? []
+      : [{ label: held.name, to: `/routing/channels/groups/${held.id}/edit` }, { label: t("balancers.remove") }],
+  )
 
   if (held === undefined) {
     return balancers.data === undefined ? (

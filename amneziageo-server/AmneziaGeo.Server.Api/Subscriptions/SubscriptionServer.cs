@@ -131,7 +131,7 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
     private async Task<string> ServeAsync(SubscriptionSettings settings)
     {
         await HaltAsync().ConfigureAwait(false);
-        if (!settings.IsEnabled || settings.Port == _panel.Port)
+        if (!settings.IsEnabled || !settings.Separate || settings.Port == _panel.Port)
         {
             return string.Empty;
         }

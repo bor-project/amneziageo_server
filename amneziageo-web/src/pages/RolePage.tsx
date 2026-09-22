@@ -66,7 +66,7 @@ function HeldRole({ name }: { name: string }) {
   const [title, setTitle] = useState<string | null>(null)
   const [scopes, setScopes] = useState<string[] | null>(null)
 
-  useTail([{ label: name }, { label: t("roles.edit") }])
+  useTail([{ label: name }])
 
   if (held === undefined) {
     return catalog.data === undefined ? (

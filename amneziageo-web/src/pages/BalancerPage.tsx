@@ -36,7 +36,7 @@ function HeldBalancer({ balancerId }: { balancerId: number }) {
   const all = balancers.data ?? []
   const held = all.find((one) => one.id === balancerId)
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("balancers.edit") }])
+  useTail(held === undefined ? [] : [{ label: held.name }])
 
   if (held === undefined) {
     return balancers.data === undefined ? (

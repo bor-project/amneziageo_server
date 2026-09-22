@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Globalization;
 using System.Text.Json;
+using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
@@ -12,7 +13,8 @@ using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 namespace AmneziaGeo.Server.Api.Services;
 
 /// <summary>
-/// Answers the services of an endpoint: the hello, the legs of a measurement and the websocket of the tunnel.
+/// Answers the services of an endpoint: the hello, the legs of a measurement, the subscriptions and the websocket of
+/// the tunnel.
 /// </summary>
 public sealed class ServiceDesk
 {
@@ -44,6 +46,8 @@ public sealed class ServiceDesk
 
     private readonly IReadOnlyList<IHelloFeature> _features;
 
+    private readonly SubscriptionState _subscriptions;
+
     private readonly JsonSerializerOptions _json;
 
     private readonly ILogger<ServiceDesk> _logger;
@@ -55,6 +59,7 @@ public sealed class ServiceDesk
         IServiceScopeFactory scopes,
         SpeedTickets tickets,
         IEnumerable<IHelloFeature> features,
+        SubscriptionState subscriptions,
         IOptions<JsonOptions> json,
         ILogger<ServiceDesk> logger)
     {
@@ -63,6 +68,7 @@ public sealed class ServiceDesk
         _scopes = scopes;
         _tickets = tickets;
         _features = [.. features];
+        _subscriptions = subscriptions;
         _json = json.Value.SerializerOptions;
         _logger = logger;
     }
@@ -103,6 +109,16 @@ public sealed class ServiceDesk
         if (path.Equals(SpeedPath + "/up", StringComparison.Ordinal) && HttpMethods.IsPost(method))
         {
             await UpAsync(context).ConfigureAwait(false);
+
+            return;
+        }
+
+        var subscriptions = _subscriptions.Current;
+        if (subscriptions.IsEnabled
+            && !subscriptions.Separate
+            && (SubscriptionAnswer.Asked(path, subscriptions) ?? SubscriptionAnswer.AskedHold(path, subscriptions)) is not null)
+        {
+            await SubscriptionAnswer.WriteAsync(context, subscriptions, _scopes).ConfigureAwait(false);
 
             return;
         }
@@ -158,7 +174,7 @@ public sealed class ServiceDesk
         var offered = new SortedDictionary<string, object>(StringComparer.Ordinal);
         foreach (var feature in _features)
         {
-            if (feature.Offer(peer) is { } arguments)
+            if (await feature.OfferAsync(peer, ct).ConfigureAwait(false) is { } arguments)
             {
                 offered[feature.Name] = arguments;
             }

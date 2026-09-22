@@ -13,13 +13,17 @@ export function TemplateRemove() {
   const remove = useRemoveTemplate()
   const held = templates.data?.find((one) => one.id === Number(templateId))
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("templates.remove") }])
+  useTail(
+    held === undefined
+      ? []
+      : [{ label: held.name, to: `/connections/templates/${held.id}/edit` }, { label: t("templates.remove") }],
+  )
 
   if (held === undefined) {
     return templates.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("templates.loading")}</div>
     ) : (
-      <Navigate to="/connections/templates/clients" replace />
+      <Navigate to="/connections/templates" replace />
     )
   }
 
@@ -37,12 +41,12 @@ export function TemplateRemove() {
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}
 
       <div className="flex justify-end gap-2">
-        <Link to="/connections/templates/clients" className={`flex h-10 items-center ${secondary}`}>
+        <Link to="/connections/templates" className={`flex h-10 items-center ${secondary}`}>
           {t("action.backToList")}
         </Link>
         <button
           type="button"
-          onClick={() => void remove.mutateAsync(held.id).then(() => navigate("/connections/templates/clients"))}
+          onClick={() => void remove.mutateAsync(held.id).then(() => navigate("/connections/templates"))}
           disabled={remove.isPending}
           className={danger}
         >

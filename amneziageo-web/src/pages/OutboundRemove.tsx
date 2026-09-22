@@ -14,7 +14,11 @@ export function OutboundRemove() {
   const all = outbounds.data ?? []
   const held = all.find((one) => one.id === Number(outboundId))
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("outbounds.remove") }])
+  useTail(
+    held === undefined
+      ? []
+      : [{ label: held.name, to: `/routing/channels/${held.id}/edit` }, { label: t("outbounds.remove") }],
+  )
 
   if (held === undefined) {
     return outbounds.data === undefined ? (

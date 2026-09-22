@@ -168,8 +168,8 @@ export function ClientForm({
           <Link
             to={
               draft.templateId === null
-                ? "/connections/templates/clients/default"
-                : `/connections/templates/clients/${draft.templateId}/edit`
+                ? "/connections/templates/default"
+                : `/connections/templates/${draft.templateId}/edit`
             }
             className="text-sm text-brand-ink hover:text-brand-lit"
           >

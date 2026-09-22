@@ -8,6 +8,7 @@ namespace AmneziaGeo.Server.Api.Subscriptions;
 /// </summary>
 public sealed record SubscriptionResponse(
     bool IsEnabled,
+    bool Separate,
     IReadOnlyList<string> Listen,
     IReadOnlyList<string> Domains,
     int Port,
@@ -27,6 +28,7 @@ public sealed record SubscriptionResponse(
 /// </summary>
 public sealed record SubscriptionRequest(
     bool IsEnabled,
+    bool Separate,
     IReadOnlyList<string>? Listen,
     IReadOnlyList<string>? Domains,
     int Port,
@@ -53,6 +55,7 @@ public static class SubscriptionAnswers
 
         return new SubscriptionResponse(
             settings.IsEnabled,
+            settings.Separate,
             settings.Listen,
             settings.Domains,
             settings.Port,
@@ -78,6 +81,7 @@ public static class SubscriptionAnswers
         return new SubscriptionSettings
         {
             IsEnabled = request.IsEnabled,
+            Separate = request.Separate,
             Listen = PanelList.Of(request.Listen),
             Domains = PanelList.Of(request.Domains),
             Port = request.Port,

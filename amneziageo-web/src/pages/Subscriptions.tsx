@@ -82,19 +82,30 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
         </div>
 
         <div className="sm:col-span-2">
-          <label className={label} htmlFor="subscription-listen">
-            {t("settings.listen")}
-          </label>
-          <div className="mt-1">
-            <Multi
-              id="subscription-listen"
-              value={draft.listen}
-              offers={settings.addresses}
-              placeholder={t("settings.everyAddress")}
-              onChange={(listen) => set({ listen })}
-            />
-          </div>
+          <Flag
+            id="subscription-separate"
+            caption={t("subscription.separate")}
+            value={draft.separate}
+            onChange={(separate) => set({ separate })}
+          />
         </div>
+
+        {draft.separate && (
+          <div className="sm:col-span-2">
+            <label className={label} htmlFor="subscription-listen">
+              {t("settings.listen")}
+            </label>
+            <div className="mt-1">
+              <Multi
+                id="subscription-listen"
+                value={draft.listen}
+                offers={settings.addresses}
+                placeholder={t("settings.everyAddress")}
+                onChange={(listen) => set({ listen })}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="sm:col-span-2">
           <label className={label} htmlFor="subscription-domains">
@@ -111,12 +122,14 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
           </div>
         </div>
 
-        <Count
-          id="subscription-port"
-          caption={t("settings.port")}
-          value={draft.port}
-          onChange={(port) => set({ port })}
-        />
+        {draft.separate && (
+          <Count
+            id="subscription-port"
+            caption={t("settings.port")}
+            value={draft.port}
+            onChange={(port) => set({ port })}
+          />
+        )}
 
         <Line
           id="subscription-path"
@@ -139,45 +152,49 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
           onChange={(title) => set({ title })}
         />
 
-        <div className="sm:col-span-2">
-          <Flag
-            id="subscription-opened"
-            caption={t("settings.opened")}
-            value={draft.opened}
-            onChange={(opened) => set({ opened })}
+        {draft.separate && (
+          <div className="sm:col-span-2">
+            <Flag
+              id="subscription-opened"
+              caption={t("settings.opened")}
+              value={draft.opened}
+              onChange={(opened) => set({ opened })}
+            />
+          </div>
+        )}
+      </Part>
+
+      {draft.separate && (
+        <Part title={t("settings.partCertificate")}>
+          <Pick id="subscription-domain" caption={t("settings.domain")} value={domain} onChange={pickDomain}>
+            <option value="">{t("subscription.panelCertificate")}</option>
+            {settings.certificates.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+            <option value={own}>{t("settings.ownCertificate")}</option>
+          </Pick>
+
+          <div />
+
+          <Line
+            id="subscription-certificate"
+            caption={t("settings.certificate")}
+            value={draft.certificate}
+            onChange={(certificate) => set({ certificate })}
+            wide
           />
-        </div>
-      </Part>
 
-      <Part title={t("settings.partCertificate")}>
-        <Pick id="subscription-domain" caption={t("settings.domain")} value={domain} onChange={pickDomain}>
-          <option value="">{t("subscription.panelCertificate")}</option>
-          {settings.certificates.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-          <option value={own}>{t("settings.ownCertificate")}</option>
-        </Pick>
-
-        <div />
-
-        <Line
-          id="subscription-certificate"
-          caption={t("settings.certificate")}
-          value={draft.certificate}
-          onChange={(certificate) => set({ certificate })}
-          wide
-        />
-
-        <Line
-          id="subscription-certificate-key"
-          caption={t("settings.certificateKey")}
-          value={draft.certificateKey}
-          onChange={(certificateKey) => set({ certificateKey })}
-          wide
-        />
-      </Part>
+          <Line
+            id="subscription-certificate-key"
+            caption={t("settings.certificateKey")}
+            value={draft.certificateKey}
+            onChange={(certificateKey) => set({ certificateKey })}
+            wide
+          />
+        </Part>
+      )}
 
       {refused !== null && <div className="text-sm text-alarm">{t(refused)}</div>}
 

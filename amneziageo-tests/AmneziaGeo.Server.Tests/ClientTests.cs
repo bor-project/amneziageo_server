@@ -481,20 +481,18 @@ public class ClientTests
     }
 
     [Fact]
-    public void TheConstantsOfAnInterfaceTemplateReachTheFileOfAClientOfItsOwnTemplate()
+    public void TheValuesOfAnEndpointReachTheFileOfAClientWhoseTemplateLeavesThemEmpty()
     {
-        var template = InterfaceTemplateDefaults.Fresh() with
+        var endpoint = ConfigDefaults.Fresh("t66i") with
         {
+            Host = "bor.sytes.net",
             Mtu = 1234,
             Keepalive = 21,
             AllowedIps = ["10.66.9.0/24"],
             Dns = ["9.9.9.9"],
         };
 
-        var text = ClientText.Text(
-            template.Fresh("t66i") with { Host = "bor.sytes.net" },
-            Client(),
-            new ClientTemplate { Name = "plain" });
+        var text = ClientText.Text(endpoint, Client(), new ClientTemplate { Name = "plain" });
 
         Assert.Contains("DNS = 9.9.9.9\n", text, StringComparison.Ordinal);
         Assert.Contains("MTU = 1234\n", text, StringComparison.Ordinal);

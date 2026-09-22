@@ -14,7 +14,9 @@ export function GeoRemove() {
   const all = sources.data ?? []
   const held = all.find((one) => one.id === Number(sourceId))
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("geo.remove") }])
+  useTail(
+    held === undefined ? [] : [{ label: held.name, to: `/routing/geo/${held.id}/edit` }, { label: t("geo.remove") }],
+  )
 
   if (held === undefined) {
     return sources.data === undefined ? (

@@ -56,8 +56,6 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<TemplateEntity> Templates => Set<TemplateEntity>();
 
-    public DbSet<InterfaceTemplateEntity> InterfaceTemplates => Set<InterfaceTemplateEntity>();
-
     public DbSet<SubscriptionEntity> Subscription => Set<SubscriptionEntity>();
 
     /// <summary>
@@ -119,7 +117,6 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(config => config.Name).HasMaxLength(ConfigRules.MaxNameLength);
             entity.Property(config => config.Host).HasMaxLength(ConfigRules.MaxHostLength);
             entity.HasIndex(config => config.Name).IsUnique();
-            entity.HasIndex(config => config.TemplateId);
         });
 
         builder.Entity<ClientEntity>(entity =>
@@ -151,13 +148,6 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
         {
             entity.Property(template => template.Name).HasMaxLength(TemplateRules.MaxNameLength);
             entity.HasIndex(template => template.Name).IsUnique();
-        });
-
-        builder.Entity<InterfaceTemplateEntity>(entity =>
-        {
-            entity.Property(template => template.Name).HasMaxLength(InterfaceTemplateRules.MaxNameLength);
-            entity.HasIndex(template => template.Name).IsUnique();
-            entity.HasIndex(template => template.ClientTemplateId);
         });
 
         builder.Entity<GeoSourceEntity>(entity =>

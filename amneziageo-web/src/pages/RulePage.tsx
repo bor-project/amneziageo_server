@@ -38,7 +38,7 @@ function HeldRule({ ruleId }: { ruleId: number }) {
   const all = rules.data ?? []
   const held = all.find((one) => one.id === ruleId)
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("rules.edit") }])
+  useTail(held === undefined ? [] : [{ label: held.name }])
 
   if (held === undefined) {
     return rules.data === undefined ? (

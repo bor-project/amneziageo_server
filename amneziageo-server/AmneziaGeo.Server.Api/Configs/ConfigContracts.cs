@@ -38,7 +38,6 @@ public sealed record ObfuscationBody(
 /// </summary>
 public sealed record ConfigResponse(
     long Id,
-    long? TemplateId,
     string Name,
     string Host,
     int ListenPort,
@@ -83,7 +82,6 @@ public sealed record ConfigRequest(
     ObfuscationBody? Obfuscation,
     int? OfflineAfter = null,
     string? Inbound = null,
-    long? TemplateId = null,
     bool? WebSocket = null,
     int? ServicesPort = null);
 
@@ -128,7 +126,6 @@ public static class ConfigAnswers
     /// </summary>
     public static ConfigResponse Config(ServerConfig config, bool secrets) => new(
         config.Id,
-        config.TemplateId,
         config.Name,
         config.Host,
         config.ListenPort,
@@ -187,7 +184,6 @@ public static class ConfigAnswers
     /// </summary>
     public static ServerConfig Draft(ConfigRequest request) => new()
     {
-        TemplateId = request.TemplateId,
         Name = (request.Name ?? string.Empty).Trim(),
         Host = (request.Host ?? string.Empty).Trim(),
         ListenPort = request.ListenPort,

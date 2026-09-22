@@ -55,7 +55,7 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
   const all = outbounds.data ?? []
   const held = all.find((one) => one.id === outboundId)
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("outbounds.edit") }])
+  useTail(held === undefined ? [] : [{ label: held.name }])
 
   if (held === undefined) {
     return outbounds.data === undefined ? (

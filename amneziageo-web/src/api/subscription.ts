@@ -3,6 +3,7 @@ import { client } from "./client"
 
 export interface SubscriptionDraft {
   isEnabled: boolean
+  separate: boolean
   listen: string[]
   domains: string[]
   port: number
@@ -44,6 +45,7 @@ export function useSaveSubscription() {
 export function draftOf(one: Subscription): SubscriptionDraft {
   return {
     isEnabled: one.isEnabled,
+    separate: one.separate,
     listen: one.listen,
     domains: one.domains,
     port: one.port,

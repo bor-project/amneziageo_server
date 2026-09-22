@@ -69,7 +69,6 @@ public static class ServerDatabase
         services.AddScoped<DnsStandingStore>();
         services.AddScoped<PanelStore>();
         services.AddScoped<TemplateStore>();
-        services.AddScoped<InterfaceTemplateStore>();
         services.AddScoped<SubscriptionStore>();
         services.AddScoped<IRefreshTokens, RefreshTokenStore>();
         services.AddScoped<IApiTokens, ApiTokenStore>();
@@ -91,7 +90,6 @@ public static class ServerDatabase
         await scope.ServiceProvider.GetRequiredService<GeoStore>().SeedAsync(ct).ConfigureAwait(false);
         await scope.ServiceProvider.GetRequiredService<OutboundStore>().SeedAsync(ct).ConfigureAwait(false);
         await scope.ServiceProvider.GetRequiredService<TemplateStore>().SeedAsync(ct).ConfigureAwait(false);
-        await scope.ServiceProvider.GetRequiredService<InterfaceTemplateStore>().SeedAsync(ct).ConfigureAwait(false);
     }
 
     /// <summary>

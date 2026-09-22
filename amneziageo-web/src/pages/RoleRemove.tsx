@@ -13,7 +13,7 @@ export function RoleRemove() {
   const remove = useRemoveRole()
   const held = catalog.data?.roles.find((one) => one.name === name)
 
-  useTail([{ label: name }, { label: t("roles.remove") }])
+  useTail([{ label: name, to: `/settings/users/roles/${name}/edit` }, { label: t("roles.remove") }])
 
   return (
     <div className="mt-4 flex max-w-[35rem] flex-col gap-4">

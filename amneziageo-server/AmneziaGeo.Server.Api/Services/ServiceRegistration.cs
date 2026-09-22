@@ -51,6 +51,7 @@ public static class ServiceRegistration
         services.AddSingleton<IHelloFeature, InboundOffer>();
         services.AddSingleton<IHelloFeature, RoutesOffer>();
         services.AddSingleton<IHelloFeature, SpeedOffer>();
+        services.AddSingleton<IHelloFeature, SubscriptionOffer>();
         services.AddSingleton<ServiceDesk>();
         services.AddSingleton<ServiceServer>();
         services.AddHostedService(provider => provider.GetRequiredService<ServiceServer>());

@@ -71,7 +71,7 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
             Take(ports, new FirewallPort(Tcp, panel.Port, Panel));
         }
 
-        if (subscriptions.IsEnabled && subscriptions.Opened && Reached(subscriptions.Listen))
+        if (subscriptions.IsEnabled && subscriptions.Separate && subscriptions.Opened && Reached(subscriptions.Listen))
         {
             Take(ports, new FirewallPort(Tcp, subscriptions.Port, Subscriptions));
         }

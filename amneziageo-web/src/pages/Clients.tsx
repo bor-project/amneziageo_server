@@ -137,7 +137,7 @@ export function Clients() {
                 one.templateId === null ? (
                   t("clients.dash")
                 ) : (
-                  <Link to={`/connections/templates/clients/${one.templateId}/edit`} className="text-brand-ink hover:text-brand-lit">
+                  <Link to={`/connections/templates/${one.templateId}/edit`} className="text-brand-ink hover:text-brand-lit">
                     {named(one)}
                   </Link>
                 ),

@@ -58,28 +58,14 @@ public static class ConfigEndpoints
             : Results.Ok(ConfigAnswers.Config(found, Secrets(context)));
     }
 
-    private static async Task<IResult> DraftAsync(
-        string? name,
-        long? templateId,
-        ConfigStore store,
-        InterfaceTemplateStore templates,
-        CancellationToken ct)
+    private static async Task<IResult> DraftAsync(string? name, ConfigStore store, CancellationToken ct)
     {
         var wanted = string.IsNullOrWhiteSpace(name) ? "awg0" : name.Trim();
-        var template = await TemplateAsync(templates, templateId, ct).ConfigureAwait(false);
-        var fresh = template is null ? ConfigDefaults.Fresh(wanted) : template.Fresh(wanted);
+        var fresh = ConfigDefaults.Fresh(wanted);
         var port = await store.FreePortAsync(fresh.ListenPort, ct).ConfigureAwait(false);
 
         return Results.Ok(ConfigAnswers.Config(fresh with { ListenPort = port }, true));
     }
-
-    private static async Task<InterfaceTemplate?> TemplateAsync(
-        InterfaceTemplateStore templates,
-        long? id,
-        CancellationToken ct) =>
-        id is { } wanted
-            ? await templates.FindAsync(wanted, ct).ConfigureAwait(false)
-            : await templates.FindByNameAsync(InterfaceTemplateDefaults.Name, ct).ConfigureAwait(false);
 
     private static IResult Keys()
     {
@@ -105,7 +91,6 @@ public static class ConfigEndpoints
         ConfigRequest request,
         ConfigStore store,
         ClientStore clients,
-        InterfaceTemplateStore templates,
         EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
@@ -113,19 +98,7 @@ public static class ConfigEndpoints
         FirewallApplier firewall,
         CancellationToken ct)
     {
-        var draft = ConfigAnswers.Draft(request);
-        if (draft.TemplateId is { } wanted)
-        {
-            var template = await templates.FindAsync(wanted, ct).ConfigureAwait(false);
-            if (template is null)
-            {
-                return Unknown(wanted);
-            }
-
-            draft = template.Over(draft);
-        }
-
-        var result = await store.AddAsync(draft, ct).ConfigureAwait(false);
+        var result = await store.AddAsync(ConfigAnswers.Draft(request), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -147,7 +120,6 @@ public static class ConfigEndpoints
         ConfigRequest request,
         ConfigStore store,
         ClientStore clients,
-        InterfaceTemplateStore templates,
         EndpointHost host,
         RouteApplier routes,
         DnsHost resolver,
@@ -156,19 +128,7 @@ public static class ConfigEndpoints
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
-        var draft = ConfigAnswers.Draft(request);
-        if (draft.TemplateId is { } wanted)
-        {
-            var template = await templates.FindAsync(wanted, ct).ConfigureAwait(false);
-            if (template is null)
-            {
-                return Unknown(wanted);
-            }
-
-            draft = template.Over(draft);
-        }
-
-        var result = await store.ChangeAsync(id, draft, ct).ConfigureAwait(false);
+        var result = await store.ChangeAsync(id, ConfigAnswers.Draft(request), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -321,11 +281,6 @@ public static class ConfigEndpoints
 
     private static bool Secrets(HttpContext context) =>
         context.Caller()?.Holds(Scopes.ManageInterfaces) == true;
-
-    private static IResult Unknown(long id) => Refuse(
-        StatusCodes.Status400BadRequest,
-        "unknown-template",
-        $"there is no endpoint template under the number {id}");
 
     private static IResult Downed(EndpointSync sync, long id) => Results.Json(
         new ConfigRaiseFailure(sync.Fault, sync.Message, id),

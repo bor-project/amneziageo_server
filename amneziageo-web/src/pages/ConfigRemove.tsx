@@ -16,7 +16,11 @@ export function ConfigRemove() {
   const all = configs.data ?? []
   const held = all.find((one) => one.id === Number(configId))
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("configs.remove") }])
+  useTail(
+    held === undefined
+      ? []
+      : [{ label: held.name, to: `/connections/interfaces/${held.id}/edit` }, { label: t("configs.remove") }],
+  )
 
   if (held === undefined) {
     return configs.data === undefined ? (

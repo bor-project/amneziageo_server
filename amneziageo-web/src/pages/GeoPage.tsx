@@ -41,7 +41,7 @@ function HeldSource({ sourceId }: { sourceId: number }) {
   const all = sources.data ?? []
   const held = all.find((one) => one.id === sourceId)
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("geo.edit") }])
+  useTail(held === undefined ? [] : [{ label: held.name }])
 
   if (held === undefined) {
     return sources.data === undefined ? (

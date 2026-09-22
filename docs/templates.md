@@ -1,24 +1,17 @@
 # Templates
 
-The panel holds two kinds of template, one table each: client templates and interface templates. A template carries the values that are not the own of one instance, and an instance points at it
-instead of keeping a copy: changing a template changes every instance that takes it, and the subscription of a
-client hands out the new file at once, because the file is built when it is asked for.
+A client template carries the values of a client file that are not the own of one client, and a client points
+at it instead of keeping a copy: changing a template changes every client that takes it, and the subscription of
+a client hands out the new file at once, because the file is built when it is asked for.
 
-A fresh database starts with one template of each kind: the client template `default` and the interface template
-`amnezia-3.1`. A template no instance takes can be removed, a template an instance takes is refused with
-`template-in-use` (409). An install that already carries interfaces gets a template for the values each of them holds, so nothing changes under a running tunnel; interfaces that
-hold the same values share one template, named after the first of them.
+A fresh database starts with the client template `default`. A template no client takes can be removed, a
+template a client takes is refused with `template-in-use` (409).
 
-The panel holds the two kinds under `Connections`, `Templates`, one subsection each. A list names the
-template and how many instances take it; the name and the menu of the row lead into the settings, where the
-template is changed and removed. Saving an interface template answers with every interface it was written into
-and whether it came up, and the form keeps the page when one of them did not.
+The panel holds the templates under `Connections`, `Templates`. The list names the template and how many clients
+take it; the name and the menu of the row lead into the settings, where the template is changed and removed.
+The form of a client carries the choice of its template and a link to it.
 
-The form of an instance carries what belongs to the instance and the choice of its template, and the values of
-the template are shown next to the choice, without being editable. An instance left without a template keeps
-its own values, and the form opens them for editing, which is how an imported configuration is kept as it came.
-
-## Client templates
+## What a template names
 
 A template names what the file of a client takes in place of the settings of its interface: the ranges the
 client routes into the tunnel (`AllowedIPs`), the name servers, the packet size and the keepalive. A field the
@@ -88,43 +81,3 @@ of them, the ranges of a country or the names of a category, a name written `ful
 it is matched that way. It needs `state:read`.
 
 The same routes answer under `/api/templates/clients`, which is where the panel asks for them.
-
-## Interface templates
-
-An interface template carries everything an interface does not hold of its own: the name servers, the ranges the
-clients route into the tunnel, the packet size, the keepalive, the silence after which a device counts as gone,
-the ranges the clients are kept out of, and the whole of the obfuscation. The port and the range it starts from
-are in the template as well, but only as the values a fresh interface takes: the port and the address of an
-interface are its own. The name of the interface, the address clients reach it at, the port, the range, what the
-clients take from the tunnel, the masquerade, the open port and the keys stay with the interface.
-
-The template also names the client template the clients of its interfaces take (`clientTemplateId`); left empty,
-a client keeps the settings of its interface, as before.
-
-| Setting | Holds |
-|---|---|
-| Name | up to 64 characters, one of a kind |
-| ListenPort | 1 to 65535, the port a fresh interface starts from |
-| Subnet | the range a fresh interface starts from |
-| DNS, AllowedIPs, MTU, Keepalive, OfflineAfter, Blocked | as in [configs.md](configs.md) |
-| Obfuscation | as in [configs.md](configs.md), the same values for every interface of the template |
-| ClientTemplateId | a client template, or empty for the settings of the interface |
-
-The built in template carries the values of a fresh interface: the port 51820, the range `10.8.0.1/24`, the
-packet size 1420, the keepalive 25, the name servers `1.1.1.1` and `1.0.0.1`, the private ranges kept away from
-clients, the silence of 60 seconds, and AmneziaWG 3.1 obfuscation drawn when the database is made, so two
-installs do not look alike. The junk packet count follows the range the README of amneziawg-go recommends, 4 to
-12; the junk sizes are 50 to 1000 bytes and the handshake padding 15 to 149 bytes, which is over the 12 bytes
-the header protection needs.
-
-Changing an interface template writes its values into every interface that takes it and raises each of them
-again; the answer carries the template and, per interface, whether it came up and what the host said. The keys
-and the obfuscation have to match on both sides, so a client of such an interface keeps the tunnel only after it
-has the new file: with a subscription it takes it by itself, without one the administrator hands it over.
-
-`GET /api/templates/interfaces` and `GET /api/templates/interfaces/{id}` need `state:read`;
-`GET /api/templates/interfaces/draft`, `POST /api/templates/interfaces`, `PUT /api/templates/interfaces/{id}`
-and `DELETE /api/templates/interfaces/{id}` need `interfaces:write`. An interface names its template in
-`templateId` of `POST /api/configs` and `PUT /api/configs/{id}`, and `GET /api/configs/draft?templateId=`
-returns a draft of that template; without a number the draft takes the built in template. A number the panel
-does not hold is refused with `unknown-template`.

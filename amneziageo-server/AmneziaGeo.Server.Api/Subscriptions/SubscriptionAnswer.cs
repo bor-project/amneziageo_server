@@ -1,10 +1,13 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
@@ -43,6 +46,8 @@ public static class SubscriptionAnswer
     private const int PlainPort = 80;
 
     private const int SecurePort = 443;
+
+    private const int RevisionLength = 32;
 
     /// <summary>
     /// Returns the subscription a path asks for, null for a path outside the subscriptions.
@@ -114,6 +119,7 @@ public static class SubscriptionAnswer
 
         var headers = context.Response.Headers;
         headers.CacheControl = "no-store";
+        headers.ETag = "\"" + Revision(feed.Body) + "\"";
         headers["Subscription-Userinfo"] = feed.Usage;
         headers["Profile-Update-Interval"] = settings.UpdateHours.ToString(CultureInfo.InvariantCulture);
         if (settings.Title.Length > 0)
@@ -126,14 +132,21 @@ public static class SubscriptionAnswer
     }
 
     /// <summary>
-    /// Returns the address a client reads its subscription at, empty when the subscriptions are off or the client
-    /// carries none.
+    /// Returns the address a client of an endpoint reads its subscription at, empty when the subscriptions are off or
+    /// the client carries none.
     /// </summary>
-    public static string Address(SubscriptionSettings settings, PanelSettings panel, bool panelSecure, string host, string id)
+    public static string Address(
+        SubscriptionSettings settings,
+        PanelSettings panel,
+        bool panelSecure,
+        string host,
+        ServerConfig endpoint,
+        string id)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(panel);
         ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(endpoint);
         ArgumentNullException.ThrowIfNull(id);
 
         if (!settings.IsEnabled || id.Length == 0)
@@ -141,12 +154,30 @@ public static class SubscriptionAnswer
             return string.Empty;
         }
 
-        var secure = settings.Port == panel.Port ? panelSecure : settings.Certificate.Length > 0 || panelSecure;
-        var port = settings.Port == (secure ? SecurePort : PlainPort)
-            ? string.Empty
-            : ":" + settings.Port.ToString(CultureInfo.InvariantCulture);
+        if (!settings.Separate)
+        {
+            var named = Name(settings, panel, endpoint.Host.Length > 0 ? endpoint.Host : host);
 
-        return (secure ? "https://" : "http://") + Bracketed(Name(settings, panel, host)) + port + settings.Prefix + id;
+            return "https://" + Bracketed(named) + Port(ConfigServices.Port(endpoint), SecurePort) + settings.Prefix + id;
+        }
+
+        var secure = settings.Port == panel.Port ? panelSecure : settings.Certificate.Length > 0 || panelSecure;
+
+        return (secure ? "https://" : "http://")
+            + Bracketed(Name(settings, panel, host))
+            + Port(settings.Port, secure ? SecurePort : PlainPort)
+            + settings.Prefix
+            + id;
+    }
+
+    /// <summary>
+    /// Returns the mark of what a subscription hands out.
+    /// </summary>
+    public static string Revision(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(body)))[..RevisionLength];
     }
 
     private static async Task HoldAsync(HttpContext context, SubscriptionSettings settings, IServiceScopeFactory scopes, string id)
@@ -248,6 +279,9 @@ public static class SubscriptionAnswer
 
         return panel.Domains.Count > 0 ? panel.Domains[0] : host;
     }
+
+    private static string Port(int port, int usual) =>
+        port == usual ? string.Empty : ":" + port.ToString(CultureInfo.InvariantCulture);
 
     private static string Bracketed(string host) =>
         !host.StartsWith('[') && IPAddress.TryParse(host, out var address) && address.AddressFamily == AddressFamily.InterNetworkV6

@@ -38,6 +38,7 @@ public static class SubscriptionServices
             var settings = state.Current;
             var path = context.Request.Path;
             if (settings.IsEnabled
+                && settings.Separate
                 && settings.Port == panel.Port
                 && (SubscriptionAnswer.Asked(path, settings) ?? SubscriptionAnswer.AskedHold(path, settings)) is not null)
             {

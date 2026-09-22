@@ -1,7 +1,10 @@
 using System.Security.Cryptography;
+using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Geo.Files;
+using AmneziaGeo.Server.Routing.Dns;
+using AmneziaGeo.Server.Routing.Traffic;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -80,6 +83,9 @@ public sealed class Bench : IDisposable
         services.AddSingleton<TimeProvider>(Clock);
         services.AddSingleton<ITokenIssuer>(Issuer);
         services.AddServerDatabase(_path, Options, _geo);
+        services.AddSingleton(new TrafficLedger(Clock));
+        services.AddSingleton<DnsState>();
+        services.AddScoped<SubscriptionFeed>();
 
         _services = services.BuildServiceProvider();
         ServerDatabase.PrepareAsync(_services).GetAwaiter().GetResult();
@@ -101,7 +107,6 @@ public sealed class Bench : IDisposable
         Standings = _scope.ServiceProvider.GetRequiredService<DnsStandingStore>();
         Panel = _scope.ServiceProvider.GetRequiredService<PanelStore>();
         Templates = _scope.ServiceProvider.GetRequiredService<TemplateStore>();
-        InterfaceTemplates = _scope.ServiceProvider.GetRequiredService<InterfaceTemplateStore>();
         GeoFiles = _scope.ServiceProvider.GetRequiredService<IGeoFileStore>();
         RefreshTokens = _scope.ServiceProvider.GetRequiredService<IRefreshTokens>();
         Audit = _scope.ServiceProvider.GetRequiredService<IAuditLog>();
@@ -145,8 +150,6 @@ public sealed class Bench : IDisposable
     public PanelStore Panel { get; }
 
     public TemplateStore Templates { get; }
-
-    public InterfaceTemplateStore InterfaceTemplates { get; }
 
     public string DatabasePath => _path;
 

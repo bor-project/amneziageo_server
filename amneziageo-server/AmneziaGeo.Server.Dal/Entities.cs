@@ -232,8 +232,6 @@ public sealed class ConfigEntity : IObfuscated
 {
     public long Id { get; set; }
 
-    public long? TemplateId { get; set; }
-
     public string Name { get; set; } = string.Empty;
 
     public string Host { get; set; } = string.Empty;
@@ -686,6 +684,8 @@ public sealed class SubscriptionEntity
 
     public bool IsEnabled { get; set; }
 
+    public bool Separate { get; set; }
+
     public string Listen { get; set; } = string.Empty;
 
     public string Domains { get; set; } = string.Empty;
@@ -731,88 +731,6 @@ public sealed class TemplateEntity
     public bool LocksRouting { get; set; }
 
     public DateTimeOffset? RefreshedUtc { get; set; }
-
-    public DateTimeOffset CreatedUtc { get; set; }
-
-    public DateTimeOffset UpdatedUtc { get; set; }
-}
-
-/// <summary>
-/// One endpoint template as the database holds it.
-/// </summary>
-public sealed class InterfaceTemplateEntity : IObfuscated
-{
-    public long Id { get; set; }
-
-    public string Name { get; set; } = string.Empty;
-
-    public int ListenPort { get; set; }
-
-    public string Subnet { get; set; } = string.Empty;
-
-    public string Dns { get; set; } = string.Empty;
-
-    public string AllowedIps { get; set; } = string.Empty;
-
-    public int Mtu { get; set; }
-
-    public int Keepalive { get; set; }
-
-    public int OfflineAfter { get; set; }
-
-    public string Blocked { get; set; } = string.Empty;
-
-    public long? ClientTemplateId { get; set; }
-
-    public int Jc { get; set; }
-
-    public int Jmin { get; set; }
-
-    public int Jmax { get; set; }
-
-    public int S1 { get; set; }
-
-    public int S2 { get; set; }
-
-    public int S3 { get; set; }
-
-    public int S4 { get; set; }
-
-    public string H1 { get; set; } = string.Empty;
-
-    public string H2 { get; set; } = string.Empty;
-
-    public string H3 { get; set; } = string.Empty;
-
-    public string H4 { get; set; } = string.Empty;
-
-    public string? I1 { get; set; }
-
-    public string? I2 { get; set; }
-
-    public string? I3 { get; set; }
-
-    public string? I4 { get; set; }
-
-    public string? I5 { get; set; }
-
-    public string HeaderProtectionKey { get; set; } = string.Empty;
-
-    public string ContentPaddingAddition { get; set; } = string.Empty;
-
-    public string RekeyAfterTime { get; set; } = string.Empty;
-
-    public string RekeyTimeout { get; set; } = string.Empty;
-
-    public string RejectAfterTime { get; set; } = string.Empty;
-
-    public string KeepaliveTimeout { get; set; } = string.Empty;
-
-    public string MaxHandshakeAttempts { get; set; } = string.Empty;
-
-    public bool RandomTrailers { get; set; }
-
-    public bool DisableCookies { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; }
 

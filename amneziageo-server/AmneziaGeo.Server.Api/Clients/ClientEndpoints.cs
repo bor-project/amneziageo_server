@@ -134,22 +134,6 @@ public static class ClientEndpoints
             ClientTraffic.None));
     }
 
-    private static async Task<long?> InheritedAsync(
-        long configId,
-        ConfigStore configs,
-        InterfaceTemplateStore templates,
-        CancellationToken ct)
-    {
-        if (await configs.FindAsync(configId, ct).ConfigureAwait(false) is not { TemplateId: { } held })
-        {
-            return null;
-        }
-
-        var template = await templates.FindAsync(held, ct).ConfigureAwait(false);
-
-        return template?.ClientTemplateId;
-    }
-
     private static async Task<TunnelClient?> FilledAsync(
         TunnelClient draft,
         ConfigStore configs,
@@ -229,6 +213,7 @@ public static class ClientEndpoints
                 panel,
                 Listening.Chain(options, panel).Length > 0,
                 context.Request.Host.Host,
+                endpoint,
                 client.PrivateKey.Length > 0 ? client.SubscriptionId : string.Empty),
             Miss(subscriptions.Current, client)));
     }
@@ -245,7 +230,6 @@ public static class ClientEndpoints
         ClientRequest request,
         ConfigStore configs,
         ClientStore store,
-        InterfaceTemplateStore templates,
         ClientHost host,
         EndpointHost endpoints,
         ClientGuard guard,
@@ -254,11 +238,6 @@ public static class ClientEndpoints
         CancellationToken ct)
     {
         var draft = ClientAnswers.Draft(request, null);
-        if (draft.TemplateId is null)
-        {
-            draft = draft with { TemplateId = await InheritedAsync(draft.ConfigId, configs, templates, ct).ConfigureAwait(false) };
-        }
-
         if (await FilledAsync(draft, configs, store, ct).ConfigureAwait(false) is not { } settled)
         {
             return Missing(draft.ConfigId);

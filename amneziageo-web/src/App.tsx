@@ -3,7 +3,7 @@ import { scopes } from "@/api/scopes"
 import { Boot } from "@/components/Boot"
 import { Layout } from "@/components/Layout"
 import { RequireAuth, RequireScope } from "@/components/RequireAuth"
-import { Landing, Sectioned } from "@/components/Section"
+import { Cards, Sectioned } from "@/components/Section"
 import { connections, routing, settings } from "@/components/menu"
 import { Accounts } from "@/pages/Accounts"
 import { BalancerPage } from "@/pages/BalancerPage"
@@ -24,9 +24,6 @@ import { Dns } from "@/pages/Dns"
 import { Geo } from "@/pages/Geo"
 import { GeoPage } from "@/pages/GeoPage"
 import { GeoRemove } from "@/pages/GeoRemove"
-import { InterfaceTemplatePage } from "@/pages/InterfaceTemplatePage"
-import { InterfaceTemplateRemove } from "@/pages/InterfaceTemplateRemove"
-import { InterfaceTemplates } from "@/pages/InterfaceTemplates"
 import { Login } from "@/pages/Login"
 import { OwnPassword } from "@/pages/OwnPassword"
 import { OutboundPage } from "@/pages/OutboundPage"
@@ -77,7 +74,7 @@ export function App() {
             <Route element={<RequireScope scope={scopes.readState} />}>
               <Route index element={<Dashboard />} />
               <Route path="connections" element={<Sectioned title="nav.connections" items={connections} />}>
-                <Route index element={<Landing section="connections" to="/connections/interfaces" />} />
+                <Route index element={<Cards items={connections} />} />
                 <Route path="interfaces" element={<Configs />} />
                 <Route path="interfaces/:configId" element={<Navigate to="edit" replace />} />
                 <Route element={<RequireScope scope={scopes.manageInterfaces} />}>
@@ -93,24 +90,19 @@ export function App() {
                   <Route path="clients/:clientId/edit" element={<ClientPage />} />
                   <Route path="clients/:clientId/delete" element={<ClientRemove />} />
                 </Route>
-                <Route path="templates" element={<Navigate to="clients" replace />} />
-                <Route path="templates/clients" element={<Templates />} />
-                <Route path="templates/clients/default" element={<DefaultTemplate />} />
-                <Route path="templates/clients/:templateId" element={<Navigate to="edit" replace />} />
+                <Route path="templates" element={<Templates />} />
+                <Route path="templates/default" element={<DefaultTemplate />} />
+                <Route path="templates/clients" element={<Navigate to="/connections/templates" replace />} />
+                <Route path="templates/interfaces" element={<Navigate to="/connections/templates" replace />} />
+                <Route path="templates/:templateId" element={<Navigate to="edit" replace />} />
                 <Route element={<RequireScope scope={scopes.manageClients} />}>
-                  <Route path="templates/clients/new" element={<TemplatePage />} />
-                  <Route path="templates/clients/:templateId/edit" element={<TemplatePage />} />
-                  <Route path="templates/clients/:templateId/delete" element={<TemplateRemove />} />
-                </Route>
-                <Route path="templates/interfaces" element={<InterfaceTemplates />} />
-                <Route element={<RequireScope scope={scopes.manageInterfaces} />}>
-                  <Route path="templates/interfaces/new" element={<InterfaceTemplatePage />} />
-                  <Route path="templates/interfaces/:templateId/edit" element={<InterfaceTemplatePage />} />
-                  <Route path="templates/interfaces/:templateId/delete" element={<InterfaceTemplateRemove />} />
+                  <Route path="templates/new" element={<TemplatePage />} />
+                  <Route path="templates/:templateId/edit" element={<TemplatePage />} />
+                  <Route path="templates/:templateId/delete" element={<TemplateRemove />} />
                 </Route>
               </Route>
               <Route path="routing" element={<Sectioned title="nav.routing" items={routing} />}>
-                <Route index element={<Landing section="routing" to="/routing/rules" />} />
+                <Route index element={<Cards items={routing} />} />
                 <Route path="rules" element={<Rules />} />
                 <Route element={<RequireScope scope={scopes.manageRouting} />}>
                   <Route path="rules/new" element={<RulePage />} />
@@ -145,7 +137,7 @@ export function App() {
             </Route>
             <Route element={<RequireScope scope={scopes.manageAccess} />}>
               <Route path="settings" element={<Sectioned title="nav.settings" items={settings} />}>
-                <Route index element={<Landing section="settings" to="/settings/server" />} />
+                <Route index element={<Cards items={settings} />} />
                 <Route path="server" element={<PanelServer />} />
                 <Route path="certificates" element={<PanelCertificates />} />
                 <Route path="subscriptions" element={<Subscriptions />} />

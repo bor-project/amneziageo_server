@@ -67,7 +67,7 @@ function HeldConfig({ configId }: { configId: number }) {
   const held = all.find((one) => one.id === configId)
   const back = lastSpot("connections", "/connections/interfaces")
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("configs.edit") }])
+  useTail(held === undefined ? [] : [{ label: held.name }])
 
   if (held === undefined) {
     return configs.data === undefined ? (

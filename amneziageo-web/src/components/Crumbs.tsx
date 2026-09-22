@@ -34,21 +34,21 @@ export function Crumbs() {
       )}
 
       {shown.map((one, at) => (
-        <div key={one.label} className="flex min-w-0 items-center gap-1.5">
+        <div key={`${at}-${one.label}`} className="flex min-w-0 items-center gap-1.5">
           {at > 0 && (
             <span className="text-faint" aria-hidden>
               /
             </span>
           )}
-          <Piece crumb={one} />
+          <Piece crumb={one} last={at === shown.length - 1} />
         </div>
       ))}
     </nav>
   )
 }
 
-function Piece({ crumb }: { crumb: Crumb }) {
-  if (crumb.to === undefined) {
+function Piece({ crumb, last }: { crumb: Crumb; last: boolean }) {
+  if (last || crumb.to === undefined) {
     return <span className="truncate font-medium text-ink">{crumb.label}</span>
   }
 

@@ -10,7 +10,12 @@ public sealed record SubscriptionSettings
     /// <summary>
     /// Whether the panel hands the subscriptions out.
     /// </summary>
-    public bool IsEnabled { get; init; }
+    public bool IsEnabled { get; init; } = true;
+
+    /// <summary>
+    /// Whether the subscriptions answer on a port of their own instead of the port of the services of each endpoint.
+    /// </summary>
+    public bool Separate { get; init; }
 
     /// <summary>
     /// The addresses the subscriptions are served on, empty for every address of the host.
@@ -85,6 +90,7 @@ public sealed record SubscriptionSettings
         ArgumentNullException.ThrowIfNull(other);
 
         return IsEnabled != other.IsEnabled
+            || Separate != other.Separate
             || !Listen.SequenceEqual(other.Listen, StringComparer.Ordinal)
             || Port != other.Port
             || !string.Equals(Certificate, other.Certificate, StringComparison.Ordinal)

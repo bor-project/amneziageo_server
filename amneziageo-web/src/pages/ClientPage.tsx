@@ -58,7 +58,11 @@ function HeldClient({ clientId }: { clientId: number }) {
   const held = all.find((one) => one.id === clientId)
   const back = lastSpot("connections", "/connections/clients")
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("action.settings") }])
+  useTail(
+    held === undefined
+      ? []
+      : [{ label: held.name, to: `/connections/clients/${held.id}/export` }, { label: t("action.settings") }],
+  )
 
   if (held === undefined) {
     return clients.data === undefined ? (

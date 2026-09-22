@@ -1,8 +1,13 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using AmneziaGeo.Server.Api.Subscriptions;
+using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
+using AmneziaGeo.Server.Core.Panel;
+using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 
 namespace AmneziaGeo.Server.Api.Services;
 
@@ -15,11 +20,11 @@ public sealed class WebSocketOffer : IHelloFeature
     public string Name => FeatureNames.WebSocket;
 
     /// <inheritdoc/>
-    public object? Offer(HelloPeer peer)
+    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(peer);
 
-        return peer.Endpoint.WebSocket ? new WebSocketFeature(ConfigServices.Port(peer.Endpoint)) : null;
+        return ValueTask.FromResult<object?>(peer.Endpoint.WebSocket ? new WebSocketFeature(ConfigServices.Port(peer.Endpoint)) : null);
     }
 }
 
@@ -32,11 +37,11 @@ public sealed class RoutingOffer : IHelloFeature
     public string Name => FeatureNames.Routing;
 
     /// <inheritdoc/>
-    public object? Offer(HelloPeer peer)
+    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(peer);
 
-        return new RoutingFeature(RoutingName.Taken(peer.Client.Routing, peer.Template));
+        return ValueTask.FromResult<object?>(new RoutingFeature(RoutingName.Taken(peer.Client.Routing, peer.Template)));
     }
 }
 
@@ -49,13 +54,13 @@ public sealed class InboundOffer : IHelloFeature
     public string Name => FeatureNames.Inbound;
 
     /// <inheritdoc/>
-    public object? Offer(HelloPeer peer)
+    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(peer);
 
         var inbound = InboundName.Taken(peer.Client.Inbound, peer.Endpoint.Inbound);
 
-        return inbound == ClientInbound.Off ? null : new InboundFeature(InboundName.Of(inbound));
+        return ValueTask.FromResult<object?>(inbound == ClientInbound.Off ? null : new InboundFeature(InboundName.Of(inbound)));
     }
 }
 
@@ -68,11 +73,11 @@ public sealed class RoutesOffer : IHelloFeature
     public string Name => FeatureNames.Routes;
 
     /// <inheritdoc/>
-    public object? Offer(HelloPeer peer)
+    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(peer);
 
-        return peer.Client.Routes.Count > 0 ? new RoutesFeature([.. peer.Client.Routes]) : null;
+        return ValueTask.FromResult<object?>(peer.Client.Routes.Count > 0 ? new RoutesFeature([.. peer.Client.Routes]) : null);
     }
 }
 
@@ -95,7 +100,7 @@ public sealed class SpeedOffer : IHelloFeature
     public string Name => FeatureNames.Speed;
 
     /// <inheritdoc/>
-    public object? Offer(HelloPeer peer)
+    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(peer);
 
@@ -104,7 +109,8 @@ public sealed class SpeedOffer : IHelloFeature
         var outside = peer.Endpoint.Host.Length > 0 ? peer.Endpoint.Host : peer.Context.Request.Host.Host;
         var inside = Inside(peer.Endpoint) ?? outside;
 
-        return new SpeedFeature(Leg(inside, port, ticket), Leg(outside, port, ticket), SpeedTickets.MaxBytes, ticket.Expires);
+        return ValueTask.FromResult<object?>(
+            new SpeedFeature(Leg(inside, port, ticket), Leg(outside, port, ticket), SpeedTickets.MaxBytes, ticket.Expires));
     }
 
     // Returns the address of the interface the tunnel reaches, the first one of IPv4 ahead of the rest.
@@ -129,4 +135,70 @@ public sealed class SpeedOffer : IHelloFeature
 
         return new SpeedLeg(root + "/down?bytes=" + bytes + "&ticket=" + ticket.Value, root + "/up?ticket=" + ticket.Value);
     }
+}
+
+/// <summary>
+/// Tells the client where it reads its subscription and what the subscription hands out now.
+/// </summary>
+public sealed class SubscriptionOffer : IHelloFeature
+{
+    private readonly SubscriptionState _state;
+
+    private readonly PanelSettings _panel;
+
+    private readonly WebOptions _options;
+
+    private readonly IServiceScopeFactory _scopes;
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public SubscriptionOffer(SubscriptionState state, PanelSettings panel, WebOptions options, IServiceScopeFactory scopes)
+    {
+        _state = state;
+        _panel = panel;
+        _options = options;
+        _scopes = scopes;
+    }
+
+    /// <inheritdoc/>
+    public string Name => FeatureNames.Subscription;
+
+    /// <inheritdoc/>
+    public async ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+
+        var settings = _state.Current;
+        var client = peer.Client;
+        if (!settings.IsEnabled || client.SubscriptionId.Length == 0 || client.PrivateKey.Length == 0)
+        {
+            return null;
+        }
+
+        using var scope = _scopes.CreateScope();
+        var feed = await scope.ServiceProvider.GetRequiredService<SubscriptionFeed>()
+            .ReadAsync(client.SubscriptionId, ct)
+            .ConfigureAwait(false);
+        if (feed is null)
+        {
+            return null;
+        }
+
+        var url = SubscriptionAnswer.Address(
+            settings,
+            _panel,
+            Listening.Chain(_options, _panel).Length > 0,
+            peer.Context.Request.Host.Host,
+            peer.Endpoint,
+            client.SubscriptionId);
+
+        return new SubscriptionFeature(url, SubscriptionAnswer.Revision(feed.Body), settings.Separate ? string.Empty : Pin(peer.Context));
+    }
+
+    // Returns the SHA-256 of the certificate the port answered under, empty without one.
+    private static string Pin(HttpContext context) =>
+        context.Features.Get<ISslStreamFeature>()?.SslStream.LocalCertificate is { } certificate
+            ? Convert.ToHexStringLower(SHA256.HashData(certificate.GetRawCertData()))
+            : string.Empty;
 }

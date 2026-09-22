@@ -1,9 +1,12 @@
 using System.Text;
 using System.Text.Json;
 using AmneziaGeo.Server.Api.Services;
+using AmneziaGeo.Server.Api.Subscriptions;
+using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
+using AmneziaGeo.Server.Core.Panel;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -235,6 +238,63 @@ public class ServiceTests
     }
 
     [Fact]
+    public async Task AClientLearnsWhereItsSubscriptionIsAndWhatItHandsOutNow()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
+
+        var answer = await AskAsync(desk, Point(endpoint), token);
+        var feed = await ReadAsync(desk, Point(endpoint), "/sub/" + client.SubscriptionId);
+
+        var opened = PeerToken.Open(
+            PeerToken.Shared(client.PrivateKey, endpoint.PublicKey),
+            token.Nonce!,
+            JsonSerializer.Deserialize<SealedAnswer>(answer.Body, Web)!);
+        using var document = JsonDocument.Parse(opened!);
+        var subscription = document.RootElement.GetProperty("features").GetProperty("subscription");
+        var revision = subscription.GetProperty("revision").GetString()!;
+        Assert.Equal(
+            $"https://vpn.example:{endpoint.ListenPort}/sub/{client.SubscriptionId}",
+            subscription.GetProperty("url").GetString());
+        Assert.Matches("^[0-9a-f]{32}$", revision);
+        Assert.Equal(string.Empty, subscription.GetProperty("pin").GetString());
+        Assert.Equal(StatusCodes.Status200OK, feed.Status);
+        Assert.Equal("\"" + revision + "\"", feed.Tag);
+        Assert.Equal(revision, SubscriptionAnswer.Revision(feed.Body));
+    }
+
+    [Fact]
+    public async Task ThePortOfTheServicesLeavesTheSubscriptionsToAPortOfTheirOwn()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"] }, CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var state = new SubscriptionState();
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), state);
+
+        var shared = await ReadAsync(desk, Point(endpoint), "/sub/" + client.SubscriptionId);
+        var unknown = await ReadAsync(desk, Point(endpoint), "/sub/nobodyhasthisone");
+        state.Current = SubscriptionDefaults.Settings with { Separate = true };
+        var apart = await ReadAsync(desk, Point(endpoint), "/sub/" + client.SubscriptionId);
+        state.Current = SubscriptionDefaults.Settings with { IsEnabled = false };
+        var off = await ReadAsync(desk, Point(endpoint), "/sub/" + client.SubscriptionId);
+
+        Assert.Equal(StatusCodes.Status200OK, shared.Status);
+        Assert.Equal(StatusCodes.Status404NotFound, unknown.Status);
+        Assert.Equal(StatusCodes.Status404NotFound, apart.Status);
+        Assert.Equal(StatusCodes.Status404NotFound, off.Status);
+    }
+
+    [Fact]
     public async Task ATokenThatDoesNotHoldIsRefusedWithItsReason()
     {
         using var bench = new Bench();
@@ -283,12 +343,25 @@ public class ServiceTests
         Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
     }
 
-    private static ServiceDesk Desk(Bench bench, SpeedTickets tickets) => new(
-        bench.Scopes,
-        tickets,
-        [new WebSocketOffer(), new RoutingOffer(), new InboundOffer(), new RoutesOffer(), new SpeedOffer(tickets)],
-        Options.Create(new JsonOptions()),
-        NullLogger<ServiceDesk>.Instance);
+    private static ServiceDesk Desk(Bench bench, SpeedTickets tickets, SubscriptionState? subscriptions = null)
+    {
+        var state = subscriptions ?? new SubscriptionState();
+
+        return new ServiceDesk(
+            bench.Scopes,
+            tickets,
+            [
+                new WebSocketOffer(),
+                new RoutingOffer(),
+                new InboundOffer(),
+                new RoutesOffer(),
+                new SpeedOffer(tickets),
+                new SubscriptionOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
+            ],
+            state,
+            Options.Create(new JsonOptions()),
+            NullLogger<ServiceDesk>.Instance);
+    }
 
     private static ServicePoint Point(ServerConfig endpoint) => ServicePoints.Of([endpoint], string.Empty, string.Empty)[0];
 
@@ -314,6 +387,20 @@ public class ServiceTests
         await desk.AnswerAsync(context, point);
 
         return (context.Response.StatusCode, body.ToArray());
+    }
+
+    private static async Task<(int Status, string Body, string Tag)> ReadAsync(ServiceDesk desk, ServicePoint point, string path)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = path;
+        context.Request.Host = new HostString("vpn.example", point.Port);
+        var body = new MemoryStream();
+        context.Response.Body = body;
+
+        await desk.AnswerAsync(context, point);
+
+        return (context.Response.StatusCode, Encoding.UTF8.GetString(body.ToArray()), context.Response.Headers.ETag.ToString());
     }
 
     private static string? Error((int Status, byte[] Body) answer)

@@ -17,12 +17,25 @@ public class FirewallTests
                 Endpoint() with { Name = "awg2", ListenPort = 51822, IsEnabled = false },
             ],
             new PanelSettings { Port = 8443, Opened = true },
-            new SubscriptionSettings { IsEnabled = true, Port = 8444, Opened = true });
+            new SubscriptionSettings { IsEnabled = true, Separate = true, Port = 8444, Opened = true });
 
         Assert.Equal(
             [("udp", 51820), ("tcp", 51820), ("tcp", 8443), ("tcp", 8444)],
             plan.Ports.Select(port => (port.Protocol, port.Port)).ToArray());
         Assert.Equal(["awg0"], plan.Interfaces);
+    }
+
+    [Fact]
+    public void SubscriptionsOnThePortsOfTheServicesOpenNoPortOfTheirOwn()
+    {
+        var plan = FirewallPlan.Of(
+            [Endpoint()],
+            new PanelSettings { Port = 8443 },
+            new SubscriptionSettings { IsEnabled = true, Port = 8444, Opened = true });
+
+        Assert.Equal(
+            [("udp", 51820), ("tcp", 51820)],
+            plan.Ports.Select(port => (port.Protocol, port.Port)).ToArray());
     }
 
     [Fact]

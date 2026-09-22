@@ -55,7 +55,6 @@ export interface Config {
   privateKey: string | null
   presharedKey: string | null
   obfuscation: Obfuscation
-  templateId: number | null
   createdUtc: string
   updatedUtc: string
 }
@@ -80,7 +79,6 @@ export interface ConfigDraft {
   privateKey: string
   presharedKey: string
   obfuscation: Obfuscation
-  templateId: number | null
 }
 
 export interface ConfigSync {
@@ -199,7 +197,6 @@ export function draftOf(config: Config): ConfigDraft {
     privateKey: config.privateKey ?? "",
     presharedKey: config.presharedKey ?? "",
     obfuscation: config.obfuscation,
-    templateId: config.templateId,
   }
 }
 

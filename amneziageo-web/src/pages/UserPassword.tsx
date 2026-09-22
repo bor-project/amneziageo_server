@@ -15,7 +15,7 @@ export function UserPassword() {
   const [password, setPassword] = useState("")
   const [mustChange, setMustChange] = useState(true)
 
-  useTail([{ label: name }, { label: t("users.password") }])
+  useTail([{ label: name, to: `/settings/users/${name}/edit` }, { label: t("users.password") }])
 
   async function save() {
     await set.mutateAsync({ name, password, mustChangePassword: mustChange })

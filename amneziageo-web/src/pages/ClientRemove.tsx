@@ -14,7 +14,11 @@ export function ClientRemove() {
   const all = clients.data ?? []
   const held = all.find((one) => one.id === Number(clientId))
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("clients.remove") }])
+  useTail(
+    held === undefined
+      ? []
+      : [{ label: held.name, to: `/connections/clients/${held.id}/export` }, { label: t("clients.remove") }],
+  )
 
   if (held === undefined) {
     return clients.data === undefined ? (

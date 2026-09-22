@@ -19,6 +19,8 @@ public static class SubscriptionRules
 
     private static readonly string[] Held = ["api", "assets"];
 
+    private static readonly string[] Served = ["api", "v1"];
+
     /// <summary>
     /// Returns the first rule the settings break next to the panel they may share a port with.
     /// </summary>
@@ -30,9 +32,9 @@ public static class SubscriptionRules
         return CheckPort(settings.Port)
             ?? CheckListen(settings.Listen)
             ?? CheckDomains(settings.Domains)
-            ?? CheckCertificate(settings.Certificate, settings.CertificateKey)
+            ?? (settings.Separate ? CheckCertificate(settings.Certificate, settings.CertificateKey) : null)
             ?? CheckPath(settings.Path)
-            ?? CheckShared(settings, panel)
+            ?? (settings.Separate ? CheckShared(settings, panel) : CheckServices(settings))
             ?? CheckHours(settings.UpdateHours)
             ?? CheckTitle(settings.Title);
     }
@@ -129,6 +131,15 @@ public static class SubscriptionRules
 
         return taken
             ? new PanelFault("subscription-path-taken", $"the panel answers under '/{head}/' on port {settings.Port}")
+            : null;
+    }
+
+    private static PanelFault? CheckServices(SubscriptionSettings settings)
+    {
+        var head = Head(settings.Path);
+
+        return Array.Exists(Served, one => string.Equals(one, head, StringComparison.OrdinalIgnoreCase))
+            ? new PanelFault("subscription-path-taken", $"the services of the endpoints answer under '/{head}/'")
             : null;
     }
 

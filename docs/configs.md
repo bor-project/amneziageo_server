@@ -4,12 +4,11 @@
 addresses the interface carries and the whole obfuscation of the 3.1 profile. The panel keeps the
 intent in SQLite; the kernel is the fact, and the two are brought together separately.
 
-An endpoint takes its constants from an interface template: the name servers, the ranges the clients route into
-the tunnel, the packet size, the keepalive, the silence after which a device counts as gone, the ranges kept
-away from clients and the whole obfuscation come from the template it names in `templateId`, and changing the
-template changes every endpoint of it. What stays with the endpoint is its name, the address clients reach it
-at, the port, the range it carries, what its clients take from the tunnel, the masquerade, the open port and the
-keys. See [templates.md](templates.md).
+An endpoint holds every setting of its own: the name, the address clients reach it at, the port, the range it
+carries, the name servers and the ranges its clients route into the tunnel, the packet size, the keepalive, the
+silence after which a device counts as gone, the ranges kept away from clients, what its clients take from the
+tunnel, the masquerade, the open port, the keys and the whole obfuscation. A client template changes what the
+file of a client takes, see [templates.md](templates.md).
 
 ## Rights
 

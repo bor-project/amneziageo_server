@@ -113,7 +113,7 @@ function HeldUser({ name }: { name: string }) {
   const [enabled, setEnabled] = useState<boolean | null>(null)
   const [publicKey, setPublicKey] = useState("")
 
-  useTail([{ label: name }, { label: t("users.edit") }])
+  useTail([{ label: name }])
 
   if (held === undefined) {
     return users.data === undefined ? (

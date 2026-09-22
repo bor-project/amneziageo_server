@@ -8,7 +8,7 @@ import { Crumbs, CrumbsHolder } from "@/components/Crumbs"
 import { LanguagePicker } from "@/components/LanguagePicker"
 import { RestartButton } from "@/components/RestartButton"
 import { ThemeToggle } from "@/components/ThemeToggle"
-import { sections, under } from "@/components/menu"
+import { place, sections, under } from "@/components/menu"
 import type { Item, Section } from "@/components/menu"
 import { menu, menuItem } from "@/components/styles"
 import { isLanguageChoice, useText } from "@/i18n"
@@ -16,7 +16,6 @@ import type { Text } from "@/i18n"
 import { useAbove, wideQuery } from "@/theme/width"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { holds, sessionClosed } from "@/store/authSlice"
-import { lastSpot, sectionOf } from "@/store/spots"
 import { languageServed, sidebarSet, sidebarToggled } from "@/store/uiSlice"
 
 const item = "rounded-lg px-2.5 py-2 text-sm"
@@ -151,42 +150,18 @@ function Group({ section, shut }: { section: Section; shut: () => void }) {
         {t(section.label)}
         <Caret open={inside} />
       </Link>
-      {inside && items.map((one) => <Leaf key={one.to} one={one} depth={1} shut={shut} />)}
+      {inside && items.map((one) => <Leaf key={one.to} one={one} shut={shut} />)}
     </div>
   )
 }
 
-function Leaf({ one, depth, shut }: { one: Item; depth: number; shut: () => void }) {
+function Leaf({ one, shut }: { one: Item; shut: () => void }) {
   const t = useText()
-  const user = useAppSelector((s) => s.auth.user)
-  const { pathname } = useLocation()
-  const kids = (one.kids ?? []).filter((kid) => holds(user, kid.scope))
-  const spot = lastSpot(sectionOf(one.to), one.to)
-  const to = under(spot, one.to) ? spot : one.to
-  const indent = depth > 1 ? "pl-9" : "pl-6"
-
-  if (kids.length === 0) {
-    return (
-      <NavLink to={to} onClick={shut} className={({ isActive }) => `${leaf} ${indent} ${isActive ? active : idle}`}>
-        {t(one.label)}
-      </NavLink>
-    )
-  }
-
-  const inside = under(pathname, one.to)
 
   return (
-    <>
-      <Link
-        to={to}
-        aria-expanded={inside}
-        className={`flex items-center justify-between gap-2 ${leaf} ${indent} ${inside ? opened : idle}`}
-      >
-        {t(one.label)}
-        <Caret open={inside} />
-      </Link>
-      {inside && kids.map((kid) => <Leaf key={kid.to} one={kid} depth={depth + 1} shut={shut} />)}
-    </>
+    <NavLink to={place(one.to)} onClick={shut} className={({ isActive }) => `${leaf} pl-6 ${isActive ? active : idle}`}>
+      {t(one.label)}
+    </NavLink>
   )
 }
 

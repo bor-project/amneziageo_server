@@ -16,7 +16,7 @@ export function ClientExport() {
   const clients = useClients()
   const held = (clients.data ?? []).find((one) => one.id === Number(clientId))
 
-  useTail(held === undefined ? [] : [{ label: held.name }, { label: t("action.export") }])
+  useTail(held === undefined ? [] : [{ label: held.name }])
 
   if (held === undefined) {
     return clients.data === undefined ? (

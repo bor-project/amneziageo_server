@@ -10,7 +10,7 @@ export function DefaultTemplate() {
   const t = useText()
   const navigate = useNavigate()
   const defaults = useTemplateDefaults().data
-  const back = lastSpot("connections", "/connections/templates/clients")
+  const back = lastSpot("connections", "/connections/templates")
 
   useTail([{ label: t("clients.noTemplate") }])
 

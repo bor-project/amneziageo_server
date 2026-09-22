@@ -74,6 +74,14 @@ public sealed record SpeedLeg(string Down, string Up);
 public sealed record SpeedFeature(SpeedLeg Inside, SpeedLeg Outside, long Limit, DateTimeOffset Expires);
 
 /// <summary>
+/// Arguments of the subscription feature.
+/// </summary>
+/// <param name="Url">The address the client reads its subscription at.</param>
+/// <param name="Revision">The mark of what the subscription hands out now.</param>
+/// <param name="Pin">The SHA-256 of the certificate the address answers under, empty when the address is elsewhere.</param>
+public sealed record SubscriptionFeature(string Url, string Revision, string Pin);
+
+/// <summary>
 /// The client that proved its key and the request it asked with.
 /// </summary>
 /// <param name="Client">The client behind the key.</param>
@@ -95,7 +103,7 @@ public interface IHelloFeature
     /// <summary>
     /// Returns the arguments of the feature for a peer, or null when it is not offered.
     /// </summary>
-    object? Offer(HelloPeer peer);
+    ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct);
 }
 
 /// <summary>
@@ -132,4 +140,9 @@ public static class FeatureNames
     /// The measurement of the speed against the server.
     /// </summary>
     public const string Speed = "speed";
+
+    /// <summary>
+    /// The subscription of the client.
+    /// </summary>
+    public const string Subscription = "subscription";
 }

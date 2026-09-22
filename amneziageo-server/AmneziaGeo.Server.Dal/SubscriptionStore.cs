@@ -58,6 +58,7 @@ public sealed class SubscriptionStore
     private static SubscriptionSettings Read(SubscriptionEntity row) => new()
     {
         IsEnabled = row.IsEnabled,
+        Separate = row.Separate,
         Listen = PanelList.Split(row.Listen),
         Domains = PanelList.Split(row.Domains),
         Port = row.Port,
@@ -72,6 +73,7 @@ public sealed class SubscriptionStore
     private static void Write(SubscriptionEntity row, SubscriptionSettings settings)
     {
         row.IsEnabled = settings.IsEnabled;
+        row.Separate = settings.Separate;
         row.Listen = PanelList.Line(settings.Listen);
         row.Domains = PanelList.Line(settings.Domains);
         row.Port = settings.Port;
