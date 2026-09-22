@@ -57,6 +57,8 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 {
     private const int BindTries = 10;
 
+    private const string FrontDown = "the websocket front is down";
+
     private static readonly TimeSpan BindGap = TimeSpan.FromMilliseconds(500);
 
     private static readonly TimeSpan StopFor = TimeSpan.FromSeconds(5);
@@ -116,19 +118,21 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
     }
 
     /// <summary>
-    /// Serves the services of the endpoints the database holds, binding again only what changed.
+    /// Serves the services of the endpoints the database holds, binding again only what changed, and returns why each
+    /// websocket that stayed down did not come up.
     /// </summary>
-    public async Task SettleAsync(CancellationToken ct)
+    public async Task<IReadOnlyDictionary<long, string>> SettleAsync(CancellationToken ct)
     {
         using var scope = _scopes.CreateScope();
         var configs = await scope.ServiceProvider.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false);
         var panel = await scope.ServiceProvider.GetRequiredService<PanelStore>().ReadAsync(ct).ConfigureAwait(false);
         var wanted = ServicePoints.Of(configs, Listening.Chain(_options, panel), Listening.Key(_options, panel));
 
+        var faults = new Dictionary<long, string>();
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await FrontsAsync(wanted, ct).ConfigureAwait(false);
+            await FrontsAsync(wanted, faults, ct).ConfigureAwait(false);
             foreach (var port in _served.Keys.ToList())
             {
                 if (!wanted.Contains(_served[port].Point))
@@ -139,13 +143,19 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 
             foreach (var point in wanted.Where(one => !_served.ContainsKey(one.Port)))
             {
-                await ServeAsync(point, ct).ConfigureAwait(false);
+                var fault = await ServeAsync(point, ct).ConfigureAwait(false);
+                if (point.WebSocket && fault.Length > 0)
+                {
+                    faults.TryAdd(point.ConfigId, fault);
+                }
             }
         }
         finally
         {
             _gate.Release();
         }
+
+        return faults;
     }
 
     /// <summary>
@@ -161,8 +171,9 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         _gate.Dispose();
     }
 
-    // Keeps a websocket front for every endpoint that takes one and takes down every other front of the host.
-    private async Task FrontsAsync(IReadOnlyList<ServicePoint> wanted, CancellationToken ct)
+    // Keeps a websocket front for every endpoint that takes one, noting the fronts that stayed down, and takes down
+    // every other front of the host.
+    private async Task FrontsAsync(IReadOnlyList<ServicePoint> wanted, Dictionary<long, string> faults, CancellationToken ct)
     {
         if (!_sourcesForgotten)
         {
@@ -186,11 +197,12 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             if (!state.IsRunning)
             {
                 _logger.LogWarning("the websocket front of {Name} is down: {Reason}", point.Name, state.Message);
+                faults[point.ConfigId] = state.Message.Length > 0 ? state.Message : FrontDown;
             }
         }
     }
 
-    private async Task ServeAsync(ServicePoint point, CancellationToken ct)
+    private async Task<string> ServeAsync(ServicePoint point, CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
         {
@@ -201,7 +213,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
                 _served[point.Port] = new Served(point, app);
                 _logger.LogInformation("the services of {Name} answer on TCP port {Port}", point.Name, point.Port);
 
-                return;
+                return string.Empty;
             }
             catch (Exception ex) when (ex is IOException or SocketException or InvalidOperationException or CryptographicException)
             {
@@ -210,7 +222,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
                 {
                     _logger.LogWarning(ex, "the services of {Name} stayed off TCP port {Port}", point.Name, point.Port);
 
-                    return;
+                    return ex.Message;
                 }
             }
 

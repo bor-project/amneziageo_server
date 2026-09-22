@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using AmneziaGeo.Server.Api.Services;
@@ -7,6 +9,7 @@ using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Core.Panel;
+using AmneziaGeo.Server.Routing.Proxy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -343,6 +346,48 @@ public class ServiceTests
         Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
     }
 
+    [Fact]
+    public async Task AWebSocketThatStaysDownComesBackWithWhy()
+    {
+        using var bench = new Bench();
+        using var held = new TcpListener(System.Net.IPAddress.IPv6Any, 0);
+        held.Server.DualMode = true;
+        held.Start();
+        var busy = ((System.Net.IPEndPoint)held.LocalEndpoint).Port;
+        var blocked = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true, ServicesPort = busy },
+            CancellationToken.None)).Record!;
+        var fallen = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg2") with { ListenPort = 51821, Address = ["10.9.0.1/24"], WebSocket = true, ServicesPort = Free() },
+            CancellationToken.None)).Record!;
+        await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg3") with { ListenPort = 51822, Address = ["10.10.0.1/24"], WebSocket = true, ServicesPort = Free() },
+            CancellationToken.None);
+        await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg4") with { ListenPort = 51823, Address = ["10.11.0.1/24"], ServicesPort = Free() },
+            CancellationToken.None);
+        var folder = Path.Combine(Path.GetTempPath(), $"amneziageo-fronts-{Guid.NewGuid():N}");
+        var server = new ServiceServer(
+            bench.Scopes,
+            Desk(bench, new SpeedTickets(bench.Clock)),
+            new ProxyHost(new Ledger(), new Fronts("awg2"), folder),
+            new WebOptions(),
+            NullLogger<ServiceServer>.Instance);
+        try
+        {
+            var faults = await server.SettleAsync(CancellationToken.None);
+
+            Assert.Equal([blocked.Id, fallen.Id], faults.Keys.Order().ToArray());
+            Assert.Contains(busy.ToString(CultureInfo.InvariantCulture), faults[blocked.Id], StringComparison.Ordinal);
+            Assert.Equal("the front fell over", faults[fallen.Id]);
+        }
+        finally
+        {
+            await server.DisposeAsync();
+            Directory.Delete(folder, true);
+        }
+    }
+
     private static ServiceDesk Desk(Bench bench, SpeedTickets tickets, SubscriptionState? subscriptions = null)
     {
         var state = subscriptions ?? new SubscriptionState();
@@ -364,6 +409,15 @@ public class ServiceTests
     }
 
     private static ServicePoint Point(ServerConfig endpoint) => ServicePoints.Of([endpoint], string.Empty, string.Empty)[0];
+
+    private static int Free()
+    {
+        using var probe = new TcpListener(System.Net.IPAddress.IPv6Any, 0);
+        probe.Server.DualMode = true;
+        probe.Start();
+
+        return ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+    }
 
     private static HelloRequest Token(string privateKey, string serverKey, DateTimeOffset now)
     {
@@ -424,5 +478,29 @@ public class ServiceTests
         public bool IsUpgradableRequest => true;
 
         public Task<Stream> UpgradeAsync() => Task.FromResult<Stream>(new MemoryStream());
+    }
+
+    // Runs every front but the one named, which falls over.
+    private sealed class Fronts : IProxyRunner
+    {
+        private readonly string _falling;
+
+        /// <summary>
+        /// ctor
+        /// </summary>
+        public Fronts(string falling)
+        {
+            _falling = falling;
+        }
+
+        public Task<ProxyState> EnableAsync(string name, CancellationToken ct) => Task.FromResult(ProxyState.Down);
+
+        public Task<ProxyState> StartAsync(string name, CancellationToken ct) =>
+            Task.FromResult(name == _falling ? new ProxyState(false, "the front fell over") : ProxyState.Up);
+
+        public Task<ProxyState> StopAsync(string name, CancellationToken ct) => Task.FromResult(ProxyState.Down);
+
+        public Task<ProxyState> StateAsync(string name, CancellationToken ct) =>
+            Task.FromResult(name == _falling ? ProxyState.Down : ProxyState.Up);
     }
 }

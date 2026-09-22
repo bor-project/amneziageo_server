@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { span } from "@/address"
 import { complaint } from "@/api/auth"
-import { failure, useConfigs, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
+import { downedOf, failure, useConfigs, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
 import { ObfuscationFields } from "@/components/Obfuscation"
@@ -19,6 +19,7 @@ export function ConfigForm({
   pending,
   error,
   fault = "",
+  faultOf = "",
   onSave,
   onClose,
   onRemove,
@@ -30,6 +31,7 @@ export function ConfigForm({
   pending: boolean
   error: unknown
   fault?: string
+  faultOf?: string
   onSave: (draft: ConfigDraft) => void
   onClose: () => void
   onRemove?: () => void
@@ -44,7 +46,9 @@ export function ConfigForm({
   const [shown, setShown] = useState(publicKey)
   const read = useImportConfig()
   const [text, setText] = useState("")
-  const said = error !== null && error !== undefined ? failure(t, error) : fault
+  const failed = error !== null && error !== undefined
+  const said = failed ? failure(t, error) : fault
+  const proxy = (failed ? downedOf(error)?.error : faultOf) === "websocket-down" ? said : ""
   const port = portFault(t, draft.listenPort, held)
   const services = draft.servicesPort === 0 ? "" : portFault(t, draft.servicesPort, held)
   const name = nameFault(t, draft.name, others.map((one) => one.name))
@@ -151,12 +155,15 @@ export function ConfigForm({
           <option value="server">{t("clients.inboundServer")}</option>
           <option value="network">{t("clients.inboundNetwork")}</option>
         </Pick>
-        <Flag
-          id="config-websocket"
-          caption={t("configs.webSocket")}
-          value={draft.webSocket}
-          onChange={(value) => put({ webSocket: value })}
-        />
+        <div className="flex flex-col justify-center">
+          <Flag
+            id="config-websocket"
+            caption={t("configs.webSocket")}
+            value={draft.webSocket}
+            onChange={(value) => put({ webSocket: value })}
+          />
+          {proxy.length > 0 && <div className="mt-1 text-xs text-alarm">{proxy}</div>}
+        </div>
         <div>
           <Count
             id="config-services-port"
@@ -279,7 +286,7 @@ export function ConfigForm({
         </Part>
       )}
 
-      {said.length > 0 && <div className="text-sm text-alarm">{said}</div>}
+      {said.length > 0 && proxy.length === 0 && <div className="text-sm text-alarm">{said}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
         {onRemove !== undefined && (

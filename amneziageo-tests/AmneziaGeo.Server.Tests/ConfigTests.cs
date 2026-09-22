@@ -121,6 +121,22 @@ public class ConfigTests
     }
 
     [Fact]
+    public async Task TheWebSocketOfAnEndpointIsTurnedOffWithoutItsOtherSettingsMoving()
+    {
+        using var bench = new Bench();
+        var added = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { WebSocket = true, ServicesPort = 8446 }, default);
+
+        var off = await bench.Configs.WebSocketAsync(added.Record!.Id, false, default);
+
+        Assert.False(off.Record!.WebSocket);
+        Assert.False((await bench.Configs.FindAsync(added.Record.Id, default))!.WebSocket);
+        Assert.True(off.Record.IsEnabled);
+        Assert.Equal(8446, off.Record.ServicesPort);
+        Assert.Equal(added.Record.PrivateKey, off.Record.PrivateKey);
+        Assert.Equal(ConfigOutcome.Unknown, (await bench.Configs.WebSocketAsync(added.Record.Id + 100, false, default)).Outcome);
+    }
+
+    [Fact]
     public async Task AnEndpointTakesTheNameOfAnotherOnlyOnce()
     {
         using var bench = new Bench();

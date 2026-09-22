@@ -98,7 +98,7 @@ the server does not hold with `unknown-ticket` (403).
 
 ## The websocket
 
-`WebSocket` in the form of the endpoint (`webSocket` in the API) lets a network that passes nothing but web
+`WebSocket proxy` in the form of the endpoint (`webSocket` in the API) lets a network that passes nothing but web
 traffic carry the tunnel. The panel then runs one `wstunnel` per endpoint on `127.0.0.1`, at port
 `61000 + id % 4000`, whose whitelist lets it reach the UDP port of its own endpoint on the loopback and nothing
 else. The client opens
@@ -118,8 +118,12 @@ another path or to an endpoint without `WebSocket` finds nothing (404).
 On a host with systemd the front of an endpoint is the service `amneziageo-proxy@<name>`, with its arguments in
 `/etc/amneziageo-server/proxy-<name>.env` and its whitelist in `proxy-<name>.yaml`. On a host without it, a
 container among them, the panel runs `wstunnel` itself with the same arguments and starts it again three
-seconds after it falls over. Turning `WebSocket` off takes the front down and removes its files; the panel
+seconds after it falls over. Turning `WebSocket proxy` off takes the front down and removes its files; the panel
 starting over leaves a front whose files did not change alone.
+
+When the front does not come up or another service holds the port of the services, adding, changing or turning on
+the endpoint turns its `WebSocket proxy` off and answers `websocket-down` (409) with the reason and the number of
+the endpoint; the form shows the reason under the flag.
 
 An outbound of the `ws` kind proves its keys to the front of another AmneziaGeo server the same way, see
 [outbounds.md](outbounds.md).

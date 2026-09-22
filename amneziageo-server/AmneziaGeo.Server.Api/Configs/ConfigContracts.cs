@@ -97,7 +97,7 @@ public sealed record ConfigSwitchRequest(bool? On);
 public sealed record ConfigSyncResponse(string Name, bool IsDone, string Message);
 
 /// <summary>
-/// The refusal of the host to raise an endpoint the panel kept and turned off.
+/// The refusal of the host to raise an endpoint or its websocket, which the panel kept and turned off.
 /// </summary>
 public sealed record ConfigRaiseFailure(string Error, string Message, long Id);
 

@@ -201,6 +201,24 @@ public sealed class ConfigStore
     }
 
     /// <summary>
+    /// Turns the websocket of an endpoint on or off.
+    /// </summary>
+    public async Task<ConfigResult> WebSocketAsync(long id, bool on, CancellationToken ct)
+    {
+        var held = await _db.Configs.FirstOrDefaultAsync(row => row.Id == id, ct).ConfigureAwait(false);
+        if (held is null)
+        {
+            return Missing(id);
+        }
+
+        held.WebSocket = on;
+        held.UpdatedUtc = _time.GetUtcNow();
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return ConfigResult.Done(Read(held));
+    }
+
+    /// <summary>
     /// Removes an endpoint.
     /// </summary>
     public async Task<ConfigResult> RemoveAsync(long id, CancellationToken ct)

@@ -17,9 +17,6 @@ import { useAppSelector } from "@/store/hooks"
 
 const small = "rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-hover disabled:opacity-50"
 
-const smallQuiet =
-  "rounded-md border border-line-button px-2.5 py-0.75 text-xs text-ink-soft hover:bg-active disabled:opacity-50"
-
 export function Dashboard() {
   const t = useText()
   const health = useHealth()
@@ -204,7 +201,6 @@ function Update() {
   const update = useUpdate()
   const check = useCheckUpdate()
   const apply = useApplyUpdate()
-  const [asked, setAsked] = useState(false)
   const [fault, setFault] = useState<TextKey | null>(null)
   const state = update.data
 
@@ -222,13 +218,13 @@ function Update() {
   }
 
   const latest = state.latest
-  const ready = latest !== null && may && state.blocker === ""
+  const why =
+    fault === "error.updateBlocked" && state.blocker !== "" ? t(`update.blocker.${state.blocker}` as TextKey) : undefined
 
   async function go(version: string) {
     setFault(null)
     try {
       await apply.mutateAsync(version)
-      setAsked(false)
     } catch (error) {
       setFault(complaint(error))
     }
@@ -247,28 +243,17 @@ function Update() {
         </a>
       )}
 
-      {latest && state.blocker !== "" && (
-        <span title={t(`update.blocker.${state.blocker}` as TextKey)}>{t("update.manual")}</span>
-      )}
-
-      {ready && !asked && (
-        <button type="button" className={small} onClick={() => setAsked(true)}>
-          {t("update.apply")}
+      {latest && may && (
+        <button type="button" className={small} disabled={apply.isPending} onClick={() => void go(latest.version)}>
+          {t("update.confirm", { version: latest.version })}
         </button>
       )}
 
-      {ready && asked && (
-        <>
-          <button type="button" className={smallQuiet} disabled={apply.isPending} onClick={() => setAsked(false)}>
-            {t("update.cancel")}
-          </button>
-          <button type="button" className={small} disabled={apply.isPending} onClick={() => void go(latest.version)}>
-            {t("update.confirm", { version: latest.version })}
-          </button>
-        </>
+      {fault !== null && (
+        <span className="text-alarm" title={why}>
+          {t(fault)}
+        </span>
       )}
-
-      {fault !== null && <span className="text-alarm">{t(fault)}</span>}
 
       {check.isError && <span className="text-alarm">{t(complaint(check.error))}</span>}
 

@@ -156,7 +156,7 @@ export interface Downed {
   id: number
 }
 
-const downs = ["port-busy", "no-module", "no-rights", "forwarding-off", "raise-failed"]
+const downs = ["port-busy", "no-module", "no-rights", "forwarding-off", "raise-failed", "websocket-down"]
 
 export function downedOf(error: unknown): Downed | null {
   if (!axios.isAxiosError(error)) {
@@ -172,8 +172,15 @@ export function downedOf(error: unknown): Downed | null {
 
 export function failure(t: Text, error: unknown): string {
   const downed = downedOf(error)
+  if (downed?.error === "raise-failed") {
+    return t("error.raiseFailed", { reason: downed.message })
+  }
 
-  return downed?.error === "raise-failed" ? t("error.raiseFailed", { reason: downed.message }) : t(complaint(error))
+  if (downed?.error === "websocket-down") {
+    return t("error.webSocketDown", { reason: downed.message })
+  }
+
+  return t(complaint(error))
 }
 
 export function draftOf(config: Config): ConfigDraft {

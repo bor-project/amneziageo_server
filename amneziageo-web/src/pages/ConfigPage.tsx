@@ -42,7 +42,9 @@ function NewConfig() {
           (error: unknown) => {
             const downed = downedOf(error)
             if (downed !== null) {
-              navigate(`/connections/interfaces/${downed.id}/edit`, { state: { fault: failure(t, error) } })
+              navigate(`/connections/interfaces/${downed.id}/edit`, {
+                state: { fault: failure(t, error), of: downed.error },
+              })
             }
           },
         )
@@ -63,6 +65,7 @@ function HeldConfig({ configId }: { configId: number }) {
   const [round, setRound] = useState(0)
   const may = holds(user, scopes.manageInterfaces)
   const arrived = (state as { fault?: string } | null)?.fault ?? ""
+  const arrivedOf = (state as { of?: string } | null)?.of ?? ""
   const all = configs.data ?? []
   const held = all.find((one) => one.id === configId)
   const back = lastSpot("connections", "/connections/interfaces")
@@ -86,6 +89,7 @@ function HeldConfig({ configId }: { configId: number }) {
       pending={change.isPending}
       error={change.error}
       fault={change.error === null ? arrived : ""}
+      faultOf={change.error === null ? arrivedOf : ""}
       onSave={(draft) =>
         void change.mutateAsync({ id: held.id, draft }).then(
           () => navigate(back),

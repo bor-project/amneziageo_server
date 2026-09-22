@@ -107,12 +107,14 @@ public static class ConfigEndpoints
         var raised = await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
-        await services.SettleAsync(ct).ConfigureAwait(false);
+        var proxy = await ServicesAsync(store, services, result.Record!.Id, ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
 
-        return raised.IsDone
-            ? Results.Created($"/api/configs/{result.Record!.Id}", ConfigAnswers.Config(result.Record, true))
-            : Downed(raised, result.Record!.Id);
+        return Settled(
+            raised,
+            proxy,
+            result.Record!.Id,
+            Results.Created($"/api/configs/{result.Record!.Id}", ConfigAnswers.Config(result.Record, true)));
     }
 
     private static async Task<IResult> ChangeAsync(
@@ -142,10 +144,10 @@ public static class ConfigEndpoints
         var raised = await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
-        await services.SettleAsync(ct).ConfigureAwait(false);
+        var proxy = await ServicesAsync(store, services, id, ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
 
-        return raised.IsDone ? Results.Ok(ConfigAnswers.Config(result.Record!, true)) : Downed(raised, id);
+        return Settled(raised, proxy, id, Results.Ok(ConfigAnswers.Config(result.Record!, true)));
     }
 
     private static async Task<IResult> SwitchAsync(
@@ -174,10 +176,10 @@ public static class ConfigEndpoints
         var raised = await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
-        await services.SettleAsync(ct).ConfigureAwait(false);
+        var proxy = await ServicesAsync(store, services, id, ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
 
-        return raised.IsDone ? Results.Ok(ConfigAnswers.Config(result.Record!, true)) : Downed(raised, id);
+        return Settled(raised, proxy, id, Results.Ok(ConfigAnswers.Config(result.Record!, true)));
     }
 
     private static async Task<IResult> RemoveAsync(
@@ -266,6 +268,21 @@ public static class ConfigEndpoints
         return sync;
     }
 
+    // Serves the services of the endpoints and turns the websocket of an endpoint off when it stayed down, returning why.
+    private static async Task<string> ServicesAsync(ConfigStore store, ServiceServer services, long id, CancellationToken ct)
+    {
+        var faults = await services.SettleAsync(ct).ConfigureAwait(false);
+        if (!faults.TryGetValue(id, out var fault))
+        {
+            return string.Empty;
+        }
+
+        await store.WebSocketAsync(id, false, ct).ConfigureAwait(false);
+        await services.SettleAsync(ct).ConfigureAwait(false);
+
+        return fault;
+    }
+
     private static async Task FirewallAsync(
         ConfigStore store,
         ClientStore clients,
@@ -285,6 +302,19 @@ public static class ConfigEndpoints
     private static IResult Downed(EndpointSync sync, long id) => Results.Json(
         new ConfigRaiseFailure(sync.Fault, sync.Message, id),
         statusCode: StatusCodes.Status409Conflict);
+
+    // Answers a change of an endpoint with the refusal of the host, the websocket that stayed down or what was done.
+    private static IResult Settled(EndpointSync raised, string proxy, long id, IResult done)
+    {
+        if (!raised.IsDone)
+        {
+            return Downed(raised, id);
+        }
+
+        return proxy.Length > 0
+            ? Results.Json(new ConfigRaiseFailure("websocket-down", proxy, id), statusCode: StatusCodes.Status409Conflict)
+            : done;
+    }
 
     private static IResult Explain(ConfigResult result) => Refuse(Status(result.Outcome), result.Code, result.Message);
 

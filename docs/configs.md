@@ -37,7 +37,7 @@ go only to a caller that holds `interfaces:write`; to anyone else they come back
 | Host | the address or the host name clients come to, empty when it is not known yet |
 | Port | the UDP port the endpoint listens on |
 | Services port | the TCP port hello, the measurement and the websocket answer on, empty for the number of the UDP port, see [services.md](services.md) |
-| WebSocket | whether the endpoint takes the tunnel inside a websocket on the port of its services |
+| WebSocket proxy | whether the endpoint takes the tunnel inside a websocket on the port of its services; when it does not start, the panel turns it off and says why |
 | MTU | the packet size clients take, 0 leaves it to the system |
 | Interface address | the address ranges the interface carries |
 | Closed to clients | the ranges clients of the endpoint are not let into |
