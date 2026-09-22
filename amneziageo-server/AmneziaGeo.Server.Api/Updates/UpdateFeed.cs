@@ -40,13 +40,16 @@ public sealed class UpdateFeed
 
     private readonly UpdateOptions _options;
 
+    private readonly bool _tests;
+
     /// <summary>
     /// ctor
     /// </summary>
-    public UpdateFeed(HttpClient http, UpdateOptions options)
+    public UpdateFeed(HttpClient http, UpdateOptions options, bool tests)
     {
         _http = http;
         _options = options;
+        _tests = tests;
     }
 
     /// <summary>
@@ -75,7 +78,7 @@ public sealed class UpdateFeed
             throw new InvalidDataException($"the release {listing.Version} carries the manifest of {parsed.Version}");
         }
 
-        if (!_options.TakesTests && !string.Equals(parsed.Channel, UpdateOptions.Stable, StringComparison.OrdinalIgnoreCase))
+        if (!_tests && !string.Equals(parsed.Channel, UpdateOptions.Stable, StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
@@ -156,7 +159,7 @@ public sealed class UpdateFeed
 
         var body = await response.Content.ReadAsByteArrayAsync(limit.Token).ConfigureAwait(false);
 
-        return Pick(body, _options.TakesTests);
+        return Pick(body, _tests);
     }
 
     private async Task<byte[]> ReadAsync(Uri address, int max, CancellationToken ct)

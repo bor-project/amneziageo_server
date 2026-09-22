@@ -41,6 +41,8 @@ public sealed class UpdateCenter
 
     private readonly ILogger<UpdateCenter> _logger;
 
+    private readonly IServiceScopeFactory _scopes;
+
     private readonly UpdateJournal _journal;
 
     private readonly SemaphoreSlim _checking = new(1, 1);
@@ -61,17 +63,26 @@ public sealed class UpdateCenter
 
     private string _blocker = string.Empty;
 
+    private bool _tests;
+
     private DockerPlace? _place;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public UpdateCenter(UpdateOptions options, IHttpClientFactory clients, TimeProvider time, ILogger<UpdateCenter> logger)
+    public UpdateCenter(
+        UpdateOptions options,
+        IHttpClientFactory clients,
+        TimeProvider time,
+        ILogger<UpdateCenter> logger,
+        IServiceScopeFactory scopes)
     {
         _options = options;
         _clients = clients;
         _time = time;
         _logger = logger;
+        _scopes = scopes;
+        _tests = options.TakesTests;
         _data = Path.GetDirectoryName(ServerDatabase.DefaultPath()) is { Length: > 0 } data ? data : "/var/lib/amneziageo-server";
         _journal = new UpdateJournal(options.Directory.Length > 0 ? options.Directory : Path.Combine(_data, "update"));
         _mode = UpdateModes.Detect(
@@ -95,7 +106,7 @@ public sealed class UpdateCenter
         {
             return new UpdateResponse(
                 Current.ToString(),
-                _options.TakesTests ? UpdateOptions.Test : UpdateOptions.Stable,
+                _tests ? UpdateOptions.Test : UpdateOptions.Stable,
                 _mode,
                 _blocker,
                 _checked,
@@ -120,17 +131,20 @@ public sealed class UpdateCenter
         {
             Move(Checking, Idle);
             Tidy();
+            var tests = await TestsAsync(ct).ConfigureAwait(false);
             var blocker = await BlockerAsync(ct).ConfigureAwait(false);
-            var (offer, fault) = await LookAsync(ct).ConfigureAwait(false);
+            var (offer, fault) = await LookAsync(tests, ct).ConfigureAwait(false);
             lock (_gate)
             {
                 _blocker = blocker;
                 _checked = _time.GetUtcNow();
                 _fault = fault;
-                if (fault is null)
+                if (fault is null || tests != _tests)
                 {
                     _offer = offer is not null && offer.Manifest.Version > Current ? offer : null;
                 }
+
+                _tests = tests;
             }
         }
         finally
@@ -140,6 +154,24 @@ public sealed class UpdateCenter
         }
 
         return Status();
+    }
+
+    /// <summary>
+    /// Looks the releases over again in the background.
+    /// </summary>
+    public void Recheck()
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await CheckAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "the releases of the panel were not looked over again");
+            }
+        });
     }
 
     /// <summary>
@@ -269,7 +301,31 @@ public sealed class UpdateCenter
         }
     }
 
-    private async Task<(UpdateOffer? Offer, Failure? Fault)> LookAsync(CancellationToken ct)
+    private async Task<bool> TestsAsync(CancellationToken ct)
+    {
+        if (_options.TakesTests)
+        {
+            return true;
+        }
+
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            var settings = await scope.ServiceProvider.GetRequiredService<PanelStore>().ReadAsync(ct).ConfigureAwait(false);
+
+            return settings.Prereleases;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            _logger.LogWarning(ex, "the settings of the panel were not read");
+            lock (_gate)
+            {
+                return _tests;
+            }
+        }
+    }
+
+    private async Task<(UpdateOffer? Offer, Failure? Fault)> LookAsync(bool tests, CancellationToken ct)
     {
         try
         {
@@ -279,7 +335,7 @@ public sealed class UpdateCenter
                 return (null, new Failure("update-no-key", "the panel carries no key to check releases against"));
             }
 
-            var feed = new UpdateFeed(_clients.CreateClient(Client), _options);
+            var feed = new UpdateFeed(_clients.CreateClient(Client), _options, tests);
 
             return (await feed.NewestAsync(key, ct).ConfigureAwait(false), null);
         }

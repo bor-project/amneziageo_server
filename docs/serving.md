@@ -18,9 +18,11 @@ hold without a restart, see [subscriptions.md](subscriptions.md).
 | Certificate path | the chain in PEM, empty for the certificate the configuration names |
 | Certificate key path | the key of that chain, taken together with it |
 | Language | the language the panel opens in, until the browser is told otherwise |
+| Receive prerelease versions | whether the panel offers the prereleases of the panel as well, see [updates.md](updates.md) |
 
 `POST /api/panel/restart` stops the server, systemd starts it again, or compose in a container. `GET /api/panel` carries `pending`,
-true while the saved settings differ from the ones the panel started under; the language does not count.
+true while the saved settings differ from the ones the panel started under; the language and the prereleases do not
+count.
 
 The page of the panel carries the path in its `base` tag, so the interface and `/api` follow the panel
 wherever it sits.

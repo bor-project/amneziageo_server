@@ -14,6 +14,7 @@ public sealed record PanelResponse(
     string Certificate,
     string CertificateKey,
     string Language,
+    bool Prereleases,
     IReadOnlyList<string> Certificates,
     IReadOnlyList<string> Addresses,
     string CertificateRoot,
@@ -30,7 +31,8 @@ public sealed record PanelRequest(
     string? Path,
     string? Certificate,
     string? CertificateKey,
-    string? Language);
+    string? Language,
+    bool Prereleases);
 
 /// <summary>
 /// Turns the settings of the panel into what it reads and back.
@@ -55,6 +57,7 @@ public static class PanelAnswers
             settings.Certificate,
             settings.CertificateKey,
             settings.Language,
+            settings.Prereleases,
             PanelChoices.Domains(options.CertificateRoot),
             PanelChoices.Addresses(),
             options.CertificateRoot,
@@ -78,6 +81,7 @@ public static class PanelAnswers
             Certificate = Trim(request.Certificate),
             CertificateKey = Trim(request.CertificateKey),
             Language = request.Language is { Length: > 0 } language ? language : PanelDefaults.Language,
+            Prereleases = request.Prereleases,
         };
     }
 

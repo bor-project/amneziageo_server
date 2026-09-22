@@ -536,6 +536,8 @@ public sealed class PanelEntity
 
     public string Language { get; set; } = string.Empty;
 
+    public bool Prereleases { get; set; }
+
     public DateTimeOffset UpdatedUtc { get; set; }
 }
 

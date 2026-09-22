@@ -1,5 +1,6 @@
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Firewall;
+using AmneziaGeo.Server.Api.Updates;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
@@ -66,6 +67,7 @@ public static class PanelEndpoints
         PanelSettings running,
         WebOptions options,
         FirewallApplier firewall,
+        UpdateCenter updates,
         ILoggerFactory loggers,
         CancellationToken ct)
     {
@@ -79,6 +81,7 @@ public static class PanelEndpoints
             return Results.Json(new Failure(fault.Code, fault.Message), statusCode: StatusCodes.Status400BadRequest);
         }
 
+        var before = await store.ReadAsync(ct).ConfigureAwait(false);
         var result = await store.SaveAsync(draft, ct).ConfigureAwait(false);
         if (!result.IsOk || result.Record is null)
         {
@@ -86,6 +89,10 @@ public static class PanelEndpoints
         }
 
         await firewall.SettleAsync(ct).ConfigureAwait(false);
+        if (result.Record.Prereleases != before.Prereleases)
+        {
+            updates.Recheck();
+        }
 
         return Results.Ok(PanelAnswers.Panel(result.Record, running, options));
     }

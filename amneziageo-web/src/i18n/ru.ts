@@ -254,6 +254,7 @@ export const ru: Dictionary = {
   "settings.listen": "Слушать на адресах",
   "settings.port": "Порт",
   "settings.opened": "Открыть порт в брандмауэре",
+  "settings.prereleases": "Получать предварительные версии",
   "settings.path": "Путь",
   "settings.domains": "Отвечать доменам",
   "settings.domain": "Домен сертификата",

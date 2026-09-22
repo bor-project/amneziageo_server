@@ -48,6 +48,11 @@ public sealed record PanelSettings
     public string Language { get; init; } = PanelDefaults.Language;
 
     /// <summary>
+    /// Whether the panel takes the builds before a release as well.
+    /// </summary>
+    public bool Prereleases { get; init; }
+
+    /// <summary>
     /// Returns the addresses with the port the panel binds.
     /// </summary>
     public IReadOnlyList<string> Entries => Listen.Count == 0

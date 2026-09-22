@@ -97,11 +97,12 @@ public class PanelTests
     public void NamesInARequestArriveAsAList()
     {
         var asked = PanelAnswers.Draft(
-            new PanelRequest(["127.0.0.1"], ["panel.example; vpn.example"], 8443, false, "/panel/", null, null, "ru"));
+            new PanelRequest(["127.0.0.1"], ["panel.example; vpn.example"], 8443, false, "/panel/", null, null, "ru", true));
 
         Assert.Equal(["127.0.0.1"], asked.Listen);
         Assert.Equal(["panel.example", "vpn.example"], asked.Domains);
         Assert.Equal("panel", asked.Path);
+        Assert.True(asked.Prereleases);
     }
 
     [Fact]
@@ -131,6 +132,15 @@ public class PanelTests
         var running = PanelDefaults.Settings with { Language = "en" };
 
         Assert.False((running with { Language = "ru" }).Differs(running));
+    }
+
+    [Fact]
+    public void PrereleasesTakeNoRestart()
+    {
+        var running = PanelDefaults.Settings;
+
+        Assert.False((running with { Prereleases = true }).Differs(running));
+        Assert.True(PanelAnswers.Panel(running with { Prereleases = true }, running, new WebOptions()).Prereleases);
     }
 
     [Fact]
@@ -234,6 +244,7 @@ public class PanelTests
             Certificate = "/srv/panel/chain.pem",
             CertificateKey = "/srv/panel/key.pem",
             Language = "ru",
+            Prereleases = true,
         };
 
         var saved = await bench.Panel.SaveAsync(settings, CancellationToken.None);
@@ -247,6 +258,7 @@ public class PanelTests
         Assert.Equal(settings.Certificate, held.Certificate);
         Assert.Equal(settings.CertificateKey, held.CertificateKey);
         Assert.Equal(settings.Language, held.Language);
+        Assert.True(held.Prereleases);
     }
 
     [Fact]

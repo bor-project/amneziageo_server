@@ -5,6 +5,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using AmneziaGeo.Server.Api.Updates;
+using AmneziaGeo.Server.Core.Panel;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -114,7 +116,7 @@ public sealed class UpdateTests : IDisposable
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var data = Manifest("1.0.1.0");
         using var http = new HttpClient(new Files(Published(data, Sign(key, data))));
-        var feed = new UpdateFeed(http, new UpdateOptions { Manifest = "https://releases.test/1.0.1.0/update.json" });
+        var feed = new UpdateFeed(http, new UpdateOptions { Manifest = "https://releases.test/1.0.1.0/update.json" }, tests: false);
 
         var offer = await feed.NewestAsync(key.ExportSubjectPublicKeyInfoPem(), CancellationToken.None);
 
@@ -129,7 +131,7 @@ public sealed class UpdateTests : IDisposable
         using var other = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var data = Manifest("1.0.1.0");
         using var http = new HttpClient(new Files(Published(data, Sign(other, data))));
-        var feed = new UpdateFeed(http, new UpdateOptions { Manifest = "https://releases.test/1.0.1.0/update.json" });
+        var feed = new UpdateFeed(http, new UpdateOptions { Manifest = "https://releases.test/1.0.1.0/update.json" }, tests: false);
 
         await Assert.ThrowsAsync<InvalidDataException>(() => feed.NewestAsync(key.ExportSubjectPublicKeyInfoPem(), CancellationToken.None));
     }
@@ -142,13 +144,44 @@ public sealed class UpdateTests : IDisposable
         using var http = new HttpClient(new Files(Published(data, Sign(key, data))));
         var address = "https://releases.test/1.0.1.0/update.json";
 
-        var stable = await new UpdateFeed(http, new UpdateOptions { Manifest = address })
+        var stable = await new UpdateFeed(http, new UpdateOptions { Manifest = address }, tests: false)
             .NewestAsync(key.ExportSubjectPublicKeyInfoPem(), CancellationToken.None);
-        var test = await new UpdateFeed(http, new UpdateOptions { Manifest = address, Channel = UpdateOptions.Test })
+        var test = await new UpdateFeed(http, new UpdateOptions { Manifest = address }, tests: true)
             .NewestAsync(key.ExportSubjectPublicKeyInfoPem(), CancellationToken.None);
 
         Assert.Null(stable);
         Assert.Equal(new Version(1, 0, 1, 3), test?.Manifest.Version);
+    }
+
+    [Fact]
+    public async Task TheSettingsOfThePanelTakeTheBuildsBeforeARelease()
+    {
+        using var bench = new Bench();
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var data = Manifest("1.0.1.3", "test");
+        using var files = new Files(Published(data, Sign(key, data)));
+        var pem = Path.Combine(_folder.FullName, "key.pem");
+        File.WriteAllText(pem, key.ExportSubjectPublicKeyInfoPem());
+        var options = new UpdateOptions
+        {
+            Manifest = "https://releases.test/1.0.1.0/update.json",
+            Key = pem,
+            Directory = Path.Combine(_folder.FullName, "update"),
+        };
+        var center = new UpdateCenter(options, new Clients(files), bench.Clock, NullLogger<UpdateCenter>.Instance, bench.Scopes);
+
+        var stable = await center.CheckAsync(CancellationToken.None);
+        await bench.Panel.SaveAsync(PanelDefaults.Settings with { Prereleases = true }, CancellationToken.None);
+        var test = await center.CheckAsync(CancellationToken.None);
+        await bench.Panel.SaveAsync(PanelDefaults.Settings, CancellationToken.None);
+        var back = await center.CheckAsync(CancellationToken.None);
+
+        Assert.Equal(UpdateOptions.Stable, stable.Channel);
+        Assert.Null(stable.Latest);
+        Assert.Equal(UpdateOptions.Test, test.Channel);
+        Assert.Equal("1.0.1.3", test.Latest?.Version);
+        Assert.Equal(UpdateOptions.Stable, back.Channel);
+        Assert.Null(back.Latest);
     }
 
     [Fact]
@@ -441,5 +474,17 @@ public sealed class UpdateTests : IDisposable
             Task.FromResult(_files.TryGetValue(request.RequestUri!.AbsoluteUri, out var body)
                 ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) }
                 : new HttpResponseMessage(HttpStatusCode.NotFound));
+    }
+
+    private sealed class Clients : IHttpClientFactory
+    {
+        private readonly HttpMessageHandler _handler;
+
+        public Clients(HttpMessageHandler handler)
+        {
+            _handler = handler;
+        }
+
+        public HttpClient CreateClient(string name) => new(_handler, disposeHandler: false);
     }
 }

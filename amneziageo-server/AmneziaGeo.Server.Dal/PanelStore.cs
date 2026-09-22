@@ -157,6 +157,7 @@ public sealed class PanelStore
         Certificate = row.Certificate,
         CertificateKey = row.CertificateKey,
         Language = row.Language,
+        Prereleases = row.Prereleases,
     };
 
     private static void Write(PanelEntity row, PanelSettings settings)
@@ -169,5 +170,6 @@ public sealed class PanelStore
         row.Certificate = settings.Certificate;
         row.CertificateKey = settings.CertificateKey;
         row.Language = settings.Language;
+        row.Prereleases = settings.Prereleases;
     }
 }

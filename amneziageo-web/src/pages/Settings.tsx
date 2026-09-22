@@ -135,6 +135,15 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
               onChange={(opened) => set({ opened })}
             />
           </div>
+
+          <div className="sm:col-span-2">
+            <Flag
+              id="panel-prereleases"
+              caption={t("settings.prereleases")}
+              value={draft.prereleases}
+              onChange={(prereleases) => set({ prereleases })}
+            />
+          </div>
         </Part>
       ) : (
         <Part title={t("settings.partCertificate")}>

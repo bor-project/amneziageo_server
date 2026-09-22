@@ -29,6 +29,10 @@ panel names why.
 
 The settings go into `server.env` like any other.
 
+**Receive prerelease versions** on the **Server** tab of **Settings** takes the prereleases as well, without a
+restart: the panel looks the releases over again once the tab is saved. `Update__Channel=test` takes them whatever
+the tab says. `GET /api/update` names the channel in `channel`.
+
 ## The routes
 
 | Route | Right | What it does |

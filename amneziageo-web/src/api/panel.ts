@@ -10,6 +10,7 @@ export interface PanelDraft {
   certificate: string
   certificateKey: string
   language: string
+  prereleases: boolean
 }
 
 export interface Panel extends PanelDraft {
@@ -55,6 +56,7 @@ export function draftOf(panel: Panel): PanelDraft {
     certificate: panel.certificate,
     certificateKey: panel.certificateKey,
     language: panel.language,
+    prereleases: panel.prereleases,
   }
 }
 

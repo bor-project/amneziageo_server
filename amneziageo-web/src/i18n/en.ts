@@ -252,6 +252,7 @@ export const en = {
   "settings.listen": "Listen addresses",
   "settings.port": "Port",
   "settings.opened": "Open the port in the firewall",
+  "settings.prereleases": "Receive prerelease versions",
   "settings.path": "Path",
   "settings.domains": "Listen domains",
   "settings.domain": "Certificate domain",
