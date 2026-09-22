@@ -6,6 +6,8 @@ address ranges onto the interface, the masquerade and the closed ranges into the
 been raising its interfaces with `awg-quick` hands them over whole.
 
 This page puts the panel on as a package. The same panel goes on as a container, see [docker.md](docker.md).
+A guide in Russian that takes a bare Debian 12 to a running panel, step by step, is
+[ru/install-debian12.md](ru/install-debian12.md).
 
 ## Build the package
 

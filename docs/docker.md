@@ -3,7 +3,8 @@
 The panel goes on a server in one of two ways: as a package the host keeps under `/opt/amneziageo-server`, see
 [install.md](install.md), or as a container. Both do the same job. The container runs in the network of the
 host, so the interfaces of the endpoints, the rules of the firewall and the ports the panel opens are those of
-the host, as with the package.
+the host, as with the package. A guide in Russian that takes a bare Debian 12 to a panel in a container, step by
+step, is [ru/install-debian12-docker.md](ru/install-debian12-docker.md).
 
 ## What the host carries
 
