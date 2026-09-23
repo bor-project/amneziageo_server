@@ -4,11 +4,13 @@ import { complaint } from "@/api/auth"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
+import { useSpot } from "@/store/spots"
 
 export function TokenRemove() {
   const t = useText()
   const language = useLanguage()
   const navigate = useNavigate()
+  const back = useSpot("/settings/users")
   const { tokenId } = useParams()
   const tokens = useApiTokens()
   const revoke = useRevokeApiToken()
@@ -20,7 +22,7 @@ export function TokenRemove() {
     return tokens.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("apiTokens.loading")}</div>
     ) : (
-      <Link to="/settings/users" className="mt-4 block text-sm text-brand-ink">
+      <Link to={back} className="mt-4 block text-sm text-brand-ink">
         {t("action.backToList")}
       </Link>
     )
@@ -40,12 +42,12 @@ export function TokenRemove() {
       {revoke.error !== null && <div className="text-sm text-alarm">{t(complaint(revoke.error))}</div>}
 
       <div className="flex justify-end gap-2">
-        <Link to="/settings/users" className={`flex h-10 items-center ${secondary}`}>
+        <Link to={back} className={`flex h-10 items-center ${secondary}`}>
           {t("action.backToList")}
         </Link>
         <button
           type="button"
-          onClick={() => void revoke.mutateAsync(held.id).then(() => navigate("/settings/users"))}
+          onClick={() => void revoke.mutateAsync(held.id).then(() => navigate(back))}
           disabled={revoke.isPending}
           className={danger}
         >

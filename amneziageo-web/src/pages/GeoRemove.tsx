@@ -4,10 +4,12 @@ import { useGeoSources, useRemoveGeoSource } from "@/api/geo"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
+import { useSpot } from "@/store/spots"
 
 export function GeoRemove() {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/routing/geo")
   const { sourceId } = useParams()
   const sources = useGeoSources()
   const remove = useRemoveGeoSource()
@@ -22,7 +24,7 @@ export function GeoRemove() {
     return sources.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("geo.loading")}</div>
     ) : (
-      <Navigate to="/routing/geo" replace />
+      <Navigate to={back} replace />
     )
   }
 
@@ -38,12 +40,12 @@ export function GeoRemove() {
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}
 
       <div className="flex justify-end gap-2">
-        <Link to="/routing/geo" className={`flex h-10 items-center ${secondary}`}>
+        <Link to={back} className={`flex h-10 items-center ${secondary}`}>
           {t("action.backToList")}
         </Link>
         <button
           type="button"
-          onClick={() => void remove.mutateAsync(held.id).then(() => navigate("/routing/geo"))}
+          onClick={() => void remove.mutateAsync(held.id).then(() => navigate(back))}
           disabled={remove.isPending}
           className={danger}
         >

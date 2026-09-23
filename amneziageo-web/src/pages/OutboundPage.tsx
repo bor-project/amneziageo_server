@@ -13,6 +13,7 @@ import { OutboundForm } from "@/components/OutboundForm"
 import { secondary } from "@/components/styles"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
+import { useSpot } from "@/store/spots"
 
 export function OutboundPage() {
   const { outboundId } = useParams()
@@ -23,6 +24,7 @@ export function OutboundPage() {
 function NewOutbound() {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/routing/channels")
   const outbounds = useOutbounds()
   const fresh = useFreshOutbound(outbounds.data !== undefined, nextName(outbounds.data), "wg")
   const add = useAddOutbound()
@@ -39,8 +41,8 @@ function NewOutbound() {
       publicKey={fresh.data.publicKey}
       pending={add.isPending}
       error={add.error}
-      onSave={(draft) => void add.mutateAsync(draft).then(() => navigate("/routing/channels"))}
-      onClose={() => navigate("/routing/channels")}
+      onSave={(draft) => void add.mutateAsync(draft).then(() => navigate(back))}
+      onClose={() => navigate(back)}
     />
   )
 }
@@ -48,6 +50,7 @@ function NewOutbound() {
 function HeldOutbound({ outboundId }: { outboundId: number }) {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/routing/channels")
   const outbounds = useOutbounds()
   const change = useChangeOutbound()
   const apply = useApplyOutbound()
@@ -61,7 +64,7 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
     return outbounds.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("outbounds.loading")}</div>
     ) : (
-      <Navigate to="/routing/channels" replace />
+      <Navigate to={back} replace />
     )
   }
 
@@ -91,8 +94,8 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
         publicKey={held.publicKey}
         pending={change.isPending}
         error={change.error}
-        onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate("/routing/channels"))}
-        onClose={() => navigate("/routing/channels")}
+        onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}
+        onClose={() => navigate(back)}
         onRemove={() => navigate(`/routing/channels/${held.id}/delete`)}
       />
     </div>

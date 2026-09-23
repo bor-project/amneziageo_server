@@ -4,10 +4,12 @@ import { useClients, useRemoveClient } from "@/api/clients"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
+import { useSpot } from "@/store/spots"
 
 export function ClientRemove() {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/connections/clients")
   const { clientId } = useParams()
   const clients = useClients()
   const remove = useRemoveClient()
@@ -24,7 +26,7 @@ export function ClientRemove() {
     return clients.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("clients.loading")}</div>
     ) : (
-      <Navigate to="/connections/clients" replace />
+      <Navigate to={back} replace />
     )
   }
 
@@ -47,12 +49,12 @@ export function ClientRemove() {
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}
 
       <div className="flex justify-end gap-2">
-        <Link to="/connections/clients" className={`flex h-10 items-center ${secondary}`}>
+        <Link to={back} className={`flex h-10 items-center ${secondary}`}>
           {t("action.backToList")}
         </Link>
         <button
           type="button"
-          onClick={() => void remove.mutateAsync(held.id).then(() => navigate("/connections/clients"))}
+          onClick={() => void remove.mutateAsync(held.id).then(() => navigate(back))}
           disabled={remove.isPending}
           className={danger}
         >

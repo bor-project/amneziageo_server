@@ -10,11 +10,13 @@ import { Line, Part, Pick } from "@/components/fields"
 import { narrowest, titleOf } from "@/components/roles"
 import { card, note, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
+import { useSpot } from "@/store/spots"
 import { selectText } from "@/select"
 
 export function TokenPage() {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/settings/users")
   const mint = useMintApiToken()
   const catalog = useRoles()
   const roles = catalog.data?.roles ?? []
@@ -62,7 +64,7 @@ export function TokenPage() {
       {mint.error !== null && <div className="text-sm text-alarm">{t(complaint(mint.error))}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
-        <button type="button" onClick={() => navigate("/settings/users")} className={secondary}>
+        <button type="button" onClick={() => navigate(back)} className={secondary}>
           {t("apiTokens.cancel")}
         </button>
         <button type="button" onClick={() => void save()} disabled={!ready} className={primary}>
@@ -75,6 +77,7 @@ export function TokenPage() {
 
 function Secret({ minted }: { minted: MintedApiToken }) {
   const t = useText()
+  const back = useSpot("/settings/users")
   const block = useRef<HTMLPreElement>(null)
   const [copied, setCopied] = useState(false)
 
@@ -107,7 +110,7 @@ function Secret({ minted }: { minted: MintedApiToken }) {
         <button type="button" onClick={() => void copy()} className={secondary}>
           {copied ? t("apiTokens.copied") : t("apiTokens.copy")}
         </button>
-        <Link to="/settings/users" className={`flex h-10 items-center ${primary}`}>
+        <Link to={back} className={`flex h-10 items-center ${primary}`}>
           {t("apiTokens.done")}
         </Link>
       </div>

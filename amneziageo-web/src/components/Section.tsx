@@ -2,20 +2,23 @@ import { useEffect } from "react"
 import { Link, Outlet, useLocation } from "react-router-dom"
 import { Glyph } from "@/components/Glyph"
 import { useCrumbs } from "@/components/crumbs"
-import { here, place } from "@/components/menu"
+import { here } from "@/components/menu"
 import type { Item } from "@/components/menu"
 import { card, primary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
-import { useAppSelector } from "@/store/hooks"
-import { keepSpot, sectionOf } from "@/store/spots"
+import { useAppDispatch, useAppSelector } from "@/store/hooks"
+import { sectionOf, spotIn, useSpots } from "@/store/spots"
+import { spotKept } from "@/store/spotsSlice"
 
 const tile = "flex size-10 shrink-0 items-center justify-center rounded-lg bg-chip text-chip-ink group-hover:bg-picked"
 
 export function Sectioned({ title, items }: { title: TextKey; items: Item[] }) {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
+  const dispatch = useAppDispatch()
+  const spots = useSpots()
   const { pathname, search } = useLocation()
   const open = items.filter((one) => holds(user, one.scope))
   const now = here(open, pathname)
@@ -25,16 +28,16 @@ export function Sectioned({ title, items }: { title: TextKey; items: Item[] }) {
 
   useEffect(() => {
     if (listed) {
-      keepSpot(pathname, search)
+      dispatch(spotKept({ path: pathname, search }))
     }
-  }, [listed, pathname, search])
+  }, [dispatch, listed, pathname, search])
 
   useCrumbs(
     now === undefined
       ? [{ label: t(title) }]
       : [
           { label: t(title), to: `/${sectionOf(pathname)}` },
-          { label: t(now.label), to: place(now.to) },
+          { label: t(now.label), to: spotIn(spots, now.to) },
         ],
   )
 
@@ -59,6 +62,7 @@ export function Sectioned({ title, items }: { title: TextKey; items: Item[] }) {
 export function Cards({ items }: { items: Item[] }) {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
+  const spots = useSpots()
 
   return (
     <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -67,7 +71,7 @@ export function Cards({ items }: { items: Item[] }) {
         .map((one) => (
           <Link
             key={one.to}
-            to={place(one.to)}
+            to={spotIn(spots, one.to)}
             className={`group flex items-start gap-3.5 p-4.5 hover:border-brand hover:bg-active ${card}`}
           >
             <span className={tile}>

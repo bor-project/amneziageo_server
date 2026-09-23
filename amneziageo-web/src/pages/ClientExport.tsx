@@ -7,13 +7,14 @@ import { secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
-import { lastSpot } from "@/store/spots"
+import { useSpot } from "@/store/spots"
 
 export function ClientExport() {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
   const { clientId } = useParams()
   const clients = useClients()
+  const back = useSpot("/connections/clients")
   const held = (clients.data ?? []).find((one) => one.id === Number(clientId))
 
   useTail(held === undefined ? [] : [{ label: held.name }])
@@ -22,7 +23,7 @@ export function ClientExport() {
     return clients.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("clients.loading")}</div>
     ) : (
-      <Navigate to={lastSpot("connections", "/connections/clients")} replace />
+      <Navigate to={back} replace />
     )
   }
 

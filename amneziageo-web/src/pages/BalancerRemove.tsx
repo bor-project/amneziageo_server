@@ -4,10 +4,12 @@ import { useBalancers, useRemoveBalancer } from "@/api/balancers"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
+import { useSpot } from "@/store/spots"
 
 export function BalancerRemove() {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/routing/channels")
   const { balancerId } = useParams()
   const balancers = useBalancers()
   const remove = useRemoveBalancer()
@@ -24,7 +26,7 @@ export function BalancerRemove() {
     return balancers.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("outbounds.loading")}</div>
     ) : (
-      <Navigate to="/routing/channels" replace />
+      <Navigate to={back} replace />
     )
   }
 
@@ -40,12 +42,12 @@ export function BalancerRemove() {
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}
 
       <div className="flex justify-end gap-2">
-        <Link to="/routing/channels" className={`flex h-10 items-center ${secondary}`}>
+        <Link to={back} className={`flex h-10 items-center ${secondary}`}>
           {t("action.backToList")}
         </Link>
         <button
           type="button"
-          onClick={() => void remove.mutateAsync(held.id).then(() => navigate("/routing/channels"))}
+          onClick={() => void remove.mutateAsync(held.id).then(() => navigate(back))}
           disabled={remove.isPending}
           className={danger}
         >

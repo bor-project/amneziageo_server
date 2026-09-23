@@ -8,7 +8,7 @@ import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
-import { lastSpot } from "@/store/spots"
+import { useSpot } from "@/store/spots"
 
 export function ConfigPage() {
   const { configId } = useParams()
@@ -22,7 +22,7 @@ function NewConfig() {
   const configs = useConfigs()
   const fresh = useFreshConfig(configs.data !== undefined, nextName(configs.data))
   const add = useAddConfig()
-  const back = lastSpot("connections", "/connections/interfaces")
+  const back = useSpot("/connections/interfaces")
 
   useTail([{ label: t("configs.newTitle") }])
 
@@ -68,7 +68,7 @@ function HeldConfig({ configId }: { configId: number }) {
   const arrivedOf = (state as { of?: string } | null)?.of ?? ""
   const all = configs.data ?? []
   const held = all.find((one) => one.id === configId)
-  const back = lastSpot("connections", "/connections/interfaces")
+  const back = useSpot("/connections/interfaces")
 
   useTail(held === undefined ? [] : [{ label: held.name }])
 

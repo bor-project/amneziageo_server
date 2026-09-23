@@ -7,6 +7,7 @@ import { useTail } from "@/components/crumbs"
 import { Flag, Line, Part, Pick } from "@/components/fields"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
+import { useSpot } from "@/store/spots"
 
 export function UserPage() {
   const { name } = useParams()
@@ -17,6 +18,7 @@ export function UserPage() {
 function NewUser() {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/settings/users")
   const add = useAddUser()
   const catalog = useRoles()
   const [name, setName] = useState("")
@@ -39,7 +41,7 @@ function NewUser() {
       host,
       publicKey: publicKey.trim(),
     })
-    navigate("/settings/users")
+    navigate(back)
   }
 
   return (
@@ -86,7 +88,7 @@ function NewUser() {
       {add.error !== null && <div className="text-sm text-alarm">{t(complaint(add.error))}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
-        <button type="button" onClick={() => navigate("/settings/users")} className={secondary}>
+        <button type="button" onClick={() => navigate(back)} className={secondary}>
           {t("users.cancel")}
         </button>
         <button
@@ -105,6 +107,7 @@ function NewUser() {
 function HeldUser({ name }: { name: string }) {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/settings/users")
   const users = useUsers(true)
   const catalog = useRoles()
   const change = useChangeUser()
@@ -119,7 +122,7 @@ function HeldUser({ name }: { name: string }) {
     return users.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("users.loading")}</div>
     ) : (
-      <Navigate to="/settings/users" replace />
+      <Navigate to={back} replace />
     )
   }
 
@@ -132,7 +135,7 @@ function HeldUser({ name }: { name: string }) {
       name,
       change: key.length > 0 ? { role: picked, enabled: on, publicKey: key } : { role: picked, enabled: on },
     })
-    navigate("/settings/users")
+    navigate(back)
   }
 
   return (
@@ -190,7 +193,7 @@ function HeldUser({ name }: { name: string }) {
         >
           {t("users.remove")}
         </button>
-        <button type="button" onClick={() => navigate("/settings/users")} className={secondary}>
+        <button type="button" onClick={() => navigate(back)} className={secondary}>
           {t("users.cancel")}
         </button>
         <button type="button" onClick={() => void save()} disabled={change.isPending} className={primary}>

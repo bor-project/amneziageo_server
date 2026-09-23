@@ -1,7 +1,6 @@
 import { scopes } from "@/api/scopes"
 import type { GlyphName } from "@/components/Glyph"
 import type { TextKey } from "@/i18n"
-import { lastSpot, sectionOf } from "@/store/spots"
 
 export interface Item {
   to: string
@@ -115,10 +114,4 @@ export function here(items: Item[], pathname: string): Item | undefined {
 
 export function under(path: string, to: string): boolean {
   return path === to || path.startsWith(`${to}/`) || path.startsWith(`${to}?`)
-}
-
-export function place(to: string): string {
-  const spot = lastSpot(sectionOf(to), to)
-
-  return under(spot, to) ? spot : to
 }

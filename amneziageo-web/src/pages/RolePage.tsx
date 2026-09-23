@@ -7,6 +7,7 @@ import { Line, Part } from "@/components/fields"
 import { card, danger, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
+import { useSpot } from "@/store/spots"
 
 export function RolePage() {
   const { name } = useParams()
@@ -17,6 +18,7 @@ export function RolePage() {
 function NewRole() {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/settings/users")
   const catalog = useRoles()
   const add = useAddRole()
   const [name, setName] = useState("")
@@ -27,7 +29,7 @@ function NewRole() {
 
   async function save() {
     await add.mutateAsync({ name: name.trim(), title: title.trim(), scopes: held })
-    navigate("/settings/users")
+    navigate(back)
   }
 
   return (
@@ -41,7 +43,7 @@ function NewRole() {
       {add.error !== null && <div className="text-sm text-alarm">{t(complaint(add.error))}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
-        <button type="button" onClick={() => navigate("/settings/users")} className={secondary}>
+        <button type="button" onClick={() => navigate(back)} className={secondary}>
           {t("roles.cancel")}
         </button>
         <button
@@ -60,6 +62,7 @@ function NewRole() {
 function HeldRole({ name }: { name: string }) {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/settings/users")
   const catalog = useRoles()
   const change = useChangeRole()
   const held = catalog.data?.roles.find((one) => one.name === name)
@@ -72,7 +75,7 @@ function HeldRole({ name }: { name: string }) {
     return catalog.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("roles.loading")}</div>
     ) : (
-      <Navigate to="/settings/users" replace />
+      <Navigate to={back} replace />
     )
   }
 
@@ -85,7 +88,7 @@ function HeldRole({ name }: { name: string }) {
       name,
       change: builtin ? { title: shown.trim() } : { title: shown.trim(), scopes: rights },
     })
-    navigate("/settings/users")
+    navigate(back)
   }
 
   return (
@@ -108,7 +111,7 @@ function HeldRole({ name }: { name: string }) {
             {t("roles.remove")}
           </button>
         )}
-        <button type="button" onClick={() => navigate("/settings/users")} className={secondary}>
+        <button type="button" onClick={() => navigate(back)} className={secondary}>
           {t("roles.cancel")}
         </button>
         <button type="button" onClick={() => void save()} disabled={change.isPending} className={primary}>

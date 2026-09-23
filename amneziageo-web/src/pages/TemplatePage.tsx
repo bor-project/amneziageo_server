@@ -12,7 +12,7 @@ import { TemplateForm } from "@/components/TemplateForm"
 import { useTail } from "@/components/crumbs"
 import { secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import { lastSpot } from "@/store/spots"
+import { useSpot } from "@/store/spots"
 
 export function TemplatePage() {
   const t = useText()
@@ -23,7 +23,7 @@ export function TemplatePage() {
   const change = useChangeTemplate()
   const refresh = useRefreshTemplate()
   const held = templateId === undefined ? undefined : templates.data?.find((one) => one.id === Number(templateId))
-  const back = lastSpot("connections", "/connections/templates")
+  const back = useSpot("/connections/templates")
 
   useTail(held === undefined ? [{ label: t("templates.newTitle") }] : [{ label: held.name }])
 

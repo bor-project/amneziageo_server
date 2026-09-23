@@ -5,6 +5,7 @@ import { GeoForm } from "@/components/GeoForm"
 import { secondary } from "@/components/styles"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
+import { useSpot } from "@/store/spots"
 
 const fresh: GeoSourceDraft = { name: "", kind: "geoip", url: "", isEnabled: true }
 
@@ -17,6 +18,7 @@ export function GeoPage() {
 function NewSource() {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/routing/geo")
   const add = useAddGeoSource()
 
   useTail([{ label: t("geo.newTitle") }])
@@ -26,8 +28,8 @@ function NewSource() {
       start={fresh}
       pending={add.isPending}
       error={add.error}
-      onSave={(draft) => void add.mutateAsync(draft).then(() => navigate("/routing/geo"))}
-      onClose={() => navigate("/routing/geo")}
+      onSave={(draft) => void add.mutateAsync(draft).then(() => navigate(back))}
+      onClose={() => navigate(back)}
     />
   )
 }
@@ -35,6 +37,7 @@ function NewSource() {
 function HeldSource({ sourceId }: { sourceId: number }) {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/routing/geo")
   const sources = useGeoSources()
   const change = useChangeGeoSource()
   const update = useUpdateGeoSource()
@@ -47,7 +50,7 @@ function HeldSource({ sourceId }: { sourceId: number }) {
     return sources.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("geo.loading")}</div>
     ) : (
-      <Navigate to="/routing/geo" replace />
+      <Navigate to={back} replace />
     )
   }
 
@@ -68,8 +71,8 @@ function HeldSource({ sourceId }: { sourceId: number }) {
         start={draftOf(held)}
         pending={change.isPending}
         error={change.error}
-        onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate("/routing/geo"))}
-        onClose={() => navigate("/routing/geo")}
+        onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}
+        onClose={() => navigate(back)}
         onRemove={() => navigate(`/routing/geo/${held.id}/delete`)}
       />
     </div>

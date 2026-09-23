@@ -4,13 +4,13 @@ import { useTail } from "@/components/crumbs"
 import { Part } from "@/components/fields"
 import { card, field, label, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import { lastSpot } from "@/store/spots"
+import { useSpot } from "@/store/spots"
 
 export function DefaultTemplate() {
   const t = useText()
   const navigate = useNavigate()
   const defaults = useTemplateDefaults().data
-  const back = lastSpot("connections", "/connections/templates")
+  const back = useSpot("/connections/templates")
 
   useTail([{ label: t("clients.noTemplate") }])
 

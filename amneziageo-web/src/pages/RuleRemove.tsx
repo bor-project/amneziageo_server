@@ -4,10 +4,12 @@ import { useRemoveRule, useRules } from "@/api/rules"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
+import { useSpot } from "@/store/spots"
 
 export function RuleRemove() {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/routing/rules")
   const { ruleId } = useParams()
   const rules = useRules()
   const remove = useRemoveRule()
@@ -22,7 +24,7 @@ export function RuleRemove() {
     return rules.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("rules.loading")}</div>
     ) : (
-      <Navigate to="/routing/rules" replace />
+      <Navigate to={back} replace />
     )
   }
 
@@ -40,12 +42,12 @@ export function RuleRemove() {
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}
 
       <div className="flex justify-end gap-2">
-        <Link to="/routing/rules" className={`flex h-10 items-center ${secondary}`}>
+        <Link to={back} className={`flex h-10 items-center ${secondary}`}>
           {t("action.backToList")}
         </Link>
         <button
           type="button"
-          onClick={() => void remove.mutateAsync(held.id).then(() => navigate("/routing/rules"))}
+          onClick={() => void remove.mutateAsync(held.id).then(() => navigate(back))}
           disabled={remove.isPending}
           className={danger}
         >

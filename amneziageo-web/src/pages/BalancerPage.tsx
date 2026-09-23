@@ -3,6 +3,7 @@ import { draftOf, freshBalancer, useAddBalancer, useBalancers, useChangeBalancer
 import { BalancerForm } from "@/components/BalancerForm"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
+import { useSpot } from "@/store/spots"
 
 export function BalancerPage() {
   const { balancerId } = useParams()
@@ -13,6 +14,7 @@ export function BalancerPage() {
 function NewBalancer() {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/routing/channels")
   const add = useAddBalancer()
 
   useTail([{ label: t("balancers.newTitle") }])
@@ -22,8 +24,8 @@ function NewBalancer() {
       start={freshBalancer}
       pending={add.isPending}
       error={add.error}
-      onSave={(draft) => void add.mutateAsync(draft).then(() => navigate("/routing/channels"))}
-      onClose={() => navigate("/routing/channels")}
+      onSave={(draft) => void add.mutateAsync(draft).then(() => navigate(back))}
+      onClose={() => navigate(back)}
     />
   )
 }
@@ -31,6 +33,7 @@ function NewBalancer() {
 function HeldBalancer({ balancerId }: { balancerId: number }) {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/routing/channels")
   const balancers = useBalancers()
   const change = useChangeBalancer()
   const all = balancers.data ?? []
@@ -42,7 +45,7 @@ function HeldBalancer({ balancerId }: { balancerId: number }) {
     return balancers.data === undefined ? (
       <div className="mt-4 text-sm text-muted">{t("outbounds.loading")}</div>
     ) : (
-      <Navigate to="/routing/channels" replace />
+      <Navigate to={back} replace />
     )
   }
 
@@ -51,8 +54,8 @@ function HeldBalancer({ balancerId }: { balancerId: number }) {
       start={draftOf(held)}
       pending={change.isPending}
       error={change.error}
-      onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate("/routing/channels"))}
-      onClose={() => navigate("/routing/channels")}
+      onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}
+      onClose={() => navigate(back)}
       onRemove={() => navigate(`/routing/channels/groups/${held.id}/delete`)}
     />
   )

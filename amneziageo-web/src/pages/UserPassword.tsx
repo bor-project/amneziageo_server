@@ -6,10 +6,12 @@ import { useTail } from "@/components/crumbs"
 import { Flag, Part } from "@/components/fields"
 import { card, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
+import { useSpot } from "@/store/spots"
 
 export function UserPassword() {
   const t = useText()
   const navigate = useNavigate()
+  const back = useSpot("/settings/users")
   const { name = "" } = useParams()
   const set = useSetPassword()
   const [password, setPassword] = useState("")
@@ -19,7 +21,7 @@ export function UserPassword() {
 
   async function save() {
     await set.mutateAsync({ name, password, mustChangePassword: mustChange })
-    navigate("/settings/users")
+    navigate(back)
   }
 
   return (
@@ -50,7 +52,7 @@ export function UserPassword() {
       {set.error !== null && <div className="text-sm text-alarm">{t(complaint(set.error))}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
-        <button type="button" onClick={() => navigate("/settings/users")} className={secondary}>
+        <button type="button" onClick={() => navigate(back)} className={secondary}>
           {t("users.cancel")}
         </button>
         <button

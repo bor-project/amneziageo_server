@@ -8,7 +8,7 @@ import { Crumbs, CrumbsHolder } from "@/components/Crumbs"
 import { LanguagePicker } from "@/components/LanguagePicker"
 import { RestartButton } from "@/components/RestartButton"
 import { ThemeToggle } from "@/components/ThemeToggle"
-import { place, sections, under } from "@/components/menu"
+import { sections, under } from "@/components/menu"
 import type { Item, Section } from "@/components/menu"
 import { menu, menuItem } from "@/components/styles"
 import { isLanguageChoice, useText } from "@/i18n"
@@ -16,6 +16,7 @@ import type { Text } from "@/i18n"
 import { useAbove, wideQuery } from "@/theme/width"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { holds, sessionClosed } from "@/store/authSlice"
+import { useSpot } from "@/store/spots"
 import { languageServed, sidebarSet, sidebarToggled } from "@/store/uiSlice"
 
 const item = "rounded-lg px-2.5 py-2 text-sm"
@@ -157,9 +158,10 @@ function Group({ section, shut }: { section: Section; shut: () => void }) {
 
 function Leaf({ one, shut }: { one: Item; shut: () => void }) {
   const t = useText()
+  const to = useSpot(one.to)
 
   return (
-    <NavLink to={place(one.to)} onClick={shut} className={({ isActive }) => `${leaf} pl-6 ${isActive ? active : idle}`}>
+    <NavLink to={to} onClick={shut} className={({ isActive }) => `${leaf} pl-6 ${isActive ? active : idle}`}>
       {t(one.label)}
     </NavLink>
   )

@@ -10,7 +10,7 @@ import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
-import { lastSpot } from "@/store/spots"
+import { useSpot } from "@/store/spots"
 
 export function ClientPage() {
   const { clientId } = useParams()
@@ -25,7 +25,7 @@ function NewClient() {
   const draft = useClientDraft()
   const add = useAddClient()
   const asked = Number(params.get("config") ?? 0)
-  const back = lastSpot("connections", "/connections/clients")
+  const back = useSpot("/connections/clients")
 
   useTail([{ label: t("clients.newTitle") }])
 
@@ -56,7 +56,7 @@ function HeldClient({ clientId }: { clientId: number }) {
   const may = holds(user, scopes.manageClients)
   const all = clients.data ?? []
   const held = all.find((one) => one.id === clientId)
-  const back = lastSpot("connections", "/connections/clients")
+  const back = useSpot("/connections/clients")
 
   useTail(
     held === undefined
