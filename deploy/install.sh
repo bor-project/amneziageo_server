@@ -125,6 +125,7 @@ shared() {
   if [ ! -f /etc/amneziageo-server/server.env ]; then
     cat > /etc/amneziageo-server/server.env <<'ENV'
 # Web__Listen__0=*:8443
+# Web__Path=/
 # Web__Certificate=/etc/letsencrypt/live/example.org/fullchain.pem
 # Web__CertificateKey=/etc/letsencrypt/live/example.org/privkey.pem
 ENV

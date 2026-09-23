@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace AmneziaGeo.Server.Api.Web;
@@ -7,6 +8,8 @@ namespace AmneziaGeo.Server.Api.Web;
 /// </summary>
 public sealed class WebCertificate
 {
+    private static readonly Lazy<X509Certificate2> Made = new(Make);
+
     private readonly string _chain;
 
     private readonly string _key;
@@ -27,10 +30,24 @@ public sealed class WebCertificate
     }
 
     /// <summary>
+    /// ctor
+    /// </summary>
+    private WebCertificate()
+    {
+        _chain = string.Empty;
+        _key = string.Empty;
+    }
+
+    /// <summary>
     /// Returns the certificate the panel answers under.
     /// </summary>
     public X509Certificate2 Current()
     {
+        if (_chain.Length == 0)
+        {
+            return Made.Value;
+        }
+
         lock (_sync)
         {
             var stamp = File.GetLastWriteTimeUtc(_chain);
@@ -69,5 +86,21 @@ public sealed class WebCertificate
         certificate.Current();
 
         return certificate;
+    }
+
+    /// <summary>
+    /// Returns a certificate made up for a port that answers under none of its own.
+    /// </summary>
+    public static WebCertificate MadeUp() => new();
+
+    // Makes up the certificate a port answers under when the panel holds none.
+    private static X509Certificate2 Make()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest("CN=localhost", key, HashAlgorithmName.SHA256);
+        var now = DateTimeOffset.UtcNow;
+        using var made = request.CreateSelfSigned(now.AddDays(-1), now.AddYears(10));
+
+        return X509CertificateLoader.LoadPkcs12(made.Export(X509ContentType.Pkcs12), null);
     }
 }

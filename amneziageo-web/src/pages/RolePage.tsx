@@ -7,6 +7,7 @@ import { Line, Part } from "@/components/fields"
 import { card, danger, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
+import { same } from "@/store/draftSlice"
 import { useSpot } from "@/store/spots"
 
 export function RolePage() {
@@ -24,6 +25,7 @@ function NewRole() {
   const [name, setName] = useState("")
   const [title, setTitle] = useState("")
   const [held, setHeld] = useState<string[]>([])
+  const edited = name.length > 0 || title.length > 0 || held.length > 0
 
   useTail([{ label: t("roles.newTitle") }])
 
@@ -43,7 +45,7 @@ function NewRole() {
       {add.error !== null && <div className="text-sm text-alarm">{t(complaint(add.error))}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
-        <button type="button" onClick={() => navigate(back)} className={secondary}>
+        <button type="button" onClick={() => navigate(back)} disabled={!edited || add.isPending} className={secondary}>
           {t("roles.cancel")}
         </button>
         <button
@@ -82,6 +84,7 @@ function HeldRole({ name }: { name: string }) {
   const shown = title ?? held.title
   const rights = scopes ?? held.scopes
   const builtin = held.builtin
+  const edited = shown.trim() !== held.title || (!builtin && !same(rights, held.scopes))
 
   async function save() {
     await change.mutateAsync({
@@ -111,10 +114,20 @@ function HeldRole({ name }: { name: string }) {
             {t("roles.remove")}
           </button>
         )}
-        <button type="button" onClick={() => navigate(back)} className={secondary}>
+        <button
+          type="button"
+          onClick={() => navigate(back)}
+          disabled={!edited || change.isPending}
+          className={secondary}
+        >
           {t("roles.cancel")}
         </button>
-        <button type="button" onClick={() => void save()} disabled={change.isPending} className={primary}>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={!edited || change.isPending}
+          className={primary}
+        >
           {change.isPending ? t("roles.busy") : t("roles.save")}
         </button>
       </div>

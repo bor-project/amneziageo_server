@@ -6,11 +6,12 @@ import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { Count, Flag, Help, Line, Part, Pick, Switch } from "@/components/fields"
-import { portFault, usePortHolders } from "@/components/ports"
+import { portFault, usePortHolders, useServicesHolders } from "@/components/ports"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
+import { same } from "@/store/draftSlice"
 
 export function ConfigForm({
   start,
@@ -42,6 +43,7 @@ export function ConfigForm({
   const shared = usePresharedKey()
   const others = (useConfigs().data ?? []).filter((one) => one.id !== self)
   const held = usePortHolders({ config: self })
+  const taken = useServicesHolders()
   const [draft, setDraft] = useState(start)
   const [shown, setShown] = useState(publicKey)
   const read = useImportConfig()
@@ -50,12 +52,16 @@ export function ConfigForm({
   const said = failed ? failure(t, error) : fault
   const proxy = (failed ? downedOf(error)?.error : faultOf) === "websocket-down" ? said : ""
   const port = portFault(t, draft.listenPort, held)
-  const services = draft.servicesPort === 0 ? "" : portFault(t, draft.servicesPort, held)
+  const services = draft.servicesPort === 0 ? "" : portFault(t, draft.servicesPort, taken)
   const name = nameFault(t, draft.name, others.map((one) => one.name))
   const address = addressFault(t, draft.address)
   const host = draft.host.length > 255 ? t("error.badHost") : ""
+  const edited = !same(draft, start)
   const ready =
-    !pending && draft.name.length > 0 && [port, services, name, address, host].every((one) => one.length === 0)
+    edited &&
+    !pending &&
+    draft.name.length > 0 &&
+    [port, services, name, address, host].every((one) => one.length === 0)
   const twisted = JSON.stringify(draft.obfuscation) !== JSON.stringify(start.obfuscation)
 
   function put(change: Partial<ConfigDraft>) {
@@ -294,7 +300,7 @@ export function ConfigForm({
             {t("configs.remove")}
           </button>
         )}
-        <button type="button" onClick={onClose} className={secondary}>
+        <button type="button" onClick={onClose} disabled={!edited || pending} className={secondary}>
           {t("configs.cancel")}
         </button>
         <button type="button" onClick={() => onSave(draft)} disabled={!ready} className={primary}>

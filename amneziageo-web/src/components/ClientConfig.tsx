@@ -1,9 +1,10 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { useClientConfig } from "@/api/clients"
 import type { Miss } from "@/api/clients"
 import { scopes } from "@/api/scopes"
+import { Caret } from "@/components/Glyph"
 import { card, chip, quiet } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -106,11 +107,18 @@ function Sheet({
 }) {
   const [open, setOpen] = useState(true)
   const [taken, setTaken] = useState("")
+  const timer = useRef(0)
   const room = Math.min(440, Math.max(280, 3 * (picture?.modules ?? 0)))
 
   async function put(what: "text" | "image") {
     const done = what === "text" ? await copyText(text) : await copyImage(picture)
-    setTaken(done ? what : "")
+    if (!done) {
+      return
+    }
+
+    setTaken(what)
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => setTaken(""), 1500)
   }
 
   function keep() {
@@ -130,9 +138,7 @@ function Sheet({
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-ink"
       >
-        <span className="text-[10px] text-faint" aria-hidden>
-          {open ? "▾" : "▸"}
-        </span>
+        <Caret open={open} />
         <span className="truncate">{caption}</span>
       </button>
 
@@ -156,9 +162,9 @@ function Sheet({
               title={t("action.copyText")}
               aria-label={t("action.copyText")}
               onClick={() => void put("text")}
-              className={`${quiet} ${taken === "text" ? "text-brand-ink" : ""}`}
+              className={`${quiet} ${taken === "text" ? "text-good" : ""}`}
             >
-              <Papers />
+              {taken === "text" ? <Tick /> : <Papers />}
             </button>
             <button
               type="button"
@@ -166,9 +172,9 @@ function Sheet({
               aria-label={t("action.copyImage")}
               onClick={() => void put("image")}
               disabled={picture === null}
-              className={`${quiet} ${taken === "image" ? "text-brand-ink" : ""}`}
+              className={`${quiet} ${taken === "image" ? "text-good" : ""}`}
             >
-              <Frame />
+              {taken === "image" ? <Tick /> : <Frame />}
             </button>
             <button
               type="button"
@@ -180,7 +186,6 @@ function Sheet({
             >
               <Arrow />
             </button>
-            {plain && <span className="truncate font-mono text-xs text-mono">{name}</span>}
           </div>
 
           {picture === null ? (
@@ -202,6 +207,14 @@ function Sheet({
         </div>
       )}
     </div>
+  )
+}
+
+function Tick() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="m5 12.5 4.5 4.5L19 7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }
 

@@ -74,56 +74,45 @@ public sealed class ServiceDesk
     }
 
     /// <summary>
-    /// Answers one request that reached the services of an endpoint.
+    /// Answers one request that reached the services of a port.
     /// </summary>
     public async Task AnswerAsync(HttpContext context, ServicePoint point)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(point);
 
-        var path = context.Request.Path;
-        var method = context.Request.Method;
-        if (point.WebSocket
-            && path.StartsWithSegments(FrontPath, StringComparison.Ordinal)
-            && context.Features.Get<IHttpUpgradeFeature>() is { IsUpgradableRequest: true })
+        switch (Route(context, point))
         {
-            await PassAsync(context, point).ConfigureAwait(false);
-
-            return;
+            case Wanted.Front:
+                await PassAsync(context, point).ConfigureAwait(false);
+                break;
+            case Wanted.Hello:
+                await HelloAsync(context, point).ConfigureAwait(false);
+                break;
+            case Wanted.Down:
+                await DownAsync(context).ConfigureAwait(false);
+                break;
+            case Wanted.Up:
+                await UpAsync(context).ConfigureAwait(false);
+                break;
+            case Wanted.Subscription:
+                await SubscriptionAnswer.WriteAsync(context, _subscriptions.Current, _scopes).ConfigureAwait(false);
+                break;
+            default:
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                break;
         }
+    }
 
-        if (path.Equals(HelloPath, StringComparison.Ordinal) && HttpMethods.IsPost(method))
-        {
-            await HelloAsync(context, point).ConfigureAwait(false);
+    /// <summary>
+    /// Tells whether a request belongs to the services of a port.
+    /// </summary>
+    public bool Takes(HttpContext context, ServicePoint point)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(point);
 
-            return;
-        }
-
-        if (path.Equals(SpeedPath + "/down", StringComparison.Ordinal) && HttpMethods.IsGet(method))
-        {
-            await DownAsync(context).ConfigureAwait(false);
-
-            return;
-        }
-
-        if (path.Equals(SpeedPath + "/up", StringComparison.Ordinal) && HttpMethods.IsPost(method))
-        {
-            await UpAsync(context).ConfigureAwait(false);
-
-            return;
-        }
-
-        var subscriptions = _subscriptions.Current;
-        if (subscriptions.IsEnabled
-            && !subscriptions.Separate
-            && (SubscriptionAnswer.Asked(path, subscriptions) ?? SubscriptionAnswer.AskedHold(path, subscriptions)) is not null)
-        {
-            await SubscriptionAnswer.WriteAsync(context, subscriptions, _scopes).ConfigureAwait(false);
-
-            return;
-        }
-
-        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return Route(context, point) != Wanted.None;
     }
 
     /// <summary>
@@ -196,13 +185,62 @@ public sealed class ServiceDesk
             : await ProveAsync(token, point, false, context.RequestAborted).ConfigureAwait(false);
         if (proven.Failure is { } failure)
         {
-            _logger.LogInformation("the websocket of {Endpoint} was refused: {Reason}", point.Name, failure.Error);
-            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            Refuse(context, point.Names, failure.Error);
 
             return;
         }
 
-        await FrontRelay.PassAsync(context, point.Front, _logger).ConfigureAwait(false);
+        var endpoint = point.Of(proven.Client!.ConfigId);
+        if (endpoint is null || !endpoint.WebSocket)
+        {
+            Refuse(context, point.Names, "websocket-off");
+
+            return;
+        }
+
+        await FrontRelay.PassAsync(context, endpoint.Front, _logger).ConfigureAwait(false);
+    }
+
+    // Tells what the services of a port make of a request.
+    private Wanted Route(HttpContext context, ServicePoint point)
+    {
+        var path = context.Request.Path;
+        var method = context.Request.Method;
+        if (point.WebSocket
+            && path.StartsWithSegments(FrontPath, StringComparison.Ordinal)
+            && context.Features.Get<IHttpUpgradeFeature>() is { IsUpgradableRequest: true })
+        {
+            return Wanted.Front;
+        }
+
+        if (path.Equals(HelloPath, StringComparison.Ordinal) && HttpMethods.IsPost(method))
+        {
+            return Wanted.Hello;
+        }
+
+        if (path.Equals(SpeedPath + "/down", StringComparison.Ordinal) && HttpMethods.IsGet(method))
+        {
+            return Wanted.Down;
+        }
+
+        if (path.Equals(SpeedPath + "/up", StringComparison.Ordinal) && HttpMethods.IsPost(method))
+        {
+            return Wanted.Up;
+        }
+
+        var subscriptions = _subscriptions.Current;
+
+        return subscriptions.IsEnabled
+            && !subscriptions.Separate
+            && (SubscriptionAnswer.Asked(path, subscriptions) ?? SubscriptionAnswer.AskedHold(path, subscriptions)) is not null
+            ? Wanted.Subscription
+            : Wanted.None;
+    }
+
+    private void Refuse(HttpContext context, string endpoint, string reason)
+    {
+        _logger.LogInformation("the websocket of {Endpoint} was refused: {Reason}", endpoint, reason);
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
     }
 
     // Proves a token; a hello takes its nonce once, a websocket may come again with it within the window.
@@ -228,7 +266,7 @@ public sealed class ServiceDesk
 
         using var scope = _scopes.CreateScope();
         var client = await scope.ServiceProvider.GetRequiredService<ClientStore>().FindByKeyAsync(key, ct).ConfigureAwait(false);
-        if (client is null || !client.IsEnabled || client.ConfigId != point.ConfigId)
+        if (client is null || !client.IsEnabled || point.Of(client.ConfigId) is null)
         {
             return Proven.No(new HelloFailure("unknown-peer", "the endpoint carries no such peer"));
         }
@@ -384,6 +422,17 @@ public sealed class ServiceDesk
         typeof(ServiceDesk).Assembly.GetName().Version?.ToString() ?? "0.0.0";
 
     private static string Trim(string? value) => value is null ? string.Empty : value.Trim();
+
+    // What the services of a port make of a request.
+    private enum Wanted
+    {
+        None = 0,
+        Front = 1,
+        Hello = 2,
+        Down = 3,
+        Up = 4,
+        Subscription = 5,
+    }
 
     // The client behind a token and what it shares with its endpoint, or why the token was refused.
     private sealed record Proven(

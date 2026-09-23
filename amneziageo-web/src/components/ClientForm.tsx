@@ -13,6 +13,7 @@ import { card, chip, danger, field, label, note, primary, secondary } from "@/co
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { randomId, randomKey } from "@/keys"
+import { same } from "@/store/draftSlice"
 
 export function ClientForm({
   start,
@@ -42,7 +43,8 @@ export function ClientForm({
   const spans = spansOf(configs, draft.configId)
   const taken = holders(others, draft.configId)
   const legacy = start.address.length > 0 && carried(spans, start.address) === null
-  const shown = number ?? (start.address.length > 0 ? (carried(spans, start.address) ?? "") : first(spans, taken))
+  const base = start.address.length > 0 ? (carried(spans, start.address) ?? "") : first(spans, taken)
+  const shown = number ?? base
   const listed = text ?? start.address.join(", ")
   const whole = /^\d+$/.test(shown)
   const problem = legacy ? "" : fault(t, spans, taken, shown)
@@ -58,7 +60,13 @@ export function ClientForm({
   const allowed = allowanceOf(limit)
   const ported = draft.forwards.every((one) => isPort(one.from) && isPort(one.to))
   const inherited = (templates.data ?? []).find((one) => one.id === draft.templateId)?.routing ?? true
+  const edited =
+    !same(draft, start) ||
+    shown !== base ||
+    listed !== start.address.join(", ") ||
+    limit !== gigabytes(start.dailyLimit)
   const ready =
+    edited &&
     !pending &&
     draft.name.trim().length > 0 &&
     !clash &&
@@ -279,7 +287,7 @@ export function ClientForm({
             {t("clients.remove")}
           </button>
         )}
-        <button type="button" onClick={onClose} className={secondary}>
+        <button type="button" onClick={onClose} disabled={!edited || pending} className={secondary}>
           {t("clients.cancel")}
         </button>
         <button

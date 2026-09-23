@@ -49,6 +49,7 @@ app.SettleFirewall();
 app.StartOverview();
 
 app.UseForwarded();
+app.UseEndpointServices();
 app.UseTunnelGate();
 app.UseSubscriptions();
 app.UsePanel();

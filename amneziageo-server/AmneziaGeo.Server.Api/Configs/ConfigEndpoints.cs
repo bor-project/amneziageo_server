@@ -63,8 +63,10 @@ public static class ConfigEndpoints
         var wanted = string.IsNullOrWhiteSpace(name) ? "awg0" : name.Trim();
         var fresh = ConfigDefaults.Fresh(wanted);
         var port = await store.FreePortAsync(fresh.ListenPort, ct).ConfigureAwait(false);
+        var held = await store.ListAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(ConfigAnswers.Config(fresh with { ListenPort = port }, true));
+        return Results.Ok(
+            ConfigAnswers.Config(fresh with { ListenPort = port, ServicesPort = ConfigDefaults.Services(held) }, true));
     }
 
     private static IResult Keys()

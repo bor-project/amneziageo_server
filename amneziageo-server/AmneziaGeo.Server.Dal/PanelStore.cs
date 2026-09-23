@@ -113,6 +113,29 @@ public sealed class PanelStore
     }
 
     /// <summary>
+    /// Tells whether the services of an endpoint that is turned on answer on a TCP port, before the server is built.
+    /// </summary>
+    public static bool ServesOn(string path, int port)
+    {
+        try
+        {
+            using var connection = new SqliteConnection($"Data Source={path};Mode=ReadOnly");
+            connection.Open();
+
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "select count(*) from Configs where IsEnabled = 1 and (ServicesPort = $port or (ServicesPort = 0 and ListenPort = $port))";
+            command.Parameters.AddWithValue("$port", port);
+
+            return command.ExecuteScalar() is long count && count > 0;
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Returns the settings the database holds before the server is built, null when it holds none.
     /// </summary>
     public static PanelSettings? Held(string path)

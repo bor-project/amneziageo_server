@@ -604,7 +604,7 @@ export const ru: Dictionary = {
   "error.badPort": "Порт вне диапазона 1-65535",
   "error.badAddress": "Адрес интерфейса не диапазон адресов",
   "error.portBusy": "Порт занят: {name}",
-  "error.servicesPortTaken": "На этом порту уже работают сервисы другого интерфейса",
+  "error.panelPathNeeded": "Панель отвечает на этом порту из корня, задайте ей свой путь",
   "ports.panel": "панель",
   "ports.subscription": "подписки",
   "error.badAllowed": "AllowedIPs не диапазон адресов",

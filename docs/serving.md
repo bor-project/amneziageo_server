@@ -14,6 +14,7 @@ hold without a restart, see [subscriptions.md](subscriptions.md).
 | Port | the port the panel binds, 8443 when nothing is set |
 | Open the port in the firewall | whether the panel holds its own port open in the firewall of the host, see [firewall.md](firewall.md) |
 | Path | what follows the port, `/` for the root: `/panel/` puts the panel there and everything outside it answers 404 |
+| | a panel that holds no settings yet takes `/sub/<16 letters and digits>/`, so the way in is not guessed |
 | Certificate domain | a directory of `/etc/letsencrypt/live`, picking one fills the two paths below it |
 | Certificate path | the chain in PEM, empty for the certificate the configuration names |
 | Certificate key path | the key of that chain, taken together with it |
@@ -67,6 +68,35 @@ Web__Listen__1=wgadmin:8443
 The list becomes the settings the panel starts holding: the port of its first entry and every address behind
 the entries carrying that port, `*` for every address of the host. From then on the panel rules, and the list
 is read again only when the settings are dropped from the database.
+
+The path comes with them. A panel that holds no settings yet takes `/sub/<16 letters and digits>/`, made up
+once at that first start, written down with the other settings and named in the log:
+
+```
+the panel answers from *:8443 under /sub/l4kg8s0xq1zc7ab2/
+```
+
+`journalctl -u amneziageo-server | grep "the panel answers"` reads it back, `amneziageo-server-cli init` names
+it as its last line, and **Settings** > **Server** > **Path** shows it. `Web:Path` names another path instead,
+`/` puts the panel at the root:
+
+```
+Web__Path=/
+```
+
+A panel that already holds settings keeps the path it has.
+
+## On the port of the services
+
+The panel shares the TCP port of the services of the endpoints, see [services.md](services.md): giving it the
+port they serve on is all it takes. The panel then answers the hello, the measurement, the websocket of the
+tunnel and the subscriptions on that port itself, and no listener of its own is raised for it, so the server
+answers one TCP port to the world.
+
+The panel takes a path of its own to share a port, `/sub/<...>/` or any other: at the root there is nothing
+left for the services, and saving it that way is refused with `panel-path-needed`, as is giving an endpoint the
+port of a panel that sits at the root. A shared port always answers over TLS: under the certificate of the
+panel when it has one, under a certificate the panel makes for itself when it has none.
 
 ## Under a certificate
 

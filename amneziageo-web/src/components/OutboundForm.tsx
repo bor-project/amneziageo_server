@@ -9,6 +9,7 @@ import { card, danger, field, label, primary, secondary } from "@/components/sty
 import { parts } from "@/format"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
+import { same } from "@/store/draftSlice"
 
 export function OutboundForm({
   start,
@@ -33,6 +34,7 @@ export function OutboundForm({
   const [draft, setDraft] = useState(start)
   const [shown, setShown] = useState(publicKey)
   const [text, setText] = useState("")
+  const edited = !same(draft, start)
 
   function put(change: Partial<OutboundDraft>) {
     setDraft({ ...draft, ...change })
@@ -255,13 +257,13 @@ export function OutboundForm({
             {t("outbounds.remove")}
           </button>
         )}
-        <button type="button" onClick={onClose} className={secondary}>
+        <button type="button" onClick={onClose} disabled={!edited || pending} className={secondary}>
           {t("outbounds.cancel")}
         </button>
         <button
           type="button"
           onClick={() => onSave(draft)}
-          disabled={pending || draft.name.length === 0}
+          disabled={!edited || pending || draft.name.length === 0}
           className={primary}
         >
           {pending ? t("outbounds.busy") : t("outbounds.save")}

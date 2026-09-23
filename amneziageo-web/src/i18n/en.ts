@@ -602,7 +602,7 @@ export const en = {
   "error.badPort": "The port is outside 1 to 65535",
   "error.badAddress": "The interface address is not an address range",
   "error.portBusy": "The port is taken by {name}",
-  "error.servicesPortTaken": "Another interface already serves on this port",
+  "error.panelPathNeeded": "The panel answers on this port from the root, give it a path of its own",
   "ports.panel": "the panel",
   "ports.subscription": "subscriptions",
   "error.badAllowed": "AllowedIPs is not an address range",

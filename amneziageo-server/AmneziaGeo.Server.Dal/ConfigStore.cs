@@ -79,6 +79,17 @@ public sealed class ConfigStore
     }
 
     /// <summary>
+    /// Tells whether the services of an endpoint that is turned on answer on a TCP port.
+    /// </summary>
+    public async Task<bool> ServesAsync(int port, CancellationToken ct) =>
+        await _db.Configs
+            .AnyAsync(
+                config => config.IsEnabled
+                    && (config.ServicesPort == port || (config.ServicesPort == 0 && config.ListenPort == port)),
+                ct)
+            .ConfigureAwait(false);
+
+    /// <summary>
     /// Returns the first port from the wanted one up that no endpoint listens on.
     /// </summary>
     public async Task<int> FreePortAsync(int wanted, CancellationToken ct)
@@ -119,7 +130,7 @@ public sealed class ConfigStore
                 $"the panel already listens on port {draft.ListenPort}");
         }
 
-        if (await ServicesTakenAsync(draft, 0, ct).ConfigureAwait(false) is { } busy)
+        if (await PanelTakenAsync(draft, ct).ConfigureAwait(false) is { } busy)
         {
             return busy;
         }
@@ -167,7 +178,7 @@ public sealed class ConfigStore
                 $"the panel already listens on port {draft.ListenPort}");
         }
 
-        if (await ServicesTakenAsync(draft, id, ct).ConfigureAwait(false) is { } busy)
+        if (await PanelTakenAsync(draft, ct).ConfigureAwait(false) is { } busy)
         {
             return busy;
         }
@@ -239,22 +250,20 @@ public sealed class ConfigStore
     private static ConfigResult Missing(long id) =>
         ConfigResult.No(ConfigOutcome.Unknown, "unknown-config", $"there is no endpoint under the number {id}");
 
-    // Returns the refusal when another endpoint already serves on the TCP port the draft serves on.
-    private async Task<ConfigResult?> ServicesTakenAsync(ServerConfig draft, long id, CancellationToken ct)
+    // Returns the refusal when the draft serves on the port of a panel that sits at the root.
+    private async Task<ConfigResult?> PanelTakenAsync(ServerConfig draft, CancellationToken ct)
     {
         var port = ConfigServices.Port(draft);
-        var taken = await _db.Configs
-            .AnyAsync(
-                config => config.Id != id
-                    && (config.ServicesPort == port || (config.ServicesPort == 0 && config.ListenPort == port)),
-                ct)
+        var panel = await _db.Set<PanelEntity>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(row => row.Port == port, ct)
             .ConfigureAwait(false);
 
-        return taken
+        return panel is not null && panel.Path.Trim('/').Length == 0
             ? ConfigResult.No(
                 ConfigOutcome.PortTaken,
-                "services-port-taken",
-                $"another endpoint already serves on TCP port {port}")
+                "panel-path-needed",
+                $"the panel answers on TCP port {port} from the root, give it a path of its own to share the port")
             : null;
     }
 

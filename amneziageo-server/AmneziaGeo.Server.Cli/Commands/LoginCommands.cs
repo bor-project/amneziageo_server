@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Dal;
 
 namespace AmneziaGeo.Server.Cli.Commands;
 
@@ -20,9 +21,15 @@ public static class LoginCommands
             return 1;
         }
 
-        return args.Value("user") is { Length: > 0 } name
+        var made = args.Value("user") is { Length: > 0 } name
             ? await LocalAdminAsync(context, args, name, ct).ConfigureAwait(false)
             : await HostAdminAsync(context, args, ct).ConfigureAwait(false);
+        if (made == 0)
+        {
+            Where(context);
+        }
+
+        return made;
     }
 
     /// <summary>
@@ -99,6 +106,19 @@ public static class LoginCommands
         LoginOutcome.RefreshUnknown => "the refresh token is unknown",
         _ => "signed in",
     };
+
+    // Names where the panel answers, or says the first start of the server names it.
+    private static void Where(Context context)
+    {
+        if (PanelStore.Held(context.Path) is not { } settings)
+        {
+            Terminal.Say("the server names the port and the path of the panel in its log at the first start");
+
+            return;
+        }
+
+        Terminal.Say($"the panel answers on port {settings.Port} under {settings.Prefix}");
+    }
 
     private static async Task<int> HostAdminAsync(Context context, Arguments args, CancellationToken ct)
     {

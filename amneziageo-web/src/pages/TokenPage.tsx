@@ -26,6 +26,7 @@ export function TokenPage() {
   const [minted, setMinted] = useState<MintedApiToken | null>(null)
   const role = picked ?? narrowest(roles)
   const lifetime = daysOf(days)
+  const edited = name.length > 0 || picked !== null || days.length > 0
   const ready = !mint.isPending && name.trim().length > 0 && role.length > 0 && lifetime !== undefined
 
   useTail([{ label: t("apiTokens.newTitle") }])
@@ -64,7 +65,7 @@ export function TokenPage() {
       {mint.error !== null && <div className="text-sm text-alarm">{t(complaint(mint.error))}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
-        <button type="button" onClick={() => navigate(back)} className={secondary}>
+        <button type="button" onClick={() => navigate(back)} disabled={!edited || mint.isPending} className={secondary}>
           {t("apiTokens.cancel")}
         </button>
         <button type="button" onClick={() => void save()} disabled={!ready} className={primary}>

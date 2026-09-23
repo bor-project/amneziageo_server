@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Proxy;
@@ -53,9 +54,37 @@ public static class ServiceRegistration
         services.AddSingleton<IHelloFeature, SpeedOffer>();
         services.AddSingleton<IHelloFeature, SubscriptionOffer>();
         services.AddSingleton<ServiceDesk>();
+        services.AddSingleton<ServiceShare>();
         services.AddSingleton<ServiceServer>();
         services.AddHostedService(provider => provider.GetRequiredService<ServiceServer>());
 
         return services;
+    }
+
+    /// <summary>
+    /// Answers the services of the port the panel shares with them, leaving the path of the panel to the panel.
+    /// </summary>
+    public static WebApplication UseEndpointServices(this WebApplication app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+
+        var share = app.Services.GetRequiredService<ServiceShare>();
+        var desk = app.Services.GetRequiredService<ServiceDesk>();
+        var settings = app.Services.GetRequiredService<PanelSettings>();
+        var under = settings.Prefix.Length > 1 ? new PathString(settings.Prefix.TrimEnd('/')) : PathString.Empty;
+        app.Use(async (context, next) =>
+        {
+            var panel = under.HasValue && context.Request.Path.StartsWithSegments(under);
+            if (!panel && share.Point is { } point && desk.Takes(context, point))
+            {
+                await desk.AnswerAsync(context, point).ConfigureAwait(false);
+
+                return;
+            }
+
+            await next(context).ConfigureAwait(false);
+        });
+
+        return app;
     }
 }

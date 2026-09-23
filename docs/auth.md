@@ -44,6 +44,10 @@ amneziageo-server-cli init
 amneziageo-server-cli init --user admin --generate
 ```
 
+The last line it writes names the port and the path the panel answers under, see [serving.md](serving.md). On a
+database the server never started on there are no settings yet, and it says the log of the first start names
+them.
+
 ## Host accounts
 
 A host account signs in with no password: the process runs as that user, and the server reads its name and

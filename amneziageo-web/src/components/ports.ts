@@ -12,6 +12,25 @@ export interface PortHolder {
   name: string
 }
 
+export function useServicesHolders(): PortHolder[] {
+  const t = useText()
+  const user = useAppSelector((s) => s.auth.user)
+  const may = holds(user, scopes.manageAccess)
+  const panel = usePanel(may).data
+  const subscription = useSubscription(may).data
+  const held: PortHolder[] = []
+
+  if (panel !== undefined && panel.path === "/") {
+    held.push({ port: panel.port, name: t("ports.panel") })
+  }
+
+  if (subscription !== undefined && subscription.isEnabled && subscription.separate) {
+    held.push({ port: subscription.port, name: t("ports.subscription") })
+  }
+
+  return held
+}
+
 export function usePortHolders(mine: { config?: number } = {}): PortHolder[] {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)

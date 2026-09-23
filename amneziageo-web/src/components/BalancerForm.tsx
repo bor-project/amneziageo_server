@@ -6,6 +6,7 @@ import { Flag, Line, Part } from "@/components/fields"
 import { card, danger, field, label, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
+import { same } from "@/store/draftSlice"
 
 export function BalancerForm({
   start,
@@ -26,6 +27,7 @@ export function BalancerForm({
   const outbounds = useOutbounds()
   const [draft, setDraft] = useState(start)
   const rest = (outbounds.data ?? []).filter((one) => !draft.members.includes(one.name))
+  const edited = !same(draft, start)
 
   function put(change: Partial<BalancerDraft>) {
     setDraft({ ...draft, ...change })
@@ -141,13 +143,13 @@ export function BalancerForm({
             {t("balancers.remove")}
           </button>
         )}
-        <button type="button" onClick={onClose} className={secondary}>
+        <button type="button" onClick={onClose} disabled={!edited || pending} className={secondary}>
           {t("balancers.cancel")}
         </button>
         <button
           type="button"
           onClick={() => onSave(draft)}
-          disabled={pending || draft.name.length === 0 || draft.members.length === 0}
+          disabled={!edited || pending || draft.name.length === 0 || draft.members.length === 0}
           className={primary}
         >
           {pending ? t("balancers.busy") : t("balancers.save")}

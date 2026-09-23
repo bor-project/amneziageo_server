@@ -9,8 +9,13 @@ endpoint.
 
 The services take the TCP port with the number of the UDP port of the endpoint. `Services port` in the form of
 the endpoint (`servicesPort` in `POST /api/configs` and `PUT /api/configs/{id}`) moves them to another port, 0
-keeps the number of the endpoint. Two endpoints cannot serve on one TCP port: the second is refused with
-`services-port-taken`, a port outside 1 to 65535 with `bad-services-port`.
+keeps the number of the endpoint. A port outside 1 to 65535 is refused with `bad-services-port`.
+
+Endpoints share a port: naming the port another endpoint already serves on leaves one listener answering for
+all of them, and the key of the client in the token says which endpoint a request belongs to. The form of a new
+endpoint offers the port the endpoints already serve on, the port of the endpoint itself when there are none.
+Removing an endpoint takes down its own front and leaves the port to the endpoints that stay on it. The panel
+answers on the port itself when it holds that port, see [serving.md](serving.md).
 
 The file of a client carries the port only when it was moved, as the line
 
@@ -101,7 +106,8 @@ the server does not hold with `unknown-ticket` (403).
 `WebSocket proxy` in the form of the endpoint (`webSocket` in the API) lets a network that passes nothing but web
 traffic carry the tunnel. The panel then runs one `wstunnel` per endpoint on `127.0.0.1`, at port
 `61000 + id % 4000`, whose whitelist lets it reach the UDP port of its own endpoint on the loopback and nothing
-else. The client opens
+else. On a port several endpoints share, the token of the websocket says whose front the upgrade goes to. The
+client opens
 
 ```
 GET /v1/events HTTP/1.1

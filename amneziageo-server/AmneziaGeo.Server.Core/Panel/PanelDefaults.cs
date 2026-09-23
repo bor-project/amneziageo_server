@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+
 namespace AmneziaGeo.Server.Core.Panel;
 
 /// <summary>
@@ -9,6 +11,11 @@ public static class PanelDefaults
     /// The port the panel listens on.
     /// </summary>
     public const int Port = 8443;
+
+    /// <summary>
+    /// The path a fresh panel sits under, ahead of the name it is given.
+    /// </summary>
+    public const string PathHead = "sub";
 
     /// <summary>
     /// The language that leaves the choice to the browser.
@@ -39,4 +46,13 @@ public static class PanelDefaults
     /// The settings the panel starts with when it holds none.
     /// </summary>
     public static readonly PanelSettings Settings = new();
+
+    /// <summary>
+    /// Returns the path a panel that holds no settings sits under.
+    /// </summary>
+    public static string FreshPath() => PathHead + "/" + RandomNumberGenerator.GetString(Letters, NameLength);
+
+    private const string Letters = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+    private const int NameLength = 16;
 }

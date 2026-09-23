@@ -131,19 +131,99 @@ public class ServiceTests
     }
 
     [Fact]
-    public void TheServicesOfEveryEnabledEndpointAnswerOnAPortOfTheirOwn()
+    public void TheEndpointsThatShareAPortAnswerOnItTogether()
     {
-        var one = Endpoint(1, "awg0", 51820);
+        var first = Endpoint(1, "awg0", 51820);
         var moved = Endpoint(2, "awg1", 51821) with { ServicesPort = 8443, WebSocket = true };
         var off = Endpoint(3, "awg2", 51822) with { IsEnabled = false };
-        var clash = Endpoint(4, "awg3", 51823) with { ServicesPort = 51820 };
+        var shared = Endpoint(4, "awg3", 51823) with { ServicesPort = 51820, WebSocket = true };
 
-        var points = ServicePoints.Of([one, moved, off, clash], "/tls/chain.pem", "/tls/key.pem");
+        var points = ServicePoints.Of([first, moved, off, shared], "/tls/chain.pem", "/tls/key.pem");
 
+        Assert.Equal([51820, 8443], points.Select(point => point.Port).ToArray());
         Assert.Equal(
-            [("awg0", 51820, false, 61001, 51820), ("awg1", 8443, true, 61002, 51821)],
-            points.Select(point => (point.Name, point.Port, point.WebSocket, point.Front, point.Target)).ToArray());
+            [("awg0", false, 61001, 51820), ("awg3", true, 61004, 51823)],
+            points[0].Endpoints.Select(one => (one.Name, one.WebSocket, one.Front, one.Target)).ToArray());
+        Assert.Equal(
+            [("awg1", true, 61002, 51821)],
+            points[1].Endpoints.Select(one => (one.Name, one.WebSocket, one.Front, one.Target)).ToArray());
+        Assert.Equal("awg0, awg3", points[0].Names);
+        Assert.True(points[0].WebSocket);
+        Assert.Equal(4, points[0].Of(4)!.ConfigId);
+        Assert.Null(points[0].Of(3));
         Assert.All(points, point => Assert.Equal("/tls/chain.pem", point.Chain));
+    }
+
+    [Fact]
+    public async Task APortThatIsSharedTakesTheHelloOfEveryEndpointBehindIt()
+    {
+        using var bench = new Bench();
+        var first = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var other = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg2") with { Host = "vpn.example", ListenPort = 51821, Address = ["10.9.0.1/24"], ServicesPort = first.ListenPort },
+            CancellationToken.None)).Record!;
+        var mine = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(other.Id, "milena") with { Address = ["10.9.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var point = ServicePoints.Of([first, other], string.Empty, string.Empty)[0];
+        var alone = ServicePoints.Of([first], string.Empty, string.Empty)[0];
+        var token = Token(mine.PrivateKey, other.PublicKey, bench.Clock.GetUtcNow());
+
+        var shared = await AskAsync(desk, point, token);
+        var apart = await AskAsync(desk, alone, Token(mine.PrivateKey, other.PublicKey, bench.Clock.GetUtcNow()));
+
+        Assert.Equal(first.ListenPort, point.Port);
+        Assert.Equal(StatusCodes.Status200OK, shared.Status);
+        Assert.Equal("unknown-peer", Error(apart));
+    }
+
+    [Fact]
+    public async Task AWebSocketOfAnEndpointThatTakesNoneFindsNothingOnASharedPort()
+    {
+        using var bench = new Bench();
+        var first = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true },
+            CancellationToken.None)).Record!;
+        var other = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg2") with { ListenPort = 51821, Address = ["10.9.0.1/24"], ServicesPort = first.ListenPort },
+            CancellationToken.None)).Record!;
+        var mine = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(other.Id, "milena") with { Address = ["10.9.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var point = ServicePoints.Of([first, other], string.Empty, string.Empty)[0];
+        var context = new DefaultHttpContext();
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpUpgradeFeature>(new Upgradable());
+        context.Request.Method = "GET";
+        context.Request.Path = "/v1/events";
+        context.Request.Headers.Authorization = PeerToken.Header(mine.PrivateKey, other.PublicKey, bench.Clock.GetUtcNow());
+
+        await desk.AnswerAsync(context, point);
+
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ThePanelTakesOnlyTheRequestsOfTheServicesOfItsPort()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var point = Point(endpoint);
+
+        Assert.True(desk.Takes(Asking("POST", ServiceDesk.HelloPath), point));
+        Assert.True(desk.Takes(Asking("GET", ServiceDesk.SpeedPath + "/down"), point));
+        Assert.True(desk.Takes(Asking("GET", "/sub/" + client.SubscriptionId), point));
+        Assert.False(desk.Takes(Asking("GET", "/api/panel"), point));
+        Assert.False(desk.Takes(Asking("GET", "/sub/l4kg8s0xq1zc7ab2/"), point));
     }
 
     [Fact]
@@ -372,6 +452,8 @@ public class ServiceTests
             Desk(bench, new SpeedTickets(bench.Clock)),
             new ProxyHost(new Ledger(), new Fronts("awg2"), folder),
             new WebOptions(),
+            PanelDefaults.Settings,
+            new ServiceShare(),
             NullLogger<ServiceServer>.Instance);
         try
         {
@@ -409,6 +491,15 @@ public class ServiceTests
     }
 
     private static ServicePoint Point(ServerConfig endpoint) => ServicePoints.Of([endpoint], string.Empty, string.Empty)[0];
+
+    private static DefaultHttpContext Asking(string method, string path)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = method;
+        context.Request.Path = path;
+
+        return context;
+    }
 
     private static int Free()
     {

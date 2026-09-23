@@ -69,7 +69,8 @@ setting leaves the kernel its own default, and the client takes the same lines t
 above it that nothing listens on, `10.8.0.1/24`, MTU 1420, keepalive 25, DNS `1.1.1.1` and `1.0.0.1`,
 AllowedIPs `0.0.0.0/0` and `::/0`, a fresh pair of keys and an obfuscation drawn at random: Jc 3 to 10,
 Jmin 50, Jmax 1000, S1 and S2 from 15 to 149, H1 to H4 from 5 up, all four different. The panel offers
-the first free name of the `awgN` shape.
+the first free name of the `awgN` shape and the TCP port the endpoints already serve on, 0 when there are
+none, see [services.md](services.md).
 
 The draft is never written down; it reaches the database only when the endpoint is added.
 
@@ -108,7 +109,7 @@ the code into a phrase of its own language.
 | `name-taken` | the panel already carries an endpoint under this name |
 | `port-taken` | the panel already listens on this port |
 | `bad-services-port` | the port of the services is outside 1 to 65535 |
-| `services-port-taken` | another endpoint already serves on this TCP port |
+| `panel-path-needed` | the panel answers on this TCP port from the root, see [serving.md](serving.md) |
 | `unknown-config` | there is no endpoint under this number |
 | `bad-import` | the interface file carries no private key, or nothing at all |
 

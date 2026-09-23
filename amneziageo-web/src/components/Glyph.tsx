@@ -98,6 +98,23 @@ const drawings: Record<GlyphName, ReactNode> = {
   pulse: <path d="M3 12h4l2.5-6 5 12 2.5-6h4" />,
 }
 
+export function Caret({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`size-4 shrink-0 text-faint ${open ? "rotate-90" : ""}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  )
+}
+
 export function Glyph({ name }: { name: GlyphName }) {
   return (
     <svg

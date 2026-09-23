@@ -1,6 +1,7 @@
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Crypto;
+using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Route;
 
@@ -216,6 +217,37 @@ public class ConfigTests
 
         Assert.Equal(ConfigOutcome.PortTaken, again.Outcome);
         Assert.Equal("port-taken", again.Code);
+    }
+
+    [Fact]
+    public async Task TwoEndpointsServeOnOneServicesPort()
+    {
+        using var bench = new Bench();
+        var first = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), default);
+
+        var second = await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg2") with { ListenPort = 51821, ServicesPort = first.Record!.ListenPort },
+            default);
+
+        Assert.True(second.IsOk);
+        Assert.Equal(first.Record.ListenPort, second.Record!.ServicesPort);
+    }
+
+    [Fact]
+    public async Task AnEndpointLeavesThePortOfAPanelThatSitsAtTheRootAlone()
+    {
+        using var bench = new Bench();
+        await bench.Panel.SaveAsync(PanelDefaults.Settings with { Port = 8443, Path = string.Empty }, default);
+
+        var taken = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { ServicesPort = 8443 }, default);
+        await bench.Panel.SaveAsync(PanelDefaults.Settings with { Port = 8443, Path = "sub/l4kg8s0xq1zc7ab2" }, default);
+        var shared = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { ServicesPort = 8443 }, default);
+
+        Assert.Equal(ConfigOutcome.PortTaken, taken.Outcome);
+        Assert.Equal("panel-path-needed", taken.Code);
+        Assert.True(shared.IsOk);
+        Assert.True(await bench.Configs.ServesAsync(8443, default));
+        Assert.False(await bench.Configs.ServesAsync(8444, default));
     }
 
     [Fact]

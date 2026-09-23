@@ -77,6 +77,19 @@ public static class ConfigDefaults
     }
 
     /// <summary>
+    /// Returns the port the services of a new endpoint answer on: the one the endpoints already answer on, else the
+    /// port of the endpoint itself.
+    /// </summary>
+    public static int Services(IReadOnlyList<ServerConfig> held)
+    {
+        ArgumentNullException.ThrowIfNull(held);
+
+        var first = held.Where(one => one.IsEnabled).MinBy(one => one.Id) ?? held.MinBy(one => one.Id);
+
+        return first is null ? 0 : ConfigServices.Port(first);
+    }
+
+    /// <summary>
     /// Returns obfuscation another endpoint is unlikely to repeat.
     /// </summary>
     public static ObfuscationSettings Obfuscation()

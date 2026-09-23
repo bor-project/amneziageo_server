@@ -24,6 +24,11 @@ public sealed class WebOptions
     public string[] Listen { get; set; } = Fallback;
 
     /// <summary>
+    /// The path the panel sits under before it holds settings, empty for one made up.
+    /// </summary>
+    public string Path { get; set; } = string.Empty;
+
+    /// <summary>
     /// The certificate chain the panel answers under, in PEM.
     /// </summary>
     public string Certificate { get; set; } = string.Empty;
@@ -88,7 +93,8 @@ public static class Listening
             throw new InvalidOperationException("the panel listens on no address this host carries: " + string.Join(", ", entries));
         }
 
-        var certificate = WebCertificate.Of(Chain(options, settings), Key(options, settings));
+        var certificate = WebCertificate.Of(Chain(options, settings), Key(options, settings))
+            ?? (PanelStore.ServesOn(path, settings.Port) ? WebCertificate.MadeUp() : null);
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(settings);
         builder.Services.AddSingleton(plan);
@@ -174,6 +180,7 @@ public static class Listening
         ArgumentNullException.ThrowIfNull(options);
 
         var port = Split(options.Listen[0]).Port;
+        var path = options.Path.Length > 0 ? options.Path : PanelDefaults.FreshPath();
         var listen = new List<string>();
         foreach (var entry in options.Listen)
         {
@@ -185,7 +192,7 @@ public static class Listening
 
             if (host is "*")
             {
-                return new PanelSettings { Port = port };
+                return new PanelSettings { Port = port, Path = path };
             }
 
             if (IPAddress.TryParse(host, out var address))
@@ -198,7 +205,7 @@ public static class Listening
             listen.AddRange(Addresses(host).Select(item => item.ToString()));
         }
 
-        return new PanelSettings { Listen = PanelList.Of(listen), Port = port };
+        return new PanelSettings { Listen = PanelList.Of(listen), Port = port, Path = path };
     }
 
     /// <summary>

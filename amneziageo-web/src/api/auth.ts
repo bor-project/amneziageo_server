@@ -101,7 +101,7 @@ const complaints: Record<string, TextKey> = {
   "bad-blocked": "error.badBlocked",
   "bad-header-key": "error.badHeaderKey",
   "port-taken": "error.portTaken",
-  "services-port-taken": "error.servicesPortTaken",
+  "panel-path-needed": "error.panelPathNeeded",
   "bad-kind": "error.badKind",
   "bad-url": "error.badUrl",
   "bad-peer-key": "error.badPeerKey",

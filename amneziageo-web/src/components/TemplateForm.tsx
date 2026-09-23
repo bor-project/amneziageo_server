@@ -7,6 +7,7 @@ import { Flag, Line, Part } from "@/components/fields"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
+import { same } from "@/store/draftSlice"
 
 const slowAt = 12000
 const stopAt = 16000
@@ -37,6 +38,7 @@ export function TemplateForm({
   const found = preview.data ?? kept(held)
   const total = found === undefined || preview.isFetching ? null : found.total
   const heavy = total !== null && total > stopAt
+  const edited = !same({ ...draft, dns: parts(servers) }, start)
 
   function put(change: Partial<TemplateDraft>) {
     setDraft({ ...draft, ...change })
@@ -143,13 +145,13 @@ export function TemplateForm({
             {t("templates.remove")}
           </button>
         )}
-        <button type="button" onClick={onClose} className={secondary}>
+        <button type="button" onClick={onClose} disabled={!edited || pending} className={secondary}>
           {t("templates.cancel")}
         </button>
         <button
           type="button"
           onClick={() => onSave({ ...draft, dns: parts(servers) })}
-          disabled={pending || preview.isFetching || heavy || draft.name.trim().length === 0}
+          disabled={!edited || pending || preview.isFetching || heavy || draft.name.trim().length === 0}
           className={primary}
         >
           {pending ? t("templates.busy") : t("templates.save")}

@@ -64,6 +64,7 @@ public static class PanelEndpoints
     private static async Task<IResult> SaveAsync(
         PanelRequest request,
         PanelStore store,
+        ConfigStore configs,
         PanelSettings running,
         WebOptions options,
         FirewallApplier firewall,
@@ -79,6 +80,15 @@ public static class PanelEndpoints
         if (fault is not null)
         {
             return Results.Json(new Failure(fault.Code, fault.Message), statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (draft.Prefix.Length == 1 && await configs.ServesAsync(draft.Port, ct).ConfigureAwait(false))
+        {
+            return Results.Json(
+                new Failure(
+                    "panel-path-needed",
+                    $"the services of an endpoint answer on TCP port {draft.Port}, give the panel a path of its own to share the port"),
+                statusCode: StatusCodes.Status400BadRequest);
         }
 
         var before = await store.ReadAsync(ct).ConfigureAwait(false);

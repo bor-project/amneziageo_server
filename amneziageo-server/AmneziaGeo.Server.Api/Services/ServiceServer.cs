@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Config;
+using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Proxy;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -14,13 +15,57 @@ namespace AmneziaGeo.Server.Api.Services;
 /// </summary>
 /// <param name="ConfigId">The number of the endpoint.</param>
 /// <param name="Name">The name of the interface of the endpoint.</param>
-/// <param name="Port">The TCP port the services answer on.</param>
-/// <param name="WebSocket">Whether the port takes the tunnel inside a websocket.</param>
+/// <param name="WebSocket">Whether the endpoint takes the tunnel inside a websocket.</param>
 /// <param name="Front">The loopback port the websocket front of the endpoint listens on.</param>
 /// <param name="Target">The UDP port the front hands the tunnel to.</param>
+public sealed record ServiceEndpoint(long ConfigId, string Name, bool WebSocket, int Front, int Target);
+
+/// <summary>
+/// Where the services of the endpoints that share a TCP port answer.
+/// </summary>
+/// <param name="Port">The TCP port the services answer on.</param>
+/// <param name="Endpoints">The endpoints the port serves.</param>
 /// <param name="Chain">The certificate chain the port answers under, empty for one made up.</param>
 /// <param name="Key">The key of the chain.</param>
-public sealed record ServicePoint(long ConfigId, string Name, int Port, bool WebSocket, int Front, int Target, string Chain, string Key);
+public sealed record ServicePoint(int Port, IReadOnlyList<ServiceEndpoint> Endpoints, string Chain, string Key)
+{
+    /// <summary>
+    /// Tells whether the port takes a tunnel inside a websocket.
+    /// </summary>
+    public bool WebSocket => Endpoints.Any(one => one.WebSocket);
+
+    /// <summary>
+    /// Names the endpoints the port serves.
+    /// </summary>
+    public string Names => string.Join(", ", Endpoints.Select(one => one.Name));
+
+    /// <summary>
+    /// Returns the endpoint the port serves under a number, null when it serves none.
+    /// </summary>
+    public ServiceEndpoint? Of(long configId) => Endpoints.FirstOrDefault(one => one.ConfigId == configId);
+
+    /// <summary>
+    /// Tells whether the port answers under another certificate than the other one.
+    /// </summary>
+    public bool Rebinds(ServicePoint other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return !string.Equals(Chain, other.Chain, StringComparison.Ordinal)
+            || !string.Equals(Key, other.Key, StringComparison.Ordinal);
+    }
+}
+
+/// <summary>
+/// The port of the services the panel answers on itself.
+/// </summary>
+public sealed class ServiceShare
+{
+    /// <summary>
+    /// The port the panel shares with the services, null when it shares none.
+    /// </summary>
+    public ServicePoint? Point { get; set; }
+}
 
 /// <summary>
 /// Lists where the services of the endpoints answer.
@@ -28,7 +73,7 @@ public sealed record ServicePoint(long ConfigId, string Name, int Port, bool Web
 public static class ServicePoints
 {
     /// <summary>
-    /// Returns the services of every endpoint that is turned on, one port each.
+    /// Returns the services of every endpoint that is turned on, the endpoints of one port together.
     /// </summary>
     public static IReadOnlyList<ServicePoint> Of(IEnumerable<ServerConfig> configs, string chain, string key)
     {
@@ -38,12 +83,21 @@ public static class ServicePoints
         foreach (var config in configs.Where(one => one.IsEnabled).OrderBy(one => one.Id))
         {
             var port = ConfigServices.Port(config);
-            if (port is <= 0 or > 65535 || points.Exists(point => point.Port == port))
+            if (port is <= 0 or > 65535)
             {
                 continue;
             }
 
-            points.Add(new ServicePoint(config.Id, config.Name, port, config.WebSocket, ConfigServices.Front(config), config.ListenPort, chain, key));
+            var endpoint = new ServiceEndpoint(config.Id, config.Name, config.WebSocket, ConfigServices.Front(config), config.ListenPort);
+            var held = points.FindIndex(point => point.Port == port);
+            if (held < 0)
+            {
+                points.Add(new ServicePoint(port, [endpoint], chain, key));
+
+                continue;
+            }
+
+            points[held] = points[held] with { Endpoints = [.. points[held].Endpoints, endpoint] };
         }
 
         return points;
@@ -63,7 +117,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 
     private static readonly TimeSpan StopFor = TimeSpan.FromSeconds(5);
 
-    private static readonly Lazy<X509Certificate2> MadeUp = new(MakeUp);
+    private static readonly WebCertificate Spare = WebCertificate.MadeUp();
 
     private readonly IServiceScopeFactory _scopes;
 
@@ -72,6 +126,10 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
     private readonly ProxyHost _fronts;
 
     private readonly WebOptions _options;
+
+    private readonly PanelSettings _running;
+
+    private readonly ServiceShare _share;
 
     private readonly ILogger<ServiceServer> _logger;
 
@@ -84,12 +142,21 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
     /// <summary>
     /// ctor
     /// </summary>
-    public ServiceServer(IServiceScopeFactory scopes, ServiceDesk desk, ProxyHost fronts, WebOptions options, ILogger<ServiceServer> logger)
+    public ServiceServer(
+        IServiceScopeFactory scopes,
+        ServiceDesk desk,
+        ProxyHost fronts,
+        WebOptions options,
+        PanelSettings running,
+        ServiceShare share,
+        ILogger<ServiceServer> logger)
     {
         _scopes = scopes;
         _desk = desk;
         _fronts = fronts;
         _options = options;
+        _running = running;
+        _share = share;
         _logger = logger;
     }
 
@@ -133,20 +200,39 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         try
         {
             await FrontsAsync(wanted, faults, ct).ConfigureAwait(false);
-            foreach (var port in _served.Keys.ToList())
+            var mine = wanted.FirstOrDefault(point => point.Port == _running.Port);
+            if (mine is not null && !string.Equals(_share.Point?.Names, mine.Names, StringComparison.Ordinal))
             {
-                if (!wanted.Contains(_served[port].Point))
-                {
-                    await HaltAsync(port).ConfigureAwait(false);
-                }
+                _logger.LogInformation("the services of {Name} answer on the port of the panel {Port}", mine.Names, mine.Port);
             }
 
-            foreach (var point in wanted.Where(one => !_served.ContainsKey(one.Port)))
+            _share.Point = mine;
+
+            var own = wanted.Where(point => point.Port != _running.Port).ToList();
+            foreach (var port in _served.Keys.ToList())
+            {
+                var kept = own.Find(point => point.Port == port);
+                if (kept is null || kept.Rebinds(_served[port].Point))
+                {
+                    await HaltAsync(port).ConfigureAwait(false);
+
+                    continue;
+                }
+
+                _served[port].Point = kept;
+            }
+
+            foreach (var point in own.Where(one => !_served.ContainsKey(one.Port)))
             {
                 var fault = await ServeAsync(point, ct).ConfigureAwait(false);
-                if (point.WebSocket && fault.Length > 0)
+                if (fault.Length == 0)
                 {
-                    faults.TryAdd(point.ConfigId, fault);
+                    continue;
+                }
+
+                foreach (var endpoint in point.Endpoints.Where(one => one.WebSocket))
+                {
+                    faults.TryAdd(endpoint.ConfigId, fault);
                 }
             }
         }
@@ -181,8 +267,8 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             _sourcesForgotten = true;
         }
 
-        var kept = wanted.Where(point => point.WebSocket).ToList();
-        foreach (var name in _fronts.Held().Where(held => !kept.Exists(point => point.Name == held)))
+        var kept = wanted.SelectMany(point => point.Endpoints).Where(one => one.WebSocket).ToList();
+        foreach (var name in _fronts.Held().Where(held => !kept.Exists(one => one.Name == held)))
         {
             var gone = await _fronts.WithdrawAsync(name, ct).ConfigureAwait(false);
             if (gone.Message.Length > 0)
@@ -191,13 +277,13 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             }
         }
 
-        foreach (var point in kept)
+        foreach (var endpoint in kept)
         {
-            var state = await _fronts.ApplyAsync(point.Name, point.Front, point.Target, ct).ConfigureAwait(false);
+            var state = await _fronts.ApplyAsync(endpoint.Name, endpoint.Front, endpoint.Target, ct).ConfigureAwait(false);
             if (!state.IsRunning)
             {
-                _logger.LogWarning("the websocket front of {Name} is down: {Reason}", point.Name, state.Message);
-                faults[point.ConfigId] = state.Message.Length > 0 ? state.Message : FrontDown;
+                _logger.LogWarning("the websocket front of {Name} is down: {Reason}", endpoint.Name, state.Message);
+                faults[endpoint.ConfigId] = state.Message.Length > 0 ? state.Message : FrontDown;
             }
         }
     }
@@ -206,12 +292,14 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
     {
         for (var attempt = 1; ; attempt++)
         {
-            var app = Build(point);
+            var served = new Served(point);
+            var app = Build(served);
             try
             {
                 await app.StartAsync(CancellationToken.None).ConfigureAwait(false);
-                _served[point.Port] = new Served(point, app);
-                _logger.LogInformation("the services of {Name} answer on TCP port {Port}", point.Name, point.Port);
+                served.App = app;
+                _served[point.Port] = served;
+                _logger.LogInformation("the services of {Name} answer on TCP port {Port}", point.Names, point.Port);
 
                 return string.Empty;
             }
@@ -220,7 +308,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
                 await app.DisposeAsync().ConfigureAwait(false);
                 if (attempt >= BindTries || ex is CryptographicException)
                 {
-                    _logger.LogWarning(ex, "the services of {Name} stayed off TCP port {Port}", point.Name, point.Port);
+                    _logger.LogWarning(ex, "the services of {Name} stayed off TCP port {Port}", point.Names, point.Port);
 
                     return ex.Message;
                 }
@@ -230,8 +318,9 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         }
     }
 
-    private WebApplication Build(ServicePoint point)
+    private WebApplication Build(Served served)
     {
+        var point = served.Point;
         var certificate = point.Chain.Length > 0
             ? new WebCertificate(point.Chain, point.Key.Length > 0 ? point.Key : point.Chain)
             : null;
@@ -251,21 +340,21 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         });
 
         var app = builder.Build();
-        app.Run(context => _desk.AnswerAsync(context, point));
+        app.Run(context => _desk.AnswerAsync(context, served.Point));
 
         return app;
     }
 
     private async Task HaltAsync(int port)
     {
-        if (!_served.Remove(port, out var served))
+        if (!_served.Remove(port, out var served) || served.App is not { } app)
         {
             return;
         }
 
         using var limit = new CancellationTokenSource(StopFor);
-        await served.App.StopAsync(limit.Token).ConfigureAwait(false);
-        await served.App.DisposeAsync().ConfigureAwait(false);
+        await app.StopAsync(limit.Token).ConfigureAwait(false);
+        await app.DisposeAsync().ConfigureAwait(false);
     }
 
     // Returns the certificate of the panel, or the one made up when the panel holds none or its files do not read.
@@ -273,7 +362,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
     {
         if (certificate is null)
         {
-            return MadeUp.Value;
+            return Spare.Current();
         }
 
         try
@@ -284,20 +373,23 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         {
             _logger.LogWarning(ex, "the services answer under a made up certificate");
 
-            return MadeUp.Value;
+            return Spare.Current();
         }
     }
 
-    // Makes up the certificate a port answers under when the panel holds none.
-    private static X509Certificate2 MakeUp()
+    // One TCP port of the services with the application that answers on it.
+    private sealed class Served
     {
-        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var request = new CertificateRequest("CN=localhost", key, HashAlgorithmName.SHA256);
-        var now = DateTimeOffset.UtcNow;
-        using var made = request.CreateSelfSigned(now.AddDays(-1), now.AddYears(10));
+        /// <summary>
+        /// ctor
+        /// </summary>
+        public Served(ServicePoint point)
+        {
+            Point = point;
+        }
 
-        return X509CertificateLoader.LoadPkcs12(made.Export(X509ContentType.Pkcs12), null);
+        public ServicePoint Point { get; set; }
+
+        public WebApplication? App { get; set; }
     }
-
-    private sealed record Served(ServicePoint Point, WebApplication App);
 }

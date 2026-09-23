@@ -28,6 +28,14 @@ function NewUser() {
   const [mustChange, setMustChange] = useState(true)
   const [host, setHost] = useState(false)
   const [publicKey, setPublicKey] = useState("")
+  const edited =
+    name.length > 0 ||
+    displayName.length > 0 ||
+    role.length > 0 ||
+    password.length > 0 ||
+    !mustChange ||
+    host ||
+    publicKey.length > 0
 
   useTail([{ label: t("users.newTitle") }])
 
@@ -88,7 +96,7 @@ function NewUser() {
       {add.error !== null && <div className="text-sm text-alarm">{t(complaint(add.error))}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
-        <button type="button" onClick={() => navigate(back)} className={secondary}>
+        <button type="button" onClick={() => navigate(back)} disabled={!edited || add.isPending} className={secondary}>
           {t("users.cancel")}
         </button>
         <button
@@ -128,6 +136,7 @@ function HeldUser({ name }: { name: string }) {
 
   const picked = role ?? held.role
   const on = enabled ?? held.enabled
+  const edited = picked !== held.role || on !== held.enabled || publicKey.trim().length > 0
 
   async function save() {
     const key = publicKey.trim()
@@ -193,10 +202,20 @@ function HeldUser({ name }: { name: string }) {
         >
           {t("users.remove")}
         </button>
-        <button type="button" onClick={() => navigate(back)} className={secondary}>
+        <button
+          type="button"
+          onClick={() => navigate(back)}
+          disabled={!edited || change.isPending}
+          className={secondary}
+        >
           {t("users.cancel")}
         </button>
-        <button type="button" onClick={() => void save()} disabled={change.isPending} className={primary}>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={!edited || change.isPending}
+          className={primary}
+        >
           {change.isPending ? t("users.busy") : t("users.save")}
         </button>
       </div>

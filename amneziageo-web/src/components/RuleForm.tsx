@@ -9,6 +9,7 @@ import { Flag, Line, Multi, Part } from "@/components/fields"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
+import { same } from "@/store/draftSlice"
 
 export function RuleForm({
   start,
@@ -31,6 +32,7 @@ export function RuleForm({
   const clients = useClients()
   const configs = useConfigs()
   const [draft, setDraft] = useState(start)
+  const edited = !same(draft, start)
 
   function put(change: Partial<RuleDraft>) {
     setDraft({ ...draft, ...change })
@@ -193,13 +195,13 @@ export function RuleForm({
             {t("rules.remove")}
           </button>
         )}
-        <button type="button" onClick={onClose} className={secondary}>
+        <button type="button" onClick={onClose} disabled={!edited || pending} className={secondary}>
           {t("rules.cancel")}
         </button>
         <button
           type="button"
           onClick={() => onSave(draft)}
-          disabled={pending || draft.name.length === 0}
+          disabled={!edited || pending || draft.name.length === 0}
           className={primary}
         >
           {pending ? t("rules.busy") : t("rules.save")}

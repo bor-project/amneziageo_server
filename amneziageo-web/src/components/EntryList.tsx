@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "react"
 import { useGeoEntries, useGeoKeys } from "@/api/geo"
 import type { GeoKeys } from "@/api/geo"
 import type { TemplatePart } from "@/api/templates"
+import { Caret } from "@/components/Glyph"
 import { TextBlock } from "@/components/TextBlock"
 import { card, field } from "@/components/styles"
 import { useText } from "@/i18n"
@@ -118,7 +119,7 @@ export function EntryList({
                   onClick={() => setOpen(open === one ? null : one)}
                   className="px-1 text-muted hover:text-brand-ink"
                 >
-                  {open === one ? "▾" : "▸"}
+                  <Caret open={open === one} />
                 </button>
                 <button
                   type="button"

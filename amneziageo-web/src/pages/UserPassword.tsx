@@ -16,6 +16,7 @@ export function UserPassword() {
   const set = useSetPassword()
   const [password, setPassword] = useState("")
   const [mustChange, setMustChange] = useState(true)
+  const edited = password.length > 0 || !mustChange
 
   useTail([{ label: name, to: `/settings/users/${name}/edit` }, { label: t("users.password") }])
 
@@ -52,7 +53,7 @@ export function UserPassword() {
       {set.error !== null && <div className="text-sm text-alarm">{t(complaint(set.error))}</div>}
 
       <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
-        <button type="button" onClick={() => navigate(back)} className={secondary}>
+        <button type="button" onClick={() => navigate(back)} disabled={!edited || set.isPending} className={secondary}>
           {t("users.cancel")}
         </button>
         <button
