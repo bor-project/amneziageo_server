@@ -24,7 +24,8 @@ amneziageo-server install
 `install` asks for a package or a container and for the channel. It puts on the module of AmneziaWG from the PPA
 of Amnezia when the kernel lacks it, turns forwarding on, offers BBR, checks the release against the key the
 releases are signed with, makes the first administrator and starts the panel. The package puts the script into
-`/usr/local/bin` with every release it installs.
+`/usr/local/bin` with every release it installs. Given a backup a panel downloaded, it starts the panel on that
+database instead of making an administrator, see [Moving to another server](#moving-to-another-server).
 
 Without arguments the script opens a menu, over ssh as well: updates and the way back, copies of the database,
 the address, the port and the path of the panel, users and tokens, the service and its log, certificates, the
@@ -33,6 +34,8 @@ firewall, endpoints, websocket fronts and BBR. Its items go as commands too:
 | Command | Does |
 |---|---|
 | `install` | puts the panel on the host |
+| `install --restore <file>` | puts the panel on the host on a backup a panel downloaded |
+| `restore <file>` | puts a backup a panel downloaded in place of the database |
 | `update`, `update beta` | moves the panel to the newest release of its channel, of the test channel for `beta` |
 | `rollback` | goes back to the release before |
 | `uninstall` | takes the panel off the host, its database and settings when asked to |
@@ -247,3 +250,28 @@ in `/opt/amneziageo-server` lead to the current release, so the commands above w
 
 A panel put on before releases kept its files right in `/opt/amneziageo-server`. The first update moves them
 into a release of their own, `legacy-<date>`, and goes on from there.
+
+## Moving to another server
+
+**Download backup** on the **Overview** of the panel, for a role with the right to download backups, saves the
+database as it is at that moment: the accounts and tokens, the endpoints with their keys, the clients, the rules
+and the settings of the panel. On the new host, as root:
+
+```
+amneziageo-server install --restore /root/amneziageo-<name>-<time>.db
+```
+
+`install` without the option asks for the file as well. The script checks that the file is a sound database of the
+panel, puts the panel on as a package or a container, sets the fresh database aside in
+`/var/lib/amneziageo-server/backup` and starts the panel on the backup. On a host that runs the panel already,
+`amneziageo-server restore <file>` or **Restore a backup file** in item 5 does the same and sets the database it
+replaces aside; a backup of a newer release than the host runs waits until the panel is updated.
+
+The backup keeps the addresses of the old host. The clients reach the server by the name in their configurations,
+so the name moves to the new host in DNS and the configurations work on as they are. The certificate of the panel,
+the key it signs sign-ins with and the geo files stay out of the backup:
+
+- a certificate the new host lacks comes from Let's Encrypt for the same name when asked, once the name points at
+  the new host; otherwise the panel answers without one until item 22 puts it on;
+- addresses of the old host the panel listened on drop out;
+- the panel downloads the geo sources once it starts.

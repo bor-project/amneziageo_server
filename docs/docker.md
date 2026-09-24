@@ -64,6 +64,10 @@ The script finds the project in `/opt/amneziageo-docker` or by the labels of its
 through `docker compose exec`, and in a container of its own while the panel is stopped. Inside the container
 `amneziageo-server` is the console itself.
 
+`amneziageo-server install --restore <file>` and `amneziageo-server restore <file>` put a backup a panel downloaded
+into the directory of the database while the container is stopped, see
+[Moving to another server](install.md#moving-to-another-server).
+
 ## Reach it
 
 The panel listens on `127.0.0.1:8443` of the host, as with the package:

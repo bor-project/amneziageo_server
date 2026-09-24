@@ -388,6 +388,7 @@ export const ru: Dictionary = {
   "overview.threads": "Потоки",
   "overview.ram": "Память",
   "overview.addresses": "Адреса",
+  "overview.backup": "Скачать бэкап",
 
   "unit.b": "Б",
   "unit.kb": "КБ",
@@ -593,6 +594,7 @@ export const ru: Dictionary = {
   "scope.routing:write": "Управление маршрутизацией",
   "scope.access:write": "Управление доступом",
   "scope.updates:write": "Обновление панели",
+  "scope.backup:read": "Скачивание бэкапа",
 
   "theme.label": "Тема",
   "theme.auto": "Авто",

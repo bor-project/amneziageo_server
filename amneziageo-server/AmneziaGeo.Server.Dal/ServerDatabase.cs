@@ -4,6 +4,7 @@ using AmneziaGeo.Server.Geo.Files;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace AmneziaGeo.Server.Dal;
 
@@ -70,6 +71,7 @@ public static class ServerDatabase
         services.AddScoped<PanelStore>();
         services.AddScoped<TemplateStore>();
         services.AddScoped<SubscriptionStore>();
+        services.AddScoped<DatabaseBackup>();
         services.AddScoped<IRefreshTokens, RefreshTokenStore>();
         services.AddScoped<IApiTokens, ApiTokenStore>();
         services.AddScoped<IAuditLog, AuditStore>();
@@ -80,12 +82,17 @@ public static class ServerDatabase
     }
 
     /// <summary>
-    /// Brings the schema up to date and puts the built in role in place.
+    /// Brings the schema up to date, hides the files of the database from other users and puts the built in role in
+    /// place.
     /// </summary>
     public static async Task PrepareAsync(IServiceProvider services, CancellationToken ct = default)
     {
         using var scope = services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync(ct).ConfigureAwait(false);
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>().Database;
+        await database.MigrateAsync(ct).ConfigureAwait(false);
+        DatabaseFiles.Hide(
+            database.GetDbConnection().DataSource,
+            scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DatabaseFiles).FullName!));
         await SeedAsync(scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>()).ConfigureAwait(false);
         await scope.ServiceProvider.GetRequiredService<GeoStore>().SeedAsync(ct).ConfigureAwait(false);
         await scope.ServiceProvider.GetRequiredService<OutboundStore>().SeedAsync(ct).ConfigureAwait(false);

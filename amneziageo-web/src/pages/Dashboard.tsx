@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { complaint } from "@/api/auth"
+import { useBackup } from "@/api/backup"
 import { useHealth } from "@/api/health"
 import { useOverview } from "@/api/overview"
 import type { Overview } from "@/api/overview"
@@ -8,7 +9,7 @@ import { busy, useApplyUpdate, useCheckUpdate, useUpdate } from "@/api/update"
 import { Sparkline } from "@/components/Chart"
 import type { Trace } from "@/components/Chart"
 import { useCrumbs } from "@/components/crumbs"
-import { card, quiet } from "@/components/styles"
+import { card, primary, quiet } from "@/components/styles"
 import { average, bytes, peak, percent, rate, share, span } from "@/format"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -37,7 +38,10 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl leading-10 font-semibold tracking-[-0.02em]">{t("nav.overview")}</h1>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-2xl leading-10 font-semibold tracking-[-0.02em]">{t("nav.overview")}</h1>
+        <Backup />
+      </div>
 
       <Head data={data} version={health.data?.version} />
 
@@ -155,6 +159,31 @@ export function Dashboard() {
 
         <Addresses list={data.addresses} />
       </div>
+    </div>
+  )
+}
+
+function Backup() {
+  const t = useText()
+  const user = useAppSelector((s) => s.auth.user)
+  const backup = useBackup()
+
+  if (!holds(user, scopes.readBackup)) {
+    return null
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      {backup.isError && <span className="text-sm text-alarm">{t(complaint(backup.error))}</span>}
+      <button
+        type="button"
+        className={`flex h-10 shrink-0 items-center gap-2 ${primary}`}
+        disabled={backup.isPending}
+        onClick={() => backup.mutate()}
+      >
+        <Down />
+        {t("overview.backup")}
+      </button>
     </div>
   )
 }
@@ -425,6 +454,14 @@ function Disk() {
       <ellipse cx="12" cy="6" rx="8" ry="3" />
       <path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6" />
       <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+    </svg>
+  )
+}
+
+function Down() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

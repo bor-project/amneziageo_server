@@ -769,9 +769,9 @@ first_admin() {
   cli_in init --user "$login" --permanent
 }
 
-# Item 1: puts the panel on a clean host as a package or a container.
+# Item 1: puts the panel on a clean host as a package or a container, on the database of a backup when given one.
 install_panel() {
-  local way channel
+  local way channel copy=${1:-} said
   if [ "$(kind)" != none ]; then
     say "the panel is already on this host as a $(kind): item 2 updates it"
     return 0
@@ -797,11 +797,34 @@ install_panel() {
     channel=test
   fi
 
+  if [ -z "$copy" ]; then
+    copy=$(ask "Backup file to restore, empty for a fresh panel:")
+  fi
+
+  if [ -n "$copy" ]; then
+    said=$(check_copy "$copy")
+    if [ "$said" != ok ]; then
+      bad "$copy: $said"
+      return 1
+    fi
+  fi
+
   prepare_host || return 1
   if [ "$way" = 2 ]; then
     install_container "$channel" || return 1
   else
     install_package "$channel" || return 1
+  fi
+
+  if [ -n "$copy" ]; then
+    step "the backup"
+    if [ "$way" = 2 ]; then
+      wait_panel
+      refresh_self
+    fi
+
+    restore_copy "$copy"
+    return
   fi
 
   step "the first administrator"
@@ -934,6 +957,174 @@ offer_backup() {
   fi
 }
 
+# Prints ok for a sound database of the panel, or what is wrong with it; a database of the host to compare it with
+# turns down a backup of a newer release.
+check_copy() {
+  if ! command -v python3 > /dev/null 2>&1; then
+    printf 'python3 checks the backup: apt-get install python3'
+    return 0
+  fi
+
+  python3 - "$1" "${2:-}" <<'EOF'
+import os, pathlib, sqlite3, sys
+
+def newest(db):
+    try:
+        return db.execute("select max(MigrationId) from __EFMigrationsHistory").fetchone()[0] or ""
+    except sqlite3.DatabaseError:
+        return ""
+
+copy, held = sys.argv[1], sys.argv[2]
+if not os.path.isfile(copy):
+    print("there is no such file")
+    sys.exit()
+
+with open(copy, "rb") as head:
+    if head.read(16) != b"SQLite format 3\x00":
+        print("not a database")
+        sys.exit()
+
+try:
+    db = sqlite3.connect(pathlib.Path(copy).resolve().as_uri() + "?mode=ro&immutable=1", uri=True)
+    sound = db.execute("pragma integrity_check").fetchone()[0] == "ok"
+    tables = {row[0] for row in db.execute("select name from sqlite_master where type = 'table'")}
+    mine = newest(db)
+    db.close()
+except sqlite3.DatabaseError:
+    print("the database is damaged")
+    sys.exit()
+
+if not {"__EFMigrationsHistory", "Panel", "Configs", "AspNetUsers"} <= tables:
+    print("not a database of the panel")
+elif not sound:
+    print("the database is damaged")
+elif held and os.path.isfile(held):
+    db = sqlite3.connect(held)
+    known = newest(db)
+    db.close()
+    print("the backup comes from a newer release of the panel, update the panel first" if known and mine > known else "ok")
+else:
+    print("ok")
+EOF
+}
+
+# Tells whether the host carries an address the panel listens on.
+carried() {
+  case $1 in
+    127.* | ::1 | 0.0.0.0 | ::) return 0 ;;
+  esac
+
+  ip -o addr show 2> /dev/null | awk '{sub(/\/.*/, "", $4); print $4}' | grep -qxF "$1"
+}
+
+# Fits the settings of a restored panel to this host: the certificate it lacks, the addresses it does not carry and
+# the port of the panel in ufw.
+fit_host() {
+  local values chain listen opened port name live kept one now list fix=()
+  mapfile -t values < <(setting certificate listen opened port)
+  chain=${values[0]:-}
+  listen=${values[1]:-}
+  opened=${values[2]:-}
+  port=${values[3]:-}
+  if [ -n "$chain" ] && [ ! -f "$chain" ]; then
+    bad "the panel answers under $chain, which this host lacks"
+    name=$(basename "$(dirname "$chain")")
+    name=${name%-[0-9][0-9][0-9][0-9]}
+    live=/etc/letsencrypt/live/$name
+    if [[ $chain == /etc/letsencrypt/live/* ]] && confirm "Get a Let's Encrypt certificate for $name now? The name has to point at this host"; then
+      certify "$name"
+    fi
+
+    if [ ! -f "$chain" ] && [[ $chain == /etc/letsencrypt/live/* ]] && [ -f "$live/fullchain.pem" ]; then
+      chain=$live/fullchain.pem
+      fix+=(--certificate "$chain" --key "$live/privkey.pem")
+    elif [ ! -f "$chain" ]; then
+      chain=
+      fix+=(--certificate none)
+      say "the panel answers without a certificate until item 22 gets one"
+    fi
+  fi
+
+  now=$listen
+  if [ -n "$listen" ]; then
+    kept=
+    IFS=, read -ra list <<< "$listen"
+    for one in "${list[@]}"; do
+      if carried "$one"; then
+        kept=${kept:+$kept,}$one
+      else
+        bad "this host carries no address $one"
+      fi
+    done
+
+    if [ -z "$kept" ] && agree "Let the panel answer on every address of the host?"; then
+      kept=all
+    fi
+
+    if [ "$kept" != "$listen" ]; then
+      now=${kept:-127.0.0.1}
+      fix+=(--listen "$now")
+    fi
+  fi
+
+  if ufw_active && [ "$opened" = off ] && [ "$now" != 127.0.0.1 ] && [ "$now" != ::1 ] \
+    && agree "Hold TCP port $port open in the firewall?"; then
+    fix+=(--opened on)
+  fi
+
+  if [ "$(kind)" = docker ] && [[ $chain == /etc/letsencrypt/* ]]; then
+    share_certificates stopped || return 1
+  fi
+
+  if [ ${#fix[@]} -gt 0 ]; then
+    cli panel set "${fix[@]}" > /dev/null || return 1
+  fi
+}
+
+# Puts a backup downloaded from a panel in place of the database, keeping the database it replaces aside, and starts
+# the panel on it.
+restore_copy() {
+  local file=$1 dir said aside
+  dir=$(data_dir)
+  if [ ! -f "$dir/server.db" ]; then
+    cli panel get port > /dev/null 2>&1
+  fi
+
+  said=$(check_copy "$file" "$dir/server.db")
+  if [ "$said" != ok ]; then
+    bad "$file: $said"
+    return 1
+  fi
+
+  stop_panel
+  aside=$dir/backup/$(date -u +%Y%m%d-%H%M%S)-before-restore
+  mkdir -p "$aside"
+  cp -a "$dir"/server.db* "$aside/" 2> /dev/null
+  rm -f "$dir/server.db-wal" "$dir/server.db-shm"
+  install -m 600 "$file" "$dir/server.db" || return 1
+  good "restored $file, the database before it lies in $aside"
+  fit_host || return 1
+  start_panel || return 1
+  cli geo update
+  show_address
+}
+
+# Puts a backup downloaded from a panel on, asking for the file when not given one.
+restore_file() {
+  local file=${1:-}
+  need_panel || return 1
+  if [ -z "$file" ]; then
+    file=$(ask "Backup file, like /root/amneziageo-<name>-<time>.db:")
+  fi
+
+  if [ -z "$file" ]; then
+    return 0
+  fi
+
+  confirm "The panel stops while $file goes in. Go on?" || return 0
+  restore_copy "$file"
+}
+
 # Item 4: goes back to the release before the current one.
 rollback_panel() {
   local current previous
@@ -1026,20 +1217,22 @@ releases_menu() {
     say "  1. Releases on this host"
     say "  2. Database backups"
     say "  3. Put a database backup back"
-    say "  4. Back up the database now"
-    say "  5. Release channel"
-    say "  6. Look for a new release"
-    say "  7. Put on a web interface package"
+    say "  4. Restore a backup file"
+    say "  5. Back up the database now"
+    say "  6. Release channel"
+    say "  7. Look for a new release"
+    say "  8. Put on a web interface package"
     say "  0. Back"
     choice=$(ask "Choose:") || return 0
     case $choice in
       1) list_releases ;;
       2) list_backups ;;
       3) restore_backup ;;
-      4) take_backup ;;
-      5) channel_item ;;
-      6) cli update check ;;
-      7) web_package ;;
+      4) restore_file ;;
+      5) take_backup ;;
+      6) channel_item ;;
+      7) cli update check ;;
+      8) web_package ;;
       0 | "") return 0 ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -1448,7 +1641,8 @@ autostart() {
   good "autostart $(autostart_state)"
 }
 
-# Gives the container the certificates of the host through a compose override the script owns.
+# Gives the container the certificates of the host through a compose override the script owns, and starts the
+# container over on it unless told the panel stays stopped.
 share_certificates() {
   local override=$docker_dir/compose.override.yaml
   if [ "$(kind)" != docker ] || grep -qs '/etc/letsencrypt:/etc/letsencrypt' "$override"; then
@@ -1461,7 +1655,9 @@ share_certificates() {
   fi
 
   printf '%s\nservices:\n  panel:\n    volumes:\n      - /etc/letsencrypt:/etc/letsencrypt:ro\n' "$override_mark" > "$override"
-  dcompose up -d > /dev/null && wait_panel
+  if [ "${1:-}" != stopped ]; then
+    dcompose up -d > /dev/null && wait_panel
+  fi
 }
 
 # Puts a certificate of the host on the panel.
@@ -1484,6 +1680,14 @@ get_certificate() {
     return 0
   fi
 
+  certify "$name" || return 1
+  live=/etc/letsencrypt/live/$name
+  use_certificate "$live/fullchain.pem" "$live/privkey.pem"
+}
+
+# Gets a Let's Encrypt certificate for a name of the host.
+certify() {
+  local name=$1
   if ! getent ahostsv4 "$name" > /dev/null; then
     bad "$name does not resolve"
     return 1
@@ -1504,8 +1708,6 @@ get_certificate() {
 
   certbot certonly --standalone --preferred-challenges http --cert-name "$name" -d "$name" || return 1
   systemctl enable --now certbot.timer > /dev/null 2>&1
-  live=/etc/letsencrypt/live/$name
-  use_certificate "$live/fullchain.pem" "$live/privkey.pem"
 }
 
 # Lists the certificates of the host and the one the panel answers under.
@@ -1897,6 +2099,9 @@ usage() {
 usage:
   amneziageo-server                    open the menu
   amneziageo-server install            put the panel on this host
+  amneziageo-server install --restore <file>
+                                       put the panel on this host on a backup downloaded from a panel
+  amneziageo-server restore <file>     put a backup downloaded from a panel in place of the database
   amneziageo-server update [beta]      move the panel to the newest release, of the test channel for beta
   amneziageo-server rollback           go back to the release before
   amneziageo-server uninstall          take the panel off this host
@@ -1923,7 +2128,17 @@ main() {
   locate_compose
   case ${1:-} in
     "") menu ;;
-    install) install_panel ;;
+    install)
+      if [ "${2:-}" = --restore ] && [ -n "${3:-}" ]; then
+        install_panel "$3"
+      elif [ -n "${2:-}" ]; then
+        usage
+        return 1
+      else
+        install_panel
+      fi
+      ;;
+    restore) restore_file "${2:-}" ;;
     update)
       case ${2:-} in
         "") update_panel ;;

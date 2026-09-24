@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Backup;
 using AmneziaGeo.Server.Api.Balancers;
 using AmneziaGeo.Server.Api.Clients;
 using AmneziaGeo.Server.Api.Configs;
@@ -82,6 +83,7 @@ app.MapPanel();
 app.MapSubscriptions();
 app.MapDiagnostics();
 app.MapUpdates();
+app.MapBackup();
 app.MapApiDescription();
 app.MapControllers();
 app.MapPanelPage();

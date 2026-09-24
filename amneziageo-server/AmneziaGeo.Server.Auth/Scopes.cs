@@ -16,6 +16,7 @@ public static class Scopes
     public const string ManageRouting = "routing:write";
     public const string ManageAccess = "access:write";
     public const string ManageUpdates = "updates:write";
+    public const string ReadBackup = "backup:read";
 
     /// <summary>
     /// The right to replace one own password, held even by an account that has to change it.
@@ -25,7 +26,7 @@ public static class Scopes
     /// <summary>
     /// Every right that a role can carry.
     /// </summary>
-    public static readonly string[] All = [ReadState, ManageClients, ManageInterfaces, ManageRouting, ManageAccess, ManageUpdates];
+    public static readonly string[] All = [ReadState, ManageClients, ManageInterfaces, ManageRouting, ManageAccess, ManageUpdates, ReadBackup];
 
     /// <summary>
     /// Rights that change a live tunnel and are refused to a caller without a fresh login.

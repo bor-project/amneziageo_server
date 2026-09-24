@@ -67,6 +67,7 @@ export function Rows<T>({
   const sorted = useSorted(items, chosen?.sort, order)
   const places = arrange ? rearrange(sorted, arrange) : sorted
   const sortable = columns.filter((column) => column.sort && !column.tail)
+  const picking = !wide && sortable.length > 0
   const moving = drag !== undefined && order === null
   const able = choice === undefined ? [] : places.map((place) => place.item).filter(choice.able).map(keyOf)
   const marked = choice === undefined ? 0 : able.filter((key) => choice.chosen.has(key)).length
@@ -145,16 +146,12 @@ export function Rows<T>({
     />
   )
 
-  const bar = (sortable.length > 0 || tools !== undefined) && (
+  const bar = (picking || tools !== undefined) && (
     <div
       className={`flex gap-3 border-b border-line px-4 py-3 ${wide ? "flex-wrap items-center" : "flex-col"}`}
     >
       <div className={wide ? "max-w-full shrink-0" : ""}>{tools}</div>
-      {sortable.length > 0 && (
-        <div className={wide ? "ml-auto shrink-0" : ""}>
-          <SortControl options={sortable} order={order} choose={choose} direct={direct} fill={!wide} />
-        </div>
-      )}
+      {picking && <SortControl options={sortable} order={order} choose={choose} direct={direct} fill />}
     </div>
   )
 

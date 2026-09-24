@@ -386,6 +386,7 @@ export const en = {
   "overview.threads": "Threads",
   "overview.ram": "RAM",
   "overview.addresses": "Addresses",
+  "overview.backup": "Download backup",
 
   "unit.b": "B",
   "unit.kb": "KB",
@@ -591,6 +592,7 @@ export const en = {
   "scope.routing:write": "Manage routing",
   "scope.access:write": "Manage access",
   "scope.updates:write": "Update the panel",
+  "scope.backup:read": "Download backups",
 
   "theme.label": "Theme",
   "theme.auto": "Auto",
