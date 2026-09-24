@@ -13,6 +13,7 @@ import { Channels } from "@/pages/Channels"
 import { ClientExport } from "@/pages/ClientExport"
 import { ClientPage } from "@/pages/ClientPage"
 import { ClientRemove } from "@/pages/ClientRemove"
+import { ClientsRemove } from "@/pages/ClientsRemove"
 import { Clients } from "@/pages/Clients"
 import { ConfigPage } from "@/pages/ConfigPage"
 import { ConfigRemove } from "@/pages/ConfigRemove"
@@ -89,6 +90,7 @@ export function App() {
                   <Route path="clients/new" element={<ClientPage />} />
                   <Route path="clients/:clientId/edit" element={<ClientPage />} />
                   <Route path="clients/:clientId/delete" element={<ClientRemove />} />
+                  <Route path="clients/delete" element={<ClientsRemove />} />
                 </Route>
                 <Route path="templates" element={<Templates />} />
                 <Route path="templates/default" element={<DefaultTemplate />} />

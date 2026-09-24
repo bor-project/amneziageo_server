@@ -176,15 +176,6 @@ public sealed class SubscriptionOffer : IHelloFeature
             return null;
         }
 
-        using var scope = _scopes.CreateScope();
-        var feed = await scope.ServiceProvider.GetRequiredService<SubscriptionFeed>()
-            .ReadAsync(client.SubscriptionId, ct)
-            .ConfigureAwait(false);
-        if (feed is null)
-        {
-            return null;
-        }
-
         var url = SubscriptionAnswer.Address(
             settings,
             _panel,
@@ -192,6 +183,17 @@ public sealed class SubscriptionOffer : IHelloFeature
             peer.Context.Request.Host.Host,
             peer.Endpoint,
             client.SubscriptionId);
+
+        // Reads the subscription with the host its address names, as the client reads it.
+        var host = Uri.TryCreate(url, UriKind.Absolute, out var address) ? address.Host : peer.Context.Request.Host.Host;
+        using var scope = _scopes.CreateScope();
+        var feed = await scope.ServiceProvider.GetRequiredService<SubscriptionFeed>()
+            .ReadAsync(client.SubscriptionId, host, ct)
+            .ConfigureAwait(false);
+        if (feed is null)
+        {
+            return null;
+        }
 
         return new SubscriptionFeature(url, SubscriptionAnswer.Revision(feed.Body), settings.Separate ? string.Empty : Pin(peer.Context));
     }

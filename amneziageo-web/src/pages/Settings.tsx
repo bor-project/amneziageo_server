@@ -1,9 +1,10 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
-import { draftOf, usePanel, useSavePanel } from "@/api/panel"
+import { draftOf, useNameSample, usePanel, useSavePanel } from "@/api/panel"
 import type { Panel, PanelDraft } from "@/api/panel"
 import { scopes } from "@/api/scopes"
-import { Count, Flag, Line, Multi, Part, Pick } from "@/components/fields"
+import { Count, Flag, Help, Line, Multi, Part, Pick } from "@/components/fields"
+import { defaultName, fillName, unknownKeys } from "@/components/names"
 import { card, label, primary, secondary } from "@/components/styles"
 import { languageNames, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -37,9 +38,16 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
   const kept = useAppSelector((s) => s.drafts.panel)
   const [fault, setFault] = useState<TextKey | null>(null)
   const save = useSavePanel()
+  const names = useNameSample(part === "server")
   const saved = draftOf(settings)
   const draft = kept ?? saved
   const domain = domainOf(draft, settings.certificateRoot)
+  const template = draft.nameTemplate.trim() || defaultName
+  const strange = unknownKeys(template)
+  const sample =
+    strange.length === 0 && names.data !== undefined && names.data.stamp.length > 0
+      ? fillName(template, names.data.values, names.data.stamp)
+      : ""
 
   function set(change: Partial<PanelDraft>) {
     const next = { ...draft, ...change }
@@ -126,6 +134,21 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
             <option value="en">{languageNames.en}</option>
             <option value="ru">{languageNames.ru}</option>
           </Pick>
+
+          <Line
+            id="panel-name-template"
+            caption={
+              <span className="flex items-center gap-1">
+                {t("settings.nameTemplate")}
+                <Help text={t("settings.nameKeys")} />
+              </span>
+            }
+            value={draft.nameTemplate}
+            placeholder={defaultName}
+            onChange={(nameTemplate) => set({ nameTemplate })}
+            hint={sample}
+            fault={strange.length > 0 ? t("settings.nameUnknown", { list: strange.join(", ") }) : ""}
+          />
 
           <div className="sm:col-span-2">
             <Flag

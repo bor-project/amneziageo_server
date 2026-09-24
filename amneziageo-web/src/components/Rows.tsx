@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react"
-import type { ReactNode } from "react"
+import type { MouseEvent, ReactNode } from "react"
 import { SortControl } from "@/components/SortControl"
 import { ariaSort, useOrder, useSorted } from "@/components/sort"
 import type { Order, Place, SortValue } from "@/components/sort"
@@ -12,6 +12,8 @@ export interface Column<T> {
   sort?: (item: T) => SortValue
   lead?: boolean
   tail?: boolean
+  width?: number
+  wrap?: boolean
   head?: string
   body?: string
 }
@@ -21,6 +23,23 @@ export interface Drag<T> {
   onMove: (item: T, to: T) => void
 }
 
+export interface Choice<T> {
+  chosen: ReadonlySet<string | number>
+  onChange: (chosen: Set<string | number>) => void
+  able: (item: T) => boolean
+  title: string
+  every: string
+}
+
+// The least width of a column that shares what the fixed ones leave.
+const least = 104
+
+// The width of the column with the grips.
+const grip = 36
+
+// The width of the column with the boxes that choose rows.
+const box = 36
+
 export function Rows<T>({
   items,
   columns,
@@ -29,6 +48,7 @@ export function Rows<T>({
   name = "",
   tools,
   drag,
+  choice,
 }: {
   items: T[]
   columns: Column<T>[]
@@ -37,6 +57,7 @@ export function Rows<T>({
   name?: string
   tools?: ReactNode
   drag?: Drag<T>
+  choice?: Choice<T>
 }) {
   const wide = useAbove(wideQuery)
   const [held, setHeld] = useState<T | null>(null)
@@ -47,6 +68,10 @@ export function Rows<T>({
   const places = arrange ? rearrange(sorted, arrange) : sorted
   const sortable = columns.filter((column) => column.sort && !column.tail)
   const moving = drag !== undefined && order === null
+  const able = choice === undefined ? [] : places.map((place) => place.item).filter(choice.able).map(keyOf)
+  const marked = choice === undefined ? 0 : able.filter((key) => choice.chosen.has(key)).length
+  const span =
+    columns.reduce((sum, column) => sum + (column.width ?? least), 0) + (moving ? grip : 0) + (choice ? box : 0)
 
   function lit(item: T): string {
     if (held === item) {
@@ -64,6 +89,61 @@ export function Rows<T>({
     setHeld(null)
     setOver(null)
   }
+
+  function flip(item: T) {
+    if (choice === undefined) {
+      return
+    }
+
+    const next = new Set(choice.chosen)
+    const key = keyOf(item)
+    if (next.has(key)) {
+      next.delete(key)
+    } else {
+      next.add(key)
+    }
+
+    choice.onChange(next)
+  }
+
+  function flipAll() {
+    if (choice === undefined) {
+      return
+    }
+
+    const next = new Set(choice.chosen)
+    const every = marked === able.length
+    for (const key of able) {
+      if (every) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+    }
+
+    choice.onChange(next)
+  }
+
+  function tick(item: T) {
+    if (choice === undefined) {
+      return null
+    }
+
+    if (!choice.able(item)) {
+      return <span className="block size-4 shrink-0" />
+    }
+
+    return <Tick on={choice.chosen.has(keyOf(item))} title={choice.title} onChange={() => flip(item)} />
+  }
+
+  const all = choice !== undefined && able.length > 0 && (
+    <Tick
+      on={marked > 0 && marked === able.length}
+      some={marked > 0 && marked < able.length}
+      title={choice.every}
+      onChange={flipAll}
+    />
+  )
 
   const bar = (sortable.length > 0 || tools !== undefined) && (
     <div
@@ -83,15 +163,23 @@ export function Rows<T>({
       <div>
         {bar}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full table-fixed text-left text-sm tabular-nums" style={{ minWidth: span }}>
+            <colgroup>
+              {choice && <col style={{ width: box }} />}
+              {moving && <col style={{ width: grip }} />}
+              {columns.map((column) => (
+                <col key={column.key} style={column.width === undefined ? undefined : { width: column.width }} />
+              ))}
+            </colgroup>
             <thead className="text-xs text-faint">
               <tr>
-                {moving && <th className="w-6 py-2.5 pr-0 pl-3" />}
+                {choice && <th className="py-2.5 pr-0 pl-3">{all}</th>}
+                {moving && <th className="py-2.5 pr-0 pl-3" />}
                 {columns.map((column) => (
                   <th
                     key={column.key}
                     aria-sort={ariaSort(column.key, order)}
-                    className={`px-4 py-2.5 font-normal ${column.head ?? ""}`}
+                    className={`overflow-hidden px-3 py-2.5 font-normal whitespace-nowrap ${column.head ?? ""}`}
                   >
                     {column.tail ? (
                       ""
@@ -129,8 +217,9 @@ export function Rows<T>({
                   }}
                   className={`border-t border-line-soft hover:bg-hover ${lit(place.item)}`}
                 >
+                  {choice && <td className="py-3.25 pr-0 pl-3">{tick(place.item)}</td>}
                   {moving && (
-                    <td className="w-6 py-3.25 pr-0 pl-3">
+                    <td className="py-3.25 pr-0 pl-3">
                       <button
                         type="button"
                         title={drag.title}
@@ -144,7 +233,11 @@ export function Rows<T>({
                     </td>
                   )}
                   {columns.map((column) => (
-                    <td key={column.key} className={`px-4 py-3.25 text-body ${column.body ?? ""}`}>
+                    <td
+                      key={column.key}
+                      onMouseEnter={column.tail || column.wrap ? undefined : hint}
+                      className={`px-3 py-3.25 text-body ${column.tail ? "" : column.wrap ? "break-words" : "truncate"} ${column.body ?? ""}`}
+                    >
                       {column.cell(place.item, place.at)}
                     </td>
                   ))}
@@ -165,10 +258,20 @@ export function Rows<T>({
     <div>
       {bar}
 
+      {all && (
+        <label className="flex items-center gap-3 px-4 py-2.5 text-xs text-faint">
+          {all}
+          {choice?.every}
+        </label>
+      )}
+
       {places.map((place) => (
         <div key={keyOf(place.item)} className="border-t border-line-soft px-4 py-3.5 hover:bg-hover">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 text-[15px] font-semibold text-ink">{lead.cell(place.item, place.at)}</div>
+            <div className="flex min-w-0 items-start gap-3">
+              {choice && <span className="mt-1 shrink-0">{tick(place.item)}</span>}
+              <div className="min-w-0 text-[15px] font-semibold text-ink">{lead.cell(place.item, place.at)}</div>
+            </div>
             {tail && <div className="shrink-0">{tail.cell(place.item, place.at)}</div>}
           </div>
 
@@ -210,6 +313,34 @@ export function SortCaption({
   )
 }
 
+function Tick({
+  on,
+  some = false,
+  title,
+  onChange,
+}: {
+  on: boolean
+  some?: boolean
+  title: string
+  onChange: () => void
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={on}
+      title={title}
+      aria-label={title}
+      ref={(box) => {
+        if (box !== null) {
+          box.indeterminate = some
+        }
+      }}
+      onChange={onChange}
+      className="block size-4 cursor-pointer accent-brand"
+    />
+  )
+}
+
 function Grip() {
   return (
     <svg viewBox="0 0 16 16" className="size-4" fill="currentColor" aria-hidden>
@@ -221,6 +352,16 @@ function Grip() {
       <circle cx="10.5" cy="12.5" r="1.3" />
     </svg>
   )
+}
+
+// Names the whole text of a cell that is cut short.
+function hint(event: MouseEvent<HTMLTableCellElement>) {
+  const cell = event.currentTarget
+  if (cell.scrollWidth > cell.clientWidth) {
+    cell.title = cell.innerText
+  } else {
+    cell.removeAttribute("title")
+  }
 }
 
 function rearrange<T>(places: Place<T>[], arrange: (items: T[]) => T[]): Place<T>[] {

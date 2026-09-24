@@ -73,6 +73,10 @@ stage_release() {
   cp -a "$here/publish" "$target.new"
   rm -rf "$target.new/wwwroot"
   cp "$here/install.sh" "$here/release" "$here/server" "$target.new/"
+  if [ -f "$here/amneziageo-server" ]; then
+    install -m 755 "$here/amneziageo-server" "$target.new/"
+  fi
+
   chmod +x "$target.new/AmneziaGeo.Server.Api" "$target.new/AmneziaGeo.Server.Cli" "$target.new/install.sh"
   mv -T "$target.new" "$target"
 }
@@ -103,7 +107,7 @@ stage_web() {
   mv -T "$target.new" "$target"
 }
 
-# Puts the services and the websocket tool in place where they differ, and drops the unit of the relays.
+# Puts the services, the websocket tool and the menu in place where they differ, and drops the unit of the relays.
 shared() {
   local reload= file
   for file in amneziageo-server.service amneziageo-proxy@.service; do
@@ -118,6 +122,10 @@ shared() {
   fi
 
   put 755 "$here/wstunnel" /usr/local/bin/wstunnel || true
+  if [ -f "$here/amneziageo-server" ]; then
+    put 755 "$here/amneziageo-server" /usr/local/bin/amneziageo-server || true
+  fi
+
   if [ -n "$reload" ]; then
     systemctl daemon-reload
   fi

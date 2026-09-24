@@ -126,6 +126,23 @@ export function useSwitchClient() {
   return useRefreshing(({ id, on }: { id: number; on: boolean }) => client.post(`/clients/${id}/switch`, { on }))
 }
 
+export interface ClientBatch {
+  done: number[]
+  failed: { id: number; code: string; message: string }[]
+  unsynced: { config: string; message: string }[]
+}
+
+export function useSwitchClients() {
+  return useRefreshing(
+    async ({ ids, on }: { ids: number[]; on: boolean }) =>
+      (await client.post<ClientBatch>("/clients/switch", { ids, on })).data,
+  )
+}
+
+export function useRemoveClients() {
+  return useRefreshing(async (ids: number[]) => (await client.post<ClientBatch>("/clients/remove", { ids })).data)
+}
+
 export function draftOf(one: Client): ClientDraft {
   return {
     configId: one.configId,

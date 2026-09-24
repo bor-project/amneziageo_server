@@ -7,6 +7,17 @@
   --breakpoint-xl: 1200px;
   --breakpoint-2xl: 1400px;
   --breakpoint-wide: 880px;
+  --animate-slide: slide 1.3s ease-in-out infinite;
+
+  @keyframes slide {
+    from {
+      left: -35%;
+    }
+
+    to {
+      left: 100%;
+    }
+  }
 }
 
 @theme inline {

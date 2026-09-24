@@ -138,25 +138,28 @@ function HeldClient({ clientId }: { clientId: number }) {
                 },
                 {
                   key: "address",
+                  width: 136,
                   caption: t("clients.address"),
                   sort: (one: Client) => one.address.join(", "),
                   cell: (one: Client) => one.address.join(", "),
                 },
                 {
                   key: "traffic",
+                  width: 136,
                   caption: t("clients.traffic"),
                   sort: (one: Client) => one.state.todayRx + one.state.todayTx,
-                  body: "whitespace-nowrap",
                   cell: (one: Client) => <Traffic one={one} />,
                 },
                 {
                   key: "state",
+                  width: 188,
                   caption: t("clients.state"),
                   sort: (one: Client) => (one.state.lastHandshake === null ? null : Date.parse(one.state.lastHandshake)),
                   cell: (one: Client) => <Handshake one={one} />,
                 },
                 {
                   key: "actions",
+                  width: 56,
                   caption: t("clients.actions"),
                   tail: true,
                   cell: (one: Client) =>

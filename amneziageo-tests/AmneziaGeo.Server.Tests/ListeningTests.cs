@@ -1,5 +1,6 @@
 using System.Net;
 using AmneziaGeo.Server.Api.Web;
+using AmneziaGeo.Server.Core.Panel;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -18,6 +19,38 @@ public class ListeningTests
         Assert.Equal("/" + made.Path + "/", made.Prefix);
         Assert.Equal("/", told.Prefix);
         Assert.Equal(["127.0.0.1"], told.Listen);
+    }
+
+    [Fact]
+    public void TheHostAsksAPanelOnEveryAddressAtTheLoopback()
+    {
+        var plan = Listening.Plan(["*:8443"]);
+
+        Assert.Equal("http://127.0.0.1:8443/api/health", Listening.Health(plan, PanelDefaults.Settings with { Path = "sub/abc" }, secure: false));
+    }
+
+    [Fact]
+    public void TheHostAsksAPanelUnderACertificateOverTls()
+    {
+        var plan = Listening.Plan(["*:9443"]);
+
+        Assert.Equal("https://127.0.0.1:9443/api/health", Listening.Health(plan, PanelDefaults.Settings, secure: true));
+    }
+
+    [Fact]
+    public void TheHostAsksAPanelAtTheLoopbackAmongItsAddresses()
+    {
+        var plan = Listening.Plan(["192.0.2.10:8443", "[::1]:8443"]);
+
+        Assert.Equal("http://[::1]:8443/api/health", Listening.Health(plan, PanelDefaults.Settings, secure: false));
+    }
+
+    [Fact]
+    public void TheHostAsksAPanelOnAnOuterAddressUnderItsPath()
+    {
+        var plan = Listening.Plan(["192.0.2.10:8443"]);
+
+        Assert.Equal("http://192.0.2.10:8443/sub/abc/api/health", Listening.Health(plan, PanelDefaults.Settings with { Path = "sub/abc" }, secure: false));
     }
 
     [Fact]

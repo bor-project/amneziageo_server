@@ -4,8 +4,8 @@ The panel holds where it answers itself, on the **Server** and **Certificates** 
 it holds is taken at start: `Save`
 writes a change down, and it takes hold after `Restart`, the button that shows in the header while a saved
 change waits for it. `Cancel` drops what is not saved yet, and an edit left unsaved stays while other pages
-are opened. The language takes hold at once. The subscriptions of the clients have a tab of their own and take
-hold without a restart, see [subscriptions.md](subscriptions.md).
+are opened. The language and the name template take hold at once. The subscriptions of the clients have a tab
+of their own and take hold without a restart, see [subscriptions.md](subscriptions.md).
 
 | Setting | What it does |
 |---|---|
@@ -19,11 +19,12 @@ hold without a restart, see [subscriptions.md](subscriptions.md).
 | Certificate path | the chain in PEM, empty for the certificate the configuration names |
 | Certificate key path | the key of that chain, taken together with it |
 | Language | the language the panel opens in, until the browser is told otherwise |
+| Config name template | the name the configuration of a client goes by in the file, the `vpn://` link and the subscription, see [clients.md](clients.md) |
 | Receive prerelease versions | whether the panel offers the prereleases of the panel as well, see [updates.md](updates.md) |
 
 `POST /api/panel/restart` stops the server, systemd starts it again, or compose in a container. `GET /api/panel` carries `pending`,
-true while the saved settings differ from the ones the panel started under; the language and the prereleases do not
-count.
+true while the saved settings differ from the ones the panel started under; the language, the prereleases and the
+name template do not count.
 
 The page of the panel carries the path in its `base` tag, so the interface and `/api` follow the panel
 wherever it sits.

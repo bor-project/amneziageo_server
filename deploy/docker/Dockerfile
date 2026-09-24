@@ -53,6 +53,7 @@ COPY --from=web /src/amneziageo-server/AmneziaGeo.Server.Api/wwwroot/ /opt/amnez
 COPY --from=tunnel /wstunnel /usr/local/bin/wstunnel
 COPY --chmod=755 deploy/docker/entrypoint.sh /usr/local/bin/amneziageo-server-entrypoint
 COPY --chmod=755 deploy/docker/update.sh /usr/local/bin/amneziageo-server-update
+COPY --chmod=755 deploy/amneziageo-server /usr/local/share/amneziageo-server/amneziageo-server
 RUN ln -s /opt/amneziageo-server/AmneziaGeo.Server.Cli /usr/local/bin/amneziageo-server
 ENV DOTNET_NOLOGO=1 \
     AMNEZIAGEO_CONTAINER=1 \
@@ -68,5 +69,5 @@ ENV DOTNET_NOLOGO=1 \
 WORKDIR /opt/amneziageo-server
 VOLUME ["/var/lib/amneziageo-server", "/etc/amneziageo-server"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s \
-  CMD curl -fsSk "${AMNEZIAGEO_HEALTH:-http://127.0.0.1:8443/api/health}" > /dev/null || exit 1
+  CMD curl -fsSk "${AMNEZIAGEO_HEALTH:-$(cat /var/lib/amneziageo-server/health 2>/dev/null || echo http://127.0.0.1:8443/api/health)}" > /dev/null || exit 1
 ENTRYPOINT ["tini", "--", "amneziageo-server-entrypoint"]

@@ -70,18 +70,31 @@ export function Line({
   )
 }
 
-export function Regenerate({ title, onClick }: { title: string; onClick: () => void }) {
+export function Regenerate({
+  title,
+  onClick,
+  disabled = false,
+}: {
+  title: string
+  onClick: () => void
+  disabled?: boolean
+}) {
   return (
     <button
       type="button"
       title={title}
       aria-label={title}
       onClick={onClick}
-      className="flex shrink-0 items-center rounded border border-line px-2.5 text-muted hover:bg-hover hover:text-ink"
+      disabled={disabled}
+      className="flex shrink-0 items-center rounded border border-line px-2.5 text-muted hover:bg-hover hover:text-ink disabled:opacity-50"
     >
-      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6">
-        <path d="M20 12a8 8 0 1 1-2.34-5.66L20 8" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M20 3v5h-5" strokeLinecap="round" strokeLinejoin="round" />
+      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+        <rect x="4" y="4" width="16" height="16" rx="3.5" />
+        <circle cx="8.75" cy="8.75" r="1.25" fill="currentColor" stroke="none" />
+        <circle cx="15.25" cy="8.75" r="1.25" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="12" r="1.25" fill="currentColor" stroke="none" />
+        <circle cx="8.75" cy="15.25" r="1.25" fill="currentColor" stroke="none" />
+        <circle cx="15.25" cy="15.25" r="1.25" fill="currentColor" stroke="none" />
       </svg>
     </button>
   )

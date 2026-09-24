@@ -39,7 +39,8 @@ public static class PanelRules
             ?? CheckDomains(settings.Domains)
             ?? CheckCertificate(settings.Certificate, settings.CertificateKey)
             ?? CheckPath(settings.Path)
-            ?? CheckLanguage(settings.Language);
+            ?? CheckLanguage(settings.Language)
+            ?? CheckNameTemplate(settings.NameTemplate);
     }
 
     private static PanelFault? CheckPort(int port) => port is < 1 or > 65535
@@ -128,4 +129,21 @@ public static class PanelRules
         Array.IndexOf(PanelDefaults.Languages, language) < 0
             ? new PanelFault("bad-language", $"'{language}' is not a language the panel opens in")
             : null;
+
+    private static PanelFault? CheckNameTemplate(string template)
+    {
+        if (template.Length > ConfigName.MaxLength)
+        {
+            return new PanelFault("long-name-template", $"the name template holds {ConfigName.MaxLength} characters at most");
+        }
+
+        if (template.Any(char.IsControl))
+        {
+            return new PanelFault("bad-name-template", "the name template holds one line");
+        }
+
+        return ConfigName.Unknown(template) is [var unknown, ..]
+            ? new PanelFault("bad-name-template", $"'{unknown}' is not a substitution of the name template")
+            : null;
+    }
 }

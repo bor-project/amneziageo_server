@@ -83,6 +83,7 @@ export function Geo() {
             columns={[
               {
                 key: "name",
+                width: 176,
                 caption: t("geo.name"),
                 sort: (one) => one.name,
                 lead: true,
@@ -102,6 +103,7 @@ export function Geo() {
               },
               {
                 key: "kind",
+                width: 104,
                 caption: t("geo.kind"),
                 sort: (one) => (one.kind === "geoip" ? t("geo.kindIp") : t("geo.kindSite")),
                 cell: (one) => (one.kind === "geoip" ? t("geo.kindIp") : t("geo.kindSite")),
@@ -110,7 +112,6 @@ export function Geo() {
                 key: "url",
                 caption: t("geo.url"),
                 sort: (one) => one.url,
-                body: "max-w-72",
                 cell: (one) => (
                   <span className="block truncate" title={one.url}>
                     {one.url}
@@ -119,18 +120,21 @@ export function Geo() {
               },
               {
                 key: "entries",
+                width: 112,
                 caption: t("geo.entries"),
                 sort: (one) => (one.entryCount > 0 ? one.entryCount : null),
                 cell: (one) => (one.entryCount > 0 ? one.entryCount : ""),
               },
               {
                 key: "size",
+                width: 112,
                 caption: t("geo.size"),
                 sort: (one) => (one.size > 0 ? one.size : null),
                 cell: (one) => (one.size > 0 ? bytes(t, one.size) : ""),
               },
               {
                 key: "updated",
+                width: 188,
                 caption: t("geo.updated"),
                 sort: (one) => (one.updatedUtc === null ? null : Date.parse(one.updatedUtc)),
                 cell: (one) => (
@@ -146,6 +150,7 @@ export function Geo() {
               },
               {
                 key: "actions",
+                width: 128,
                 caption: t("geo.actions"),
                 tail: true,
                 cell: (one, at) =>

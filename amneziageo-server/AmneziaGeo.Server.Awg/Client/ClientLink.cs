@@ -31,7 +31,8 @@ public static class ClientLink
         ServerConfig config,
         TunnelClient client,
         ClientTemplate? template = null,
-        IReadOnlyList<string>? resolver = null)
+        IReadOnlyList<string>? resolver = null,
+        string? title = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
@@ -56,7 +57,7 @@ public static class ClientLink
                 },
             }),
             ["defaultContainer"] = Container,
-            ["description"] = ClientText.Title(config, client),
+            ["description"] = title ?? ClientText.Title(config, client),
             ["hostName"] = config.Host,
         };
 

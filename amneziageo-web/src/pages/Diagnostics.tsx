@@ -81,14 +81,20 @@ export function Diagnostics() {
         {journal.data && journal.data.length > 0 && (
           <div className="max-h-[60vh] overflow-auto">
             {roomy ? (
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[40rem] table-fixed text-left text-xs">
+                <colgroup>
+                  <col className="w-48" />
+                  <col className="w-24" />
+                  <col className="w-40" />
+                  <col />
+                </colgroup>
                 <thead className="text-faint">
                   <tr>
                     {heads.map((head) => (
                       <th
                         key={head.key}
                         aria-sort={ariaSort(head.key, order)}
-                        className={`${head.pad} py-1.5 font-normal whitespace-nowrap`}
+                        className={`${head.pad} overflow-hidden py-1.5 font-normal whitespace-nowrap`}
                       >
                         <SortCaption caption={head.caption} name={head.key} order={order} toggle={toggle} />
                       </th>
@@ -143,9 +149,9 @@ function Record({ entry, language }: { entry: JournalEntry; language: string }) 
 
   return (
     <tr className="border-t border-line-soft align-top hover:bg-hover">
-      <td className="px-4 py-1.5 whitespace-nowrap text-muted">{new Date(entry.time).toLocaleString(language)}</td>
-      <td className={`px-2 py-1.5 whitespace-nowrap ${tone}`}>{entry.level}</td>
-      <td className="px-2 py-1.5 whitespace-nowrap text-muted" title={entry.category}>
+      <td className="truncate px-4 py-1.5 text-muted">{new Date(entry.time).toLocaleString(language)}</td>
+      <td className={`truncate px-2 py-1.5 ${tone}`}>{entry.level}</td>
+      <td className="truncate px-2 py-1.5 text-muted" title={entry.category}>
         {source}
       </td>
       <td className="px-4 py-1.5 break-all text-body">

@@ -54,18 +54,21 @@ export function Users() {
             },
             {
               key: "kind",
+              width: 184,
               caption: t("users.kind"),
               sort: (one) => t(`users.kind.${one.kind}` as TextKey),
               cell: (one) => t(`users.kind.${one.kind}` as TextKey),
             },
             {
               key: "role",
+              width: 144,
               caption: t("users.role"),
               sort: (one) => role(one),
               cell: (one) => role(one),
             },
             {
               key: "state",
+              width: 120,
               caption: t("users.state"),
               sort: (one) => (one.enabled ? 0 : 1),
               cell: (one) => (
@@ -76,6 +79,7 @@ export function Users() {
             },
             {
               key: "actions",
+              width: 56,
               caption: t("users.actions"),
               tail: true,
               cell: (one) => (

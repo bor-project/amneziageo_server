@@ -16,6 +16,9 @@ export const secondary =
 export const danger =
   "rounded-lg bg-alarm-button px-4.5 py-2.5 text-sm font-medium text-white hover:bg-alarm-button-hover disabled:opacity-50"
 
+export const risky =
+  "rounded-lg border border-alarm-line px-4 py-2.25 text-sm text-alarm hover:bg-active disabled:opacity-50"
+
 export const quiet = "rounded-md px-2 py-1 text-sm text-muted hover:bg-active hover:text-ink"
 
 export const label = "block text-xs text-muted"

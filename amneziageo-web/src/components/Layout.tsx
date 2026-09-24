@@ -8,6 +8,7 @@ import { Crumbs, CrumbsHolder } from "@/components/Crumbs"
 import { LanguagePicker } from "@/components/LanguagePicker"
 import { RestartButton } from "@/components/RestartButton"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { UpdateWatch } from "@/components/UpdateWatch"
 import { sections, under } from "@/components/menu"
 import type { Item, Section } from "@/components/menu"
 import { menu, menuItem } from "@/components/styles"
@@ -121,6 +122,7 @@ export function Layout() {
           </main>
         </div>
       </div>
+      <UpdateWatch />
     </CrumbsHolder>
   )
 }

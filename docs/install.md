@@ -9,6 +9,43 @@ This page puts the panel on as a package. The same panel goes on as a container,
 A guide in Russian that takes a bare Debian 12 to a running panel, step by step, is
 [ru/install-debian12.md](ru/install-debian12.md).
 
+## The menu
+
+Every release carries `amneziageo-server`, a script that puts the panel on a bare Debian or Ubuntu host and
+looks after it there. As root:
+
+```
+curl -fsSL https://github.com/bor-project/amneziageo_server/releases/latest/download/amneziageo-server \
+  -o /usr/local/bin/amneziageo-server
+chmod 755 /usr/local/bin/amneziageo-server
+amneziageo-server install
+```
+
+`install` asks for a package or a container and for the channel. It puts on the module of AmneziaWG from the PPA
+of Amnezia when the kernel lacks it, turns forwarding on, offers BBR, checks the release against the key the
+releases are signed with, makes the first administrator and starts the panel. The package puts the script into
+`/usr/local/bin` with every release it installs.
+
+Without arguments the script opens a menu, over ssh as well: updates and the way back, copies of the database,
+the address, the port and the path of the panel, users and tokens, the service and its log, certificates, the
+firewall, endpoints, websocket fronts and BBR. Its items go as commands too:
+
+| Command | Does |
+|---|---|
+| `install` | puts the panel on the host |
+| `update`, `update beta` | moves the panel to the newest release of its channel, of the test channel for `beta` |
+| `rollback` | goes back to the release before |
+| `uninstall` | takes the panel off the host, its database and settings when asked to |
+| `settings` | what the panel answers under, its endpoints and what the host carries |
+| `start`, `stop`, `restart`, `status`, `log` | the service |
+| `enable`, `disable` | whether the panel starts with the host |
+| `bbr on`, `bbr off` | BBR with the `fq` queue for TCP, now and at boot |
+
+Any other command goes to the console of the panel, as in `amneziageo-server user list` or
+`amneziageo-server panel show`; `amneziageo-server help` lists them.
+
+The rest of this page puts the panel on by hand.
+
 ## Build the package
 
 On the machine the code lives on:
@@ -136,7 +173,8 @@ it does the same job.
 ## Keeping it up to date
 
 The panel puts a newer release on by itself from its `Overview`, see [updates.md](updates.md); it runs the
-`install.sh` of the new package the way this section describes. By hand, build a new package, copy it over and
+`install.sh` of the new package the way this section describes, and `amneziageo-server update` asks it for the
+same from the shell. By hand, build a new package, copy it over and
 run its `install.sh`, the same way as the first time. The interfaces and
 their clients live in the kernel and do not go down with the server, so the clients keep their connections
 through an update.
@@ -188,7 +226,8 @@ alone, the same way.
 points `current` back at the release before and starts the server over on it, with the web interface that came
 with that release; the same command again returns to the newer one. The database stays as it is: every update copies it aside first, into
 `/var/lib/amneziageo-server/backup`, which keeps the last five copies. `install.sh --list` shows the releases
-the host keeps.
+the host keeps. `amneziageo-server rollback` goes back the same way and offers to put a copy of the database back
+as well.
 
 ### What the host keeps
 
@@ -200,6 +239,7 @@ the host keeps.
 | `/opt/amneziageo-server/previous` | the release before it, where `--rollback` goes |
 | `/opt/amneziageo-server/wwwroot` | the web interface the server serves |
 | `/var/lib/amneziageo-server/backup` | the database as it was before each of the last five updates |
+| `/usr/local/bin/amneziageo-server` | the menu of the release that runs |
 
 The host keeps the current release and the one before it, each with its web interface, and the web interface
 served before the last one; the rest goes, a release that did not come up among it. `AmneziaGeo.Server.Api` and `AmneziaGeo.Server.Cli`

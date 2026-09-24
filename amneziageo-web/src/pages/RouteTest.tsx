@@ -165,7 +165,13 @@ function Answer({
 
       {answer.steps.length > 0 && (
         <div className={`overflow-x-auto ${card}`}>
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[40rem] table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-14" />
+              <col className="w-60" />
+              <col className="w-32" />
+              <col />
+            </colgroup>
             <thead className="text-xs text-faint">
               <tr>
                 <th className="px-4 py-2.5 font-normal">#</th>
@@ -178,8 +184,8 @@ function Answer({
               {answer.steps.map((step) => (
                 <tr key={step.rule} className="border-t border-line-soft">
                   <td className="px-4 py-3 text-faint tabular-nums">{places.get(step.rule) ?? ""}</td>
-                  <td className="px-4 py-3 text-ink">{listName(step.rule, step.name, t)}</td>
-                  <td className={`px-4 py-3 ${step.outcome === "match" ? "text-good" : "text-muted"}`}>
+                  <td className="truncate px-4 py-3 text-ink">{listName(step.rule, step.name, t)}</td>
+                  <td className={`truncate px-4 py-3 ${step.outcome === "match" ? "text-good" : "text-muted"}`}>
                     {t(outcome(step))}
                   </td>
                   <td className="px-4 py-3 break-all text-body">{why(step, t)}</td>

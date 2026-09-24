@@ -2,6 +2,7 @@ using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Api.Updates;
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 
@@ -19,7 +20,9 @@ public static class PanelEndpoints
     {
         ArgumentNullException.ThrowIfNull(routes);
 
-        routes.MapGroup("/api/panel").RequireScope(Scopes.ReadState).MapGet("/", ReadAsync);
+        var reading = routes.MapGroup("/api/panel").RequireScope(Scopes.ReadState);
+        reading.MapGet("/", ReadAsync);
+        reading.MapGet("/names", NamesAsync);
 
         var writing = routes.MapGroup("/api/panel").RequireScope(Scopes.ManageAccess);
         writing.MapPut("/", SaveAsync);
@@ -59,6 +62,26 @@ public static class PanelEndpoints
         var settings = await store.ReadAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(PanelAnswers.Panel(settings, running, options));
+    }
+
+    private static async Task<IResult> NamesAsync(
+        HttpContext context,
+        ClientStore clients,
+        ConfigStore configs,
+        CancellationToken ct)
+    {
+        var endpoints = await configs.ListAsync(ct).ConfigureAwait(false);
+        var members = await clients.ListAsync(ct).ConfigureAwait(false);
+        var first = members
+            .OrderBy(one => one.Id)
+            .Select(one => (Client: one, Endpoint: endpoints.FirstOrDefault(endpoint => endpoint.Id == one.ConfigId)))
+            .FirstOrDefault(pair => pair.Endpoint is not null);
+
+        return first.Endpoint is null
+            ? Results.Ok(new NameSample(new Dictionary<string, string>(), string.Empty))
+            : Results.Ok(new NameSample(
+                ClientText.Values(first.Endpoint, first.Client, context.Request.Host.Host),
+                ClientText.Stamp(first.Client)));
     }
 
     private static async Task<IResult> SaveAsync(

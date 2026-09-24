@@ -1,8 +1,9 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using AmneziaGeo.Server.Core.Panel;
+using Microsoft.Extensions.Logging;
 
-namespace AmneziaGeo.Server.Api.Web;
+namespace AmneziaGeo.Server.Dal;
 
 /// <summary>
 /// Checks the files of the certificate the panel is told to answer under.

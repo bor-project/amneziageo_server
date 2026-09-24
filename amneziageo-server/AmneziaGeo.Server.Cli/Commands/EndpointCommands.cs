@@ -41,7 +41,8 @@ public static class EndpointCommands
 
         foreach (var config in held)
         {
-            Terminal.Say($"{config.Name}: port {config.ListenPort}, {(config.Opened ? "open" : "closed")} in the firewall");
+            var carried = config.WebSocket ? $", websocket on TCP {ConfigServices.Port(config)}" : string.Empty;
+            Terminal.Say($"{config.Name}: port {config.ListenPort}, {(config.Opened ? "open" : "closed")} in the firewall{carried}");
         }
 
         return 0;

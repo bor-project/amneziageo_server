@@ -913,6 +913,11 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("NameTemplate")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Opened")
                         .HasColumnType("INTEGER");
 

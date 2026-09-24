@@ -144,6 +144,8 @@ const complaints: Record<string, TextKey> = {
   "certificate-key-encrypted": "error.certificateKeyEncrypted",
   "certificate-key-mismatch": "error.certificateKeyMismatch",
   "bad-language": "error.badLanguage",
+  "bad-name-template": "error.badNameTemplate",
+  "long-name-template": "error.longNameTemplate",
   "bad-lifetime": "error.badLifetime",
   "bad-cache": "error.badCache",
   "bad-ttl": "error.badTtl",

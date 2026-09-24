@@ -538,6 +538,8 @@ public sealed class PanelEntity
 
     public bool Prereleases { get; set; }
 
+    public string NameTemplate { get; set; } = string.Empty;
+
     public DateTimeOffset UpdatedUtc { get; set; }
 }
 

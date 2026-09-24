@@ -5,7 +5,7 @@ import { downedOf, failure, useConfigs, useImportConfig, useKeyPair, usePreshare
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
 import { ObfuscationFields } from "@/components/Obfuscation"
-import { Count, Flag, Help, Line, Part, Pick, Switch } from "@/components/fields"
+import { Count, Flag, Help, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { portFault, usePortHolders, useServicesHolders } from "@/components/ports"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
@@ -237,22 +237,14 @@ export function ConfigForm({
           </button>
         </div>
 
-        <div className="sm:col-span-2 flex items-end gap-3">
-          <div className="min-w-0 flex-1">
-            <label className={label} htmlFor="config-preshared">
-              {t("configs.preshared")}
-            </label>
-            <input
-              id="config-preshared"
-              value={draft.presharedKey}
-              onChange={(e) => put({ presharedKey: e.target.value.trim() })}
-              className={`mt-1 ${field}`}
-            />
-          </div>
-          <button type="button" onClick={() => void secret()} disabled={shared.isPending} className={secondary}>
-            {t("configs.generate")}
-          </button>
-        </div>
+        <Line
+          id="config-preshared"
+          caption={t("configs.preshared")}
+          value={draft.presharedKey}
+          onChange={(value) => put({ presharedKey: value.trim() })}
+          after={<Regenerate title={t("configs.generate")} disabled={shared.isPending} onClick={() => void secret()} />}
+          wide
+        />
       </Part>
 
       <Part title={t("configs.obfuscation")}>

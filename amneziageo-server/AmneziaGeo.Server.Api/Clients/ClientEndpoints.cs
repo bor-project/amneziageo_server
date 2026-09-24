@@ -34,6 +34,8 @@ public static class ClientEndpoints
         writing.MapPost("/", AddAsync);
         writing.MapPost("/apply", ApplyAsync);
         writing.MapPost("/import", ImportAsync);
+        writing.MapPost("/switch", SwitchAllAsync);
+        writing.MapPost("/remove", RemoveAllAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapPost("/{id:long}/switch", SwitchAsync);
         writing.MapPost("/{id:long}/devices", AddDeviceAsync);
@@ -183,6 +185,7 @@ public static class ClientEndpoints
         DnsState resolver,
         SubscriptionState subscriptions,
         PanelSettings panel,
+        PanelStore panels,
         WebOptions options,
         CancellationToken ct)
     {
@@ -203,11 +206,13 @@ public static class ClientEndpoints
             : null;
 
         var names = DnsHandout.For(endpoint, resolver.Settings ?? await dns.ReadAsync(ct).ConfigureAwait(false));
+        var naming = (await panels.ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
+        var host = context.Request.Host.Host;
 
         return Results.Ok(new ClientConfigResponse(
-            ClientText.FileName(endpoint, client),
+            ClientText.FileName(endpoint, client, naming, host),
             ClientText.Text(endpoint, client, template, names),
-            ClientLink.Link(endpoint, client, template, names),
+            ClientLink.Link(endpoint, client, template, names, ClientText.Title(endpoint, client, naming, host)),
             SubscriptionAnswer.Address(
                 subscriptions.Current,
                 panel,
@@ -382,6 +387,54 @@ public static class ClientEndpoints
         return Results.NoContent();
     }
 
+    private static async Task<IResult> SwitchAllAsync(
+        ClientBatchRequest request,
+        ConfigStore configs,
+        ClientStore store,
+        ClientHost host,
+        EndpointHost endpoints,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.Ids is not { Count: > 0 } ids || request.On is not { } on)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a switch of many clients needs the ids and the on field");
+        }
+
+        var batch = await store.SwitchAllAsync(ids, on, ct).ConfigureAwait(false);
+        var unsynced = await SettleAllAsync(batch.Done, [], configs, store, host, endpoints, ct).ConfigureAwait(false);
+
+        return Results.Ok(new ClientBatchBody([.. batch.Done.Select(client => client.Id)], batch.Failed, unsynced));
+    }
+
+    private static async Task<IResult> RemoveAllAsync(
+        ClientBatchRequest request,
+        ConfigStore configs,
+        ClientStore store,
+        ClientHost host,
+        EndpointHost endpoints,
+        RouteApplier routes,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.Ids is not { Count: > 0 } ids)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a removal of many clients needs the ids");
+        }
+
+        var batch = await store.RemoveAllAsync(ids, ct).ConfigureAwait(false);
+        var gone = batch.Done.Concat(batch.Carried).ToList();
+        var unsynced = await SettleAllAsync(gone, gone, configs, store, host, endpoints, ct).ConfigureAwait(false);
+        if (gone.Count > 0)
+        {
+            await routes.FollowClientsAsync(ct).ConfigureAwait(false);
+        }
+
+        return Results.Ok(new ClientBatchBody([.. batch.Done.Select(client => client.Id)], batch.Failed, unsynced));
+    }
+
     private static async Task<IResult> ImportAsync(
         ClientImportRequest request,
         ConfigStore configs,
@@ -457,6 +510,45 @@ public static class ClientEndpoints
         await FirewallAsync(configs, store, endpoints, ct).ConfigureAwait(false);
 
         return endpoint;
+    }
+
+    private static async Task<IReadOnlyList<ClientSyncFault>> SettleAllAsync(
+        IReadOnlyList<TunnelClient> touched,
+        IReadOnlyList<TunnelClient> removed,
+        ConfigStore configs,
+        ClientStore store,
+        ClientHost host,
+        EndpointHost endpoints,
+        CancellationToken ct)
+    {
+        var unsynced = new List<ClientSyncFault>();
+        foreach (var configId in touched.Select(client => client.ConfigId).Distinct())
+        {
+            var endpoint = await configs.FindAsync(configId, ct).ConfigureAwait(false);
+            if (endpoint is null)
+            {
+                continue;
+            }
+
+            var clients = await store.ListAsync(configId, ct).ConfigureAwait(false);
+            var gone = removed
+                .Where(client => client.ConfigId == configId)
+                .Select(client => client.PublicKey)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            var sync = await host.SyncAsync(endpoint, clients, gone, ct).ConfigureAwait(false);
+            if (!sync.IsDone)
+            {
+                unsynced.Add(new ClientSyncFault(endpoint.Name, sync.Message));
+            }
+        }
+
+        if (touched.Count > 0)
+        {
+            await FirewallAsync(configs, store, endpoints, ct).ConfigureAwait(false);
+        }
+
+        return unsynced;
     }
 
     private static async Task FirewallAsync(

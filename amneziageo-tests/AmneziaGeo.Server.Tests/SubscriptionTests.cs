@@ -261,6 +261,22 @@ public class SubscriptionTests
     }
 
     [Fact]
+    public void AFeedNamesTheConfigurationsAsItIsTold()
+    {
+        var on = Endpoint(1, "awg1");
+        var milena = Member(1, "milena");
+
+        var feed = ClientFeed.Of(
+            [on],
+            [milena],
+            new Dictionary<long, ClientTemplate>(),
+            _ => new ClientUsage(0, 0),
+            title: (endpoint, member) => ClientText.Title(endpoint, member, "{CLIENT}@{INTERFACE}"));
+
+        Assert.Equal([ClientLink.Link(on, milena, title: "milena@awg1")], feed.Links);
+    }
+
+    [Fact]
     public void AFeedCountsAClientWithItsDevicesOnceAndAddsUpTheLimits()
     {
         var on = Endpoint(1, "awg1");

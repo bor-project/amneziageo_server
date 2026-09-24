@@ -181,6 +181,7 @@ public sealed class PanelStore
         CertificateKey = row.CertificateKey,
         Language = row.Language,
         Prereleases = row.Prereleases,
+        NameTemplate = row.NameTemplate.Length > 0 ? row.NameTemplate : ConfigName.Default,
     };
 
     private static void Write(PanelEntity row, PanelSettings settings)
@@ -194,5 +195,6 @@ public sealed class PanelStore
         row.CertificateKey = settings.CertificateKey;
         row.Language = settings.Language;
         row.Prereleases = settings.Prereleases;
+        row.NameTemplate = settings.NameTemplate;
     }
 }

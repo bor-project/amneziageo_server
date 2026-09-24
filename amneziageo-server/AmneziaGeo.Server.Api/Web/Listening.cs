@@ -64,10 +64,17 @@ public sealed record ListenPlan(
 }
 
 /// <summary>
+/// Where the host asks the panel whether it runs, and the file that says so.
+/// </summary>
+public sealed record PanelHealth(string Url, string File);
+
+/// <summary>
 /// Turns the listen list into the endpoints Kestrel binds.
 /// </summary>
 public static class Listening
 {
+    private const string HealthFile = "health";
+
     /// <summary>
     /// Binds Kestrel to what the panel holds, and to the Web section until it holds anything.
     /// </summary>
@@ -98,6 +105,9 @@ public static class Listening
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(settings);
         builder.Services.AddSingleton(plan);
+        builder.Services.AddSingleton(new PanelHealth(
+            Health(plan, settings, certificate is not null),
+            Path.Combine(Path.GetDirectoryName(path) ?? ".", HealthFile)));
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
             foreach (var port in plan.AnyPorts)
@@ -148,6 +158,53 @@ public static class Listening
         }
 
         return app;
+    }
+
+    /// <summary>
+    /// Writes where the host asks the panel whether it runs, next to the database.
+    /// </summary>
+    public static WebApplication WriteHealth(this WebApplication app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+
+        var health = app.Services.GetRequiredService<PanelHealth>();
+        var next = health.File + ".next";
+        try
+        {
+            File.WriteAllLines(next, [health.Url]);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(next, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+
+            File.Move(next, health.File, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            app.Logger.LogWarning(ex, "the panel does not write where the host checks it to {File}", health.File);
+        }
+
+        return app;
+    }
+
+    /// <summary>
+    /// Returns where the host itself asks the panel whether it runs.
+    /// </summary>
+    public static string Health(ListenPlan plan, PanelSettings settings, bool secure)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var scheme = secure ? "https" : "http";
+        if (plan.AnyPorts.Count > 0)
+        {
+            return $"{scheme}://127.0.0.1:{plan.AnyPorts[0].ToString(CultureInfo.InvariantCulture)}{PanelServices.HealthPath}";
+        }
+
+        var point = plan.Points.FirstOrDefault(one => IPAddress.IsLoopback(one.Address)) ?? plan.Points[0];
+        var path = IPAddress.IsLoopback(point.Address) ? PanelServices.HealthPath : settings.Prefix + PanelServices.HealthPath[1..];
+
+        return $"{scheme}://{point}{path}";
     }
 
     /// <summary>

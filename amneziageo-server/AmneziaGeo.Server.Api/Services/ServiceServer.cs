@@ -6,6 +6,7 @@ using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Proxy;
+using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 namespace AmneziaGeo.Server.Api.Services;
@@ -138,6 +139,8 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
     private readonly Dictionary<int, Served> _served = [];
 
     private bool _sourcesForgotten;
+
+    private bool _bbrMissing;
 
     /// <summary>
     /// ctor
@@ -335,6 +338,12 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             kestrel.ListenAnyIP(point.Port, listen =>
             {
                 listen.Protocols = HttpProtocols.Http1;
+                listen.Use(next => connection =>
+                {
+                    Congest(connection);
+
+                    return next(connection);
+                });
                 listen.UseHttps(https => https.ServerCertificateSelector = (_, _) => Pick(certificate));
             });
         });
@@ -355,6 +364,18 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         using var limit = new CancellationTokenSource(StopFor);
         await app.StopAsync(limit.Token).ConfigureAwait(false);
         await app.DisposeAsync().ConfigureAwait(false);
+    }
+
+    // Puts a connection of the services on BBR and says once when the kernel gives it none.
+    private void Congest(ConnectionContext connection)
+    {
+        if (TcpCongestion.TryBbr(connection) || _bbrMissing)
+        {
+            return;
+        }
+
+        _bbrMissing = true;
+        _logger.LogInformation("the connections of the services keep the congestion control of the host: the kernel gives them no bbr");
     }
 
     // Returns the certificate of the panel, or the one made up when the panel holds none or its files do not read.

@@ -46,7 +46,10 @@ request arrived on. Behind a reverse proxy that host is the inner one until the 
 
 `GET /<path>/<subscription>` answers 404 when no client carries the subscription. Otherwise the body is base64
 of one `vpn://` link a line: one per client that is on, holds a private key and belongs to an interface that
-is on. The link is the one the configuration window of the client shows. A subscription whose clients are all
+is on. The link is the one the configuration window of the client shows, named by the template of the panel with
+the host the subscription is read at for an endpoint without an address, see [clients.md](clients.md). The
+revision the services offer is taken with the host of the address they hand out, so it matches the answer the
+client gets there. A subscription whose clients are all
 off answers an empty body, and the client application marks their configurations gone.
 
 | Header | Holds |

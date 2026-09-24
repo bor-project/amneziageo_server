@@ -11,6 +11,32 @@ root.
 Установка пакетом, без Docker, описана в [install-debian12.md](install-debian12.md). Панель одна и та же, разница
 только в том, чем она запускается.
 
+## Коротко: меню `amneziageo-server`
+
+Шаги 2-7 делает одна команда. Скрипт `amneziageo-server` из релиза ставит модуль из PPA Amnezia, если ядро его не
+несёт, включает пересылку, предлагает BBR, ставит Docker из репозитория Docker с `"ip-forward-no-drop": true`,
+пишет `/opt/amneziageo-docker/compose.yaml` как на шаге 6 с образом последнего релиза, заводит первого
+администратора и спрашивает, открыть ли панель на всех адресах хоста. Шаг 1 он не делает: обновите систему и
+перезагрузитесь до него.
+
+```bash
+curl -fsSL https://github.com/bor-project/amneziageo_server/releases/latest/download/amneziageo-server \
+  -o /usr/local/bin/amneziageo-server
+chmod 755 /usr/local/bin/amneziageo-server
+amneziageo-server install
+```
+
+На вопрос `Install as` ответьте `2` (Docker), на `Channel` - `1` (обычные релизы) или `2` (беты).
+
+Потом `amneziageo-server` без аргументов открывает меню, в том числе по ssh: обновление и откат, копии базы,
+адрес, порт и путь панели, пользователи и токены, служба и её журнал, сертификаты, брандмауэр, интерфейсы, фронты
+WebSocket и BBR. Пункты работают и командами: `amneziageo-server update`, `rollback`, `status`, `log`, `bbr on`;
+прочие команды уходят в утилиту панели, например `amneziageo-server user list`. Полный список -
+`amneziageo-server help`. В контейнере под тем же именем живёт сама утилита: команды
+`docker compose exec panel amneziageo-server ...` из шагов ниже работают как прежде.
+
+Дальше тот же путь описан по шагам, руками.
+
 ## 1. Обновить систему и перезагрузиться
 
 ```bash
@@ -281,8 +307,8 @@ Certbot спросит почту и согласие с условиями Let'
 
 ### 8.3. Подключение сертификата к панели
 
-Сертификат читается внутри контейнера, поэтому каталог Let's Encrypt отдаётся ему томом, а проверка здоровья
-переводится на `https`: иначе Docker посчитает контейнер нездоровым.
+Сертификат читается внутри контейнера, поэтому каталог Let's Encrypt отдаётся ему томом. Проверка здоровья идёт
+за панелью сама: при старте панель пишет адрес проверки со схемой и портом в `/var/lib/amneziageo-server/health`.
 
 ```bash
 D=my-panel.ddns.net
@@ -296,8 +322,6 @@ chmod 600 server.env
 cat > compose.override.yaml <<'EOF'
 services:
   panel:
-    environment:
-      AMNEZIAGEO_HEALTH: https://127.0.0.1:8443/api/health
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
 EOF
@@ -435,6 +459,8 @@ ufw enable
   под своим именем: если новый не станет здоровым за три минуты, база и `.env` возвращаются и снова работает он.
   Интерфейсы и клиенты живут в ядре и через обновление не рвутся.
 - Беты: «Настройки» > «Сервер» > «Получать предварительные версии».
+- Из консоли: `amneziageo-server update`, бета - `amneziageo-server update beta` (пункты 2 и 3 меню). Скрипт ждёт,
+  пока панель ответит новой версией.
 - Вручную: копия базы, новый тег в `.env`, перезапуск:
 
 ```bash
@@ -449,7 +475,8 @@ docker compose ps
 
 - Откат: тот же приём с прежним номером версии; образы предыдущих версий остаются на хосте
   (`docker images | grep amneziageo`). База остаётся такой, какой её оставила новая панель, вернуть её можно
-  копией из `/root`, пока контейнер остановлен.
+  копией из `/root`, пока контейнер остановлен. `amneziageo-server rollback` (пункт 4 меню) поднимает контейнер
+  на ближайшем более старом образе хоста и предлагает вернуть копию базы из `/var/lib/amneziageo-server/backup`.
 
 ## Что где лежит
 
@@ -461,9 +488,11 @@ docker compose ps
 | `/etc/amneziageo-server/signing.pem` | ключ подписи токенов |
 | `/etc/amnezia/amneziawg` | файлы интерфейсов, которые панель читает и пишет |
 | `/var/run/docker.sock` | сокет демона, через который панель обновляет себя |
+| `/usr/local/bin/amneziageo-server` | меню управления сервером, берётся из образа |
 
 ## Если не работает
 
+- `amneziageo-server status` (пункт 18 меню): контейнер, ответ панели и чего не хватает хосту.
 - `modprobe: FATAL: Module amneziawg not found`: модуль не собран под это ядро. Проверьте заголовки (шаг 2),
   выполните `dkms autoinstall -k $(uname -r)`, смотрите `make.log`.
 - `Key was rejected by service` при `modprobe`: включён Secure Boot. Выключите его в настройках ВМ или запишите
@@ -471,5 +500,7 @@ docker compose ps
 - В журнале контейнера `the host carries no amneziawg module`, `forwarding is off in ...` или `the host drops
   forwarded packets`: шаги 3, 4 и 5 соответственно. Журнал: `docker compose logs -n 50`.
 - `no administrator yet`: не выполнен шаг 7.
-- Контейнер `unhealthy` после включения TLS: не задан `AMNEZIAGEO_HEALTH` с `https` (шаг 8.3).
+- Контейнер `unhealthy`: панель не отвечает по адресу из `/var/lib/amneziageo-server/health`, причину называет
+  журнал контейнера. `AMNEZIAGEO_HEALTH`, оставшийся в `compose.override.yaml` от прежних версий, перебивает этот
+  адрес: уберите его.
 - Клиент подключился, но интернета нет: пересылка (шаг 4), политика `FORWARD` (шаг 5), NAT у интерфейса.

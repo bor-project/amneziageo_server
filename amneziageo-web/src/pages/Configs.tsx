@@ -69,6 +69,7 @@ export function Configs() {
           columns={[
             {
               key: "on",
+              width: 60,
               caption: t("action.on"),
               cell: (one) => (
                 <div className="flex max-w-56 flex-col gap-1">
@@ -96,24 +97,28 @@ export function Configs() {
             },
             {
               key: "endpoint",
+              width: 208,
               caption: t("configs.endpoint"),
               sort: (one) => (one.host.length > 0 ? `${one.host}:${one.listenPort}` : one.listenPort),
               cell: (one) => (one.host.length > 0 ? `${one.host}:${one.listenPort}` : one.listenPort),
             },
             {
               key: "address",
+              width: 184,
               caption: t("configs.address"),
               sort: (one) => one.address.join(", "),
               cell: (one) => one.address.join(", "),
             },
             {
               key: "count",
+              width: 120,
               caption: t("configs.count"),
               sort: (one) => count(one),
               cell: (one) => count(one),
             },
             {
               key: "actions",
+              width: 56,
               caption: t("configs.actions"),
               tail: true,
               cell: (one) =>

@@ -1,5 +1,5 @@
 import type { Obfuscation } from "@/api/configs"
-import { Count, Flag, Line } from "@/components/fields"
+import { Count, Flag, Line, Regenerate } from "@/components/fields"
 import { useText } from "@/i18n"
 
 export function ObfuscationFields({
@@ -189,15 +189,10 @@ export function ObfuscationFields({
             value={cover.headerProtectionKey}
             onChange={(value) => onChange({ headerProtectionKey: value.trim() })}
             after={
-              <button
-                type="button"
+              <Regenerate
                 title={t("configs.generate")}
-                aria-label={t("configs.generate")}
                 onClick={() => onChange({ headerProtectionKey: randomHeaderKey() })}
-                className="flex shrink-0 items-center self-stretch rounded border border-line px-2 text-muted hover:bg-hover"
-              >
-                <RefreshIcon />
-              </button>
+              />
             }
             wide
           />
@@ -226,13 +221,4 @@ function randomHeaderKey() {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
   return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""))
-}
-
-function RefreshIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M20 12a8 8 0 1 1-2.34-5.66" strokeLinecap="round" />
-      <path d="M20 4v4h-4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
 }

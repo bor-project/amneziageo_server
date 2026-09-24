@@ -418,10 +418,63 @@ public class ClientTests
         using var document = Opened(ClientLink.Link(Endpoint(), Client()));
         var root = document.RootElement;
 
-        Assert.Equal("awg1-milena", root.GetProperty("description").GetString());
+        Assert.Equal("bor.sytes.net-awg1-milena", root.GetProperty("description").GetString());
         Assert.Equal("bor.sytes.net", root.GetProperty("hostName").GetString());
         Assert.Equal("amnezia-awg", root.GetProperty("defaultContainer").GetString());
         Assert.Equal("51820", root.GetProperty("containers")[0].GetProperty("awg").GetProperty("port").GetString());
+    }
+
+    [Fact]
+    public void TheLinkCarriesTheNameItIsGiven()
+    {
+        using var document = Opened(ClientLink.Link(Endpoint(), Client(), title: "office-milena"));
+
+        Assert.Equal("office-milena", document.RootElement.GetProperty("description").GetString());
+    }
+
+    [Fact]
+    public void TheTemplateNamesTheConfigurationWithTheTextAroundTheSubstitutions()
+    {
+        var client = Client() with { Id = 17, Note = "Милена", CreatedUtc = Added };
+
+        var name = ClientText.Title(Endpoint(), client, "{INTERFACE}-DE-ЕЩЕ константа-{ID}-{DATE}|{NOTE}:{PORT}");
+
+        Assert.Equal("awg1-DE-ЕЩЕ константа-17-2026-09-23|Милена:51820", name);
+    }
+
+    [Theory]
+    [InlineData("{HOST}-{INTERFACE}-{CLIENT}", "awg1-milena")]
+    [InlineData("{INTERFACE}-{NOTE}-{CLIENT}", "awg1-milena")]
+    [InlineData("{INTERFACE}_{NOTE}", "awg1")]
+    [InlineData("{NOTE} {CLIENT}", "milena")]
+    [InlineData("{INTERFACE}--{CLIENT}", "awg1--milena")]
+    public void AnEmptySubstitutionTakesTheSeparatorAfterItAlong(string template, string name)
+    {
+        Assert.Equal(name, ClientText.Title(Endpoint() with { Host = string.Empty }, Client(), template));
+    }
+
+    [Fact]
+    public void AnEndpointWithoutAHostIsNamedByTheAddressItWasReachedAt()
+    {
+        var endpoint = Endpoint() with { Host = string.Empty };
+
+        Assert.Equal("panel.example-awg1-milena", ClientText.Title(endpoint, Client(), host: "panel.example"));
+        Assert.Equal("bor.sytes.net-awg1-milena", ClientText.Title(Endpoint(), Client(), host: "panel.example"));
+    }
+
+    [Fact]
+    public void ANameNothingIsLeftOfTakesTheMomentTheClientWasAdded()
+    {
+        var client = Client() with { CreatedUtc = Added };
+
+        Assert.Equal("2026-09-23-14-05-33-127", ClientText.Title(Endpoint(), client, "{NOTE}-"));
+    }
+
+    [Fact]
+    public void TheFileNameReplacesWhatAFileDoesNotTake()
+    {
+        Assert.Equal("bor.sytes.net-awg1-milena.conf", ClientText.FileName(Endpoint(), Client()));
+        Assert.Equal("awg1_milena_x_y.conf", ClientText.FileName(Endpoint(), Client(), "{INTERFACE}|{CLIENT}:x/y."));
     }
 
     [Fact]
@@ -691,6 +744,8 @@ public class ClientTests
         Assert.Null(ConfigRules.CheckInbound(ClientInbound.Network));
         Assert.Null(ConfigRules.CheckInbound(ClientInbound.Off));
     }
+
+    private static readonly DateTimeOffset Added = new(2026, 9, 23, 14, 5, 33, 127, TimeSpan.Zero);
 
     private static TunnelClient Client(string name = "milena") => new()
     {

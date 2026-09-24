@@ -13,7 +13,8 @@ import { average, bytes, peak, percent, rate, share, span } from "@/format"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
-import { useAppSelector } from "@/store/hooks"
+import { useAppDispatch, useAppSelector } from "@/store/hooks"
+import { updateWatched } from "@/store/uiSlice"
 
 const small = "rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-hover disabled:opacity-50"
 
@@ -163,15 +164,18 @@ function Head({ data, version }: { data: Overview; version?: string }) {
   const seen = useRef<string | undefined>(undefined)
 
   useEffect(() => {
-    if (!version) {
+    if (!version || seen.current === version) {
       return
     }
 
     if (seen.current === undefined) {
       seen.current = version
-    } else if (seen.current !== version) {
-      window.location.reload()
+      return
     }
+
+    const timer = window.setTimeout(() => window.location.reload(), 2000)
+
+    return () => window.clearTimeout(timer)
   }, [version])
 
   return (
@@ -201,6 +205,7 @@ function Update() {
   const update = useUpdate()
   const check = useCheckUpdate()
   const apply = useApplyUpdate()
+  const dispatch = useAppDispatch()
   const [fault, setFault] = useState<TextKey | null>(null)
   const state = update.data
 
@@ -225,6 +230,7 @@ function Update() {
     setFault(null)
     try {
       await apply.mutateAsync(version)
+      dispatch(updateWatched({ to: version, started: Date.now() }))
     } catch (error) {
       setFault(complaint(error))
     }

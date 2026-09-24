@@ -4,7 +4,8 @@ The panel goes on a server in one of two ways: as a package the host keeps under
 [install.md](install.md), or as a container. Both do the same job. The container runs in the network of the
 host, so the interfaces of the endpoints, the rules of the firewall and the ports the panel opens are those of
 the host, as with the package. A guide in Russian that takes a bare Debian 12 to a panel in a container, step by
-step, is [ru/install-debian12-docker.md](ru/install-debian12-docker.md).
+step, is [ru/install-debian12-docker.md](ru/install-debian12-docker.md). The script `amneziageo-server` puts the
+container on a bare host as well, see [The menu](#the-menu).
 
 ## What the host carries
 
@@ -45,6 +46,24 @@ docker compose exec panel amneziageo-server init --user <name>
 `--user` it refuses: host accounts do not sign in from a container. Compose builds the image for the platform of the
 host; the build takes a few minutes, most of them for `wstunnel`.
 
+## The menu
+
+`amneziageo-server install`, see [install.md](install.md#the-menu), puts the container on a bare host when asked
+for Docker: Docker itself from the repository of Docker with `"ip-forward-no-drop": true`,
+`/opt/amneziageo-docker/compose.yaml` that runs the image of the newest release of the channel from
+`ghcr.io/bor-project/amneziageo-server` with directories of the host for the database and the settings, and the
+first administrator. The image carries the script as well, and a host that put the container on by hand takes it
+out of the image:
+
+```
+docker compose exec -T panel cat /usr/local/share/amneziageo-server/amneziageo-server > /usr/local/bin/amneziageo-server
+chmod 755 /usr/local/bin/amneziageo-server
+```
+
+The script finds the project in `/opt/amneziageo-docker` or by the labels of its container. It runs the console
+through `docker compose exec`, and in a container of its own while the panel is stopped. Inside the container
+`amneziageo-server` is the console itself.
+
 ## Reach it
 
 The panel listens on `127.0.0.1:8443` of the host, as with the package:
@@ -60,8 +79,9 @@ package. A certificate is read inside the container, so its directory goes into 
       - /etc/letsencrypt:/etc/letsencrypt:ro
 ```
 
-The health check asks `http://127.0.0.1:8443/api/health`. A panel moved to another address or under TLS names
-the new one in `AMNEZIAGEO_HEALTH`.
+The health check asks `/api/health` at the address the panel writes into `health` beside its database as it
+starts, so it follows the panel to another port, a path of its own and TLS. `AMNEZIAGEO_HEALTH` names another
+address. Outside its path the panel answers `/api/health` to the loopback alone.
 
 ## What the container holds
 
@@ -73,11 +93,13 @@ the new one in `AMNEZIAGEO_HEALTH`.
 | `/etc/amnezia/amneziawg` of the host | the files of the interfaces |
 | `/opt/amneziageo-server` in the image | the server, the console and the web interface |
 | `/usr/local/bin/wstunnel` in the image | the websocket tool |
+| `/usr/local/share/amneziageo-server/amneziageo-server` in the image | the menu of the release |
 
 ## Keeping it up to date
 
 The panel moves itself onto the image of a newer release from its `Overview` when `compose.yaml` hands it the
-socket of the daemon, see [updates.md](updates.md). By hand, a version of the panel is a tag of the image:
+socket of the daemon, see [updates.md](updates.md); `amneziageo-server update` asks it for the same from the
+shell. By hand, a version of the panel is a tag of the image:
 
 ```
 git pull --recurse-submodules
@@ -104,7 +126,8 @@ AMNEZIAGEO_TAG=<earlier version> docker compose up -d
 ```
 
 The database stays as the newer panel left it. The copy from before the update goes back into the volume with
-`docker compose cp`, while the container is stopped.
+`docker compose cp`, while the container is stopped. `amneziageo-server rollback` starts the container on the
+newest image the host keeps below the one it runs, and offers to put a copy of the database back.
 
 ## How it differs from the package
 

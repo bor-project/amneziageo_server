@@ -79,6 +79,7 @@ export function Templates() {
             columns={[
               {
                 key: "name",
+                width: 200,
                 caption: t("templates.name"),
                 sort: (one) => one.name,
                 lead: true,
@@ -91,9 +92,9 @@ export function Templates() {
               },
               {
                 key: "allowed",
+                wrap: true,
                 caption: t("templates.allowed"),
                 sort: (one) => entries(t, one.entries, allowed),
-                body: "max-w-52",
                 cell: (one) => (
                   <span className="block truncate" title={one.entries.join(", ")}>
                     {entries(t, one.entries, allowed)}
@@ -102,6 +103,7 @@ export function Templates() {
               },
               {
                 key: "resolved",
+                width: 128,
                 caption: t("templates.resolved"),
                 sort: (one) => (one.entries.length === 0 ? null : one.allowedIps.length),
                 cell: (one) => (
@@ -118,12 +120,14 @@ export function Templates() {
               },
               {
                 key: "clients",
+                width: 120,
                 caption: t("templates.clients"),
                 sort: (one) => one.clients,
                 cell: (one) => one.clients,
               },
               {
                 key: "actions",
+                width: 56,
                 caption: t("templates.actions"),
                 tail: true,
                 cell: (one) => may && <RowActions title={t("templates.actions")} actions={actions(one)} />,

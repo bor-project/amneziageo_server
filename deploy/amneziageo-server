@@ -1,0 +1,1949 @@
+#!/usr/bin/env bash
+# Manages the AmneziaGeo server on this host: the menu without arguments, its items and the utility as commands.
+# AMNEZIAGEO_KIND, AMNEZIAGEO_CLI, AMNEZIAGEO_DATA, AMNEZIAGEO_UNIT and AMNEZIAGEO_DOCKER_DIR move it onto another layout.
+set -uo pipefail
+
+repo=bor-project/amneziageo_server
+image=ghcr.io/bor-project/amneziageo-server
+self=/usr/local/bin/amneziageo-server
+base=/opt/amneziageo-server
+etc=/etc/amneziageo-server
+data=${AMNEZIAGEO_DATA:-/var/lib/amneziageo-server}
+unit=${AMNEZIAGEO_UNIT:-amneziageo-server}
+docker_dir=${AMNEZIAGEO_DOCKER_DIR:-/opt/amneziageo-docker}
+endpoints=/etc/amnezia/amneziawg
+forwarding_conf=/etc/sysctl.d/90-amneziageo.conf
+bbr_conf=/etc/sysctl.d/91-amneziageo-bbr.conf
+bbr_module=/etc/modules-load.d/amneziageo-bbr.conf
+qdisc_file=/proc/sys/net/core/default_qdisc
+override_mark='# written by amneziageo-server'
+ppa_key=75C9DD72C799870E310542E24166F2C257290828
+release_key='-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEzgZ6s+M0wvE0HMsFuPhwk7cZsCSY
+vbaWhP248NSthVEmlp9mRRjOf9zIFsIZ5P4mM1ETGo+l/Gb+S+7TcwVUew==
+-----END PUBLIC KEY-----'
+
+if [ -t 1 ]; then
+  red=$'\e[31m'
+  green=$'\e[32m'
+  yellow=$'\e[33m'
+  plain=$'\e[0m'
+else
+  red=
+  green=
+  yellow=
+  plain=
+fi
+
+# Writes a line.
+say() {
+  printf '%s\n' "$*"
+}
+
+# Writes a line about something that went through.
+good() {
+  printf '%s%s%s\n' "$green" "$*" "$plain"
+}
+
+# Writes a line about something that failed.
+bad() {
+  printf '%s%s%s\n' "$red" "$*" "$plain" >&2
+}
+
+# Writes the heading of a step.
+step() {
+  printf '%s== %s%s\n' "$yellow" "$*" "$plain"
+}
+
+# Asks for a line and prints the answer, or the default when it is empty; fails when the input ends.
+ask() {
+  local answer=
+  if ! read -r -p "$1 " answer; then
+    printf '%s' "${2:-}"
+    return 1
+  fi
+
+  printf '%s' "${answer:-${2:-}}"
+}
+
+# Asks a question that is no unless answered yes.
+confirm() {
+  local answer=
+  read -r -p "$1 [y/N] " answer || true
+  [[ $answer == [yY]* ]]
+}
+
+# Asks a question that is yes unless answered no, and no when the input ends.
+agree() {
+  local answer=
+  if ! read -r -p "$1 [Y/n] " answer; then
+    return 1
+  fi
+
+  [[ -z $answer || $answer == [yY]* ]]
+}
+
+# Waits for Enter before the menu comes back.
+pause() {
+  local answer=
+  read -r -p "Press Enter to return to the menu " answer || true
+}
+
+# Stops unless the script runs as root.
+need_root() {
+  if [ "$(id -u)" != 0 ]; then
+    bad "run amneziageo-server as root"
+    exit 1
+  fi
+}
+
+# Finds the compose project of the panel by the labels of its container.
+locate_compose() {
+  local found
+  if [ -f "$docker_dir/compose.yaml" ] || ! command -v docker > /dev/null 2>&1; then
+    return 0
+  fi
+
+  found=$(docker ps -a --filter label=com.docker.compose.project=amneziageo-server \
+    --format '{{.Label "com.docker.compose.project.working_dir"}}' 2>/dev/null | head -1)
+  if [ -n "$found" ] && [ -f "$found/compose.yaml" ]; then
+    docker_dir=$found
+  fi
+}
+
+# Tells how the panel is put on the host: package, docker or none.
+kind() {
+  if [ -n "${AMNEZIAGEO_KIND:-}" ]; then
+    printf '%s' "$AMNEZIAGEO_KIND"
+  elif [ -L "$base/current" ] && [ -f "/etc/systemd/system/$unit.service" ]; then
+    printf 'package'
+  elif [ -f "$docker_dir/compose.yaml" ] && command -v docker > /dev/null 2>&1; then
+    printf 'docker'
+  else
+    printf 'none'
+  fi
+}
+
+# Stops an item that needs the panel on a host without it.
+need_panel() {
+  if [ "$(kind)" = none ]; then
+    bad "the panel is not on this host: item 1 installs it"
+    return 1
+  fi
+}
+
+# Runs docker compose in the directory of the project.
+dcompose() {
+  (cd "$docker_dir" && docker compose "$@")
+}
+
+# Prints the identifier of the container of the panel.
+container_id() {
+  dcompose ps -aq panel 2>/dev/null | head -1
+}
+
+# Prints the state of the container of the panel: running, exited, restarting or nothing.
+container_state() {
+  local id
+  id=$(container_id)
+  if [ -n "$id" ]; then
+    docker inspect -f '{{.State.Status}}' "$id" 2>/dev/null
+  fi
+}
+
+# Runs a command of the utility where the panel is put on, with no input.
+cli() {
+  cli_in "$@" < /dev/null
+}
+
+# Runs a command of the utility that may ask questions.
+cli_in() {
+  local tty=-T
+  if [ -n "${AMNEZIAGEO_CLI:-}" ]; then
+    $AMNEZIAGEO_CLI "$@"
+    return
+  fi
+
+  case $(kind) in
+    package)
+      "$base/AmneziaGeo.Server.Cli" "$@"
+      ;;
+    docker)
+      if [ -t 0 ] && [ -t 1 ]; then
+        tty=
+      fi
+
+      if [ "$(container_state)" = running ]; then
+        dcompose exec $tty panel amneziageo-server "$@"
+      else
+        dcompose run --rm --no-deps $tty --entrypoint amneziageo-server panel "$@"
+      fi
+      ;;
+    *)
+      bad "the panel is not on this host: item 1 installs it"
+      return 1
+      ;;
+  esac
+}
+
+# Prints settings of the panel one per line, for the script to read.
+setting() {
+  cli panel get "$@" 2>/dev/null | tr -d '\r'
+}
+
+# Prints what the panel answers the host about itself, nothing when it does not answer.
+health() {
+  case $(kind) in
+    package)
+      curl -fsSk --max-time 5 "$(cat "$data/health" 2>/dev/null || echo http://127.0.0.1:8443/api/health)" 2>/dev/null
+      ;;
+    docker)
+      if [ "$(container_state)" = running ]; then
+        dcompose exec -T panel sh -c \
+          'curl -fsSk --max-time 5 "$(cat /var/lib/amneziageo-server/health 2>/dev/null || echo http://127.0.0.1:8443/api/health)"' < /dev/null 2>/dev/null
+      fi
+      ;;
+  esac
+}
+
+# Prints the version the running panel answers with.
+running_version() {
+  health | sed -n 's/.*"version":"\([^"]*\)".*/\1/p'
+}
+
+# Prints the scheme the panel answers the host under.
+scheme() {
+  local written=
+  case $(kind) in
+    package)
+      written=$(cat "$data/health" 2>/dev/null)
+      ;;
+    docker)
+      written=$(dcompose exec -T panel cat /var/lib/amneziageo-server/health < /dev/null 2>/dev/null)
+      ;;
+  esac
+
+  case $written in
+    https:*) printf 'https' ;;
+    *) printf 'http' ;;
+  esac
+}
+
+# Prints running or stopped for the panel.
+panel_state() {
+  case $(kind) in
+    package)
+      if systemctl is-active --quiet "$unit"; then
+        printf 'running'
+      else
+        printf 'stopped'
+      fi
+      ;;
+    docker)
+      if [ "$(container_state)" = running ]; then
+        printf 'running'
+      else
+        printf 'stopped'
+      fi
+      ;;
+    *)
+      printf 'not installed'
+      ;;
+  esac
+}
+
+# Prints whether the panel starts with the host.
+autostart_state() {
+  local policy
+  case $(kind) in
+    package)
+      if systemctl is-enabled --quiet "$unit" 2>/dev/null; then
+        printf 'on'
+      else
+        printf 'off'
+      fi
+      ;;
+    docker)
+      policy=$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' "$(container_id)" 2>/dev/null)
+      if [ -n "$policy" ] && [ "$policy" != no ]; then
+        printf 'on'
+      else
+        printf 'off'
+      fi
+      ;;
+    *)
+      printf 'off'
+      ;;
+  esac
+}
+
+# Tells whether the amneziawg module is loaded.
+module_loaded() {
+  [ -d /sys/module/amneziawg ]
+}
+
+# Tells whether the host forwards packets.
+forwarding() {
+  [ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null)" = 1 ]
+}
+
+# Tells whether BBR drives TCP on the host.
+bbr_on() {
+  [ "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)" = bbr ]
+}
+
+# Prints the state of BBR as the host runs it.
+bbr_state() {
+  if bbr_on; then
+    printf 'on'
+  else
+    printf 'off (%s)' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)"
+  fi
+}
+
+# Prints the queue discipline new interfaces take, nothing where the host keeps none of its own.
+queue_of_host() {
+  if [ -e "$qdisc_file" ]; then
+    printf ', queue %s' "$(cat "$qdisc_file")"
+  fi
+}
+
+# Lists the units of the websocket fronts, loaded or only enabled.
+front_units() {
+  {
+    systemctl list-units --all --plain --no-legend 'amneziageo-proxy@*' 2>/dev/null | awk '{print $1}'
+    find /etc/systemd/system -name 'amneziageo-proxy@?*.service' -printf '%f\n' 2>/dev/null
+  } | grep -v '^$' | sort -u
+}
+
+# Counts the websocket fronts that run.
+fronts_running() {
+  case $(kind) in
+    package)
+      systemctl list-units --type=service --state=active --plain --no-legend 'amneziageo-proxy@*' 2>/dev/null | wc -l
+      ;;
+    docker)
+      if [ "$(container_state)" = running ]; then
+        dcompose exec -T panel sh -c 'grep -lx wstunnel /proc/[0-9]*/comm 2>/dev/null | wc -l' < /dev/null 2>/dev/null | tr -d '\r '
+      else
+        printf '0'
+      fi
+      ;;
+    *)
+      printf '0'
+      ;;
+  esac
+}
+
+# Prints the address of the host on its default route.
+public_address() {
+  ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -1
+}
+
+# Prints the port sshd listens on.
+ssh_port() {
+  local port
+  port=$(sshd -T 2>/dev/null | awk '$1 == "port" {print $2; exit}')
+  printf '%s' "${port:-22}"
+}
+
+# Tells whether ufw guards the host.
+ufw_active() {
+  command -v ufw > /dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'
+}
+
+# Prints the address the panel opens at from outside.
+address() {
+  local values port path listen domains host
+  mapfile -t values < <(setting port path listen domains)
+  port=${values[0]:-}
+  if [ -z "$port" ]; then
+    return 1
+  fi
+
+  path=${values[1]:-/}
+  listen=${values[2]:-}
+  domains=${values[3]:-}
+  if [ -n "$domains" ]; then
+    host=${domains%%,*}
+  elif [ -z "$listen" ]; then
+    host=$(public_address)
+  elif [ "$listen" = 127.0.0.1 ] || [ "$listen" = ::1 ]; then
+    host=127.0.0.1
+  else
+    host=${listen%%,*}
+  fi
+
+  case $host in
+    *:*) host="[$host]" ;;
+  esac
+
+  printf '%s://%s:%s%s' "$(scheme)" "${host:-<address of the server>}" "$port" "$path"
+}
+
+# Writes the ssh command that brings the panel to another computer and the address to open there.
+ssh_command() {
+  local values port path ssh host
+  mapfile -t values < <(setting port path)
+  port=${values[0]:-8443}
+  path=${values[1]:-/}
+  ssh="ssh -N -L $port:127.0.0.1:$port"
+  if [ "$(ssh_port)" != 22 ]; then
+    ssh="$ssh -p $(ssh_port)"
+  fi
+
+  host=$(public_address)
+  say "on your computer:"
+  say "  $ssh root@${host:-<address of the server>}"
+  say "then open $(scheme)://localhost:$port$path"
+}
+
+# Writes where the panel opens, and the way through ssh when it keeps to the loopback.
+show_address() {
+  local where
+  where=$(address) || return 1
+  good "the panel: $where"
+  case $where in
+    *://127.0.0.1:*) ssh_command ;;
+  esac
+}
+
+# Waits up to a minute for the panel to answer and says on which version.
+wait_panel() {
+  local i version
+  for i in $(seq 1 30); do
+    version=$(running_version)
+    if [ -n "$version" ]; then
+      good "the panel answers, version $version"
+      return 0
+    fi
+
+    sleep 2
+  done
+
+  bad "the panel does not answer: item 19 shows its log"
+  return 1
+}
+
+# Starts the panel and waits until it answers.
+start_panel() {
+  case $(kind) in
+    package) systemctl start "$unit" ;;
+    docker) dcompose up -d > /dev/null ;;
+  esac
+
+  wait_panel
+}
+
+# Stops the panel.
+stop_panel() {
+  case $(kind) in
+    package) systemctl stop "$unit" ;;
+    docker) dcompose stop panel > /dev/null ;;
+  esac
+}
+
+# Starts the panel over and waits until it answers.
+restart_panel() {
+  case $(kind) in
+    package) systemctl restart "$unit" ;;
+    docker) dcompose restart panel > /dev/null ;;
+  esac
+
+  wait_panel
+}
+
+# Takes the menu of the release the panel runs now.
+refresh_self() {
+  local next=$self.next
+  case $(kind) in
+    package)
+      if [ -f "$base/current/amneziageo-server" ]; then
+        cp "$base/current/amneziageo-server" "$next"
+      fi
+      ;;
+    docker)
+      dcompose exec -T panel cat /usr/local/share/amneziageo-server/amneziageo-server < /dev/null > "$next" 2>/dev/null
+      ;;
+  esac
+
+  if [ -s "$next" ] && bash -n "$next" 2> /dev/null; then
+    chmod 755 "$next"
+    mv -f "$next" "$self"
+  else
+    rm -f "$next"
+  fi
+}
+
+# Prints where the database of the panel lies on the host.
+data_dir() {
+  local found=
+  if [ "$(kind)" = docker ]; then
+    found=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/var/lib/amneziageo-server"}}{{.Source}}{{end}}{{end}}' \
+      "$(container_id)" 2>/dev/null)
+  fi
+
+  printf '%s' "${found:-$data}"
+}
+
+# Prints the tag of the image the compose project runs.
+image_tag() {
+  sed -n 's/^AMNEZIAGEO_TAG=//p' "$docker_dir/.env" 2>/dev/null | tail -1
+}
+
+# Prints the image the container of the panel runs.
+running_image() {
+  local found
+  found=$(docker inspect -f '{{.Config.Image}}' "$(container_id)" 2>/dev/null)
+  printf '%s' "${found:-$image:$(image_tag)}"
+}
+
+# Prints the name the releases give the architecture of the host.
+release_arch() {
+  case $(uname -m) in
+    x86_64 | amd64) printf 'x64' ;;
+    aarch64 | arm64) printf 'arm64' ;;
+  esac
+}
+
+# Prints the tag of the newest release of a channel that carries a signed manifest.
+release_tag() {
+  local tests=0
+  if [ "$1" = test ]; then
+    tests=1
+  fi
+
+  curl -fsSL --max-time 30 "https://api.github.com/repos/$repo/releases?per_page=30" 2>/dev/null | python3 -c '
+import json, sys
+tests = sys.argv[1] == "1"
+for release in json.load(sys.stdin):
+    if release.get("draft") or (release.get("prerelease") and not tests):
+        continue
+    names = {asset.get("name") for asset in release.get("assets", [])}
+    if "update.json" in names and "update.json.sig" in names:
+        print(release["tag_name"])
+        break
+' "$tests"
+}
+
+# Downloads one file of a release into a directory.
+fetch() {
+  if ! curl -fsSL --retry 2 -o "$3/$2" "https://github.com/$repo/releases/download/$1/$2"; then
+    bad "$2 of $1 did not download"
+    return 1
+  fi
+}
+
+# Tells whether the manifest in a directory is signed with the key of the releases.
+signed() {
+  printf '%s\n' "$release_key" > "$1/release.pem"
+  openssl dgst -sha256 -verify "$1/release.pem" -signature "$1/update.json.sig" "$1/update.json" > /dev/null 2>&1
+}
+
+# Prints the version a manifest names.
+manifest_version() {
+  sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$1" | head -1
+}
+
+# Downloads and checks the manifest of the newest release of a channel, printing its version.
+manifest() {
+  local channel=$1 work=$2 tag
+  tag=$(release_tag "$channel")
+  if [ -z "$tag" ]; then
+    bad "GitHub names no release on the $channel channel"
+    return 1
+  fi
+
+  fetch "$tag" update.json "$work" || return 1
+  fetch "$tag" update.json.sig "$work" || return 1
+  if ! signed "$work"; then
+    bad "the manifest of $tag is not signed with the key of the releases"
+    return 1
+  fi
+
+  printf '%s %s' "$tag" "$(manifest_version "$work/update.json")"
+}
+
+# Builds the amneziawg module from the PPA of Amnezia and loads it at boot.
+install_module() {
+  local suite swap= built=
+  apt-get install -y --no-install-recommends dkms gcc make "linux-headers-$(uname -r)" || return 1
+  apt-get install -y --no-install-recommends "linux-headers-$(uname -r | cut -d- -f3-)" > /dev/null 2>&1 || true
+  install -d -m 755 /etc/apt/keyrings
+  curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x$ppa_key" \
+    -o /etc/apt/keyrings/amnezia-ppa.asc || return 1
+  if command -v gpg > /dev/null 2>&1 \
+    && ! gpg --show-keys --with-colons /etc/apt/keyrings/amnezia-ppa.asc 2>/dev/null | grep -q ":$ppa_key:"; then
+    bad "the key of the Amnezia PPA does not carry the fingerprint $ppa_key"
+    return 1
+  fi
+
+  if [ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 1000000 ] && [ -z "$(swapon --show --noheadings 2>/dev/null)" ]; then
+    swap=/swap-amneziageo-build
+    fallocate -l 512M "$swap" && chmod 600 "$swap" && mkswap "$swap" > /dev/null && swapon "$swap"
+  fi
+
+  for suite in noble jammy; do
+    printf 'Types: deb\nURIs: https://ppa.launchpadcontent.net/amnezia/ppa/ubuntu/\nSuites: %s\nComponents: main\nSigned-By: /etc/apt/keyrings/amnezia-ppa.asc\n' \
+      "$suite" > /etc/apt/sources.list.d/amnezia-ppa.sources
+    if apt-get update > /dev/null && apt-get install -y --no-install-recommends amneziawg-dkms; then
+      built=1
+      break
+    fi
+  done
+
+  if [ -n "$swap" ]; then
+    swapoff "$swap"
+    rm -f "$swap"
+  fi
+
+  if [ -z "$built" ]; then
+    bad "amneziawg-dkms did not install: /var/lib/dkms/amneziawg/*/build/make.log tells why"
+    return 1
+  fi
+
+  printf 'amneziawg\n' > /etc/modules-load.d/amneziawg.conf
+  modprobe amneziawg
+}
+
+# Turns forwarding on now and at boot.
+forwarding_on() {
+  printf 'net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\n' > "$forwarding_conf"
+  sysctl -p "$forwarding_conf" > /dev/null
+  good "forwarding on"
+}
+
+# Turns BBR with the fq queue on now and at boot.
+bbr_enable() {
+  modprobe tcp_bbr 2> /dev/null || true
+  if ! grep -qw bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2> /dev/null; then
+    bad "the kernel $(uname -r) carries no BBR"
+    return 1
+  fi
+
+  printf 'tcp_bbr\n' > "$bbr_module"
+  {
+    if [ -e "$qdisc_file" ]; then
+      printf 'net.core.default_qdisc = fq\n'
+    fi
+
+    printf 'net.ipv4.tcp_congestion_control = bbr\n'
+  } > "$bbr_conf"
+  sysctl -p "$bbr_conf" > /dev/null || return 1
+  good "BBR on"
+}
+
+# Turns BBR off and puts the defaults of the kernel back.
+bbr_disable() {
+  local others
+  rm -f "$bbr_conf" "$bbr_module"
+  sysctl -w net.ipv4.tcp_congestion_control=cubic > /dev/null
+  if [ -e "$qdisc_file" ]; then
+    sysctl -w net.core.default_qdisc=fq_codel > /dev/null
+  fi
+
+  others=$(grep -ls 'tcp_congestion_control *= *bbr' /etc/sysctl.conf /etc/sysctl.d/*.conf 2> /dev/null | tr '\n' ' ')
+  if [ -n "$others" ]; then
+    bad "BBR comes back at boot from $others"
+  fi
+
+  good "BBR off"
+}
+
+# Puts on what the host needs for the endpoints: the amneziawg module, forwarding and, when asked, BBR.
+prepare_host() {
+  step "the host"
+  apt-get update > /dev/null || return 1
+  apt-get install -y --no-install-recommends curl ca-certificates nftables openssl python3 || return 1
+  if ! module_loaded && ! modprobe amneziawg 2> /dev/null; then
+    install_module || return 1
+  fi
+
+  good "amneziawg module loaded"
+  if ! forwarding; then
+    forwarding_on
+  fi
+
+  if ! bbr_on && agree "Turn BBR on?"; then
+    bbr_enable
+  fi
+}
+
+# Puts Docker on from the repository of Docker and keeps it off the forwarded packets.
+install_docker() {
+  local dist
+  if ! command -v docker > /dev/null 2>&1 || ! docker compose version > /dev/null 2>&1; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    dist=debian
+    if [ "${ID:-}" = ubuntu ]; then
+      dist=ubuntu
+    fi
+
+    install -d -m 755 /etc/apt/keyrings
+    curl -fsSL "https://download.docker.com/linux/$dist/gpg" -o /etc/apt/keyrings/docker.asc || return 1
+    printf 'Types: deb\nURIs: https://download.docker.com/linux/%s\nSuites: %s\nComponents: stable\nSigned-By: /etc/apt/keyrings/docker.asc\n' \
+      "$dist" "${VERSION_CODENAME:-}" > /etc/apt/sources.list.d/docker.sources
+    apt-get update > /dev/null && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin || return 1
+  fi
+
+  if [ ! -f /etc/docker/daemon.json ]; then
+    printf '{\n  "ip-forward-no-drop": true\n}\n' > /etc/docker/daemon.json
+    systemctl restart docker
+  elif ! grep -q '"ip-forward-no-drop"' /etc/docker/daemon.json; then
+    bad "add \"ip-forward-no-drop\": true to /etc/docker/daemon.json and restart docker: clients reach nothing past the host without it"
+  fi
+}
+
+# Writes the compose file of the panel the instructions give.
+write_compose() {
+  cat > "$docker_dir/compose.yaml" <<EOF
+name: amneziageo-server
+
+services:
+  panel:
+    image: $image:\${AMNEZIAGEO_TAG:-latest}
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    env_file:
+      - path: server.env
+        required: false
+    volumes:
+      - $data:/var/lib/amneziageo-server
+      - $etc:/etc/amneziageo-server
+      - $endpoints:/etc/amnezia/amneziawg
+      - /var/run/docker.sock:/var/run/docker.sock
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    restart: unless-stopped
+EOF
+}
+
+# Downloads the newest release of a channel, checks it against the key of the releases and puts it on as a package.
+install_package() {
+  local channel=$1 work found tag version file want rc
+  step "the package"
+  work=$(mktemp -d) || return 1
+  found=$(manifest "$channel" "$work") || { rm -rf "$work"; return 1; }
+  tag=${found%% *}
+  version=${found#* }
+  file=amneziageo-server-$version-linux-$(release_arch).tar.gz
+  fetch "$tag" "$file" "$work" || { rm -rf "$work"; return 1; }
+  want=$(grep -A3 "\"$file\"" "$work/update.json" | sed -n 's/.*"sha256": *"\([0-9a-f]*\)".*/\1/p' | head -1)
+  if [ -z "$want" ] || ! (cd "$work" && printf '%s  %s\n' "$want" "$file" | sha256sum -c - > /dev/null 2>&1); then
+    bad "$file does not match the manifest of $tag"
+    rm -rf "$work"
+    return 1
+  fi
+
+  rc=0
+  tar -xzf "$work/$file" -C "$work" && "$work/amneziageo-server/install.sh" || rc=$?
+  rm -rf "$work"
+  return $rc
+}
+
+# Puts the panel on as a container of the image of the newest release of a channel.
+install_container() {
+  local channel=$1 work found version
+  step "the container"
+  install_docker || return 1
+  work=$(mktemp -d) || return 1
+  found=$(manifest "$channel" "$work") || { rm -rf "$work"; return 1; }
+  rm -rf "$work"
+  version=${found#* }
+  mkdir -p "$docker_dir" "$data" "$etc" "$endpoints"
+  printf 'AMNEZIAGEO_TAG=%s\n' "$version" > "$docker_dir/.env"
+  write_compose
+  dcompose pull && dcompose up -d || return 1
+  good "the container of $version runs"
+}
+
+# Makes the first administrator of a fresh panel.
+first_admin() {
+  local login
+  login=$(ask "Login of the first administrator [admin]:" admin)
+  cli_in init --user "$login" --permanent
+}
+
+# Item 1: puts the panel on a clean host as a package or a container.
+install_panel() {
+  local way channel
+  if [ "$(kind)" != none ]; then
+    say "the panel is already on this host as a $(kind): item 2 updates it"
+    return 0
+  fi
+
+  if ! grep -qsE '^ID(_LIKE)?=.*(debian|ubuntu)' /etc/os-release; then
+    bad "the installer knows Debian and Ubuntu"
+    confirm "Go on anyway?" || return 1
+  fi
+
+  if [ -z "$(release_arch)" ]; then
+    bad "there are no releases for $(uname -m)"
+    return 1
+  fi
+
+  say "  1. Package"
+  say "  2. Docker"
+  way=$(ask "Install as [1]:" 1)
+  say "  1. Stable"
+  say "  2. Test"
+  channel=stable
+  if [ "$(ask "Channel [1]:" 1)" = 2 ]; then
+    channel=test
+  fi
+
+  prepare_host || return 1
+  if [ "$way" = 2 ]; then
+    install_container "$channel" || return 1
+  else
+    install_package "$channel" || return 1
+  fi
+
+  step "the first administrator"
+  first_admin || return 1
+  if [ "$channel" = test ]; then
+    cli panel set --channel test > /dev/null
+  fi
+
+  if [ "$way" = 2 ]; then
+    wait_panel
+    refresh_self
+  else
+    start_panel
+  fi
+
+  if confirm "Let the panel answer on every address of the host?"; then
+    if ufw_active; then
+      cli panel set --listen all --opened on > /dev/null
+    else
+      cli panel set --listen all > /dev/null
+    fi
+
+    restart_panel
+  fi
+
+  show_address
+}
+
+# Items 2 and 3: moves the panel to the newest release of its channel, of the test channel for a beta.
+update_panel() {
+  local before rc
+  need_panel || return 1
+  if [ "$(panel_state)" != running ]; then
+    bad "the panel does not run: item 15 starts it"
+    return 1
+  fi
+
+  before=$(running_version)
+  if [ "${1:-}" = beta ]; then
+    cli update apply --beta
+  else
+    cli update apply
+  fi
+
+  rc=$?
+  case $rc in
+    0) ;;
+    3) return 0 ;;
+    *) return 1 ;;
+  esac
+
+  wait_version "$before"
+}
+
+# Waits up to five minutes for the panel to answer on another version.
+wait_version() {
+  local before=$1 now i
+  for i in $(seq 1 150); do
+    sleep 2
+    now=$(running_version)
+    if [ -n "$now" ] && [ "$now" != "$before" ]; then
+      printf '\n'
+      good "the panel runs $now"
+      refresh_self
+      return 0
+    fi
+
+    printf '.'
+  done
+
+  printf '\n'
+  bad "the panel did not come back on a new version"
+  cli update status
+  return 1
+}
+
+# Puts a copy of the database back while the panel is stopped, the database it held kept aside.
+restore_backup() {
+  local dir copies choice picked aside was i
+  dir=$(data_dir)
+  mapfile -t copies < <(ls -1t "$dir/backup" 2> /dev/null)
+  if [ ${#copies[@]} -eq 0 ]; then
+    say "there are no copies in $dir/backup"
+    return 0
+  fi
+
+  for i in "${!copies[@]}"; do
+    printf '  %d. %s\n' $((i + 1)) "${copies[$i]}"
+  done
+
+  choice=$(ask "Copy to put back:")
+  if ! [[ $choice =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#copies[@]} ]; then
+    return 0
+  fi
+
+  picked=$dir/backup/${copies[$((choice - 1))]}
+  confirm "Put $picked back?" || return 0
+  was=$(panel_state)
+  stop_panel
+  aside=$dir/backup/$(date -u +%Y%m%d-%H%M%S)-before-restore
+  mkdir -p "$aside"
+  cp -a "$dir"/server.db* "$aside/" 2> /dev/null
+  rm -f "$dir/server.db-wal" "$dir/server.db-shm"
+  cp -a "$picked"/server.db* "$dir/"
+  good "put back $picked, the database before it lies in $aside"
+  if [ "$was" = running ]; then
+    start_panel
+  fi
+}
+
+# Copies the database aside while the panel is stopped for a moment.
+take_backup() {
+  local dir target was
+  confirm "The panel stops for a moment. Go on?" || return 0
+  dir=$(data_dir)
+  target=$dir/backup/$(date -u +%Y%m%d-%H%M%S)-by-hand
+  was=$(panel_state)
+  stop_panel
+  mkdir -p "$target"
+  cp -a "$dir"/server.db* "$target/" && good "copied the database to $target"
+  if [ "$was" = running ]; then
+    start_panel
+  fi
+}
+
+# Offers the copy of the database taken before the last update back.
+offer_backup() {
+  if confirm "Put back a copy of the database taken before an update too?"; then
+    restore_backup
+  fi
+}
+
+# Item 4: goes back to the release before the current one.
+rollback_panel() {
+  local current previous
+  need_panel || return 1
+  if [ "$(kind)" = package ]; then
+    if [ ! -L "$base/previous" ]; then
+      bad "there is no release to go back to"
+      return 1
+    fi
+
+    confirm "Go back to $(basename "$(readlink "$base/previous")")?" || return 0
+    "$base/current/install.sh" --rollback || return 1
+    offer_backup
+    return 0
+  fi
+
+  current=$(image_tag)
+  previous=$(docker images "$image" --format '{{.Tag}}' 2> /dev/null | grep -E '^[0-9]+(\.[0-9]+)+$' \
+    | { cat; printf '%s\n' "$current"; } | sort -uV | grep -B1 -x "$current" | head -1)
+  if [ -z "$previous" ] || [ "$previous" = "$current" ]; then
+    bad "the host keeps no image older than $current"
+    return 1
+  fi
+
+  confirm "Go back from $current to $previous?" || return 0
+  printf 'AMNEZIAGEO_TAG=%s\n' "$previous" > "$docker_dir/.env"
+  dcompose up -d > /dev/null && wait_panel
+  offer_backup
+}
+
+# Lists the releases the host keeps.
+list_releases() {
+  if [ "$(kind)" = package ]; then
+    "$base/current/install.sh" --list
+  else
+    say "the project runs $(running_image)"
+    docker images "$image"
+  fi
+}
+
+# Lists the copies of the database.
+list_backups() {
+  local dir
+  dir=$(data_dir)/backup
+  if ! ls -1t "$dir" 2> /dev/null | grep -q .; then
+    say "there are no copies in $dir"
+    return 0
+  fi
+
+  say "$dir:"
+  du -sh "$dir"/* 2> /dev/null | sort -k2 -r
+}
+
+# Sets the channel the panel takes its releases from.
+channel_item() {
+  local choice
+  say "the panel takes releases from the $(setting channel) channel"
+  say "  1. Stable"
+  say "  2. Test"
+  choice=$(ask "Channel:")
+  case $choice in
+    1) cli panel set --channel stable ;;
+    2) cli panel set --channel test ;;
+  esac
+}
+
+# Puts on the web interface of an unpacked package while the server runs on.
+web_package() {
+  local dir
+  if [ "$(kind)" != package ]; then
+    bad "a web interface alone goes on a package, a container takes whole images"
+    return 1
+  fi
+
+  dir=$(ask "Directory of the unpacked package:")
+  if [ ! -x "$dir/install.sh" ]; then
+    bad "$dir holds no install.sh"
+    return 1
+  fi
+
+  "$dir/install.sh" --ui
+}
+
+# Item 5: the releases on the host, the copies of the database and the channel.
+releases_menu() {
+  local choice
+  need_panel || return 1
+  while true; do
+    step "Releases & Backups"
+    say "  1. Releases on this host"
+    say "  2. Database backups"
+    say "  3. Put a database backup back"
+    say "  4. Back up the database now"
+    say "  5. Release channel"
+    say "  6. Look for a new release"
+    say "  7. Put on a web interface package"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1) list_releases ;;
+      2) list_backups ;;
+      3) restore_backup ;;
+      4) take_backup ;;
+      5) channel_item ;;
+      6) cli update check ;;
+      7) web_package ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
+# Takes the interfaces, the firewall rules and the tables the panel raised off the host.
+clear_host() {
+  local name family table number
+  for name in "$@"; do
+    if ip -d link show "$name" 2> /dev/null | grep -q amneziawg; then
+      ip link delete "$name" && say "removed the interface $name"
+    fi
+  done
+
+  nft list tables 2> /dev/null | awk '$3 ~ /^amneziageo/ {print $2, $3}' | while read -r family table; do
+    nft delete table "$family" "$table" && say "removed the table $family $table"
+  done
+
+  if command -v ufw > /dev/null 2>&1; then
+    while number=$(ufw status numbered 2> /dev/null | grep -m1 'amneziageo' | sed -n 's/^\[ *\([0-9]*\)\].*/\1/p') \
+      && [ -n "$number" ]; do
+      ufw --force delete "$number" > /dev/null || break
+    done
+  fi
+}
+
+# Item 6: takes the panel off the host, its database and settings too when asked.
+uninstall_panel() {
+  local kind names name keep=yes
+  need_panel || return 1
+  kind=$(kind)
+  confirm "Remove the panel from this host?" || return 0
+  if confirm "Remove its database and settings too?"; then
+    keep=no
+  fi
+
+  names=$(cli endpoint list 2> /dev/null | tr -d '\r' | sed -n 's/^\([^:]*\): port .*/\1/p')
+  step "the panel"
+  if [ "$kind" = package ]; then
+    systemctl disable --now "$unit" 2> /dev/null
+    for name in $(front_units); do
+      systemctl disable --now "$name" 2> /dev/null
+    done
+
+    rm -f "/etc/systemd/system/$unit.service" /etc/systemd/system/amneziageo-proxy@.service
+    systemctl daemon-reload
+    rm -rf "$base" /usr/local/bin/wstunnel
+    rm -f "$etc"/proxy-*.env
+  else
+    if [ "$keep" = no ]; then
+      dcompose down -v
+    else
+      dcompose down
+    fi
+
+    if confirm "Remove the images of the panel too?"; then
+      docker images -q "$image" | sort -u | xargs -r docker rmi -f > /dev/null
+    fi
+  fi
+
+  step "what the panel raised on the host"
+  # shellcheck disable=SC2086
+  clear_host $names
+  if [ "$keep" = no ]; then
+    for name in $names; do
+      rm -f "$endpoints/$name.conf"
+    done
+
+    rm -rf "$data" "$etc"
+    if [ "$kind" = docker ]; then
+      rm -rf "$docker_dir"
+    fi
+
+    good "removed the database and the settings"
+  else
+    say "the database stays in $(data_dir), the settings in $etc"
+  fi
+
+  say "left on the host: the amneziawg module, $forwarding_conf"
+  rm -f "$self"
+  good "the panel is off the host"
+  exit 0
+}
+
+# Item 7: sets the password of an administrator, or makes one under a new login.
+reset_login() {
+  local login users
+  need_panel || return 1
+  users=$(cli user list 2> /dev/null | tr -d '\r')
+  printf '%s\n' "$users"
+  login=$(ask "Login:")
+  if [ -z "$login" ]; then
+    return 0
+  fi
+
+  if printf '%s\n' "$users" | awk 'NR > 1 {print $1}' | grep -qx "$login"; then
+    cli_in user passwd "$login" --permanent && cli user enable "$login" > /dev/null
+  elif ! agree "There is no $login. Make an administrator $login?"; then
+    return 0
+  elif printf '%s\n' "$users" | grep -q '^no users yet'; then
+    cli_in init --user "$login" --permanent
+  else
+    cli_in user add "$login" --role admin --permanent
+  fi
+}
+
+# Item 8: the users of the panel and their roles.
+users_menu() {
+  local choice
+  need_panel || return 1
+  while true; do
+    step "Users & Roles"
+    say "  1. Users"
+    say "  2. Add a user"
+    say "  3. Password of a user"
+    say "  4. Role of a user"
+    say "  5. Enable a user"
+    say "  6. Disable a user"
+    say "  7. Remove a user"
+    say "  8. Roles"
+    say "  9. Add a role"
+    say " 10. Rights of a role"
+    say " 11. Remove a role"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1) cli user list ;;
+      2) cli_in user add ;;
+      3) cli_in user passwd ;;
+      4) cli_in user role ;;
+      5) cli_in user enable ;;
+      6) cli_in user disable ;;
+      7) cli_in user remove ;;
+      8) cli role list ;;
+      9) cli_in role add ;;
+      10) cli_in role set ;;
+      11) cli_in role remove ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
+# Item 9: the tokens of the API, and the sign-in of the host account.
+tokens_menu() {
+  local choice
+  need_panel || return 1
+  while true; do
+    step "API Tokens"
+    say "  1. Tokens"
+    say "  2. Add a token"
+    say "  3. Revoke a token"
+    say "  4. Sign in and print the tokens"
+    say "  5. Who am I"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1) cli token list ;;
+      2) cli_in token add ;;
+      3) cli_in token revoke ;;
+      4) cli_in login ;;
+      5) cli whoami ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
+# Item 10: gives the panel a fresh path, the root or a path of the host's choice.
+reset_path() {
+  local choice path
+  need_panel || return 1
+  say "the panel sits under $(setting path)"
+  say "  1. A random path"
+  say "  2. The root"
+  say "  3. A path of your own"
+  choice=$(ask "Choose [1]:" 1)
+  case $choice in
+    1) path=random ;;
+    2) path=/ ;;
+    3) path=$(ask "Path:") ;;
+    *) return 0 ;;
+  esac
+
+  if [ -n "$path" ]; then
+    cli panel set --path "$path" && restart_panel && show_address
+  fi
+}
+
+# Item 11: puts the address, port, path and certificate of the panel back to their defaults.
+reset_settings() {
+  need_panel || return 1
+  confirm "Put the address, port, path and certificate of the panel back to their defaults?" || return 0
+  cli panel reset --yes && restart_panel && show_address
+}
+
+# Item 12: moves the panel to another port.
+change_port() {
+  local port current
+  need_panel || return 1
+  current=$(setting port)
+  port=$(ask "Port [$current]:" "$current")
+  if ! [[ $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+    bad "'$port' is not a port"
+    return 1
+  fi
+
+  if [ "$port" = "$current" ]; then
+    return 0
+  fi
+
+  if [ -n "$(ss -ltnH "sport = :$port" 2> /dev/null)" ]; then
+    bad "TCP port $port is taken on this host"
+    return 1
+  fi
+
+  cli panel set --port "$port" || return 1
+  if ufw_active && [ "$(setting opened)" = off ] && agree "Hold TCP port $port open in the firewall?"; then
+    cli panel set --opened on > /dev/null
+  fi
+
+  restart_panel && show_address
+}
+
+# Asks for addresses of the host to listen on, listing them first.
+chosen_addresses() {
+  local list
+  say "addresses of the host:"
+  ip -o addr show scope global 2> /dev/null | awk '{sub(/\/.*/, "", $4); print "  " $4 " (" $2 ")"}'
+  say "  127.0.0.1 (lo)"
+  list=$(ask "Addresses, separated by commas:")
+  if [ -n "$list" ]; then
+    cli panel set --listen "$list" && restart_panel && show_address
+  fi
+}
+
+# Item 13: the addresses the panel listens on and the names it answers to.
+listen_menu() {
+  local choice names
+  need_panel || return 1
+  while true; do
+    step "Listen Addresses & Domains"
+    cli panel show | grep -E '^(listen|names) '
+    say "  1. Listen on every address"
+    say "  2. Listen on chosen addresses"
+    say "  3. Names the panel answers to"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1) cli panel set --listen all && restart_panel && show_address ;;
+      2) chosen_addresses ;;
+      3)
+        names=$(ask "Names separated by commas, none for any:")
+        if [ -n "$names" ]; then
+          cli panel set --domains "$names" && restart_panel && show_address
+        fi
+        ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
+# Item 14: the whole picture of the panel without its secrets.
+view_settings() {
+  local kind installed
+  need_panel || return 1
+  kind=$(kind)
+  installed=$kind
+  if [ "$kind" = package ]; then
+    installed="package, release $(basename "$(readlink "$base/current" 2> /dev/null)")"
+  else
+    installed="docker, image $(running_image)"
+  fi
+
+  step "the panel"
+  say "installed     $installed"
+  say "state         $(panel_state), version $(running_version)"
+  say "address       $(address)"
+  cli panel show
+  step "endpoints"
+  cli endpoint list
+  step "the host"
+  say "module        amneziawg $(module_loaded && printf loaded || printf 'not loaded')"
+  say "forwarding    $(forwarding && printf on || printf off)"
+  say "BBR           $(bbr_state)$(queue_of_host)"
+  say "firewall      $(ufw_active && printf 'ufw active' || printf 'ufw off')"
+}
+
+# Item 18: the service, the answer of the panel and what the host lacks, with the fixes it takes.
+check_status() {
+  local kind version
+  kind=$(kind)
+  step "the panel"
+  case $kind in
+    package) systemctl --no-pager status "$unit" 2> /dev/null | head -4 ;;
+    docker) dcompose ps panel ;;
+    *) say "not installed" ;;
+  esac
+
+  if [ "$kind" != none ]; then
+    version=$(running_version)
+    if [ -n "$version" ]; then
+      good "answers, version $version"
+    else
+      bad "does not answer"
+    fi
+
+    say "autostart $(autostart_state)"
+  fi
+
+  step "the host"
+  if module_loaded; then
+    good "amneziawg module loaded"
+  else
+    bad "amneziawg module not loaded"
+    if modinfo amneziawg > /dev/null 2>&1 && agree "Load it now and at boot?"; then
+      printf 'amneziawg\n' > /etc/modules-load.d/amneziawg.conf
+      modprobe amneziawg && good "amneziawg module loaded"
+    fi
+  fi
+
+  if forwarding; then
+    good "forwarding on"
+  else
+    bad "forwarding off"
+    if agree "Turn forwarding on?"; then
+      forwarding_on
+    fi
+  fi
+
+  if [ "$kind" = docker ] && nft list chain ip filter FORWARD 2> /dev/null | grep -q 'policy drop'; then
+    bad "docker drops forwarded packets: add \"ip-forward-no-drop\": true to /etc/docker/daemon.json and restart docker"
+  fi
+
+  say "websocket fronts $(fronts_running), BBR $(bbr_state)"
+}
+
+# Item 19: the logs of the panel, of its updates and of its fronts.
+logs_menu() {
+  local choice dir
+  need_panel || return 1
+  while true; do
+    step "Logs Management"
+    say "  1. Follow the log of the panel"
+    say "  2. The last 200 lines"
+    say "  3. The log of the last update"
+    say "  4. The logs of the websocket fronts"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1) follow_log ;;
+      2)
+        if [ "$(kind)" = package ]; then
+          journalctl -u "$unit" -n 200 --no-pager
+        else
+          dcompose logs --tail 200 panel
+        fi
+        ;;
+      3)
+        dir=$(data_dir)/update
+        if ls -1t "$dir"/*.log > /dev/null 2>&1; then
+          tail -n 100 "$(ls -1t "$dir"/*.log | head -1)"
+        else
+          say "no update has run yet"
+        fi
+        ;;
+      4)
+        if [ "$(kind)" = package ]; then
+          journalctl -u 'amneziageo-proxy@*' -n 100 --no-pager
+        else
+          dcompose logs --tail 200 panel | grep -i -E 'front|wstunnel|websocket'
+        fi
+        ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
+# Follows the log of the panel until Ctrl+C.
+follow_log() {
+  if [ "$(kind)" = package ]; then
+    journalctl -u "$unit" -f -n 50
+  else
+    dcompose logs -f --tail 50 panel
+  fi
+}
+
+# Items 20 and 21: lets the panel start with the host or not.
+autostart() {
+  need_panel || return 1
+  if [ "$(kind)" = package ]; then
+    if [ "$1" = on ]; then
+      systemctl enable "$unit" 2> /dev/null
+    else
+      systemctl disable "$unit" 2> /dev/null
+    fi
+  elif [ "$1" = on ]; then
+    docker update --restart unless-stopped "$(container_id)" > /dev/null
+  else
+    docker update --restart no "$(container_id)" > /dev/null
+  fi
+
+  good "autostart $(autostart_state)"
+}
+
+# Gives the container the certificates of the host through a compose override the script owns.
+share_certificates() {
+  local override=$docker_dir/compose.override.yaml
+  if [ "$(kind)" != docker ] || grep -qs '/etc/letsencrypt:/etc/letsencrypt' "$override"; then
+    return 0
+  fi
+
+  if [ -f "$override" ] && ! grep -qxF "$override_mark" "$override"; then
+    bad "add to the volumes of the panel in $override: - /etc/letsencrypt:/etc/letsencrypt:ro"
+    return 1
+  fi
+
+  printf '%s\nservices:\n  panel:\n    volumes:\n      - /etc/letsencrypt:/etc/letsencrypt:ro\n' "$override_mark" > "$override"
+  dcompose up -d > /dev/null && wait_panel
+}
+
+# Puts a certificate of the host on the panel.
+use_certificate() {
+  local chain=$1 key=$2
+  share_certificates || return 1
+  cli panel set --certificate "$chain" --key "$key" || return 1
+  if [ "$(setting listen)" = 127.0.0.1 ] && agree "Let the panel answer on every address of the host?"; then
+    cli panel set --listen all > /dev/null
+  fi
+
+  restart_panel && show_address
+}
+
+# Gets a Let's Encrypt certificate for a name of the host and puts it on the panel.
+get_certificate() {
+  local name live
+  name=$(ask "Name of the host, like panel.example.org:")
+  if [ -z "$name" ]; then
+    return 0
+  fi
+
+  if ! getent ahostsv4 "$name" > /dev/null; then
+    bad "$name does not resolve"
+    return 1
+  fi
+
+  if [ -n "$(ss -ltnH 'sport = :80' 2> /dev/null)" ]; then
+    bad "TCP port 80 is taken on this host, certbot answers the check of Let's Encrypt on it"
+    return 1
+  fi
+
+  if ! command -v certbot > /dev/null 2>&1; then
+    apt-get install -y certbot || return 1
+  fi
+
+  if ufw_active; then
+    ufw allow 80/tcp > /dev/null
+  fi
+
+  certbot certonly --standalone --preferred-challenges http --cert-name "$name" -d "$name" || return 1
+  systemctl enable --now certbot.timer > /dev/null 2>&1
+  live=/etc/letsencrypt/live/$name
+  use_certificate "$live/fullchain.pem" "$live/privkey.pem"
+}
+
+# Lists the certificates of the host and the one the panel answers under.
+show_certificates() {
+  local chain
+  if command -v certbot > /dev/null 2>&1; then
+    certbot certificates 2> /dev/null
+  fi
+
+  chain=$(setting certificate)
+  if [ -z "$chain" ]; then
+    say "the panel holds no certificate"
+  else
+    say "the panel answers under $chain"
+    openssl x509 -noout -subject -enddate -in "$chain" 2> /dev/null
+  fi
+}
+
+# Item 22: certificates of Let's Encrypt for the panel.
+ssl_menu() {
+  local choice chain key
+  need_panel || return 1
+  while true; do
+    step "SSL Certificate Management"
+    say "  1. Get a Let's Encrypt certificate"
+    say "  2. Renew the certificates now"
+    say "  3. Certificates"
+    say "  4. Put certificate files on the panel"
+    say "  5. Take the certificate off the panel"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1) get_certificate ;;
+      2) certbot renew ;;
+      3) show_certificates ;;
+      4)
+        chain=$(ask "Certificate chain, like /etc/letsencrypt/live/<name>/fullchain.pem:")
+        key=$(ask "Key, like /etc/letsencrypt/live/<name>/privkey.pem:")
+        if [ -n "$chain" ] && [ -n "$key" ]; then
+          use_certificate "$chain" "$key"
+        fi
+        ;;
+      5) cli panel set --certificate none && restart_panel && show_address ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
+# Lists the firewall and the ports the panel needs open.
+firewall_status() {
+  if command -v ufw > /dev/null 2>&1; then
+    ufw status verbose
+  else
+    say "ufw is not installed, the panel keeps its ports in nftables"
+  fi
+
+  nft list tables 2> /dev/null | grep amneziageo
+  step "ports the panel needs"
+  say "TCP $(ssh_port)  ssh"
+  say "TCP $(setting port)  the panel, held open: $(setting opened)"
+  cli endpoint list
+  if [ -d /etc/letsencrypt/live ]; then
+    say "TCP 80  renewals of Let's Encrypt"
+  fi
+}
+
+# Opens or closes a port in ufw.
+ufw_port() {
+  local port
+  if ! command -v ufw > /dev/null 2>&1; then
+    bad "ufw is not installed: item 8 of this menu puts it on"
+    return 1
+  fi
+
+  port=$(ask "Port with its protocol, like 443/tcp:")
+  if ! [[ $port =~ ^[0-9]+(/(tcp|udp))?$ ]]; then
+    bad "'$port' is not a port"
+    return 1
+  fi
+
+  if [ "$1" = allow ]; then
+    ufw allow "$port"
+  else
+    ufw delete allow "$port"
+  fi
+}
+
+# Turns ufw on with ssh kept open and lets the panel lay its rules.
+ufw_on() {
+  if ! command -v ufw > /dev/null 2>&1; then
+    agree "ufw is not installed. Install it?" || return 0
+    apt-get install -y ufw || return 1
+  fi
+
+  ufw allow "$(ssh_port)/tcp" > /dev/null
+  ufw --force enable
+  good "the firewall is on, TCP $(ssh_port) stays open for ssh"
+  if [ "$(kind)" != none ]; then
+    restart_panel
+  fi
+}
+
+# Item 23: the firewall of the host and the ports the panel needs.
+firewall_menu() {
+  local choice
+  while true; do
+    step "Firewall Management"
+    say "  1. Status and the ports the panel needs"
+    say "  2. Hold the port of the panel open"
+    say "  3. Stop holding the port of the panel open"
+    say "  4. Open the port of an endpoint"
+    say "  5. Close the port of an endpoint"
+    say "  6. Open a port"
+    say "  7. Close a port"
+    say "  8. Turn the firewall on"
+    say "  9. Turn the firewall off"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1) firewall_status ;;
+      2) need_panel && cli panel set --opened on && restart_panel ;;
+      3) need_panel && cli panel set --opened off && restart_panel ;;
+      4) need_panel && cli_in endpoint open && restart_panel ;;
+      5) need_panel && cli_in endpoint close && restart_panel ;;
+      6) ufw_port allow ;;
+      7) ufw_port delete ;;
+      8) ufw_on ;;
+      9) command -v ufw > /dev/null 2>&1 && ufw disable ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
+# Item 24: keeps the panel on the loopback behind ssh, or lets it answer on every address again.
+ssh_menu() {
+  local choice
+  need_panel || return 1
+  step "SSH Port Forwarding Management"
+  say "  1. Keep the panel on 127.0.0.1"
+  say "  2. Let the panel answer on every address"
+  say "  3. Show the ssh command"
+  say "  0. Back"
+  choice=$(ask "Choose:")
+  case $choice in
+    1) cli panel set --listen 127.0.0.1 && restart_panel && ssh_command ;;
+    2) cli panel set --listen all && restart_panel && show_address ;;
+    3) ssh_command ;;
+  esac
+}
+
+# Item 25: the endpoints, their interfaces in the kernel and the import of what the host already runs.
+endpoints_menu() {
+  local choice file target
+  need_panel || return 1
+  while true; do
+    step "Endpoints & Interfaces"
+    say "  1. Endpoints"
+    say "  2. Open the port of an endpoint"
+    say "  3. Close the port of an endpoint"
+    say "  4. Interfaces in the kernel"
+    say "  5. An interface with its peers"
+    say "  6. Import an endpoint from a file"
+    say "  7. Import the peers of an endpoint"
+    say "  8. Import clients"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1) cli endpoint list ;;
+      2) cli_in endpoint open && restart_panel ;;
+      3) cli_in endpoint close && restart_panel ;;
+      4) cli device list ;;
+      5) cli device show "$(ask "Interface:")" ;;
+      6)
+        file=$(ask "File of the interface, like $endpoints/awg0.conf:")
+        target=$(ask "Address the clients reach the server at:")
+        cli_in import endpoint "$file" ${target:+--host "$target"}
+        ;;
+      7)
+        file=$(ask "File of the interface:")
+        cli_in import peers "$file" --endpoint "$(ask "Endpoint:")"
+        ;;
+      8)
+        file=$(ask "File of the clients:")
+        cli_in import clients "$file" --endpoint "$(ask "Endpoint:")"
+        ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
+# Item 26: the websocket fronts of the endpoints.
+fronts_menu() {
+  local choice unit_name
+  need_panel || return 1
+  while true; do
+    step "Websocket Fronts"
+    say "running: $(fronts_running), BBR $(bbr_state)"
+    say "  1. Endpoints and their websocket ports"
+    say "  2. Restart the fronts"
+    say "  3. The logs of the fronts"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1)
+        cli endpoint list
+        if [ "$(kind)" = package ]; then
+          systemctl list-units --all --no-pager 'amneziageo-proxy@*'
+        fi
+        ;;
+      2)
+        if [ "$(kind)" = package ]; then
+          for unit_name in $(front_units); do
+            systemctl restart "$unit_name" && say "restarted $unit_name"
+          done
+        else
+          restart_panel
+        fi
+        ;;
+      3)
+        if [ "$(kind)" = package ]; then
+          journalctl -u 'amneziageo-proxy@*' -n 100 --no-pager
+        else
+          dcompose logs --tail 200 panel | grep -i -E 'front|wstunnel|websocket'
+        fi
+        ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
+# Item 27: turns BBR with the fq queue on or off for good.
+bbr_item() {
+  local want=${1:-}
+  say "congestion control  $(sysctl -n net.ipv4.tcp_congestion_control 2> /dev/null)"
+  if [ -e "$qdisc_file" ]; then
+    say "queue discipline    $(cat "$qdisc_file")"
+  fi
+  if [ -z "$want" ]; then
+    if bbr_on; then
+      if confirm "Turn BBR off?"; then
+        want=off
+      fi
+    elif agree "Turn BBR on?"; then
+      want=on
+    fi
+  fi
+
+  case $want in
+    on) bbr_enable ;;
+    off) bbr_disable ;;
+    "") ;;
+    *) bad "bbr takes on or off" ;;
+  esac
+}
+
+# Writes a line of the menu frame.
+row() {
+  printf '│  %-45s│\n' "$1"
+}
+
+# Writes a numbered item of the menu.
+entry() {
+  printf '│  %2s. %-41s│\n' "$1" "$2"
+}
+
+# Writes a divider of the menu.
+rule() {
+  printf '%s\n' '│───────────────────────────────────────────────│'
+}
+
+# Writes the state of the panel and the host under the menu.
+status_block() {
+  local kind state line version channel
+  kind=$(kind)
+  state=$(panel_state)
+  line=$state
+  if [ "$kind" != none ]; then
+    version=$(running_version)
+    channel=$(setting channel)
+    line="$state, $kind${version:+ $version}${channel:+, $channel channel}"
+  fi
+
+  case $state in
+    running) line="$green$line$plain" ;;
+    *) line="$red$line$plain" ;;
+  esac
+
+  printf 'Panel:      %s\n' "$line"
+  printf 'Autostart:  %s\n' "$(autostart_state)"
+  printf 'Kernel:     amneziawg %s, forwarding %s\n' \
+    "$(module_loaded && printf loaded || printf 'not loaded')" "$(forwarding && printf on || printf off)"
+  printf 'Websocket:  %s front(s), BBR %s\n' "$(fronts_running)" "$(bbr_state)"
+}
+
+# Draws the menu and runs the item chosen until the menu is left.
+menu() {
+  local choice hold
+  while true; do
+    printf '\n%s\n' '╔───────────────────────────────────────────────╗'
+    row "AmneziaGeo Server Management"
+    rule
+    entry 0 "Exit Script"
+    rule
+    entry 1 "Install"
+    entry 2 "Update"
+    entry 3 "Update Beta"
+    entry 4 "Roll Back"
+    entry 5 "Releases & Backups"
+    entry 6 "Uninstall"
+    rule
+    entry 7 "Reset Username & Password"
+    entry 8 "Users & Roles"
+    entry 9 "API Tokens"
+    entry 10 "Reset Web Base Path"
+    entry 11 "Reset Settings"
+    entry 12 "Change Port"
+    entry 13 "Listen Addresses & Domains"
+    entry 14 "View Current Settings"
+    rule
+    entry 15 "Start"
+    entry 16 "Stop"
+    entry 17 "Restart"
+    entry 18 "Check Status"
+    entry 19 "Logs Management"
+    rule
+    entry 20 "Enable Autostart"
+    entry 21 "Disable Autostart"
+    rule
+    entry 22 "SSL Certificate Management"
+    entry 23 "Firewall Management"
+    entry 24 "SSH Port Forwarding Management"
+    rule
+    entry 25 "Endpoints & Interfaces"
+    entry 26 "Websocket Fronts"
+    entry 27 "Enable BBR"
+    rule
+    entry 28 "Update Geo Files"
+    printf '%s\n' '╚───────────────────────────────────────────────╝'
+    status_block
+    choice=$(ask "Choose [0-28]:") || exit 0
+    hold=1
+    case $choice in
+      0) exit 0 ;;
+      1) install_panel ;;
+      2) update_panel ;;
+      3) update_panel beta ;;
+      4) rollback_panel ;;
+      5) releases_menu && hold= ;;
+      6) uninstall_panel ;;
+      7) reset_login ;;
+      8) users_menu && hold= ;;
+      9) tokens_menu && hold= ;;
+      10) reset_path ;;
+      11) reset_settings ;;
+      12) change_port ;;
+      13) listen_menu && hold= ;;
+      14) view_settings ;;
+      15) need_panel && start_panel ;;
+      16) need_panel && stop_panel && good "the panel is stopped" ;;
+      17) need_panel && restart_panel ;;
+      18) check_status ;;
+      19) logs_menu && hold= ;;
+      20) autostart on ;;
+      21) autostart off ;;
+      22) ssl_menu && hold= ;;
+      23) firewall_menu && hold= ;;
+      24) ssh_menu ;;
+      25) endpoints_menu && hold= ;;
+      26) fronts_menu && hold= ;;
+      27) bbr_item ;;
+      28) need_panel && cli geo update ;;
+      "") hold= ;;
+      *) bad "there is no item $choice" ;;
+    esac
+
+    if [ -n "$hold" ]; then
+      pause
+    fi
+  done
+}
+
+# Writes how the script is called.
+usage() {
+  cat <<'EOF'
+usage:
+  amneziageo-server                    open the menu
+  amneziageo-server install            put the panel on this host
+  amneziageo-server update [beta]      move the panel to the newest release, of the test channel for beta
+  amneziageo-server rollback           go back to the release before
+  amneziageo-server uninstall          take the panel off this host
+  amneziageo-server settings           what the panel answers under
+  amneziageo-server start | stop | restart | status
+  amneziageo-server log                follow the log of the panel
+  amneziageo-server enable | disable   start the panel with the host or not
+  amneziageo-server bbr [on | off]     BBR with the fq queue for TCP
+  amneziageo-server <command>          a command of the utility: user, role, token, panel, endpoint,
+                                       import, device, family, geo, init, login, whoami, update status
+EOF
+}
+
+# Runs the menu, an item or a command of the utility.
+main() {
+  case ${1:-} in
+    help | -h | --help)
+      usage
+      return 0
+      ;;
+  esac
+
+  need_root
+  locate_compose
+  case ${1:-} in
+    "") menu ;;
+    install) install_panel ;;
+    update)
+      case ${2:-} in
+        "") update_panel ;;
+        beta) update_panel beta ;;
+        *) cli_in "$@" ;;
+      esac
+      ;;
+    rollback) rollback_panel ;;
+    uninstall) uninstall_panel ;;
+    settings) view_settings ;;
+    start) need_panel && start_panel ;;
+    stop) need_panel && stop_panel ;;
+    restart) need_panel && restart_panel ;;
+    status) check_status ;;
+    log) need_panel && follow_log ;;
+    enable) autostart on ;;
+    disable) autostart off ;;
+    bbr) bbr_item "${2:-}" ;;
+    *) cli_in "$@" ;;
+  esac
+}
+
+main "$@"

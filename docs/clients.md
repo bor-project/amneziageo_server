@@ -17,6 +17,8 @@ interface file the host boots from carries them too.
 | `POST /api/clients/import` | `clients:write` |
 | `PUT /api/clients/{id}` | `clients:write` |
 | `POST /api/clients/{id}/switch` | `clients:write` |
+| `POST /api/clients/switch` | `clients:write` |
+| `POST /api/clients/remove` | `clients:write` |
 | `POST /api/clients/{id}/devices` | `clients:write` |
 | `DELETE /api/clients/{id}` | `clients:write` |
 
@@ -102,6 +104,18 @@ takes it as a pasted key, and a long list of ranges takes far less room in it th
 draws a QR of the file and of the link, opens on the link when the file does not fit, and says so when
 neither fits.
 
+The file, the link and the subscription name a configuration by the template of the panel, **Config name template**
+on the **Server** tab of **Settings**, `{HOST}-{INTERFACE}-{CLIENT}` when nothing is set. A template is text with
+substitutions in braces, in any case: `{HOST}` the address of the endpoint, or the host the request reached the
+panel at when the endpoint names none, `{INTERFACE}` the name of the endpoint, `{CLIENT}` the name of the client,
+`{ID}` its number, `{PORT}` the port of the endpoint, `{NOTE}` the note of the client and `{DATE}` the day the client
+was added, in UTC. A substitution that comes out empty takes the separator after it along (`-`, `_`, `.`, `|` or a
+space), the name loses the separators at its ends, and a name nothing is left of is the moment the client was added
+down to the millisecond, `2026-09-23-14-05-33-127`. The file takes the name with `\ / : * ? " < > |` turned into
+`_`. A template with an unknown substitution is refused with `bad-name-template`, one longer than 128 characters with
+`long-name-template`. `GET /api/panel/names` returns what the substitutions stand for with the first client and that
+moment, and the page shows the name as the template is typed.
+
 While the subscriptions are on, the answer carries `subscription` too, the address the client reads its
 subscription at, and the window draws it as a third QR code, see [subscriptions.md](subscriptions.md).
 
@@ -174,6 +188,15 @@ same import behind `Import` for an account whose role holds `clients:write`.
 | `client-has-devices` | **Several devices** stays on while the client carries devices |
 | `unknown-client` | the panel holds no client under this number |
 | `unknown-config` | the panel holds no endpoint under this number |
+
+## Many clients at once
+
+`POST /api/clients/switch` takes `{ ids, on }` and `POST /api/clients/remove` takes `{ ids }`. Each client is
+turned on, off or removed together with its devices the same way one at a time is, a device already gone with its
+client counts as removed, and every endpoint the clients stand on is put on the host once. The answer is
+`{ done, failed, unsynced }`: the numbers that went through, the ones refused with the `code` and `message` of the
+refusal, and the endpoints that did not take the change with the reason. In the list of the panel the first column
+chooses the clients; a device goes with its client and is not chosen on its own.
 
 ## What the panel shows
 

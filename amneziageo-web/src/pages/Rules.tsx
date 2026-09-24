@@ -72,6 +72,7 @@ export function Rules() {
           columns={[
             {
               key: "place",
+              width: 40,
               caption: "#",
               sort: (one) => number.get(one.id) ?? 0,
               body: "text-faint tabular-nums",
@@ -79,6 +80,7 @@ export function Rules() {
             },
             {
               key: "on",
+              width: 60,
               caption: t("rules.on"),
               cell: (one) => (
                 <Knob
@@ -106,6 +108,7 @@ export function Rules() {
             },
             {
               key: "action",
+              width: 104,
               caption: t("rules.action"),
               sort: (one) => way(one, t),
               cell: (one) => (
@@ -121,45 +124,51 @@ export function Rules() {
             },
             {
               key: "targets",
+              wrap: true,
               caption: t("rules.targets"),
               sort: (one) => (one.targets.length > 0 ? one.targets.join(", ") : t("rules.anything")),
-              body: "max-w-72",
               cell: (one) => <Some values={one.targets} none={t("rules.anything")} />,
             },
             {
               key: "sources",
+              width: 104,
+              wrap: true,
               caption: t("rules.sources"),
               sort: (one) => from(one).join(", "),
-              body: "max-w-56",
               cell: (one) => <Some values={from(one)} none={t("rules.anyone")} />,
             },
             {
               key: "inbounds",
+              width: 96,
+              wrap: true,
               caption: t("rules.inbounds"),
               sort: (one) => one.inbounds.join(", "),
-              body: "max-w-40",
               cell: (one) => <Some values={one.inbounds} none={t("rules.anyInbound")} />,
             },
             {
               key: "traffic",
+              width: 96,
               caption: t("rules.traffic"),
               sort: (one) => traffic(one, t),
               cell: (one) => traffic(one, t),
             },
             {
               key: "ranges",
+              width: 120,
               caption: t("rules.ranges"),
               sort: (one) => `${one.state.ranges} / ${one.state.names}`,
               cell: (one) => `${one.state.ranges} / ${one.state.names}`,
             },
             {
               key: "state",
+              width: 128,
               caption: t("rules.state"),
               sort: (one) => ranked(one),
               cell: (one) => <State rule={one} t={t} />,
             },
             {
               key: "actions",
+              width: 128,
               caption: t("rules.actions"),
               tail: true,
               cell: (one) =>

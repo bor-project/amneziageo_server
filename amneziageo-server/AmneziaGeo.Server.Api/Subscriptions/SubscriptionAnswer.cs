@@ -108,7 +108,7 @@ public static class SubscriptionAnswer
 
         using var scope = scopes.CreateScope();
         var feed = await scope.ServiceProvider.GetRequiredService<SubscriptionFeed>()
-            .ReadAsync(id, context.RequestAborted)
+            .ReadAsync(id, context.Request.Host.Host, context.RequestAborted)
             .ConfigureAwait(false);
         if (feed is null)
         {

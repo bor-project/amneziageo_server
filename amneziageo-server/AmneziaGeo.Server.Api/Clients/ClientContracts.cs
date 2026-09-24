@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Traffic;
 
 namespace AmneziaGeo.Server.Api.Clients;
@@ -78,6 +79,22 @@ public sealed record ClientRequest(
 /// Whether a client is on.
 /// </summary>
 public sealed record ClientSwitchRequest(bool? On);
+
+/// <summary>
+/// The clients a command goes over, and whether they end up on.
+/// </summary>
+public sealed record ClientBatchRequest(IReadOnlyList<long>? Ids, bool? On = null);
+
+/// <summary>
+/// The clients a command over many of them went through with, the ones it refused and the endpoints that did not
+/// take the change.
+/// </summary>
+public sealed record ClientBatchBody(IReadOnlyList<long> Done, IReadOnlyList<ClientBatchFault> Failed, IReadOnlyList<ClientSyncFault> Unsynced);
+
+/// <summary>
+/// An endpoint that did not take a change, and why.
+/// </summary>
+public sealed record ClientSyncFault(string Config, string Message);
 
 /// <summary>
 /// The text the clients of an endpoint are imported from.

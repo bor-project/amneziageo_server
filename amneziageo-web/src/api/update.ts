@@ -34,9 +34,10 @@ export function busy(state: UpdateState | undefined): boolean {
   )
 }
 
-export function useUpdate() {
+export function useUpdate(enabled = true) {
   return useQuery({
     queryKey: ["update"],
+    enabled,
     queryFn: async () => (await client.get<UpdateState>("/update", { timeout: 5000 })).data,
     refetchInterval: (query) => (busy(query.state.data) ? 3000 : 60000),
   })

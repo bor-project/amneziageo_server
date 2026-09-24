@@ -176,6 +176,10 @@ jobs:
     needs: [version, package, manifest]
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: deploy/amneziageo-server
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v4
         with:
           pattern: package-*
@@ -238,4 +242,5 @@ jobs:
             flags+=(--latest)
           fi
 
-          gh release create "$GITHUB_REF_NAME" "${flags[@]}" amneziageo-server-*.tar.gz update.json update.json.sig
+          cp ../deploy/amneziageo-server amneziageo-server
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}" amneziageo-server-*.tar.gz update.json update.json.sig amneziageo-server

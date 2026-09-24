@@ -28,6 +28,9 @@ return arguments.At(0) switch
     "token" => await TokenCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     "import" => await ImportCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     "endpoint" => await EndpointCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
+    "panel" => await PanelCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
+    "update" => await UpdateCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
+    "geo" => await GeoCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     _ => Usage(),
 };
 
@@ -35,19 +38,22 @@ static int Usage()
 {
     Terminal.Fail("""
         usage:
-          amneziageo-server-cli                            open the menu
-          amneziageo-server-cli init [--user <login>]      make the first administrator
-          amneziageo-server-cli login [--user <login>]     sign in and print the tokens
-          amneziageo-server-cli refresh <token>            trade a refresh token for a pair
-          amneziageo-server-cli whoami                     what the panel makes of this host account
-          amneziageo-server-cli user list | add | passwd | role | enable | disable | remove
-          amneziageo-server-cli role list | add | set | remove
-          amneziageo-server-cli token list | add | revoke
-          amneziageo-server-cli import endpoint | peers | clients
-          amneziageo-server-cli endpoint list | open <name> | close <name>
-          amneziageo-server-cli family [name]              resolve a netlink family
-          amneziageo-server-cli device list                 name the amneziawg interfaces
-          amneziageo-server-cli device show [name]          read an interface with its peers
+          amneziageo-server                            open the menu
+          amneziageo-server init [--user <login>]      make the first administrator
+          amneziageo-server login [--user <login>]     sign in and print the tokens
+          amneziageo-server refresh <token>            trade a refresh token for a pair
+          amneziageo-server whoami                     what the panel makes of this host account
+          amneziageo-server user list | add | passwd | role | enable | disable | remove
+          amneziageo-server role list | add | set | remove
+          amneziageo-server token list | add | revoke
+          amneziageo-server import endpoint | peers | clients
+          amneziageo-server endpoint list | open <name> | close <name>
+          amneziageo-server panel show | get <name> | set <options> | reset
+          amneziageo-server update status | check | apply [--beta]
+          amneziageo-server geo update                 download the geo sources of the panel now
+          amneziageo-server family [name]              resolve a netlink family
+          amneziageo-server device list                name the amneziawg interfaces
+          amneziageo-server device show [name]         read an interface with its peers
         """);
 
     return 2;

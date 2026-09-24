@@ -316,6 +316,45 @@ public class ClientStoreTests
             (await bench.Rules.FindAsync(rule.Record!.Id, CancellationToken.None))!.Clients);
     }
 
+    [Fact]
+    public async Task ClientsAreTurnedOffTogetherWithTheirDevicesAndAMissingOneIsReported()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+        var milena = await bench.Clients.AddAsync(Fresh(endpoint, "milena") with { MultiDevice = true }, CancellationToken.None);
+        var device = await bench.Clients.AddDeviceAsync(milena.Record!.Id, CancellationToken.None);
+        var bor = await bench.Clients.AddAsync(Fresh(endpoint, "bor") with { Address = ["10.8.0.20/32"] }, CancellationToken.None);
+
+        var batch = await bench.Clients.SwitchAllAsync([milena.Record.Id, bor.Record!.Id, 404], false, CancellationToken.None);
+        var held = await bench.Clients.FindAsync(device.Record!.Id, CancellationToken.None);
+
+        Assert.Equal(new[] { milena.Record.Id, bor.Record.Id }, batch.Done.Select(client => client.Id));
+        Assert.All(batch.Done, client => Assert.False(client.IsEnabled));
+        Assert.False(held?.IsEnabled);
+        var missing = Assert.Single(batch.Failed);
+        Assert.Equal(404L, missing.Id);
+        Assert.Equal("unknown-client", missing.Code);
+    }
+
+    [Fact]
+    public async Task ClientsAreRemovedTogetherWithTheirDevicesAndADeviceGoneWithItsClientCountsAsRemoved()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+        var milena = await bench.Clients.AddAsync(Fresh(endpoint, "milena") with { MultiDevice = true }, CancellationToken.None);
+        var device = await bench.Clients.AddDeviceAsync(milena.Record!.Id, CancellationToken.None);
+        var bor = await bench.Clients.AddAsync(Fresh(endpoint, "bor") with { Address = ["10.8.0.20/32"] }, CancellationToken.None);
+
+        var batch = await bench.Clients.RemoveAllAsync(
+            [milena.Record.Id, device.Record!.Id, bor.Record!.Id],
+            CancellationToken.None);
+
+        Assert.Equal(new[] { milena.Record.Id, device.Record.Id, bor.Record.Id }, batch.Done.Select(client => client.Id));
+        Assert.Empty(batch.Failed);
+        Assert.Equal(device.Record.Id, Assert.Single(batch.Carried).Id);
+        Assert.Empty(await bench.Clients.ListAsync(CancellationToken.None));
+    }
+
     private static async Task<long> EndpointAsync(Bench bench)
     {
         var added = await bench.Configs.AddAsync(

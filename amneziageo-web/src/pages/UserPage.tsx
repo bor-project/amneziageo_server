@@ -4,7 +4,7 @@ import { complaint } from "@/api/auth"
 import { useRoles } from "@/api/roles"
 import { fresh, useAddUser, useChangeUser, useUsers } from "@/api/users"
 import { useTail } from "@/components/crumbs"
-import { Flag, Line, Part, Pick } from "@/components/fields"
+import { Flag, Line, Part, Pick, Regenerate } from "@/components/fields"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
@@ -233,9 +233,7 @@ function Secret({ id, value, onChange }: { id: string; value: string; onChange: 
       </label>
       <div className="mt-1 flex gap-2">
         <input id={id} value={value} onChange={(e) => onChange(e.target.value)} className={field} />
-        <button type="button" onClick={() => onChange(fresh())} className={secondary}>
-          {t("users.generate")}
-        </button>
+        <Regenerate title={t("users.generate")} onClick={() => onChange(fresh())} />
       </div>
     </div>
   )

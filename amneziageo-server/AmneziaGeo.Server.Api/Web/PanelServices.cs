@@ -10,6 +10,11 @@ namespace AmneziaGeo.Server.Api.Web;
 public static class PanelServices
 {
     /// <summary>
+    /// The route that tells whether the panel runs.
+    /// </summary>
+    public const string HealthPath = "/api/health";
+
+    /// <summary>
     /// Registers the page of the panel.
     /// </summary>
     public static IServiceCollection AddPanel(this IServiceCollection services)
@@ -57,7 +62,7 @@ public static class PanelServices
                     return;
                 }
 
-                if (!context.Request.Path.StartsWithSegments(under))
+                if (!context.Request.Path.StartsWithSegments(under) && !AsksHealth(context.Request.Path, context.Connection.RemoteIpAddress))
                 {
                     context.Response.StatusCode = StatusCodes.Status404NotFound;
 
@@ -89,6 +94,12 @@ public static class PanelServices
 
         return app;
     }
+
+    /// <summary>
+    /// Tells whether the host itself asks whether the panel runs.
+    /// </summary>
+    public static bool AsksHealth(PathString path, IPAddress? caller) =>
+        path == HealthPath && caller is not null && IPAddress.IsLoopback(caller.IsIPv4MappedToIPv6 ? caller.MapToIPv4() : caller);
 
     private static bool Named(HttpContext context, IReadOnlyList<string> domains)
     {

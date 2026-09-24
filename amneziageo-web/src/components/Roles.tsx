@@ -31,6 +31,7 @@ export function Roles() {
           columns={[
             {
               key: "title",
+              width: 176,
               caption: t("roles.label"),
               sort: (one) => (one.title.length > 0 ? one.title : one.name),
               lead: true,
@@ -51,18 +52,21 @@ export function Roles() {
             },
             {
               key: "rights",
+              wrap: true,
               caption: t("roles.rights"),
               sort: (one) => rights(t, one),
               cell: (one) => rights(t, one),
             },
             {
               key: "users",
+              width: 160,
               caption: t("roles.users"),
               sort: (one) => one.users,
               cell: (one) => one.users,
             },
             {
               key: "actions",
+              width: 56,
               caption: t("roles.actions"),
               tail: true,
               cell: (one) => (

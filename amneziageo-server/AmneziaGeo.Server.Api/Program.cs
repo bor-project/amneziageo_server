@@ -43,6 +43,7 @@ builder.Services.AddApiDescription();
 var app = builder.Build();
 
 app.ReportListening();
+app.WriteHealth();
 app.MigrateDatabase();
 app.SeedPanel();
 app.SettleFirewall();
@@ -56,7 +57,7 @@ app.UsePanel();
 app.UseStaticFiles();
 app.UseBearer();
 
-app.MapGet("/api/health", () => new
+app.MapGet(PanelServices.HealthPath, () => new
 {
     status = "ok",
     version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0",

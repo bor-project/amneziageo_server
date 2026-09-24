@@ -1,6 +1,8 @@
+using System.Net;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
+using Microsoft.AspNetCore.Http;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -105,6 +107,23 @@ public class PanelTests
         Assert.True(asked.Prereleases);
     }
 
+    [Theory]
+    [InlineData("127.0.0.1")]
+    [InlineData("::1")]
+    [InlineData("::ffff:127.0.0.1")]
+    public void TheHostAsksTheHealthOutsideThePath(string caller)
+    {
+        Assert.True(PanelServices.AsksHealth(new PathString("/api/health"), IPAddress.Parse(caller)));
+    }
+
+    [Fact]
+    public void AStrangerGetsNoHealthOutsideThePath()
+    {
+        Assert.False(PanelServices.AsksHealth(new PathString("/api/health"), IPAddress.Parse("10.99.1.2")));
+        Assert.False(PanelServices.AsksHealth(new PathString("/api/health"), null));
+        Assert.False(PanelServices.AsksHealth(new PathString("/api/panel"), IPAddress.Loopback));
+    }
+
     [Fact]
     public void ThePathIsReadBackBoundedBySlashes()
     {
@@ -141,6 +160,51 @@ public class PanelTests
 
         Assert.False((running with { Prereleases = true }).Differs(running));
         Assert.True(PanelAnswers.Panel(running with { Prereleases = true }, running, new WebOptions()).Prereleases);
+    }
+
+    [Fact]
+    public void TheNameTemplateTakesNoRestart()
+    {
+        var running = PanelDefaults.Settings;
+
+        Assert.Equal(ConfigName.Default, running.NameTemplate);
+        Assert.False((running with { NameTemplate = "{CLIENT}" }).Differs(running));
+    }
+
+    [Theory]
+    [InlineData("{HOST}-{COUNTRY}")]
+    [InlineData("{}-{CLIENT}")]
+    public void ANameTemplateWithASubstitutionThePanelDoesNotKnowIsRefused(string template)
+    {
+        Assert.Equal("bad-name-template", PanelRules.Check(PanelDefaults.Settings with { NameTemplate = template })?.Code);
+    }
+
+    [Fact]
+    public void ANameTemplateLongerThanTheLimitIsRefused()
+    {
+        var settings = PanelDefaults.Settings with { NameTemplate = new string('a', ConfigName.MaxLength + 1) };
+
+        Assert.Equal("long-name-template", PanelRules.Check(settings)?.Code);
+    }
+
+    [Fact]
+    public void SubstitutionsAreKnownWhateverTheirCase()
+    {
+        Assert.Empty(ConfigName.Unknown("{host}-{ Interface }-{Client}-DE-{ID}-{DATE}"));
+        Assert.Equal(["{COUNTRY}"], ConfigName.Unknown("{CLIENT}-{COUNTRY}-{"));
+    }
+
+    [Fact]
+    public void AnEmptyNameTemplateInARequestTakesTheDefault()
+    {
+        var blank = PanelAnswers.Draft(new PanelRequest(null, null, 8443, false, null, null, null, "ru", false, "  "));
+        var absent = PanelAnswers.Draft(new PanelRequest(null, null, 8443, false, null, null, null, "ru", false));
+        var given = PanelAnswers.Draft(new PanelRequest(null, null, 8443, false, null, null, null, "ru", false, " {CLIENT}-DE "));
+
+        Assert.Equal(ConfigName.Default, blank.NameTemplate);
+        Assert.Equal(ConfigName.Default, absent.NameTemplate);
+        Assert.Equal("{CLIENT}-DE", given.NameTemplate);
+        Assert.Equal("{CLIENT}-DE", PanelAnswers.Panel(given, given, new WebOptions()).NameTemplate);
     }
 
     [Fact]
@@ -272,6 +336,19 @@ public class PanelTests
         Assert.False(refused.IsOk);
         Assert.Equal("bad-port", refused.Code);
         Assert.Equal(PanelDefaults.Port, held.Port);
+    }
+
+    [Fact]
+    public async Task TheNameTemplateIsReadBackAsItWasSaved()
+    {
+        using var bench = new Bench();
+
+        var fresh = await bench.Panel.ReadAsync(CancellationToken.None);
+        await bench.Panel.SaveAsync(fresh with { NameTemplate = "{INTERFACE}-DE-{ID}" }, CancellationToken.None);
+        var held = await bench.Panel.ReadAsync(CancellationToken.None);
+
+        Assert.Equal(ConfigName.Default, fresh.NameTemplate);
+        Assert.Equal("{INTERFACE}-DE-{ID}", held.NameTemplate);
     }
 
     [Fact]

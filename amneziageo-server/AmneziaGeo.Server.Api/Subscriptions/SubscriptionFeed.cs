@@ -23,6 +23,8 @@ public sealed class SubscriptionFeed
 
     private readonly DnsState _resolver;
 
+    private readonly PanelStore _panels;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -32,7 +34,8 @@ public sealed class SubscriptionFeed
         TemplateStore templates,
         TrafficLedger ledger,
         DnsStore dns,
-        DnsState resolver)
+        DnsState resolver,
+        PanelStore panels)
     {
         _clients = clients;
         _configs = configs;
@@ -40,12 +43,14 @@ public sealed class SubscriptionFeed
         _ledger = ledger;
         _dns = dns;
         _resolver = resolver;
+        _panels = panels;
     }
 
     /// <summary>
-    /// Returns what a subscription hands out, null when no client carries it.
+    /// Returns what a subscription hands out, null when no client carries it, naming the configurations with the host
+    /// the subscription is read at for an endpoint that names none.
     /// </summary>
-    public async Task<ClientFeed?> ReadAsync(string id, CancellationToken ct)
+    public async Task<ClientFeed?> ReadAsync(string id, string host, CancellationToken ct)
     {
         var members = await _clients.SubscribedAsync(id, ct).ConfigureAwait(false);
         if (members.Count == 0)
@@ -56,12 +61,14 @@ public sealed class SubscriptionFeed
         var endpoints = await _configs.ListAsync(ct).ConfigureAwait(false);
         var templates = await _templates.ListAsync(ct).ConfigureAwait(false);
         var settings = _resolver.Settings ?? await _dns.ReadAsync(ct).ConfigureAwait(false);
+        var naming = (await _panels.ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
 
         return ClientFeed.Of(
             endpoints,
             members,
             templates.ToDictionary(one => one.Id),
             _ledger.Group,
-            endpoint => DnsHandout.For(endpoint, settings));
+            endpoint => DnsHandout.For(endpoint, settings),
+            (endpoint, member) => ClientText.Title(endpoint, member, naming, host));
     }
 }

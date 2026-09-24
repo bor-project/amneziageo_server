@@ -44,29 +44,30 @@ export function ApiTokens() {
             },
             {
               key: "role",
+              width: 144,
               caption: t("apiTokens.role"),
               sort: (one) => titleOf(catalog.data?.roles ?? [], one.role),
               cell: (one) => titleOf(catalog.data?.roles ?? [], one.role),
             },
             {
               key: "created",
+              width: 188,
               caption: t("apiTokens.created"),
               sort: (one) => Date.parse(one.createdUtc),
-              body: "whitespace-nowrap",
               cell: (one) => stamp(one.createdUtc),
             },
             {
               key: "expires",
+              width: 188,
               caption: t("apiTokens.expires"),
               sort: (one) => (one.expiresUtc === null ? Number.MAX_SAFE_INTEGER : Date.parse(one.expiresUtc)),
-              body: "whitespace-nowrap",
               cell: (one) => (one.expiresUtc === null ? t("apiTokens.forever") : stamp(one.expiresUtc)),
             },
             {
               key: "used",
+              width: 188,
               caption: t("apiTokens.used"),
               sort: (one) => (one.lastUsedUtc === null ? null : Date.parse(one.lastUsedUtc)),
-              body: "whitespace-nowrap",
               cell: (one) =>
                 one.lastUsedUtc === null ? (
                   t("apiTokens.never")
@@ -79,6 +80,7 @@ export function ApiTokens() {
             },
             {
               key: "state",
+              width: 120,
               caption: t("apiTokens.state"),
               sort: (one) => (one.isExpired ? 1 : 0),
               cell: (one) => (
@@ -89,6 +91,7 @@ export function ApiTokens() {
             },
             {
               key: "actions",
+              width: 128,
               caption: t("apiTokens.actions"),
               tail: true,
               cell: (one) => (

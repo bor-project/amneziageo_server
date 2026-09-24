@@ -44,6 +44,16 @@ public sealed record ClientResult(ClientOutcome Outcome, string Code, string Mes
 }
 
 /// <summary>
+/// The clients a command over many of them went through with, the ones it refused and the devices that went along.
+/// </summary>
+public sealed record ClientBatch(IReadOnlyList<TunnelClient> Done, IReadOnlyList<ClientBatchFault> Failed, IReadOnlyList<TunnelClient> Carried);
+
+/// <summary>
+/// A client a command over many of them refused, and why.
+/// </summary>
+public sealed record ClientBatchFault(long Id, string Code, string Message);
+
+/// <summary>
 /// Adds, changes and removes the clients the panel holds.
 /// </summary>
 public sealed class ClientStore
@@ -383,6 +393,64 @@ public sealed class ClientStore
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ClientResult.Done(gone);
+    }
+
+    /// <summary>
+    /// Turns clients on or off together with their devices, one by one.
+    /// </summary>
+    public async Task<ClientBatch> SwitchAllAsync(IReadOnlyList<long> ids, bool on, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        var done = new List<TunnelClient>();
+        var failed = new List<ClientBatchFault>();
+        foreach (var id in ids.Distinct())
+        {
+            var result = await SwitchAsync(id, on, ct).ConfigureAwait(false);
+            if (result.IsOk)
+            {
+                done.Add(result.Record!);
+            }
+            else
+            {
+                failed.Add(new ClientBatchFault(id, result.Code, result.Message));
+            }
+        }
+
+        return new ClientBatch(done, failed, []);
+    }
+
+    /// <summary>
+    /// Removes clients together with their devices, one by one.
+    /// </summary>
+    public async Task<ClientBatch> RemoveAllAsync(IReadOnlyList<long> ids, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        var done = new List<TunnelClient>();
+        var failed = new List<ClientBatchFault>();
+        var carried = new List<TunnelClient>();
+        foreach (var id in ids.Distinct())
+        {
+            if (carried.Find(device => device.Id == id) is { } went)
+            {
+                done.Add(went);
+                continue;
+            }
+
+            var devices = await DevicesAsync(id, ct).ConfigureAwait(false);
+            var result = await RemoveAsync(id, ct).ConfigureAwait(false);
+            if (!result.IsOk)
+            {
+                failed.Add(new ClientBatchFault(id, result.Code, result.Message));
+                continue;
+            }
+
+            done.Add(result.Record!);
+            carried.AddRange(devices);
+        }
+
+        return new ClientBatch(done, failed, carried);
     }
 
     private async Task FollowAsync(

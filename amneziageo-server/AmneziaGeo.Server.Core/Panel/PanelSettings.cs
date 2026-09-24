@@ -53,6 +53,11 @@ public sealed record PanelSettings
     public bool Prereleases { get; init; }
 
     /// <summary>
+    /// The template the configurations of the clients are named by.
+    /// </summary>
+    public string NameTemplate { get; init; } = ConfigName.Default;
+
+    /// <summary>
     /// Returns the addresses with the port the panel binds.
     /// </summary>
     public IReadOnlyList<string> Entries => Listen.Count == 0

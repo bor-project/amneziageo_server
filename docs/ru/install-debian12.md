@@ -8,6 +8,30 @@ AmneziaWG она поднимает сама через ядерный моду�
 около 1 ГБ свободного диска. Docker на этом хосте не нужен: он переводит политику пересылки (FORWARD) в DROP, и
 клиенты не выходят дальше сервера.
 
+## Коротко: меню `amneziageo-server`
+
+Шаги 2-6 делает одна команда. Скрипт `amneziageo-server` из релиза ставит модуль из PPA Amnezia, если ядро его не
+несёт, включает пересылку, предлагает BBR, скачивает пакет последнего релиза, сверяет его с ключом, которым
+подписаны релизы, заводит первого администратора, запускает панель и спрашивает, открыть ли её на всех адресах
+хоста. Шаг 1 он не делает: обновите систему и перезагрузитесь до него.
+
+```bash
+curl -fsSL https://github.com/bor-project/amneziageo_server/releases/latest/download/amneziageo-server \
+  -o /usr/local/bin/amneziageo-server
+chmod 755 /usr/local/bin/amneziageo-server
+amneziageo-server install
+```
+
+На вопрос `Install as` ответьте `1` (пакет), на `Channel` - `1` (обычные релизы) или `2` (беты).
+
+Потом `amneziageo-server` без аргументов открывает меню, в том числе по ssh: обновление и откат, копии базы,
+адрес, порт и путь панели, пользователи и токены, служба и её журнал, сертификаты, брандмауэр, интерфейсы, фронты
+WebSocket и BBR. Пункты работают и командами: `amneziageo-server update`, `rollback`, `status`, `log`, `bbr on`;
+прочие команды уходят в утилиту панели, например `amneziageo-server user list`. Полный список -
+`amneziageo-server help`.
+
+Дальше тот же путь описан по шагам, руками.
+
 ## 1. Обновить систему и перезагрузиться
 
 ```bash
@@ -394,8 +418,11 @@ ufw enable
   systemd, поэтому панель ставит релиз сама: копирует базу, переключает релиз и при сбое возвращает прежний.
   Интерфейсы и клиенты живут в ядре и через обновление не рвутся.
 - Беты: «Настройки» > «Сервер» > «Получать предварительные версии».
+- Из консоли: `amneziageo-server update`, бета - `amneziageo-server update beta` (пункты 2 и 3 меню). Скрипт ждёт,
+  пока панель ответит новой версией.
 - Вручную: шаг 5 с новой версией.
-- Откат: `/opt/amneziageo-server/current/install.sh --rollback`, список релизов на хосте:
+- Откат: `amneziageo-server rollback` (пункт 4 меню) или `/opt/amneziageo-server/current/install.sh --rollback`,
+  список релизов на хосте:
   `/opt/amneziageo-server/current/install.sh --list`. Перед каждым обновлением база копируется в
   `/var/lib/amneziageo-server/backup` (хранятся пять последних копий).
 
@@ -410,9 +437,11 @@ ufw enable
 | `/etc/amneziageo-server/signing.pem` | ключ подписи токенов |
 | `/etc/systemd/system/amneziageo-server.service` | служба |
 | `/usr/local/bin/wstunnel` | фронт WebSocket прокси |
+| `/usr/local/bin/amneziageo-server` | меню управления сервером, приходит с каждым релизом |
 
 ## Если не работает
 
+- `amneziageo-server status` (пункт 18 меню): служба, ответ панели и чего не хватает хосту.
 - `modprobe: FATAL: Module amneziawg not found`: модуль не собран под это ядро. Проверьте заголовки (шаг 2),
   выполните `dkms autoinstall -k $(uname -r)`, смотрите `make.log`.
 - `Key was rejected by service` при `modprobe`: включён Secure Boot. Выключите его в настройках ВМ или запишите ключ

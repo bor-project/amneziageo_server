@@ -11,6 +11,7 @@ export interface PanelDraft {
   certificateKey: string
   language: string
   prereleases: boolean
+  nameTemplate: string
 }
 
 export interface Panel extends PanelDraft {
@@ -20,10 +21,23 @@ export interface Panel extends PanelDraft {
   pending: boolean
 }
 
+export interface NameSample {
+  values: Record<string, string>
+  stamp: string
+}
+
 export function usePanel(enabled = true) {
   return useQuery({
     queryKey: ["panel"],
     queryFn: async () => (await client.get<Panel>("/panel")).data,
+    enabled,
+  })
+}
+
+export function useNameSample(enabled = true) {
+  return useQuery({
+    queryKey: ["panel", "names"],
+    queryFn: async () => (await client.get<NameSample>("/panel/names")).data,
     enabled,
   })
 }
@@ -57,6 +71,7 @@ export function draftOf(panel: Panel): PanelDraft {
     certificateKey: panel.certificateKey,
     language: panel.language,
     prereleases: panel.prereleases,
+    nameTemplate: panel.nameTemplate,
   }
 }
 

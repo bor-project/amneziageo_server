@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using AmneziaGeo.Server.Awg.Config;
+using AmneziaGeo.Server.Core.Panel;
 
 namespace AmneziaGeo.Server.Awg.Client;
 
@@ -63,20 +64,52 @@ public static class ClientText
     /// <summary>
     /// Returns the name the configuration of a client is saved under.
     /// </summary>
-    public static string FileName(ServerConfig config, TunnelClient client)
+    public static string FileName(ServerConfig config, TunnelClient client, string template = ConfigName.Default, string host = "")
     {
-        return $"{Title(config, client)}.conf";
+        return $"{ConfigName.File(Title(config, client, template, host))}.conf";
     }
 
     /// <summary>
     /// Returns the name the configuration of a client goes by.
     /// </summary>
-    public static string Title(ServerConfig config, TunnelClient client)
+    public static string Title(ServerConfig config, TunnelClient client, string template = ConfigName.Default, string host = "")
+    {
+        ArgumentNullException.ThrowIfNull(template);
+
+        var name = ConfigName.Fill(template, Values(config, client, host));
+
+        return name.Length > 0 ? name : Stamp(client);
+    }
+
+    /// <summary>
+    /// Returns what the substitutions of the name template stand for with a client.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> Values(ServerConfig config, TunnelClient client, string host = "")
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(host);
 
-        return $"{config.Name}-{client.Name}";
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["HOST"] = config.Host.Length > 0 ? config.Host : host,
+            ["INTERFACE"] = config.Name,
+            ["CLIENT"] = client.Name,
+            ["ID"] = client.Id.ToString(CultureInfo.InvariantCulture),
+            ["PORT"] = Number(config.ListenPort),
+            ["NOTE"] = client.Note,
+            ["DATE"] = client.CreatedUtc.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        };
+    }
+
+    /// <summary>
+    /// Returns when a client was added, down to the millisecond, as the name of a configuration nothing else names.
+    /// </summary>
+    public static string Stamp(TunnelClient client)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+
+        return client.CreatedUtc.UtcDateTime.ToString("yyyy-MM-dd-HH-mm-ss-fff", CultureInfo.InvariantCulture);
     }
 
     /// <summary>

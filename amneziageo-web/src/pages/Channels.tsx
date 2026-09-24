@@ -107,12 +107,14 @@ export function Channels() {
             },
             {
               key: "kind",
+              width: 168,
               caption: t("outbounds.kind"),
               sort: (line) => named(t, line),
               cell: (line) => named(t, line),
             },
             {
               key: "server",
+              width: 192,
               caption: t("outbounds.server"),
               sort: (line) =>
                 line.kind === "channel" && line.channel.kind !== "local"
@@ -131,12 +133,14 @@ export function Channels() {
             },
             {
               key: "mark",
+              width: 152,
               caption: t("outbounds.mark"),
               sort: (line) => (line.kind === "channel" ? `${line.channel.mark} / ${line.channel.table}` : null),
               cell: (line) => (line.kind === "channel" ? `${line.channel.mark} / ${line.channel.table}` : ""),
             },
             {
               key: "state",
+              width: 192,
               caption: t("outbounds.state"),
               sort: (line) => (line.kind === "channel" ? channelRank(line.channel) : groupRank(line.group)),
               cell: (line) =>
@@ -148,12 +152,14 @@ export function Channels() {
             },
             {
               key: "traffic",
+              width: 168,
               caption: t("outbounds.traffic"),
               sort: (line) => sum(carried(line)),
               cell: (line) => told(t, carried(line)),
             },
             {
               key: "actions",
+              width: 128,
               caption: t("outbounds.actions"),
               tail: true,
               cell: (line, at) =>

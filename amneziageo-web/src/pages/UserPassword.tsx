@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { fresh, useSetPassword } from "@/api/users"
 import { useTail } from "@/components/crumbs"
-import { Flag, Part } from "@/components/fields"
+import { Flag, Part, Regenerate } from "@/components/fields"
 import { card, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
@@ -39,9 +39,7 @@ export function UserPassword() {
               onChange={(e) => setPassword(e.target.value)}
               className={field}
             />
-            <button type="button" onClick={() => setPassword(fresh())} className={secondary}>
-              {t("users.generate")}
-            </button>
+            <Regenerate title={t("users.generate")} onClick={() => setPassword(fresh())} />
           </div>
         </div>
 
