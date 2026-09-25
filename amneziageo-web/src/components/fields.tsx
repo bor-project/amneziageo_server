@@ -157,6 +157,7 @@ export function Count({
   onChange,
   hint = "",
   unset = "",
+  fault = "",
 }: {
   id: string
   caption: ReactNode
@@ -164,6 +165,7 @@ export function Count({
   onChange: (value: number) => void
   hint?: string
   unset?: string
+  fault?: string
 }) {
   return (
     <div>
@@ -179,6 +181,7 @@ export function Count({
         className={`mt-1 ${field}`}
       />
       {hint.length > 0 && <div className={note}>{hint}</div>}
+      {fault.length > 0 && <div className="mt-1 text-xs text-alarm">{fault}</div>}
     </div>
   )
 }

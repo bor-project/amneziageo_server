@@ -12,6 +12,8 @@ data=${AMNEZIAGEO_DATA:-/var/lib/amneziageo-server}
 unit=${AMNEZIAGEO_UNIT:-amneziageo-server}
 docker_dir=${AMNEZIAGEO_DOCKER_DIR:-/opt/amneziageo-docker}
 endpoints=/etc/amnezia/amneziawg
+run_dir=/run/amneziageo-server
+docker_socket=/var/run/docker.sock
 forwarding_conf=/etc/sysctl.d/90-amneziageo.conf
 bbr_conf=/etc/sysctl.d/91-amneziageo-bbr.conf
 bbr_module=/etc/modules-load.d/amneziageo-bbr.conf
@@ -111,10 +113,12 @@ locate_compose() {
   fi
 }
 
-# Tells how the panel is put on the host: package, docker or none.
+# Tells how the panel is put on the host: package, docker, container inside the container of the panel, or none.
 kind() {
   if [ -n "${AMNEZIAGEO_KIND:-}" ]; then
     printf '%s' "$AMNEZIAGEO_KIND"
+  elif [ -n "${AMNEZIAGEO_CONTAINER:-}" ]; then
+    printf 'container'
   elif [ -L "$base/current" ] && [ -f "/etc/systemd/system/$unit.service" ]; then
     printf 'package'
   elif [ -f "$docker_dir/compose.yaml" ] && command -v docker > /dev/null 2>&1; then
@@ -151,6 +155,95 @@ container_state() {
   fi
 }
 
+# Prints the identifier of the container the script runs in.
+own_container() {
+  grep -o '/containers/[0-9a-f]\{64\}/' /proc/self/mountinfo 2> /dev/null | head -1 | cut -d/ -f3
+}
+
+# Calls the Docker daemon through its socket and prints its answer.
+engine() {
+  local method=$1 path=$2 body=${3:-}
+  if [ ! -S "$docker_socket" ]; then
+    return 1
+  fi
+
+  if [ -n "$body" ]; then
+    curl -fsS --max-time 30 --unix-socket "$docker_socket" -X "$method" -H 'Content-Type: application/json' \
+      -d "$body" "http://docker$path"
+  else
+    curl -fsS --max-time 30 --unix-socket "$docker_socket" -X "$method" "http://docker$path"
+  fi
+}
+
+# Prints what the daemon knows of the container the script runs in.
+own_inspect() {
+  engine GET "/containers/$(own_container)/json" 2> /dev/null
+}
+
+# Prints the name of the container the script runs in.
+own_name() {
+  local name
+  name=$(own_inspect | grep -o '"Name":"/[^"]*"' | head -1 | cut -d/ -f2 | tr -d '"')
+  printf '%s' "${name:-amneziageo-server-panel-1}"
+}
+
+# Prints a label of the container the script runs in.
+own_label() {
+  own_inspect | grep -o "\"$1\":\"[^\"]*\"" | head -1 | cut -d'"' -f4
+}
+
+# Prints the process of the panel the container runs, nothing while the panel is stopped.
+panel_pid() {
+  local pid
+  pid=$(cat "$run_dir/panel.pid" 2> /dev/null)
+  if [ -n "$pid" ] && kill -0 "$pid" 2> /dev/null; then
+    printf '%s' "$pid"
+  fi
+}
+
+# Tells the loop of the container what follows the end of the panel, ends the panel and waits until it is gone.
+end_panel() {
+  local pid i
+  touch "$run_dir/$1"
+  pid=$(panel_pid)
+  if [ -z "$pid" ]; then
+    return 0
+  fi
+
+  kill -TERM "$pid"
+  for i in $(seq 1 60); do
+    if ! kill -0 "$pid" 2> /dev/null; then
+      return 0
+    fi
+
+    sleep 1
+  done
+
+  bad "the panel did not stop in a minute"
+  return 1
+}
+
+# Prints the log of the container the script runs in, through compose.
+container_log() {
+  local project service
+  project=$(own_label com.docker.compose.project)
+  service=$(own_label com.docker.compose.service)
+  if [ -z "$project" ] || [ -z "$service" ]; then
+    bad "compose did not start this container: docker logs $(own_name) on the host shows its log"
+    return 1
+  fi
+
+  (cd / && docker-compose -p "$project" logs --no-log-prefix "$@" "$service")
+}
+
+# Stops an item that changes the host itself where the script runs in the container of the panel.
+host_only() {
+  if [ "$(kind)" = container ]; then
+    bad "$1 changes the host, the container of the panel does not reach it"
+    return 1
+  fi
+}
+
 # Runs a command of the utility where the panel is put on, with no input.
 cli() {
   cli_in "$@" < /dev/null
@@ -165,7 +258,7 @@ cli_in() {
   fi
 
   case $(kind) in
-    package)
+    package | container)
       "$base/AmneziaGeo.Server.Cli" "$@"
       ;;
     docker)
@@ -174,9 +267,9 @@ cli_in() {
       fi
 
       if [ "$(container_state)" = running ]; then
-        dcompose exec $tty panel amneziageo-server "$@"
+        dcompose exec $tty panel "$base/AmneziaGeo.Server.Cli" "$@"
       else
-        dcompose run --rm --no-deps $tty --entrypoint amneziageo-server panel "$@"
+        dcompose run --rm --no-deps $tty --entrypoint "$base/AmneziaGeo.Server.Cli" panel "$@"
       fi
       ;;
     *)
@@ -194,7 +287,7 @@ setting() {
 # Prints what the panel answers the host about itself, nothing when it does not answer.
 health() {
   case $(kind) in
-    package)
+    package | container)
       curl -fsSk --max-time 5 "$(cat "$data/health" 2>/dev/null || echo http://127.0.0.1:8443/api/health)" 2>/dev/null
       ;;
     docker)
@@ -215,7 +308,7 @@ running_version() {
 scheme() {
   local written=
   case $(kind) in
-    package)
+    package | container)
       written=$(cat "$data/health" 2>/dev/null)
       ;;
     docker)
@@ -246,6 +339,13 @@ panel_state() {
         printf 'stopped'
       fi
       ;;
+    container)
+      if [ -n "$(panel_pid)" ]; then
+        printf 'running'
+      else
+        printf 'stopped'
+      fi
+      ;;
     *)
       printf 'not installed'
       ;;
@@ -263,8 +363,13 @@ autostart_state() {
         printf 'off'
       fi
       ;;
-    docker)
-      policy=$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' "$(container_id)" 2>/dev/null)
+    docker | container)
+      if [ "$(kind)" = container ]; then
+        policy=$(own_inspect | sed -n 's/.*"RestartPolicy":{"Name":"\([^"]*\)".*/\1/p')
+      else
+        policy=$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' "$(container_id)" 2>/dev/null)
+      fi
+
       if [ -n "$policy" ] && [ "$policy" != no ]; then
         printf 'on'
       else
@@ -322,6 +427,9 @@ fronts_running() {
     package)
       systemctl list-units --type=service --state=active --plain --no-legend 'amneziageo-proxy@*' 2>/dev/null | wc -l
       ;;
+    container)
+      grep -lx wstunnel /proc/[0-9]*/comm 2>/dev/null | wc -l
+      ;;
     docker)
       if [ "$(container_state)" = running ]; then
         dcompose exec -T panel sh -c 'grep -lx wstunnel /proc/[0-9]*/comm 2>/dev/null | wc -l' < /dev/null 2>/dev/null | tr -d '\r '
@@ -349,6 +457,11 @@ ssh_port() {
 
 # Tells whether ufw guards the host.
 ufw_active() {
+  if [ "$(kind)" = container ]; then
+    nft list chains 2> /dev/null | grep -q 'chain ufw-user-input'
+    return
+  fi
+
   command -v ufw > /dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'
 }
 
@@ -430,6 +543,7 @@ start_panel() {
   case $(kind) in
     package) systemctl start "$unit" ;;
     docker) dcompose up -d > /dev/null ;;
+    container) rm -f "$run_dir/held" ;;
   esac
 
   wait_panel
@@ -440,6 +554,7 @@ stop_panel() {
   case $(kind) in
     package) systemctl stop "$unit" ;;
     docker) dcompose stop panel > /dev/null ;;
+    container) end_panel held ;;
   esac
 }
 
@@ -448,6 +563,13 @@ restart_panel() {
   case $(kind) in
     package) systemctl restart "$unit" ;;
     docker) dcompose restart panel > /dev/null ;;
+    container)
+      if [ -n "$(panel_pid)" ]; then
+        end_panel again || return 1
+      else
+        rm -f "$run_dir/held"
+      fi
+      ;;
   esac
 
   wait_panel
@@ -494,6 +616,12 @@ image_tag() {
 # Prints the image the container of the panel runs.
 running_image() {
   local found
+  if [ "$(kind)" = container ]; then
+    found=$(own_inspect | sed -n 's/.*"Config":{.*"Image":"\([^"]*\)".*/\1/p')
+    printf '%s' "${found:-unknown}"
+    return 0
+  fi
+
   found=$(docker inspect -f '{{.Config.Image}}' "$(container_id)" 2>/dev/null)
   printf '%s' "${found:-$image:$(image_tag)}"
 }
@@ -876,6 +1004,11 @@ update_panel() {
     *) return 1 ;;
   esac
 
+  if [ "$(kind)" = container ]; then
+    say "the container moves to the new release and this session ends; the menu opens again with:"
+    say "  docker exec -it $(own_name) amneziageo-server"
+  fi
+
   wait_version "$before"
 }
 
@@ -960,6 +1093,11 @@ offer_backup() {
 # Prints ok for a sound database of the panel, or what is wrong with it; a database of the host to compare it with
 # turns down a backup of a newer release.
 check_copy() {
+  if [ "$(kind)" = container ]; then
+    cli backup check "$1" | tr -d '\r'
+    return 0
+  fi
+
   if ! command -v python3 > /dev/null 2>&1; then
     printf 'python3 checks the backup: apt-get install python3'
     return 0
@@ -1129,6 +1267,7 @@ restore_file() {
 rollback_panel() {
   local current previous
   need_panel || return 1
+  host_only "going back to an older image" || return 1
   if [ "$(kind)" = package ]; then
     if [ ! -L "$base/previous" ]; then
       bad "there is no release to go back to"
@@ -1157,12 +1296,21 @@ rollback_panel() {
 
 # Lists the releases the host keeps.
 list_releases() {
-  if [ "$(kind)" = package ]; then
-    "$base/current/install.sh" --list
-  else
-    say "the project runs $(running_image)"
-    docker images "$image"
-  fi
+  local running
+  case $(kind) in
+    package)
+      "$base/current/install.sh" --list
+      ;;
+    container)
+      running=$(running_image)
+      say "the container runs $running"
+      engine GET /images/json 2> /dev/null | grep -o "\"${running%:*}:[^\"]*\"" | tr -d '"' | sort -uV
+      ;;
+    *)
+      say "the project runs $(running_image)"
+      docker images "$image"
+      ;;
+  esac
 }
 
 # Lists the copies of the database.
@@ -1264,6 +1412,7 @@ clear_host() {
 uninstall_panel() {
   local kind names name keep=yes
   need_panel || return 1
+  host_only "taking the panel off" || return 1
   kind=$(kind)
   confirm "Remove the panel from this host?" || return 0
   if confirm "Remove its database and settings too?"; then
@@ -1505,6 +1654,8 @@ view_settings() {
   installed=$kind
   if [ "$kind" = package ]; then
     installed="package, release $(basename "$(readlink "$base/current" 2> /dev/null)")"
+  elif [ "$kind" = container ]; then
+    installed="docker, container $(own_name), image $(running_image)"
   else
     installed="docker, image $(running_image)"
   fi
@@ -1531,6 +1682,7 @@ check_status() {
   case $kind in
     package) systemctl --no-pager status "$unit" 2> /dev/null | head -4 ;;
     docker) dcompose ps panel ;;
+    container) say "container $(own_name), the panel $(panel_state)" ;;
     *) say "not installed" ;;
   esac
 
@@ -1560,12 +1712,12 @@ check_status() {
     good "forwarding on"
   else
     bad "forwarding off"
-    if agree "Turn forwarding on?"; then
+    if host_only "turning forwarding on" && agree "Turn forwarding on?"; then
       forwarding_on
     fi
   fi
 
-  if [ "$kind" = docker ] && nft list chain ip filter FORWARD 2> /dev/null | grep -q 'policy drop'; then
+  if { [ "$kind" = docker ] || [ "$kind" = container ]; } && nft list chain ip filter FORWARD 2> /dev/null | grep -q 'policy drop'; then
     bad "docker drops forwarded packets: add \"ip-forward-no-drop\": true to /etc/docker/daemon.json and restart docker"
   fi
 
@@ -1587,11 +1739,11 @@ logs_menu() {
     case $choice in
       1) follow_log ;;
       2)
-        if [ "$(kind)" = package ]; then
-          journalctl -u "$unit" -n 200 --no-pager
-        else
-          dcompose logs --tail 200 panel
-        fi
+        case $(kind) in
+          package) journalctl -u "$unit" -n 200 --no-pager ;;
+          container) container_log --tail 200 ;;
+          *) dcompose logs --tail 200 panel ;;
+        esac
         ;;
       3)
         dir=$(data_dir)/update
@@ -1601,13 +1753,7 @@ logs_menu() {
           say "no update has run yet"
         fi
         ;;
-      4)
-        if [ "$(kind)" = package ]; then
-          journalctl -u 'amneziageo-proxy@*' -n 100 --no-pager
-        else
-          dcompose logs --tail 200 panel | grep -i -E 'front|wstunnel|websocket'
-        fi
-        ;;
+      4) fronts_log ;;
       0 | "") return 0 ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -1616,11 +1762,20 @@ logs_menu() {
 
 # Follows the log of the panel until Ctrl+C.
 follow_log() {
-  if [ "$(kind)" = package ]; then
-    journalctl -u "$unit" -f -n 50
-  else
-    dcompose logs -f --tail 50 panel
-  fi
+  case $(kind) in
+    package) journalctl -u "$unit" -f -n 50 ;;
+    container) container_log -f --tail 50 ;;
+    *) dcompose logs -f --tail 50 panel ;;
+  esac
+}
+
+# Prints the lines of the log about the websocket fronts.
+fronts_log() {
+  case $(kind) in
+    package) journalctl -u 'amneziageo-proxy@*' -n 100 --no-pager ;;
+    container) container_log --tail 200 | grep -i -E 'front|wstunnel|websocket' ;;
+    *) dcompose logs --tail 200 panel | grep -i -E 'front|wstunnel|websocket' ;;
+  esac
 }
 
 # Items 20 and 21: lets the panel start with the host or not.
@@ -1631,6 +1786,12 @@ autostart() {
       systemctl enable "$unit" 2> /dev/null
     else
       systemctl disable "$unit" 2> /dev/null
+    fi
+  elif [ "$(kind)" = container ]; then
+    if [ "$1" = on ]; then
+      engine POST "/containers/$(own_container)/update" '{"RestartPolicy":{"Name":"unless-stopped"}}' > /dev/null
+    else
+      engine POST "/containers/$(own_container)/update" '{"RestartPolicy":{"Name":"no"}}' > /dev/null
     fi
   elif [ "$1" = on ]; then
     docker update --restart unless-stopped "$(container_id)" > /dev/null
@@ -1675,6 +1836,7 @@ use_certificate() {
 # Gets a Let's Encrypt certificate for a name of the host and puts it on the panel.
 get_certificate() {
   local name live
+  host_only "getting a certificate of Let's Encrypt" || return 1
   name=$(ask "Name of the host, like panel.example.org:")
   if [ -z "$name" ]; then
     return 0
@@ -1715,6 +1877,8 @@ show_certificates() {
   local chain
   if command -v certbot > /dev/null 2>&1; then
     certbot certificates 2> /dev/null
+  elif [ -d /etc/letsencrypt/live ]; then
+    say "certificates of the host: $(ls /etc/letsencrypt/live | grep -v README | tr '\n' ' ')"
   fi
 
   chain=$(setting certificate)
@@ -1741,7 +1905,7 @@ ssl_menu() {
     choice=$(ask "Choose:") || return 0
     case $choice in
       1) get_certificate ;;
-      2) certbot renew ;;
+      2) host_only "renewing the certificates" && certbot renew ;;
       3) show_certificates ;;
       4)
         chain=$(ask "Certificate chain, like /etc/letsencrypt/live/<name>/fullchain.pem:")
@@ -1759,8 +1923,11 @@ ssl_menu() {
 
 # Lists the firewall and the ports the panel needs open.
 firewall_status() {
+  local subscriptions
   if command -v ufw > /dev/null 2>&1; then
     ufw status verbose
+  elif [ "$(kind)" = container ]; then
+    say "the firewall of the host: $(ufw_active && printf 'ufw active' || printf 'ufw off')"
   else
     say "ufw is not installed, the panel keeps its ports in nftables"
   fi
@@ -1769,6 +1936,11 @@ firewall_status() {
   step "ports the panel needs"
   say "TCP $(ssh_port)  ssh"
   say "TCP $(setting port)  the panel, held open: $(setting opened)"
+  mapfile -t subscriptions < <(cli subscriptions get separate port opened 2> /dev/null | tr -d '\r')
+  if [ "${subscriptions[0]:-}" = on ]; then
+    say "TCP ${subscriptions[1]:-}  the subscriptions, held open: ${subscriptions[2]:-}"
+  fi
+
   cli endpoint list
   if [ -d /etc/letsencrypt/live ]; then
     say "TCP 80  renewals of Let's Encrypt"
@@ -1778,8 +1950,9 @@ firewall_status() {
 # Opens or closes a port in ufw.
 ufw_port() {
   local port
+  host_only "a rule of ufw" || return 1
   if ! command -v ufw > /dev/null 2>&1; then
-    bad "ufw is not installed: item 8 of this menu puts it on"
+    bad "ufw is not installed: item 10 of this menu puts it on"
     return 1
   fi
 
@@ -1798,6 +1971,7 @@ ufw_port() {
 
 # Turns ufw on with ssh kept open and lets the panel lay its rules.
 ufw_on() {
+  host_only "turning ufw on" || return 1
   if ! command -v ufw > /dev/null 2>&1; then
     agree "ufw is not installed. Install it?" || return 0
     apt-get install -y ufw || return 1
@@ -1819,24 +1993,28 @@ firewall_menu() {
     say "  1. Status and the ports the panel needs"
     say "  2. Hold the port of the panel open"
     say "  3. Stop holding the port of the panel open"
-    say "  4. Open the port of an endpoint"
-    say "  5. Close the port of an endpoint"
-    say "  6. Open a port"
-    say "  7. Close a port"
-    say "  8. Turn the firewall on"
-    say "  9. Turn the firewall off"
+    say "  4. Hold the port of the subscriptions open"
+    say "  5. Stop holding the port of the subscriptions open"
+    say "  6. Open the port of an endpoint"
+    say "  7. Close the port of an endpoint"
+    say "  8. Open a port"
+    say "  9. Close a port"
+    say " 10. Turn the firewall on"
+    say " 11. Turn the firewall off"
     say "  0. Back"
     choice=$(ask "Choose:") || return 0
     case $choice in
       1) firewall_status ;;
       2) need_panel && cli panel set --opened on && restart_panel ;;
       3) need_panel && cli panel set --opened off && restart_panel ;;
-      4) need_panel && cli_in endpoint open && restart_panel ;;
-      5) need_panel && cli_in endpoint close && restart_panel ;;
-      6) ufw_port allow ;;
-      7) ufw_port delete ;;
-      8) ufw_on ;;
-      9) command -v ufw > /dev/null 2>&1 && ufw disable ;;
+      4) need_panel && cli subscriptions set --opened on && restart_panel ;;
+      5) need_panel && cli subscriptions set --opened off && restart_panel ;;
+      6) need_panel && cli_in endpoint open && restart_panel ;;
+      7) need_panel && cli_in endpoint close && restart_panel ;;
+      8) ufw_port allow ;;
+      9) ufw_port delete ;;
+      10) ufw_on ;;
+      11) host_only "turning ufw off" && command -v ufw > /dev/null 2>&1 && ufw disable ;;
       0 | "") return 0 ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -1929,13 +2107,7 @@ fronts_menu() {
           restart_panel
         fi
         ;;
-      3)
-        if [ "$(kind)" = package ]; then
-          journalctl -u 'amneziageo-proxy@*' -n 100 --no-pager
-        else
-          dcompose logs --tail 200 panel | grep -i -E 'front|wstunnel|websocket'
-        fi
-        ;;
+      3) fronts_log ;;
       0 | "") return 0 ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -1949,6 +2121,7 @@ bbr_item() {
   if [ -e "$qdisc_file" ]; then
     say "queue discipline    $(cat "$qdisc_file")"
   fi
+  host_only "turning BBR on or off" || return 1
   if [ -z "$want" ]; then
     if bbr_on; then
       if confirm "Turn BBR off?"; then
@@ -1991,7 +2164,7 @@ status_block() {
   if [ "$kind" != none ]; then
     version=$(running_version)
     channel=$(setting channel)
-    line="$state, $kind${version:+ $version}${channel:+, $channel channel}"
+    line="$state, ${kind/container/docker}${version:+ $version}${channel:+, $channel channel}"
   fi
 
   case $state in

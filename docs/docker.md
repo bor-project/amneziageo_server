@@ -48,21 +48,27 @@ host; the build takes a few minutes, most of them for `wstunnel`.
 
 ## The menu
 
+The container opens the menu of the server itself, however it was put on:
+
+```
+docker compose exec panel amneziageo-server
+```
+
+The items work inside the container. Stop, start and restart hold the panel or start it over within the container,
+which runs on, so the session goes on and a new port or path takes hold without leaving it. Autostart turns the
+restart policy of the container on and off, the log is the log of the container read through compose, and a copy of
+the database goes back while the panel is held. An update moves the container onto the new image and ends the
+session. The commands of the console go through the same name: `docker compose exec panel amneziageo-server user
+list`. The items that change the host itself, going back to an older image, taking the panel off, a certificate of
+Let's Encrypt, the rules of ufw, BBR and forwarding, answer that the container does not reach the host.
+
 `amneziageo-server install`, see [install.md](install.md#the-menu), puts the container on a bare host when asked
 for Docker: Docker itself from the repository of Docker with `"ip-forward-no-drop": true`,
 `/opt/amneziageo-docker/compose.yaml` that runs the image of the newest release of the channel from
 `ghcr.io/bor-project/amneziageo-server` with directories of the host for the database and the settings, and the
-first administrator. The image carries the script as well, and a host that put the container on by hand takes it
-out of the image:
-
-```
-docker compose exec -T panel cat /usr/local/share/amneziageo-server/amneziageo-server > /usr/local/bin/amneziageo-server
-chmod 755 /usr/local/bin/amneziageo-server
-```
-
-The script finds the project in `/opt/amneziageo-docker` or by the labels of its container. It runs the console
-through `docker compose exec`, and in a container of its own while the panel is stopped. Inside the container
-`amneziageo-server` is the console itself.
+first administrator. The script it runs from stays on the host and drives the container from outside with the same
+items, the ones of the host among them; it finds the project in `/opt/amneziageo-docker` or by the labels of its
+container.
 
 `amneziageo-server install --restore <file>` and `amneziageo-server restore <file>` put a backup a panel downloaded
 into the directory of the database while the container is stopped, see
@@ -98,6 +104,7 @@ address. Outside its path the panel answers `/api/health` to the loopback alone.
 | `/opt/amneziageo-server` in the image | the server, the console and the web interface |
 | `/usr/local/bin/wstunnel` in the image | the websocket tool |
 | `/usr/local/share/amneziageo-server/amneziageo-server` in the image | the menu of the release |
+| `/usr/local/bin/amneziageo-server` in the image | the same menu, `docker compose exec panel amneziageo-server` |
 
 ## Keeping it up to date
 
@@ -138,7 +145,7 @@ newest image the host keeps below the one it runs, and offers to put a copy of t
 | What | In the container |
 |---|---|
 | Websocket fronts | the panel runs `wstunnel` itself and starts it again three seconds after it falls over; the fronts go down and come up with the container |
-| Firewall | the image carries no ufw, so the panel lays its own nftables tables; on a host whose ufw is turned on, its `drop` wins, and the ports are opened in ufw by hand, see [firewall.md](firewall.md) |
+| Firewall | the image carries no ufw, so the panel lays its own nftables tables; on a host whose ufw is turned on, its `drop` wins, and the ports are opened in ufw by hand; the tabs of the settings name such a port as closed, see [firewall.md](firewall.md) |
 | Accounts of the host | turned off: `Auth__HostLogin=Off` and `Auth__HostUsers=false`, the panel signs in its own accounts alone and refuses to carry one to the host |
 | Restart from the panel | the server ends, and the restart policy of compose starts the container again |
 | The web interface alone | not updated apart: every image carries the server and the interface together |

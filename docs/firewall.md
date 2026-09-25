@@ -4,17 +4,19 @@ The panel writes its own nftables tables, and a table of its own says nothing to
 already runs: a `drop` in the chain of ufw ends the packet whatever another table accepts. So a port is
 opened where the host closes it, in ufw itself.
 
-Every port stays closed until it is asked for. Each thing that listens carries `Open the port in the
-firewall`, off by default: an endpoint, the panel and the subscriptions. Nothing changes on a host
-that was set up by hand until a toggle goes on.
+Every port stays closed until it is asked for, and nothing is asked for by default. An endpoint carries `Open the
+port in the firewall` in the panel. The port of the panel and the port of the subscriptions are held open from the
+menu of the server, `amneziageo-server`, item 23 `Firewall Management`, or by
+`amneziageo-server panel set --opened on` and `amneziageo-server subscriptions set --opened on`. Nothing changes on a
+host that was set up by hand until one of them goes on.
 
 ## What is opened
 
 | Toggle | What it opens |
 |---|---|
 | An endpoint, see [configs.md](configs.md) | its UDP port, the TCP port of its services, see [services.md](services.md), and both ways through its interface, so its clients reach the internet and the ports carried to them arrive |
-| The panel, see [serving.md](serving.md) | the port the panel binds, unless it binds the loopback alone |
-| The subscriptions, see [subscriptions.md](subscriptions.md) | the port they are served on, while they are handed out |
+| The panel, item 23 of the menu, see [serving.md](serving.md) | the port the panel binds, unless it binds the loopback alone |
+| The subscriptions, item 23 of the menu, see [subscriptions.md](subscriptions.md) | the port they are served on, while they are handed out on a port of their own |
 
 Both families are opened together, since ufw takes a rule for each of them.
 
@@ -40,6 +42,19 @@ on a running server does not cut the tunnels off. The panel never turns ufw on o
 Where the host carries no ufw, the panel lays the table `inet amneziageo_open` instead, with the same ports
 in its `input` chain and the interfaces in its `forward` chain. On a host that closes nothing this changes
 nothing, and on a host closing ports in a table of its own the ports are still to be opened there by hand.
+
+## A closed port in the panel
+
+The tabs `Server` and `Subscriptions` of the settings ask the firewall of the host whether their port is let in, and
+name a closed port under the field along with where it is opened: item 23 of the menu. A new port the firewall
+closes is not saved until it is opened, so the panel does not move where nobody reaches it; a port that stays as it
+was is only named. Where the host carries ufw, the panel reads `ufw status verbose`: the first rule that names the
+port decides, the policy for what comes in otherwise. Where it does not, as in a container, the panel reads the
+chains ufw leaves in nftables, `ufw-user-input` and the policy of `INPUT`. A host with neither tells nothing, and
+nothing is named.
+
+`GET /api/firewall/port?port=<port>`, with `&protocol=udp` for a UDP port, takes the right `state:read` and answers
+`{"port":9443,"protocol":"tcp","state":"closed","engine":"ufw"}`; `state` is `open`, `closed` or `unknown`.
 
 ## When it happens
 

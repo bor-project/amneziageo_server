@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
+import { outside, usePortState } from "@/api/firewall"
 import { draftOf, useNameSample, usePanel, useSavePanel } from "@/api/panel"
 import type { Panel, PanelDraft } from "@/api/panel"
 import { scopes } from "@/api/scopes"
@@ -41,6 +42,9 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
   const names = useNameSample(part === "server")
   const saved = draftOf(settings)
   const draft = kept ?? saved
+  const port = usePortState(draft.port, part === "server" && outside(draft.listen))
+  const closed = port.data?.state === "closed"
+  const blocked = closed && draft.port !== saved.port
   const domain = domainOf(draft, settings.certificateRoot)
   const template = draft.nameTemplate.trim() || defaultName
   const strange = unknownKeys(template)
@@ -120,7 +124,13 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
             </div>
           </div>
 
-          <Count id="panel-port" caption={t("settings.port")} value={draft.port} onChange={(port) => set({ port })} />
+          <Count
+            id="panel-port"
+            caption={t("settings.port")}
+            value={draft.port}
+            onChange={(port) => set({ port })}
+            fault={closed ? t("settings.portClosed", { port: String(draft.port) }) : ""}
+          />
 
           <Line id="panel-path" caption={t("settings.path")} value={draft.path} onChange={(path) => set({ path })} />
 
@@ -149,15 +159,6 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
             hint={sample}
             fault={strange.length > 0 ? t("settings.nameUnknown", { list: strange.join(", ") }) : ""}
           />
-
-          <div className="sm:col-span-2">
-            <Flag
-              id="panel-opened"
-              caption={t("settings.opened")}
-              value={draft.opened}
-              onChange={(opened) => set({ opened })}
-            />
-          </div>
 
           <div className="sm:col-span-2">
             <Flag
@@ -209,7 +210,7 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
         <button
           type="button"
           className={primary}
-          disabled={!may || kept === null || save.isPending}
+          disabled={!may || kept === null || save.isPending || blocked}
           onClick={() => void keep()}
         >
           {t("settings.save")}

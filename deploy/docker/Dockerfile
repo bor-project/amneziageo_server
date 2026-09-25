@@ -54,7 +54,7 @@ COPY --from=tunnel /wstunnel /usr/local/bin/wstunnel
 COPY --chmod=755 deploy/docker/entrypoint.sh /usr/local/bin/amneziageo-server-entrypoint
 COPY --chmod=755 deploy/docker/update.sh /usr/local/bin/amneziageo-server-update
 COPY --chmod=755 deploy/amneziageo-server /usr/local/share/amneziageo-server/amneziageo-server
-RUN ln -s /opt/amneziageo-server/AmneziaGeo.Server.Cli /usr/local/bin/amneziageo-server
+RUN ln -s /usr/local/share/amneziageo-server/amneziageo-server /usr/local/bin/amneziageo-server
 ENV DOTNET_NOLOGO=1 \
     AMNEZIAGEO_CONTAINER=1 \
     ASPNETCORE_HTTP_PORTS= \

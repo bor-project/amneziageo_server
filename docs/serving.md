@@ -11,8 +11,7 @@ of their own and take hold without a restart, see [subscriptions.md](subscriptio
 |---|---|
 | Listen addresses | the addresses of the host the panel binds, empty for every address it carries |
 | Listen domains | the names the panel answers to, empty for any; a request carrying another name answers 404, a caller from the loopback is let through |
-| Port | the port the panel binds, 8443 when nothing is set |
-| Open the port in the firewall | whether the panel holds its own port open in the firewall of the host, see [firewall.md](firewall.md) |
+| Port | the port the panel binds, 8443 when nothing is set; a port the firewall of the host closes is named under the field, and a new port it closes is not saved until it is opened, see [firewall.md](firewall.md) |
 | Path | what follows the port, `/` for the root: `/panel/` puts the panel there and everything outside it answers 404 |
 | | a panel that holds no settings yet takes `/sub/<16 letters and digits>/`, so the way in is not guessed |
 | Certificate domain | a directory of `/etc/letsencrypt/live`, picking one fills the two paths below it |

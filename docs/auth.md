@@ -179,7 +179,6 @@ carried there, as in a container, see [docker.md](docker.md).
 ## Commands
 
 ```
-amneziageo-server-cli                                 open the menu
 amneziageo-server-cli init [--user <login>]           make the first administrator
 amneziageo-server-cli login [--user <login>] [--json] sign in and print the tokens
 amneziageo-server-cli refresh <token>                 trade a refresh token for a pair

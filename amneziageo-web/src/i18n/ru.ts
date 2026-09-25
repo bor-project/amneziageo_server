@@ -266,7 +266,7 @@ export const ru: Dictionary = {
   "settings.partCertificate": "Сертификат",
   "settings.listen": "Слушать на адресах",
   "settings.port": "Порт",
-  "settings.opened": "Открыть порт в брандмауэре",
+  "settings.portClosed": "Порт {port} закрыт в брандмауэре хоста. Откройте его в терминале: amneziageo-server, пункт 23 Firewall Management.",
   "settings.prereleases": "Получать предварительные версии",
   "settings.path": "Путь",
   "settings.domains": "Отвечать доменам",

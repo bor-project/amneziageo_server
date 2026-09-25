@@ -84,6 +84,7 @@ app.MapSubscriptions();
 app.MapDiagnostics();
 app.MapUpdates();
 app.MapBackup();
+app.MapFirewall();
 app.MapApiDescription();
 app.MapControllers();
 app.MapPanelPage();

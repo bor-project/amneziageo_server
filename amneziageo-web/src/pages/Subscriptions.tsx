@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { complaint, reason } from "@/api/auth"
+import { outside, usePortState } from "@/api/firewall"
 import { scopes } from "@/api/scopes"
 import { draftOf, useSaveSubscription, useSubscription } from "@/api/subscription"
 import type { Subscription, SubscriptionDraft } from "@/api/subscription"
@@ -30,6 +31,9 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
   const saved = draftOf(settings)
   const draft = kept ?? saved
   const domain = domainOf(draft, settings.certificateRoot)
+  const port = usePortState(draft.port, draft.isEnabled && draft.separate && outside(draft.listen))
+  const closed = port.data?.state === "closed"
+  const blocked = closed && (draft.port !== saved.port || !saved.separate || !saved.isEnabled)
   const refused = fault ?? (kept === null && settings.fault.length > 0 ? reason(settings.fault) : null)
 
   function set(change: Partial<SubscriptionDraft>) {
@@ -128,6 +132,7 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
             caption={t("settings.port")}
             value={draft.port}
             onChange={(port) => set({ port })}
+            fault={closed ? t("settings.portClosed", { port: String(draft.port) }) : ""}
           />
         )}
 
@@ -151,17 +156,6 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
           value={draft.title}
           onChange={(title) => set({ title })}
         />
-
-        {draft.separate && (
-          <div className="sm:col-span-2">
-            <Flag
-              id="subscription-opened"
-              caption={t("settings.opened")}
-              value={draft.opened}
-              onChange={(opened) => set({ opened })}
-            />
-          </div>
-        )}
       </Part>
 
       {draft.separate && (
@@ -205,7 +199,7 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
         <button
           type="button"
           className={primary}
-          disabled={!may || kept === null || save.isPending}
+          disabled={!may || kept === null || save.isPending || blocked}
           onClick={() => void keep()}
         >
           {t("settings.save")}

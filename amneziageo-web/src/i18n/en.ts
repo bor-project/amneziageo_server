@@ -264,7 +264,7 @@ export const en = {
   "settings.partCertificate": "Certificate",
   "settings.listen": "Listen addresses",
   "settings.port": "Port",
-  "settings.opened": "Open the port in the firewall",
+  "settings.portClosed": "Port {port} is closed in the firewall of the host. Open it in the terminal: amneziageo-server, item 23 Firewall Management.",
   "settings.prereleases": "Receive prerelease versions",
   "settings.path": "Path",
   "settings.domains": "Listen domains",
