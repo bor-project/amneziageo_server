@@ -38,7 +38,6 @@ public static class ClientEndpoints
         writing.MapPost("/remove", RemoveAllAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapPost("/{id:long}/switch", SwitchAsync);
-        writing.MapPost("/{id:long}/devices", AddDeviceAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
         return routes;
@@ -264,33 +263,6 @@ public static class ClientEndpoints
             Answer(result.Record, endpoint, host, guard, ledger, true));
     }
 
-    private static async Task<IResult> AddDeviceAsync(
-        long id,
-        ConfigStore configs,
-        ClientStore store,
-        ClientHost host,
-        EndpointHost endpoints,
-        ClientGuard guard,
-        TrafficLedger ledger,
-        RouteApplier routes,
-        CancellationToken ct)
-    {
-        var result = await store.AddDeviceAsync(id, ct).ConfigureAwait(false);
-        if (!result.IsOk)
-        {
-            return Explain(result);
-        }
-
-        var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, endpoints, ct)
-            .ConfigureAwait(false);
-
-        await routes.FollowClientsAsync(ct).ConfigureAwait(false);
-
-        return Results.Created(
-            $"/api/clients/{result.Record.Id}",
-            Answer(result.Record, endpoint, host, guard, ledger, true));
-    }
-
     private static async Task<IResult> ChangeAsync(
         long id,
         ClientRequest request,
@@ -365,21 +337,13 @@ public static class ClientEndpoints
         RouteApplier routes,
         CancellationToken ct)
     {
-        var devices = await store.DevicesAsync(id, ct).ConfigureAwait(false);
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
-        await SettleAsync(
-                result.Record!.ConfigId,
-                [result.Record.PublicKey, .. devices.Select(device => device.PublicKey)],
-                configs,
-                store,
-                host,
-                endpoints,
-                ct)
+        await SettleAsync(result.Record!.ConfigId, [result.Record.PublicKey], configs, store, host, endpoints, ct)
             .ConfigureAwait(false);
 
         await routes.FollowClientsAsync(ct).ConfigureAwait(false);
@@ -425,9 +389,8 @@ public static class ClientEndpoints
         }
 
         var batch = await store.RemoveAllAsync(ids, ct).ConfigureAwait(false);
-        var gone = batch.Done.Concat(batch.Carried).ToList();
-        var unsynced = await SettleAllAsync(gone, gone, configs, store, host, endpoints, ct).ConfigureAwait(false);
-        if (gone.Count > 0)
+        var unsynced = await SettleAllAsync(batch.Done, batch.Done, configs, store, host, endpoints, ct).ConfigureAwait(false);
+        if (batch.Done.Count > 0)
         {
             await routes.FollowClientsAsync(ct).ConfigureAwait(false);
         }

@@ -23,6 +23,45 @@ public class DatabaseTests
     }
 
     [Fact]
+    public async Task TheClientsCarryNoParent()
+    {
+        using var bench = new Bench();
+
+        var columns = await bench.Db.Database
+            .SqlQueryRaw<string>("SELECT name AS Value FROM pragma_table_info('Clients')")
+            .ToListAsync();
+
+        Assert.Contains("DailyLimit", columns);
+        Assert.DoesNotContain("ParentId", columns);
+    }
+
+    [Fact]
+    public async Task TheClientsCarryNoNetworksBehindThem()
+    {
+        using var bench = new Bench();
+
+        var columns = await bench.Db.Database
+            .SqlQueryRaw<string>("SELECT name AS Value FROM pragma_table_info('Clients')")
+            .ToListAsync();
+
+        Assert.Contains("Inbound", columns);
+        Assert.DoesNotContain("Routes", columns);
+    }
+
+    [Fact]
+    public async Task TheClientsCarryNoPortsOfTheHost()
+    {
+        using var bench = new Bench();
+
+        var columns = await bench.Db.Database
+            .SqlQueryRaw<string>("SELECT name AS Value FROM pragma_table_info('Clients')")
+            .ToListAsync();
+
+        Assert.Contains("Inbound", columns);
+        Assert.DoesNotContain("Forwards", columns);
+    }
+
+    [Fact]
     public async Task TheRightsOfARoleFallWithIt()
     {
         using var bench = new Bench();

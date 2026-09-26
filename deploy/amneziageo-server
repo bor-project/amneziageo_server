@@ -244,6 +244,15 @@ host_only() {
   fi
 }
 
+# Prints the command that does on the host what the container cannot reach, instead of a plain refusal.
+host_command() {
+  if [ "$(kind)" = container ]; then
+    bad "$1 changes the host, run this on the host:"
+    say "  $2"
+    return 1
+  fi
+}
+
 # Runs a command of the utility where the panel is put on, with no input.
 cli() {
   cli_in "$@" < /dev/null
@@ -613,7 +622,21 @@ image_tag() {
   sed -n 's/^AMNEZIAGEO_TAG=//p' "$docker_dir/.env" 2>/dev/null | tail -1
 }
 
-# Prints the image the container of the panel runs.
+# Writes the tag of the image into the .env of the compose project and keeps its other lines.
+write_tag() {
+  local lines=
+  if [ -f "$docker_dir/.env" ]; then
+    lines=$(sed "s/^AMNEZIAGEO_TAG=.*/AMNEZIAGEO_TAG=$1/" "$docker_dir/.env")
+  fi
+
+  if ! grep -q '^AMNEZIAGEO_TAG=' <<< "$lines"; then
+    lines=$lines${lines:+$'\n'}AMNEZIAGEO_TAG=$1
+  fi
+
+  printf '%s\n' "$lines" > "$docker_dir/.env"
+}
+
+# Prints the image the container of the panel runs, or the one its compose project names.
 running_image() {
   local found
   if [ "$(kind)" = container ]; then
@@ -623,7 +646,23 @@ running_image() {
   fi
 
   found=$(docker inspect -f '{{.Config.Image}}' "$(container_id)" 2>/dev/null)
+  if [ -z "$found" ]; then
+    found=$(dcompose config --images panel 2>/dev/null | head -1)
+  fi
+
   printf '%s' "${found:-$image:$(image_tag)}"
+}
+
+# Prints the name of the image the panel runs, without its tag and digest.
+panel_repository() {
+  local bare
+  bare=$(running_image)
+  bare=${bare%%@*}
+  case ${bare##*/} in
+    *:*) bare=${bare%:*} ;;
+  esac
+
+  printf '%s' "$bare"
 }
 
 # Prints the name the releases give the architecture of the host.
@@ -1281,7 +1320,7 @@ rollback_panel() {
   fi
 
   current=$(image_tag)
-  previous=$(docker images "$image" --format '{{.Tag}}' 2> /dev/null | grep -E '^[0-9]+(\.[0-9]+)+$' \
+  previous=$(docker images "$(panel_repository)" --format '{{.Tag}}' 2> /dev/null | grep -E '^[0-9]+(\.[0-9]+)+$' \
     | { cat; printf '%s\n' "$current"; } | sort -uV | grep -B1 -x "$current" | head -1)
   if [ -z "$previous" ] || [ "$previous" = "$current" ]; then
     bad "the host keeps no image older than $current"
@@ -1289,26 +1328,24 @@ rollback_panel() {
   fi
 
   confirm "Go back from $current to $previous?" || return 0
-  printf 'AMNEZIAGEO_TAG=%s\n' "$previous" > "$docker_dir/.env"
+  write_tag "$previous"
   dcompose up -d > /dev/null && wait_panel
   offer_backup
 }
 
 # Lists the releases the host keeps.
 list_releases() {
-  local running
   case $(kind) in
     package)
       "$base/current/install.sh" --list
       ;;
     container)
-      running=$(running_image)
-      say "the container runs $running"
-      engine GET /images/json 2> /dev/null | grep -o "\"${running%:*}:[^\"]*\"" | tr -d '"' | sort -uV
+      say "the container runs $(running_image)"
+      engine GET /images/json 2> /dev/null | grep -o "\"$(panel_repository):[^\"]*\"" | tr -d '"' | sort -uV
       ;;
     *)
       say "the project runs $(running_image)"
-      docker images "$image"
+      docker images "$(panel_repository)"
       ;;
   esac
 }
@@ -1410,7 +1447,7 @@ clear_host() {
 
 # Item 6: takes the panel off the host, its database and settings too when asked.
 uninstall_panel() {
-  local kind names name keep=yes
+  local kind names name repository keep=yes
   need_panel || return 1
   host_only "taking the panel off" || return 1
   kind=$(kind)
@@ -1432,6 +1469,7 @@ uninstall_panel() {
     rm -rf "$base" /usr/local/bin/wstunnel
     rm -f "$etc"/proxy-*.env
   else
+    repository=$(panel_repository)
     if [ "$keep" = no ]; then
       dcompose down -v
     else
@@ -1439,7 +1477,7 @@ uninstall_panel() {
     fi
 
     if confirm "Remove the images of the panel too?"; then
-      docker images -q "$image" | sort -u | xargs -r docker rmi -f > /dev/null
+      { docker images -q "$repository"; docker images -q "$image"; } | sort -u | xargs -r docker rmi -f > /dev/null
     fi
   fi
 
@@ -1712,7 +1750,10 @@ check_status() {
     good "forwarding on"
   else
     bad "forwarding off"
-    if host_only "turning forwarding on" && agree "Turn forwarding on?"; then
+    if [ "$(kind)" = container ]; then
+      host_command "turning forwarding on" \
+        "printf 'net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\n' > $forwarding_conf && sysctl -p $forwarding_conf"
+    elif agree "Turn forwarding on?"; then
       forwarding_on
     fi
   fi
@@ -1950,15 +1991,20 @@ firewall_status() {
 # Opens or closes a port in ufw.
 ufw_port() {
   local port
-  host_only "a rule of ufw" || return 1
-  if ! command -v ufw > /dev/null 2>&1; then
-    bad "ufw is not installed: item 10 of this menu puts it on"
-    return 1
-  fi
-
   port=$(ask "Port with its protocol, like 443/tcp:")
   if ! [[ $port =~ ^[0-9]+(/(tcp|udp))?$ ]]; then
     bad "'$port' is not a port"
+    return 1
+  fi
+
+  if [ "$1" = allow ]; then
+    host_command "opening $port" "ufw allow $port" || return 1
+  else
+    host_command "closing $port" "ufw delete allow $port" || return 1
+  fi
+
+  if ! command -v ufw > /dev/null 2>&1; then
+    bad "ufw is not installed: item 10 of this menu puts it on"
     return 1
   fi
 
@@ -1971,7 +2017,7 @@ ufw_port() {
 
 # Turns ufw on with ssh kept open and lets the panel lay its rules.
 ufw_on() {
-  host_only "turning ufw on" || return 1
+  host_command "turning ufw on" "apt-get install -y ufw; ufw allow <the port of ssh>/tcp; ufw --force enable" || return 1
   if ! command -v ufw > /dev/null 2>&1; then
     agree "ufw is not installed. Install it?" || return 0
     apt-get install -y ufw || return 1
@@ -2014,7 +2060,7 @@ firewall_menu() {
       8) ufw_port allow ;;
       9) ufw_port delete ;;
       10) ufw_on ;;
-      11) host_only "turning ufw off" && command -v ufw > /dev/null 2>&1 && ufw disable ;;
+      11) host_command "turning ufw off" "ufw disable" && command -v ufw > /dev/null 2>&1 && ufw disable ;;
       0 | "") return 0 ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -2115,13 +2161,34 @@ fronts_menu() {
 }
 
 # Item 27: turns BBR with the fq queue on or off for good.
+# Prints the commands that turn BBR on or off on a host the script does not reach.
+bbr_command() {
+  local cmd
+  if [ "$1" = on ]; then
+    cmd="modprobe tcp_bbr"$'\n'"printf 'tcp_bbr\n' > $bbr_module"$'\n'
+    if [ -e "$qdisc_file" ]; then
+      cmd+="printf 'net.core.default_qdisc = fq\nnet.ipv4.tcp_congestion_control = bbr\n' > $bbr_conf"
+    else
+      cmd+="printf 'net.ipv4.tcp_congestion_control = bbr\n' > $bbr_conf"
+    fi
+
+    printf '%s\nsysctl -p %s' "$cmd" "$bbr_conf"
+  else
+    cmd="rm -f $bbr_conf $bbr_module"$'\n'"sysctl -w net.ipv4.tcp_congestion_control=cubic"
+    if [ -e "$qdisc_file" ]; then
+      cmd+=$'\n'"sysctl -w net.core.default_qdisc=fq_codel"
+    fi
+
+    printf '%s' "$cmd"
+  fi
+}
+
 bbr_item() {
   local want=${1:-}
   say "congestion control  $(sysctl -n net.ipv4.tcp_congestion_control 2> /dev/null)"
   if [ -e "$qdisc_file" ]; then
     say "queue discipline    $(cat "$qdisc_file")"
   fi
-  host_only "turning BBR on or off" || return 1
   if [ -z "$want" ]; then
     if bbr_on; then
       if confirm "Turn BBR off?"; then
@@ -2133,8 +2200,8 @@ bbr_item() {
   fi
 
   case $want in
-    on) bbr_enable ;;
-    off) bbr_disable ;;
+    on) host_command "turning BBR on" "$(bbr_command on)" && bbr_enable ;;
+    off) host_command "turning BBR off" "$(bbr_command off)" && bbr_disable ;;
     "") ;;
     *) bad "bbr takes on or off" ;;
   esac

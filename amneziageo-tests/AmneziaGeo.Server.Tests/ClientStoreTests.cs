@@ -246,53 +246,12 @@ public class ClientStoreTests
             {
                 Inbound = ClientInbound.Network,
                 Routing = ClientRouting.Off,
-                Routes = ["192.168.88.0/24", "10.1.0.0/16"],
-                Forwards = [new PortForward("tcp", 2222, 22), new PortForward("udp", 5353, 53)],
             },
             CancellationToken.None);
         var held = await bench.Clients.FindAsync(added.Record!.Id, CancellationToken.None);
 
         Assert.Equal(ClientInbound.Network, held?.Inbound);
         Assert.Equal(ClientRouting.Off, held?.Routing);
-        Assert.Equal(["192.168.88.0/24", "10.1.0.0/16"], held?.Routes);
-        Assert.Equal(["tcp:2222:22", "udp:5353:53"], held?.Forwards.Select(one => one.ToString()));
-    }
-
-    [Fact]
-    public async Task ADeviceTakesTheAccessOfItsClient()
-    {
-        using var bench = new Bench();
-        var endpoint = await EndpointAsync(bench);
-        var added = await bench.Clients.AddAsync(
-            Fresh(endpoint, "milena") with { MultiDevice = true },
-            CancellationToken.None);
-        var device = await bench.Clients.AddDeviceAsync(added.Record!.Id, CancellationToken.None);
-
-        await bench.Clients.ChangeAsync(
-            added.Record.Id,
-            added.Record with { MultiDevice = true, Inbound = ClientInbound.Server, Routing = ClientRouting.Off },
-            CancellationToken.None);
-        var held = await bench.Clients.FindAsync(device.Record!.Id, CancellationToken.None);
-
-        Assert.Equal(ClientInbound.Server, held?.Inbound);
-        Assert.Equal(ClientRouting.Off, held?.Routing);
-    }
-
-    [Fact]
-    public async Task ADeviceIsAddedWithTheRoutingAndTheAccessOfItsClient()
-    {
-        using var bench = new Bench();
-        var endpoint = await EndpointAsync(bench);
-        var added = await bench.Clients.AddAsync(
-            Fresh(endpoint, "milena") with { MultiDevice = true, Routing = ClientRouting.On, Inbound = ClientInbound.Server },
-            CancellationToken.None);
-
-        var device = await bench.Clients.AddDeviceAsync(added.Record!.Id, CancellationToken.None);
-        var held = await bench.Clients.FindAsync(device.Record!.Id, CancellationToken.None);
-
-        Assert.Equal(ClientRouting.On, device.Record.Routing);
-        Assert.Equal(ClientInbound.Server, device.Record.Inbound);
-        Assert.Equal(ClientInbound.Server, held?.Inbound);
     }
 
     [Fact]
@@ -317,42 +276,39 @@ public class ClientStoreTests
     }
 
     [Fact]
-    public async Task ClientsAreTurnedOffTogetherWithTheirDevicesAndAMissingOneIsReported()
+    public async Task ClientsAreTurnedOffOneByOneAndAMissingOneIsReported()
     {
         using var bench = new Bench();
         var endpoint = await EndpointAsync(bench);
-        var milena = await bench.Clients.AddAsync(Fresh(endpoint, "milena") with { MultiDevice = true }, CancellationToken.None);
-        var device = await bench.Clients.AddDeviceAsync(milena.Record!.Id, CancellationToken.None);
+        var milena = await bench.Clients.AddAsync(Fresh(endpoint, "milena"), CancellationToken.None);
+        var phone = await bench.Clients.AddAsync(Fresh(endpoint, "milena-2") with { Address = ["10.8.0.21/32"] }, CancellationToken.None);
         var bor = await bench.Clients.AddAsync(Fresh(endpoint, "bor") with { Address = ["10.8.0.20/32"] }, CancellationToken.None);
 
-        var batch = await bench.Clients.SwitchAllAsync([milena.Record.Id, bor.Record!.Id, 404], false, CancellationToken.None);
-        var held = await bench.Clients.FindAsync(device.Record!.Id, CancellationToken.None);
+        var batch = await bench.Clients.SwitchAllAsync([milena.Record!.Id, bor.Record!.Id, 404], false, CancellationToken.None);
+        var held = await bench.Clients.FindAsync(phone.Record!.Id, CancellationToken.None);
 
         Assert.Equal(new[] { milena.Record.Id, bor.Record.Id }, batch.Done.Select(client => client.Id));
         Assert.All(batch.Done, client => Assert.False(client.IsEnabled));
-        Assert.False(held?.IsEnabled);
+        Assert.True(held?.IsEnabled);
         var missing = Assert.Single(batch.Failed);
         Assert.Equal(404L, missing.Id);
         Assert.Equal("unknown-client", missing.Code);
     }
 
     [Fact]
-    public async Task ClientsAreRemovedTogetherWithTheirDevicesAndADeviceGoneWithItsClientCountsAsRemoved()
+    public async Task ClientsAreRemovedOneByOneAndTheOthersStay()
     {
         using var bench = new Bench();
         var endpoint = await EndpointAsync(bench);
-        var milena = await bench.Clients.AddAsync(Fresh(endpoint, "milena") with { MultiDevice = true }, CancellationToken.None);
-        var device = await bench.Clients.AddDeviceAsync(milena.Record!.Id, CancellationToken.None);
+        var milena = await bench.Clients.AddAsync(Fresh(endpoint, "milena"), CancellationToken.None);
+        var phone = await bench.Clients.AddAsync(Fresh(endpoint, "milena-2") with { Address = ["10.8.0.21/32"] }, CancellationToken.None);
         var bor = await bench.Clients.AddAsync(Fresh(endpoint, "bor") with { Address = ["10.8.0.20/32"] }, CancellationToken.None);
 
-        var batch = await bench.Clients.RemoveAllAsync(
-            [milena.Record.Id, device.Record!.Id, bor.Record!.Id],
-            CancellationToken.None);
+        var batch = await bench.Clients.RemoveAllAsync([milena.Record!.Id, bor.Record!.Id, 404], CancellationToken.None);
 
-        Assert.Equal(new[] { milena.Record.Id, device.Record.Id, bor.Record.Id }, batch.Done.Select(client => client.Id));
-        Assert.Empty(batch.Failed);
-        Assert.Equal(device.Record.Id, Assert.Single(batch.Carried).Id);
-        Assert.Empty(await bench.Clients.ListAsync(CancellationToken.None));
+        Assert.Equal(new[] { milena.Record.Id, bor.Record.Id }, batch.Done.Select(client => client.Id));
+        Assert.Equal(404L, Assert.Single(batch.Failed).Id);
+        Assert.Equal(phone.Record!.Id, Assert.Single(await bench.Clients.ListAsync(CancellationToken.None)).Id);
     }
 
     private static async Task<long> EndpointAsync(Bench bench)

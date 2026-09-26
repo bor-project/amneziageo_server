@@ -53,7 +53,7 @@ off answers an empty body, and the client application marks their configurations
 
 | Header | Holds |
 |---|---|
-| `Subscription-Userinfo` | `upload` and `download`, what the clients made today, a client with devices counted once together with them; `total`, their daily limits added up, 0 when one of them has none; `expire=0` |
+| `Subscription-Userinfo` | `upload` and `download`, what the clients made today; `total`, their daily limits added up, 0 when one of them has none; `expire=0` |
 | `Profile-Update-Interval` | the update interval in hours |
 | `Profile-Title` | the profile title as `base64:`, left out when it is empty |
 | `Cache-Control` | `no-store` |

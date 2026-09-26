@@ -130,35 +130,26 @@ public class TrafficTests
     }
 
     [Fact]
-    public void TheLimitCountsAClientTogetherWithItsDevices()
+    public void TheLimitCountsEachClientAlone()
     {
         var ledger = new TrafficLedger(new Clock(Noon));
-        var owner = Client(1, null, 100);
-        var device = Client(2, 1, 100);
-        var other = Client(3, null, 100);
-        ledger.Observe(
-            [owner, device, other],
-            [new TrafficReading(1, 0, 0), new TrafficReading(2, 0, 0), new TrafficReading(3, 0, 0)],
-            Noon);
+        var milena = Client(1, 100);
+        var phone = Client(2, 100);
+        ledger.Observe([milena, phone], [new TrafficReading(1, 0, 0), new TrafficReading(2, 0, 0)], Noon);
 
-        ledger.Observe(
-            [owner, device, other],
-            [new TrafficReading(1, 30, 30), new TrafficReading(2, 20, 20), new TrafficReading(3, 30, 30)],
-            Noon.AddSeconds(2));
+        ledger.Observe([milena, phone], [new TrafficReading(1, 60, 60), new TrafficReading(2, 20, 20)], Noon.AddSeconds(2));
 
-        Assert.True(ledger.IsSpent(owner));
-        Assert.True(ledger.IsSpent(device));
-        Assert.False(ledger.IsSpent(other));
-        Assert.Equal(new ClientUsage(50, 50), ledger.Group(device));
-        Assert.Equal(new ClientUsage(20, 20), ledger.Of(device).Used);
-        Assert.Equal(new TrafficRate(10, 10), ledger.Of(device).Rate);
+        Assert.True(ledger.IsSpent(milena));
+        Assert.False(ledger.IsSpent(phone));
+        Assert.Equal(new ClientUsage(20, 20), ledger.Of(phone).Used);
+        Assert.Equal(new TrafficRate(10, 10), ledger.Of(phone).Rate);
     }
 
     [Fact]
     public void AClientWithoutALimitIsNeverSpent()
     {
         var ledger = new TrafficLedger(new Clock(Noon));
-        var client = Client(1, null, 0);
+        var client = Client(1, 0);
         ledger.Observe([client], [new TrafficReading(1, 0, 0)], Noon);
 
         ledger.Observe([client], [new TrafficReading(1, ulong.MaxValue / 4, ulong.MaxValue / 4)], Noon.AddSeconds(2));
@@ -194,8 +185,8 @@ public class TrafficTests
             var network = new Ledger();
             network.Links.Add("awg1");
             var ledger = new TrafficLedger(new Clock(Noon));
-            var spent = Client(1, null, 100) with { Name = "milena" };
-            var fine = Client(2, null, 0) with { Name = "bogdan" };
+            var spent = Client(1, 100) with { Name = "milena" };
+            var fine = Client(2, 0) with { Name = "bogdan" };
             ledger.Observe([spent, fine], [new TrafficReading(1, 0, 0), new TrafficReading(2, 0, 0)], Noon);
             ledger.Observe([spent, fine], [new TrafficReading(1, 100, 100), new TrafficReading(2, 100, 100)], Noon.AddSeconds(2));
             var file = new InterfaceFile(new InterfaceFileOptions { Directory = folder.FullName });
@@ -255,22 +246,6 @@ public class TrafficTests
             CancellationToken.None);
 
         Assert.Empty(await store.LatestAsync(CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task TheDailyLimitOfAClientGoesOverToItsDevices()
-    {
-        using var bench = new Bench();
-        var owner = await ClientAsync(bench, 1000);
-        var device = await bench.Clients.AddDeviceAsync(owner.Id, CancellationToken.None);
-
-        await bench.Clients.ChangeAsync(owner.Id, owner with { DailyLimit = 5000 }, CancellationToken.None);
-        var followed = await bench.Clients.FindAsync(device.Record!.Id, CancellationToken.None);
-        var kept = await bench.Clients.ChangeAsync(device.Record.Id, followed! with { DailyLimit = 1 }, CancellationToken.None);
-
-        Assert.Equal(1000, device.Record.DailyLimit);
-        Assert.Equal(5000, followed.DailyLimit);
-        Assert.Equal(5000, kept.Record!.DailyLimit);
     }
 
     [Fact]
@@ -343,11 +318,10 @@ public class TrafficTests
             Assert.Single(written));
     }
 
-    private static TunnelClient Client(long id, long? parent, long limit) =>
+    private static TunnelClient Client(long id, long limit) =>
         ClientDefaults.Fresh(1, $"client{id}") with
         {
             Id = id,
-            ParentId = parent,
             DailyLimit = limit,
             Address = [$"10.8.0.{id + 1}/32"],
         };
@@ -373,7 +347,6 @@ public class TrafficTests
             ClientDefaults.Fresh(endpoint.Record!.Id, "milena") with
             {
                 Address = ["10.8.0.2/32"],
-                MultiDevice = true,
                 DailyLimit = limit,
             },
             CancellationToken.None);

@@ -65,23 +65,6 @@ public sealed class InboundOffer : IHelloFeature
 }
 
 /// <summary>
-/// Tells the client the ranges behind it.
-/// </summary>
-public sealed class RoutesOffer : IHelloFeature
-{
-    /// <inheritdoc/>
-    public string Name => FeatureNames.Routes;
-
-    /// <inheritdoc/>
-    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(peer);
-
-        return ValueTask.FromResult<object?>(peer.Client.Routes.Count > 0 ? new RoutesFeature([.. peer.Client.Routes]) : null);
-    }
-}
-
-/// <summary>
 /// Offers the addresses a client measures its speed against, with a fresh pass.
 /// </summary>
 public sealed class SpeedOffer : IHelloFeature

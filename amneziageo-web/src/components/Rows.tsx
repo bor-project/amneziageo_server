@@ -2,7 +2,7 @@ import { Fragment, useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
 import { SortControl } from "@/components/SortControl"
 import { ariaSort, useOrder, useSorted } from "@/components/sort"
-import type { Order, Place, SortValue } from "@/components/sort"
+import type { Order, SortValue } from "@/components/sort"
 import { useAbove, wideQuery } from "@/theme/width"
 
 export interface Column<T> {
@@ -23,10 +23,9 @@ export interface Drag<T> {
   onMove: (item: T, to: T) => void
 }
 
-export interface Choice<T> {
+export interface Choice {
   chosen: ReadonlySet<string | number>
   onChange: (chosen: Set<string | number>) => void
-  able: (item: T) => boolean
   title: string
   every: string
 }
@@ -44,7 +43,6 @@ export function Rows<T>({
   items,
   columns,
   keyOf,
-  arrange,
   name = "",
   tools,
   drag,
@@ -53,11 +51,10 @@ export function Rows<T>({
   items: T[]
   columns: Column<T>[]
   keyOf: (item: T) => string | number
-  arrange?: (items: T[]) => T[]
   name?: string
   tools?: ReactNode
   drag?: Drag<T>
-  choice?: Choice<T>
+  choice?: Choice
 }) {
   const wide = useAbove(wideQuery)
   const [held, setHeld] = useState<T | null>(null)
@@ -65,11 +62,10 @@ export function Rows<T>({
   const { order, toggle, choose, direct } = useOrder(name)
   const chosen = columns.find((column) => column.key === order?.key)
   const sorted = useSorted(items, chosen?.sort, order)
-  const places = arrange ? rearrange(sorted, arrange) : sorted
   const sortable = columns.filter((column) => column.sort && !column.tail)
   const picking = !wide && sortable.length > 0
   const moving = drag !== undefined && order === null
-  const able = choice === undefined ? [] : places.map((place) => place.item).filter(choice.able).map(keyOf)
+  const able = choice === undefined ? [] : sorted.map((place) => keyOf(place.item))
   const marked = choice === undefined ? 0 : able.filter((key) => choice.chosen.has(key)).length
   const span =
     columns.reduce((sum, column) => sum + (column.width ?? least), 0) + (moving ? grip : 0) + (choice ? box : 0)
@@ -130,10 +126,6 @@ export function Rows<T>({
       return null
     }
 
-    if (!choice.able(item)) {
-      return <span className="block size-4 shrink-0" />
-    }
-
     return <Tick on={choice.chosen.has(keyOf(item))} title={choice.title} onChange={() => flip(item)} />
   }
 
@@ -190,7 +182,7 @@ export function Rows<T>({
               </tr>
             </thead>
             <tbody>
-              {places.map((place) => (
+              {sorted.map((place) => (
                 <tr
                   key={keyOf(place.item)}
                   draggable={moving && held === place.item}
@@ -262,7 +254,7 @@ export function Rows<T>({
         </label>
       )}
 
-      {places.map((place) => (
+      {sorted.map((place) => (
         <div key={keyOf(place.item)} className="border-t border-line-soft px-4 py-3.5 hover:bg-hover">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-3">
@@ -359,12 +351,6 @@ function hint(event: MouseEvent<HTMLTableCellElement>) {
   } else {
     cell.removeAttribute("title")
   }
-}
-
-function rearrange<T>(places: Place<T>[], arrange: (items: T[]) => T[]): Place<T>[] {
-  const at = new Map(places.map((place) => [place.item, place.at]))
-
-  return arrange(places.map((place) => place.item)).map((item) => ({ item, at: at.get(item) ?? 0 }))
 }
 
 function told<T>(value: ReactNode, column: Column<T>) {

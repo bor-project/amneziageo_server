@@ -128,18 +128,15 @@ The rules travel in the `inet amneziageo_in` table, rewritten whenever an endpoi
 
 | Rule | What it does |
 |---|---|
-| `iifname "<uplink>" <tcp\|udp> dport <port> dnat to <client>` | carries a port of the host to a client |
 | `ip saddr <range> oifname "<uplink>" masquerade` | sends clients out behind the address of the host |
 | `ct state established,related accept` | lets the answers to what a client sent back in |
-| `oifname "<endpoint>" ip daddr <client>  <tcp\|udp> dport <port> accept` | lets a carried port through |
 | `oifname "<endpoint>" ip daddr @in<id>v4 accept` | lets the tunnel reach the clients that take it |
 | `oifname "<endpoint>" drop` | holds everything else off the clients of the endpoint |
 | `iifname "<endpoint>" ip daddr <closed range> reject` | keeps clients out of the ranges the endpoint closes |
 
 The sets `in<id>v4` and `in<id>v6` carry the addresses of the clients whose access is the whole tunnel
-network, together with the networks behind them, see [clients.md](clients.md). A client that leaves the
-choice to the endpoint takes what the endpoint says; a client that takes nothing from the tunnel is in no
-set, so `drop` holds the other clients off it.
+network, see [clients.md](clients.md). A client that leaves the choice to the endpoint takes what the endpoint
+says; a client that takes nothing from the tunnel is in no set, so `drop` holds the other clients off it.
 
 Both families travel the same way, and the host is told to pass packets between interfaces in both of them:
 `net.ipv4.ip_forward` and `net.ipv6.conf.all.forwarding` are set on every raise, so a host that was rebooted

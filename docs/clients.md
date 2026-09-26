@@ -19,7 +19,6 @@ interface file the host boots from carries them too.
 | `POST /api/clients/{id}/switch` | `clients:write` |
 | `POST /api/clients/switch` | `clients:write` |
 | `POST /api/clients/remove` | `clients:write` |
-| `POST /api/clients/{id}/devices` | `clients:write` |
 | `DELETE /api/clients/{id}` | `clients:write` |
 
 The private key of a client is written out only to a caller that holds `clients:write`.
@@ -34,11 +33,8 @@ The private key of a client is written out only to a caller that holds `clients:
 | On | whether the interface takes the client |
 | Note | a line of your own, up to 255 characters |
 | Subscription | the subscription that hands the client out, see [subscriptions.md](subscriptions.md) |
-| Several devices | whether the client takes devices of its own, each with its keys and address, see [devices.md](devices.md) |
-| Daily limit | how many bytes a day the client moves together with its devices; empty for no limit, see [Traffic](#traffic) |
+| Daily limit | how many bytes a day the client moves; empty for no limit, see [Traffic](#traffic) |
 | Access to the client | what reaches the client from the tunnel: as the interface says, closed, the server alone, or the whole tunnel network, see [The way back](#the-way-back) |
-| Networks behind the client | the ranges the client carries behind it, laid into the `AllowedIPs` of its peer |
-| Port forwarding | ports of the host carried to a port of the client over tcp or udp |
 
 `GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair, a subscription of its own and
 a name no other client carries. It stands on the endpoint `?config=<id>` names; without it, on the endpoint of the
@@ -67,23 +63,11 @@ firewall rules of the endpoint, see [configs.md](configs.md): the address of a c
 network goes into the set of the endpoint, and everything else aimed at the clients is dropped. Clients that
 were already held when the panel took this on take the closed setting.
 
-The networks behind a client go into the `AllowedIPs` of its peer, so the host routes them into the tunnel,
-and they are reached under the same access as the client itself. The device at the far end passes them on
-itself: the panel puts nothing on it.
-
-A port of the host is carried to a client whatever its access says, because naming the port is the
-permission: `tcp:2222:22` takes port 2222 of the host to port 22 of the client. One port of the host is
-carried once per protocol, and a client that carries addresses of both families takes the port in both.
-The request reaches the client under the address of the endpoint in the tunnel, so the client answers back
-through the tunnel whatever ranges it routes there, and sees the server rather than the address the request
-came from. A client of AmneziaGeo takes it only while it lets connections in from the tunnel; the server
-alone is enough (`amneziageo config inbound <name> host`).
-
-A client of AmneziaGeo asks the endpoint what it takes from the tunnel and which networks stand behind it, so
-the application turns the flags of its own operating system on without being told twice, see
-[services.md](services.md); the file and the `vpn://` link carry none of it. A device of a client takes the
-access of the client it belongs to from the moment it is added, while the networks behind a client and the
-ports of the host stay with the record that carries them.
+The endpoint names this access to a client of AmneziaGeo in its hello, see [services.md](services.md), but the
+application does not read it yet: the device lets connections in from the tunnel only when it is told so on the
+device, by `Allow incoming connections from the VPN network` in the settings of the configuration or by
+`amneziageo config inbound <name> host` for the server alone and `network` for the whole tunnel network. The file
+and the `vpn://` link carry none of it.
 
 ## What the client is handed
 
@@ -183,20 +167,16 @@ same import behind `Import` for an account whose role holds `clients:write`.
 | `client-address-taken` | another client of the endpoint already carries this address |
 | `bad-client-subscription` | the subscription takes letters the rules do not or is longer than 64 characters |
 | `bad-client-limit` | the daily limit is negative or larger than 2^50 bytes |
-| `client-single-device` | the client has **Several devices** off, see [devices.md](devices.md) |
-| `client-is-device` | a device takes no devices of its own |
-| `client-has-devices` | **Several devices** stays on while the client carries devices |
 | `unknown-client` | the panel holds no client under this number |
 | `unknown-config` | the panel holds no endpoint under this number |
 
 ## Many clients at once
 
 `POST /api/clients/switch` takes `{ ids, on }` and `POST /api/clients/remove` takes `{ ids }`. Each client is
-turned on, off or removed together with its devices the same way one at a time is, a device already gone with its
-client counts as removed, and every endpoint the clients stand on is put on the host once. The answer is
-`{ done, failed, unsynced }`: the numbers that went through, the ones refused with the `code` and `message` of the
-refusal, and the endpoints that did not take the change with the reason. In the list of the panel the first column
-chooses the clients; a device goes with its client and is not chosen on its own.
+turned on, off or removed the same way one at a time is, and every endpoint the clients stand on is put on the
+host once. The answer is `{ done, failed, unsynced }`: the numbers that went through, the ones refused with the
+`code` and `message` of the refusal, and the endpoints that did not take the change with the reason. In the list
+of the panel the first column chooses the clients.
 
 ## What the panel shows
 
@@ -220,13 +200,11 @@ A client is online when its peer sent anything, keepalives included, within the 
 client online (see [devices.md](devices.md)), or, with the guard off, when its last handshake is younger than 3
 minutes.
 
-**Daily limit** is the most a client moves in a day, both ways together; a client with devices moves it
-together with them. Once the traffic of the day reaches it, the panel takes the peers of the client and of its
-devices off the interface and out of the interface file, and the list says the limit is used up. At midnight,
-or once the limit is raised or cleared, the panel lays them back. The counters are read every 2 seconds, so a
-client going at full speed passes the limit by what it moves in that time.
+**Daily limit** is the most a client moves in a day, both ways together. Once the traffic of the day reaches
+it, the panel takes the peer of the client off the interface and out of the interface file, and the list says
+the limit is used up. At midnight, or once the limit is raised or cleared, the panel lays it back. The counters
+are read every 2 seconds, so a client going at full speed passes the limit by what it moves in that time.
 
 `GET /api/clients` carries the traffic in `state`: `rxRate` and `txRate`, bytes a second taken from and given
-to the client; `todayRx` and `todayTx`, what the client made today; `used`, what it made today together with
-its devices, or with its client and the other devices of it; `isSpent`, whether `used` reached the limit. The
-limit is `dailyLimit` in bytes, 0 for none.
+to the client; `todayRx` and `todayTx`, what the client made today; `used`, the two added up; `isSpent`,
+whether `used` reached the limit. The limit is `dailyLimit` in bytes, 0 for none.

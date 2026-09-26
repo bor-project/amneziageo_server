@@ -30,8 +30,6 @@ export function ClientRemove() {
     )
   }
 
-  const devices = all.filter((one) => one.parentId === held.id)
-
   return (
     <div className="mt-4 flex max-w-[35rem] flex-col gap-4">
       <h2 className="text-[22px] font-semibold">{t("clients.removeTitle", { name: held.name })}</h2>
@@ -39,11 +37,6 @@ export function ClientRemove() {
       <div className={`border-alarm-line p-4 ${card}`}>
         <div className="text-[13px] font-semibold text-alarm">{t("action.forever")}</div>
         <div className="mt-1 text-[13px] text-muted">{held.address.join(", ")}</div>
-        {devices.map((one) => (
-          <div key={one.id} className="text-[13px] text-muted">
-            {`${one.name}: ${one.address.join(", ")}`}
-          </div>
-        ))}
       </div>
 
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}

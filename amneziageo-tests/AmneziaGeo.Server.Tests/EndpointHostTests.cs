@@ -191,7 +191,7 @@ public class EndpointHostTests
     }
 
     [Fact]
-    public void TheNetworksBehindAClientAreReachedTogetherWithIt()
+    public void AClientThatTakesTheWholeNetworkIsReachedAtItsAddressesAlone()
     {
         var text = EndpointRuleset.Text(
             [Endpoint() with { Id = 7 }],
@@ -199,71 +199,18 @@ public class EndpointHostTests
                 Client() with
                 {
                     Address = ["10.0.0.5/32", "fd42:6d79:7670::cafe:5/128"],
-                    Routes = ["192.168.88.0/24"],
                     Inbound = ClientInbound.Network,
                 },
             ],
             "ens3");
 
-        Assert.Contains("elements = { 10.0.0.5/32, 192.168.88.0/24 }", text, StringComparison.Ordinal);
+        Assert.Contains("elements = { 10.0.0.5/32 }", text, StringComparison.Ordinal);
         Assert.Contains("elements = { fd42:6d79:7670::cafe:5/128 }", text, StringComparison.Ordinal);
         Assert.Contains("oifname \"awg0\" ip6 daddr @in7v6 accept", text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void APortOfTheHostIsCarriedToTheClientOverBothFamilies()
-    {
-        var text = EndpointRuleset.Text(
-            [Endpoint() with { Id = 7 }],
-            [
-                Client() with
-                {
-                    Address = ["10.0.0.5/32", "fd42:6d79:7670::cafe:5/128"],
-                    Forwards = [new PortForward("tcp", 2222, 22)],
-                },
-            ],
-            "ens3");
-
-        Assert.Contains(
-            "iifname \"ens3\" meta nfproto ipv4 tcp dport 2222 dnat ip to 10.0.0.5:22",
-            text,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "iifname \"ens3\" meta nfproto ipv6 tcp dport 2222 dnat ip6 to [fd42:6d79:7670::cafe:5]:22",
-            text,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "oifname \"awg0\" ip daddr 10.0.0.5 tcp dport 22 accept",
-            text,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AClientTakesACarriedPortUnderTheAddressOfTheEndpoint()
-    {
-        var text = EndpointRuleset.Text(
-            [Endpoint() with { Id = 7 }],
-            [
-                Client() with
-                {
-                    Address = ["10.0.0.5/32", "fd42:6d79:7670::cafe:5/128"],
-                    Forwards = [new PortForward("tcp", 2222, 22)],
-                },
-            ],
-            "ens3");
-
-        Assert.Contains(
-            "oifname \"awg0\" ip daddr 10.0.0.5 tcp dport 22 ct status dnat masquerade",
-            text,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "oifname \"awg0\" ip6 daddr fd42:6d79:7670::cafe:5 tcp dport 22 ct status dnat masquerade",
-            text,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AClientThatIsTurnedOffTakesNeitherTheTunnelNorAPortOfTheHost()
+    public void AClientThatIsTurnedOffIsNotReachedThroughTheTunnel()
     {
         var text = EndpointRuleset.Text(
             [Endpoint() with { Id = 7 }],
@@ -272,27 +219,25 @@ public class EndpointHostTests
                 {
                     Address = ["10.0.0.5/32"],
                     Inbound = ClientInbound.Network,
-                    Forwards = [new PortForward("tcp", 2222, 22)],
                     IsEnabled = false,
                 },
             ],
             "ens3");
 
         Assert.DoesNotContain("10.0.0.5", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("dnat", text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AHostWithNoUplinkCarriesNoPortToAClient()
+    public void TheRulesetCarriesNoPortOfTheHostToAClient()
     {
         var text = EndpointRuleset.Text(
             [Endpoint() with { Id = 7 }],
-            [Client() with { Address = ["10.0.0.5/32"], Forwards = [new PortForward("udp", 5353, 53)] }],
-            string.Empty);
+            [Client() with { Address = ["10.0.0.5/32", "fd42:6d79:7670::cafe:5/128"], Inbound = ClientInbound.Network }],
+            "ens3");
 
+        Assert.Contains("oifname \"ens3\" masquerade", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("prerouting", text, StringComparison.Ordinal);
         Assert.DoesNotContain("dnat", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("masquerade", text, StringComparison.Ordinal);
-        Assert.Contains("oifname \"awg0\" ip daddr 10.0.0.5 udp dport 53 accept", text, StringComparison.Ordinal);
     }
 
     [Fact]

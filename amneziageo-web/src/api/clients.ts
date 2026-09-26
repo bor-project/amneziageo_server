@@ -21,12 +21,6 @@ export type Inbound = "off" | "server" | "network" | "endpoint"
 
 export type Routing = "template" | "on" | "off"
 
-export interface Forward {
-  protocol: "tcp" | "udp"
-  from: number
-  to: number
-}
-
 export interface Client {
   id: number
   configId: number
@@ -40,13 +34,9 @@ export interface Client {
   note: string
   templateId: number | null
   subscriptionId: string
-  parentId: number | null
-  multiDevice: boolean
   dailyLimit: number
   inbound: Inbound
   routing: Routing
-  routes: string[]
-  forwards: Forward[]
   state: ClientState
   createdUtc: string
   updatedUtc: string
@@ -63,12 +53,9 @@ export interface ClientDraft {
   note: string
   templateId: number | null
   subscriptionId: string
-  multiDevice: boolean
   dailyLimit: number
   inbound: Inbound
   routing: Routing
-  routes: string[]
-  forwards: Forward[]
 }
 
 export type Miss = "off" | "no-id" | "no-key"
@@ -108,10 +95,6 @@ export function useClientDraft() {
 
 export function useAddClient() {
   return useRefreshing(async (draft: ClientDraft) => (await client.post<Client>("/clients", draft)).data)
-}
-
-export function useAddDevice() {
-  return useRefreshing(async (id: number) => (await client.post<Client>(`/clients/${id}/devices`)).data)
 }
 
 export function useChangeClient() {
@@ -155,12 +138,9 @@ export function draftOf(one: Client): ClientDraft {
     note: one.note,
     templateId: one.templateId,
     subscriptionId: one.subscriptionId,
-    multiDevice: one.multiDevice,
     dailyLimit: one.dailyLimit,
     inbound: one.inbound,
     routing: one.routing,
-    routes: one.routes,
-    forwards: one.forwards,
   }
 }
 

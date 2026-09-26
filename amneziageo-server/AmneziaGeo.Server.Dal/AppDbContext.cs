@@ -58,6 +58,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<SubscriptionEntity> Subscription => Set<SubscriptionEntity>();
 
+    public DbSet<SeedEntity> Seeds => Set<SeedEntity>();
+
     /// <summary>
     /// Shapes the tables the server adds to the identity ones.
     /// </summary>
@@ -132,7 +134,6 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(client => client.TemplateId);
             entity.HasIndex(client => client.SubscriptionId);
-            entity.HasIndex(client => client.ParentId);
         });
 
         builder.Entity<TrafficEntity>(entity =>
@@ -219,6 +220,12 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(rule => rule.Outbound).HasMaxLength(ConfigRules.MaxNameLength);
             entity.Property(rule => rule.HoldsWhenDown).HasDefaultValue(true);
             entity.HasIndex(rule => rule.Position);
+        });
+
+        builder.Entity<SeedEntity>(entity =>
+        {
+            entity.HasKey(seed => seed.Name);
+            entity.Property(seed => seed.Name).HasMaxLength(32);
         });
     }
 }

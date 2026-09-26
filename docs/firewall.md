@@ -14,7 +14,7 @@ host that was set up by hand until one of them goes on.
 
 | Toggle | What it opens |
 |---|---|
-| An endpoint, see [configs.md](configs.md) | its UDP port, the TCP port of its services, see [services.md](services.md), and both ways through its interface, so its clients reach the internet and the ports carried to them arrive |
+| An endpoint, see [configs.md](configs.md) | its UDP port, the TCP port of its services, see [services.md](services.md), and both ways through its interface, so what its clients send and what comes back to them passes |
 | The panel, item 23 of the menu, see [serving.md](serving.md) | the port the panel binds, unless it binds the loopback alone |
 | The subscriptions, item 23 of the menu, see [subscriptions.md](subscriptions.md) | the port they are served on, while they are handed out on a port of their own |
 

@@ -42,7 +42,7 @@ export function Clients() {
   const [choice, setChoice] = useState({ view, keys: nothing })
   const [note, setNote] = useState({ view, told: quiet })
   const chosen = choice.view === view ? choice.keys : nothing
-  const ids = shown.filter((one) => one.parentId === null && chosen.has(one.id)).map((one) => one.id)
+  const ids = shown.filter((one) => chosen.has(one.id)).map((one) => one.id)
   const told = note.view === view ? note.told : quiet
 
   function put(key: string, value: string) {
@@ -66,15 +66,10 @@ export function Clients() {
   }
 
   function actionsOf(one: Client): RowAction[] {
-    const actions: RowAction[] = [
+    return [
       { label: t("action.export"), onPick: () => navigate(`/connections/clients/${one.id}/export`) },
+      { label: t("action.settings"), onPick: () => navigate(`/connections/clients/${one.id}/edit`) },
     ]
-
-    if (one.parentId === null) {
-      actions.push({ label: t("action.settings"), onPick: () => navigate(`/connections/clients/${one.id}/edit`) })
-    }
-
-    return actions
   }
 
   async function turnAll(on: boolean) {
@@ -104,14 +99,12 @@ export function Clients() {
         <Rows
           name="client"
           items={shown}
-          arrange={ordered}
           keyOf={(one) => one.id}
           choice={
             may
               ? {
                   chosen,
                   onChange: (keys) => setChoice({ view, keys }),
-                  able: (one) => one.parentId === null,
                   title: t("clients.choose"),
                   every: t("clients.chooseAll"),
                 }
@@ -194,7 +187,7 @@ export function Clients() {
               lead: true,
               body: "font-semibold text-ink",
               cell: (one) => (
-                <span className={`flex min-w-0 items-center gap-2 ${one.parentId === null ? "" : "pl-6"}`}>
+                <span className="flex min-w-0 items-center gap-2">
                   <Link
                     to={`/connections/clients/${one.id}/export`}
                     title={one.name}
@@ -246,7 +239,7 @@ export function Clients() {
               key: "traffic",
               caption: t("clients.traffic"),
               width: 112,
-              sort: (one) => (one.parentId === null ? one.state.used : one.state.todayRx + one.state.todayTx),
+              sort: (one) => one.state.used,
               cell: (one) => <Traffic one={one} />,
             },
             {
@@ -284,12 +277,4 @@ function matches(one: Client, find: string): boolean {
     one.address.some((address) => address.toLowerCase().includes(query)) ||
     one.note.toLowerCase().includes(query)
   )
-}
-
-function ordered(clients: Client[]): Client[] {
-  const tops = clients.filter((one) => one.parentId === null)
-  const known = new Set(tops.map((one) => one.id))
-  const rows = tops.flatMap((top) => [top, ...clients.filter((one) => one.parentId === top.id)])
-
-  return [...rows, ...clients.filter((one) => one.parentId !== null && !known.has(one.parentId))]
 }

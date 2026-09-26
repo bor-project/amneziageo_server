@@ -19,7 +19,7 @@ public class RouteConditionsTests
     private static readonly TunnelClient[] Clients =
     [
         new() { Id = 1, ConfigId = 1, Name = "bor", Address = ["10.9.1.12/32"] },
-        new() { Id = 2, ConfigId = 1, Name = "bor-phone", ParentId = 1, Address = ["10.9.1.13/32", "fd00::13/128"] },
+        new() { Id = 2, ConfigId = 1, Name = "bor-phone", Address = ["10.9.1.13/32", "fd00::13/128"] },
         new() { Id = 3, ConfigId = 2, Name = "guest", Address = ["10.9.2.5/32"] },
     ];
 
@@ -60,19 +60,21 @@ public class RouteConditionsTests
     }
 
     [Fact]
-    public void AClientIsMatchedByItsAddressesAndTheAddressesOfItsDevices()
+    public void AClientIsMatchedByItsOwnAddresses()
     {
         var leg = Leg(Out() with { Clients = ["BOR"] });
+        var phone = Leg(Out() with { Clients = ["bor-phone"] });
 
         Assert.True(leg.IsLive);
-        Assert.Equal(["10.9.1.12/32", "10.9.1.13/32"], leg.Sources4);
-        Assert.Equal(["fd00::13/128"], leg.Sources6);
+        Assert.Equal(["10.9.1.12/32"], leg.Sources4);
+        Assert.Empty(leg.Sources6);
+        Assert.Equal(["ip saddr { 10.9.1.12/32 } meta mark set 0xa602 return"], RouteRuleset.Lines(leg));
         Assert.Equal(
             [
-                "ip saddr { 10.9.1.12/32, 10.9.1.13/32 } meta mark set 0xa602 return",
+                "ip saddr { 10.9.1.13/32 } meta mark set 0xa602 return",
                 "ip6 saddr { fd00::13/128 } meta mark set 0xa602 return",
             ],
-            RouteRuleset.Lines(leg));
+            RouteRuleset.Lines(phone));
     }
 
     [Fact]

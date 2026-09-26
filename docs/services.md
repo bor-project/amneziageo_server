@@ -70,7 +70,6 @@ and `features` carries what the server offers this client, each under its name:
 | `websocket` | `port` | the endpoint takes the tunnel inside a websocket |
 | `routing` | `allowed` | always: whether the client may route by its own lists, from the client and its template, see [templates.md](templates.md) |
 | `inbound` | `mode`: `server` or `network` | the client lets connections in from the tunnel, see [clients.md](clients.md) |
-| `routes` | `ranges` | networks stand behind the client |
 | `speed` | `inside`, `outside` (each `down` and `up`), `limit`, `expires` | always: where to measure and until when |
 
 A client leaves out a feature it does not know, and takes a feature the answer leaves out as not offered.

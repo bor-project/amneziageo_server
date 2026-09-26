@@ -35,16 +35,6 @@ public static partial class ClientRules
     public const long MaxDailyLimit = 1L << 50;
 
     /// <summary>
-    /// The most networks a client carries behind it.
-    /// </summary>
-    public const int MaxRoutes = 16;
-
-    /// <summary>
-    /// The most ports of the host a client takes.
-    /// </summary>
-    public const int MaxForwards = 16;
-
-    /// <summary>
     /// Returns why the settings of a client are unusable, or null when they hold.
     /// </summary>
     public static ClientFault? Check(TunnelClient client)
@@ -58,8 +48,6 @@ public static partial class ClientRules
             ?? CheckNote(client.Note)
             ?? CheckSubscription(client.SubscriptionId)
             ?? CheckLimit(client.DailyLimit)
-            ?? CheckRoutes(client.Routes)
-            ?? CheckForwards(client.Forwards)
             ?? CheckInbound(client.Inbound)
             ?? CheckRouting(client.Routing);
     }
@@ -117,70 +105,6 @@ public static partial class ClientRules
     /// </summary>
     public static bool IsSubscription(string? id) =>
         !string.IsNullOrEmpty(id) && id.Length <= MaxSubscriptionLength && SubscriptionShape().IsMatch(id);
-
-    /// <summary>
-    /// Returns why the networks behind a client are unusable, or null when they hold.
-    /// </summary>
-    public static ClientFault? CheckRoutes(IReadOnlyList<string> routes)
-    {
-        ArgumentNullException.ThrowIfNull(routes);
-
-        if (routes.Count > MaxRoutes)
-        {
-            return Fault("bad-client-routes", $"the client carries more than {MaxRoutes} networks behind it");
-        }
-
-        foreach (var route in routes)
-        {
-            if (!AwgAllowedIp.TryParse(route, out var range))
-            {
-                return Fault("bad-client-routes", $"'{route}' is not a network");
-            }
-
-            if (range.ToString() != range.Network().ToString())
-            {
-                return Fault("bad-client-routes", $"'{route}' carries bits under its prefix");
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Returns why the ports carried to a client are unusable, or null when they hold.
-    /// </summary>
-    public static ClientFault? CheckForwards(IReadOnlyList<PortForward> forwards)
-    {
-        ArgumentNullException.ThrowIfNull(forwards);
-
-        if (forwards.Count > MaxForwards)
-        {
-            return Fault("bad-client-forward", $"the client takes more than {MaxForwards} ports of the host");
-        }
-
-        var taken = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var forward in forwards)
-        {
-            if (forward.Protocol != PortForward.Tcp && forward.Protocol != PortForward.Udp)
-            {
-                return Fault("bad-client-forward", $"'{forward.Protocol}' is neither tcp nor udp");
-            }
-
-            if (!PortForward.IsPort(forward.From) || !PortForward.IsPort(forward.To))
-            {
-                return Fault("bad-client-forward", "a port lies outside 1 to 65535");
-            }
-
-            if (!taken.Add($"{forward.Protocol}:{forward.From}"))
-            {
-                return Fault(
-                    "bad-client-forward",
-                    $"the port {forward.From} of the host is carried twice over {forward.Protocol}");
-            }
-        }
-
-        return null;
-    }
 
     /// <summary>
     /// Returns why what a client takes from the tunnel is unusable, or null when it holds.

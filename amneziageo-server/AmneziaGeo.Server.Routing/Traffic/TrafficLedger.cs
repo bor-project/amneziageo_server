@@ -7,14 +7,13 @@ namespace AmneziaGeo.Server.Routing.Traffic;
 /// </summary>
 /// <param name="Rate">How fast the client moves bytes now.</param>
 /// <param name="Used">The traffic the client made today.</param>
-/// <param name="Group">The traffic the client made today together with the rest of its group.</param>
-/// <param name="IsSpent">Whether the traffic of the group reached the daily limit.</param>
-public sealed record ClientTraffic(TrafficRate Rate, ClientUsage Used, ClientUsage Group, bool IsSpent)
+/// <param name="IsSpent">Whether the traffic of the day reached the daily limit.</param>
+public sealed record ClientTraffic(TrafficRate Rate, ClientUsage Used, bool IsSpent)
 {
     /// <summary>
     /// The traffic of a client nothing was counted for.
     /// </summary>
-    public static readonly ClientTraffic None = new(default, default, default, false);
+    public static readonly ClientTraffic None = new(default, default, false);
 }
 
 /// <summary>
@@ -27,8 +26,6 @@ public sealed class TrafficLedger
     private readonly TimeProvider _time;
 
     private readonly TrafficMeter _meter;
-
-    private readonly Dictionary<long, long> _owners = [];
 
     /// <summary>
     /// ctor
@@ -91,13 +88,7 @@ public sealed class TrafficLedger
 
         lock (_sync)
         {
-            _owners.Clear();
-            foreach (var client in clients)
-            {
-                _owners[client.Id] = Owner(client);
-            }
-
-            _meter.Keep(_owners.Keys.ToHashSet());
+            _meter.Keep(clients.Select(client => client.Id).ToHashSet());
             _meter.Observe(readings, now);
         }
     }
@@ -133,27 +124,27 @@ public sealed class TrafficLedger
 
         lock (_sync)
         {
-            var group = GroupOf(client);
+            var used = _meter.Used(client.Id);
 
-            return new ClientTraffic(_meter.Rate(client.Id), _meter.Used(client.Id), group, Spent(client, group));
+            return new ClientTraffic(_meter.Rate(client.Id), used, Spent(client, used));
         }
     }
 
     /// <summary>
-    /// Returns the traffic a client made today together with its devices or with its client and the other devices of it.
+    /// Returns the traffic a client made today.
     /// </summary>
-    public ClientUsage Group(TunnelClient client)
+    public ClientUsage Used(TunnelClient client)
     {
         ArgumentNullException.ThrowIfNull(client);
 
         lock (_sync)
         {
-            return GroupOf(client);
+            return _meter.Used(client.Id);
         }
     }
 
     /// <summary>
-    /// Tells whether the group of a client used up the daily limit of the client.
+    /// Tells whether a client used up its daily limit.
     /// </summary>
     public bool IsSpent(TunnelClient client)
     {
@@ -161,27 +152,10 @@ public sealed class TrafficLedger
 
         lock (_sync)
         {
-            return Spent(client, GroupOf(client));
+            return Spent(client, _meter.Used(client.Id));
         }
     }
 
-    private ClientUsage GroupOf(TunnelClient client)
-    {
-        var owner = Owner(client);
-        var total = _owners.ContainsKey(client.Id) ? default : _meter.Used(client.Id);
-        foreach (var (id, held) in _owners)
-        {
-            if (held == owner)
-            {
-                total = total.Add(_meter.Used(id));
-            }
-        }
-
-        return total;
-    }
-
-    private static bool Spent(TunnelClient client, ClientUsage group) =>
-        client.DailyLimit > 0 && group.Total >= (ulong)client.DailyLimit;
-
-    private static long Owner(TunnelClient client) => client.ParentId ?? client.Id;
+    private static bool Spent(TunnelClient client, ClientUsage used) =>
+        client.DailyLimit > 0 && used.Total >= (ulong)client.DailyLimit;
 }

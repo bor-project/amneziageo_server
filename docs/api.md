@@ -43,7 +43,7 @@ for a token like any other route. The shapes of the answers are not in it; the p
 | accounts, roles, tokens | [auth.md](auth.md) |
 | interfaces | [configs.md](configs.md) |
 | clients | [clients.md](clients.md) |
-| devices of a client | [devices.md](devices.md) |
+| one configuration, one device | [devices.md](devices.md) |
 | templates | [templates.md](templates.md) |
 | subscriptions | [subscriptions.md](subscriptions.md) |
 | channels | [outbounds.md](outbounds.md) |

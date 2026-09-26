@@ -1,9 +1,12 @@
 using System.Net;
+using System.Text.Json;
+using AmneziaGeo.Server.Api.Clients;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Routing.Guard;
+using AmneziaGeo.Server.Routing.Traffic;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -16,92 +19,39 @@ public class DeviceTests
     private static readonly TimeSpan Quiet = TimeSpan.FromSeconds(60);
 
     [Fact]
-    public async Task ADeviceWaitsForSeveralDevicesToBeTurnedOn()
+    public void AClientIsAnsweredWithoutAParent()
     {
-        using var bench = new Bench();
-        var parent = await ParentAsync(bench, multiDevice: false);
+        var client = ClientDefaults.Fresh(1, "milena") with { Id = 2, Address = ["10.8.0.2/32"] };
 
-        var added = await bench.Clients.AddDeviceAsync(parent.Id, CancellationToken.None);
+        var answer = ClientAnswers.Client(client, "awg1", ClientState.Missing(client), false, [], ClientTraffic.None);
+        var text = JsonSerializer.Serialize(answer, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.Equal("client-single-device", added.Code);
+        Assert.Contains("\"name\":\"milena\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"parentId\"", text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task ADeviceTakesKeysAnAddressAndASubscriptionOfItsOwn()
+    public void AClientIsAnsweredWithoutNetworksBehindIt()
     {
-        using var bench = new Bench();
-        var parent = await ParentAsync(bench, multiDevice: true);
+        var client = ClientDefaults.Fresh(1, "milena") with { Id = 2, Address = ["10.8.0.2/32"] };
 
-        var added = await bench.Clients.AddDeviceAsync(parent.Id, CancellationToken.None);
+        var answer = ClientAnswers.Client(client, "awg1", ClientState.Missing(client), false, [], ClientTraffic.None);
+        var text = JsonSerializer.Serialize(answer, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.True(added.IsOk, added.Message);
-        var device = added.Record!;
-        Assert.Equal("milena-2", device.Name);
-        Assert.Equal(parent.Id, device.ParentId);
-        Assert.Equal(parent.ConfigId, device.ConfigId);
-        Assert.NotEqual(parent.PublicKey, device.PublicKey);
-        Assert.NotEqual(parent.SubscriptionId, device.SubscriptionId);
-        Assert.Equal(["10.8.0.3/32"], device.Address);
-        Assert.False(device.MultiDevice);
+        Assert.Contains("\"inbound\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"routes\"", text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task ADeviceTakesNoDevicesOfItsOwn()
+    public void AClientIsAnsweredWithoutPortsOfTheHost()
     {
-        using var bench = new Bench();
-        var parent = await ParentAsync(bench, multiDevice: true);
-        var device = (await bench.Clients.AddDeviceAsync(parent.Id, CancellationToken.None)).Record!;
+        var client = ClientDefaults.Fresh(1, "milena") with { Id = 2, Address = ["10.8.0.2/32"] };
 
-        var again = await bench.Clients.AddDeviceAsync(device.Id, CancellationToken.None);
+        var answer = ClientAnswers.Client(client, "awg1", ClientState.Missing(client), false, [], ClientTraffic.None);
+        var text = JsonSerializer.Serialize(answer, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.Equal("client-is-device", again.Code);
-    }
-
-    [Fact]
-    public async Task TheDevicesFollowTheClientOffAndOn()
-    {
-        using var bench = new Bench();
-        var parent = await ParentAsync(bench, multiDevice: true);
-        var device = (await bench.Clients.AddDeviceAsync(parent.Id, CancellationToken.None)).Record!;
-
-        await bench.Clients.SwitchAsync(parent.Id, false, CancellationToken.None);
-        var off = await bench.Clients.FindAsync(device.Id, CancellationToken.None);
-        await bench.Clients.SwitchAsync(parent.Id, true, CancellationToken.None);
-        var on = await bench.Clients.FindAsync(device.Id, CancellationToken.None);
-
-        Assert.False(off!.IsEnabled);
-        Assert.True(on!.IsEnabled);
-    }
-
-    [Fact]
-    public async Task SeveralDevicesStayOnWhileTheClientCarriesDevices()
-    {
-        using var bench = new Bench();
-        var parent = await ParentAsync(bench, multiDevice: true);
-        var device = (await bench.Clients.AddDeviceAsync(parent.Id, CancellationToken.None)).Record!;
-
-        var refused = await bench.Clients.ChangeAsync(parent.Id, parent with { MultiDevice = false }, CancellationToken.None);
-        await bench.Clients.RemoveAsync(device.Id, CancellationToken.None);
-        var taken = await bench.Clients.ChangeAsync(parent.Id, parent with { MultiDevice = false }, CancellationToken.None);
-
-        Assert.Equal("client-has-devices", refused.Code);
-        Assert.True(taken.IsOk, taken.Message);
-        Assert.False(taken.Record!.MultiDevice);
-    }
-
-    [Fact]
-    public async Task RemovingTheClientRemovesItsDevices()
-    {
-        using var bench = new Bench();
-        var parent = await ParentAsync(bench, multiDevice: true);
-        await bench.Clients.AddDeviceAsync(parent.Id, CancellationToken.None);
-        await bench.Clients.AddDeviceAsync(parent.Id, CancellationToken.None);
-
-        var devices = await bench.Clients.DevicesAsync(parent.Id, CancellationToken.None);
-        await bench.Clients.RemoveAsync(parent.Id, CancellationToken.None);
-
-        Assert.Equal(["milena-2", "milena-3"], devices.Select(one => one.Name));
-        Assert.Empty(await bench.Clients.ListAsync(CancellationToken.None));
+        Assert.Contains("\"inbound\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"forwards\"", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -283,17 +233,4 @@ public class DeviceTests
         ListenPort = 51820,
         Peers = [new AwgPeer { PublicKey = Key, Endpoint = IPEndPoint.Parse(point), RxBytes = rx, LastHandshake = handshake }],
     };
-
-    private static async Task<TunnelClient> ParentAsync(Bench bench, bool multiDevice)
-    {
-        var endpoint = await bench.Configs.AddAsync(
-            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"] },
-            CancellationToken.None);
-        var added = await bench.Clients.AddAsync(
-            ClientDefaults.Fresh(endpoint.Record!.Id, "milena") with { Address = ["10.8.0.2/32"], MultiDevice = multiDevice },
-            CancellationToken.None);
-        Assert.True(added.IsOk, added.Message);
-
-        return added.Record!;
-    }
 }

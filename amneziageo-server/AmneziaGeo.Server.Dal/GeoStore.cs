@@ -42,6 +42,8 @@ public sealed record GeoResult(GeoOutcome Outcome, string Code, string Message, 
 /// </summary>
 public sealed class GeoStore
 {
+    private const string SeedName = "geo";
+
     private readonly AppDbContext _db;
 
     private readonly IGeoFileStore _files;
@@ -79,27 +81,54 @@ public sealed class GeoStore
     }
 
     /// <summary>
-    /// Adds the sources a fresh install starts with, once.
+    /// Adds the standard sources a panel has not been given: every one to a fresh panel, the ones that joined the set
+    /// since to a panel seeded before.
     /// </summary>
     public async Task<int> SeedAsync(CancellationToken ct)
     {
-        if (await _db.GeoSources.AnyAsync(ct).ConfigureAwait(false))
+        var seed = await _db.Seeds.FirstOrDefaultAsync(row => row.Name == SeedName, ct).ConfigureAwait(false);
+        var held = await _db.GeoSources.OrderBy(source => source.Position).ToListAsync(ct).ConfigureAwait(false);
+        var given = seed?.Version ?? (held.Count == 0 ? 0 : 1);
+        if (given >= GeoDefaults.Version)
         {
             return 0;
         }
 
         var now = _time.GetUtcNow();
-        foreach (var source in GeoDefaults.Sources)
+        var added = 0;
+        foreach (var source in GeoDefaults.Sources.Where(source => GeoDefaults.Since(source) > given))
         {
-            var entity = new GeoSourceEntity { CreatedUtc = now };
+            if (held.Exists(entity => Same(entity, source)))
+            {
+                continue;
+            }
+
+            var entity = new GeoSourceEntity { CreatedUtc = now, Position = Place(held, source) };
             Write(entity, source);
-            entity.Position = source.Position;
+            foreach (var later in held.Where(one => one.Position >= entity.Position))
+            {
+                later.Position++;
+            }
+
+            held.Add(entity);
+            held.Sort((one, other) => one.Position.CompareTo(other.Position));
             _db.GeoSources.Add(entity);
+            added++;
+        }
+
+        if (seed is null)
+        {
+            _db.Seeds.Add(new SeedEntity { Name = SeedName, Version = GeoDefaults.Version, UpdatedUtc = now });
+        }
+        else
+        {
+            seed.Version = GeoDefaults.Version;
+            seed.UpdatedUtc = now;
         }
 
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        return GeoDefaults.Sources.Length;
+        return added;
     }
 
     /// <summary>
@@ -264,6 +293,22 @@ public sealed class GeoStore
 
     private static GeoResult Missing(long id) =>
         GeoResult.No(GeoOutcome.Unknown, "unknown-source", $"there is no geo source under the number {id}");
+
+    // Tells whether a held source is the standard one under its name or its address.
+    private static bool Same(GeoSourceEntity entity, GeoSource source) =>
+        entity.Name == source.Name || string.Equals(entity.Url, source.Url, StringComparison.OrdinalIgnoreCase);
+
+    // Returns the place of a standard source: in front of the first held one that follows it in the set, else last.
+    private static int Place(List<GeoSourceEntity> held, GeoSource source)
+    {
+        var next = GeoDefaults.Sources
+            .Where(other => other.Position > source.Position)
+            .OrderBy(other => other.Position)
+            .Select(other => held.Find(entity => Same(entity, other)))
+            .FirstOrDefault(entity => entity is not null);
+
+        return next?.Position ?? (held.Count == 0 ? 1 : held[^1].Position + 1);
+    }
 
     private static void Forget(GeoSourceEntity entity)
     {

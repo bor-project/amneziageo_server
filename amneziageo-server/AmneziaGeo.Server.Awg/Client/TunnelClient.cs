@@ -61,17 +61,7 @@ public sealed record TunnelClient
     public string SubscriptionId { get; init; } = string.Empty;
 
     /// <summary>
-    /// The client the device belongs to, null for a client of its own.
-    /// </summary>
-    public long? ParentId { get; init; }
-
-    /// <summary>
-    /// Whether the client takes devices of its own.
-    /// </summary>
-    public bool MultiDevice { get; init; }
-
-    /// <summary>
-    /// How many bytes a day the client moves together with its devices, 0 for no limit.
+    /// How many bytes a day the client moves, 0 for no limit.
     /// </summary>
     public long DailyLimit { get; init; }
 
@@ -84,16 +74,6 @@ public sealed record TunnelClient
     /// Whether the application of the client routes on its own.
     /// </summary>
     public ClientRouting Routing { get; init; }
-
-    /// <summary>
-    /// The networks the client carries behind it.
-    /// </summary>
-    public IReadOnlyList<string> Routes { get; init; } = [];
-
-    /// <summary>
-    /// The ports of the host carried to the client.
-    /// </summary>
-    public IReadOnlyList<PortForward> Forwards { get; init; } = [];
 
     /// <summary>
     /// When the client was added.

@@ -1,4 +1,4 @@
-# Several devices and the second device
+# One configuration, one device
 
 ## One configuration on two devices
 
@@ -16,21 +16,7 @@ Measured on the stand, a server and two devices with one key in network namespac
 | Cut off and the peer laid anew toward the first | 0% lost from the first packet | nothing gets through |
 
 With two devices the address of the peer changed 27 times in 60 samples half a second apart. One configuration
-never serves two devices at once: several devices of one person take a configuration each.
-
-## Several devices
-
-A client with **Several devices** on takes devices. **Add device** in the menu of the client creates one with a
-key pair, an address and a subscription of its own, named after the client with a number (`milena-2`), and
-opens its configuration. A device takes the interface, the preshared key, the template and the daily limit of its client;
-turning the client off or on, changing its template or its limit and removing it carry over to its devices, and
-the limit counts the client together with its devices. A device is
-listed under its client with its own configuration, traffic and handshake, takes no devices of its own and is
-not edited on its own. **Several devices** turns off only once the devices are removed.
-
-| Route | Right |
-|---|---|
-| `POST /api/clients/{id}/devices` | `clients:write` |
+never serves two devices at once: every device of a person takes a client of its own.
 
 ## Online
 
@@ -65,10 +51,11 @@ cut off 3 seconds after it came and the first one lost 2.4 seconds; once the fir
 The guard reads the interfaces and changes the firewall, so it works under root; without the rights it says so
 once in the log and stays out. `Guard:IsEnabled` set to `false` turns it off.
 
-## What the application does
+## What an application can do
 
 An application that knows these routes tells the second device why it is not let in, instead of leaving it
-without a handshake. The contract:
+without a handshake. The application of AmneziaGeo does not follow them yet: it sends neither `X-Hwid` nor the
+hold, so a second device of it meets the firewall guard above alone. The contract:
 
 1. Every request to the subscription carries `X-Hwid`, a name of the installation that does not change, up to
    128 characters; a random one the application keeps will do.
@@ -89,11 +76,3 @@ without a handshake. The contract:
 A hold lasts 150 seconds unless it is repeated, and only the device that holds it lets it go. The holds live in
 the memory of the panel, a restart forgets them. The panel answers from the holds alone: a configuration no
 application reports stays under the firewall guard above.
-
-## When something is refused
-
-| Code | Means |
-|---|---|
-| `client-single-device` | the client has **Several devices** off |
-| `client-is-device` | a device takes no devices of its own |
-| `client-has-devices` | **Several devices** stays on while the client carries devices |

@@ -19,7 +19,7 @@ export function ClientsRemove() {
   const [fault, setFault] = useState<Summary | null>(null)
   const all = clients.data ?? []
   const wanted = new Set((params.get("ids") ?? "").split(",").map(Number))
-  const held = all.filter((one) => one.parentId === null && wanted.has(one.id))
+  const held = all.filter((one) => wanted.has(one.id))
 
   useTail([{ label: t("clients.removeMany") }])
 
@@ -61,13 +61,6 @@ export function ClientsRemove() {
           <div key={one.id} className="mt-1.5 text-[13px]">
             <span className="text-ink">{one.name}</span>
             <span className="ml-2 text-muted">{one.address.join(", ")}</span>
-            {all
-              .filter((device) => device.parentId === one.id)
-              .map((device) => (
-                <div key={device.id} className="pl-4 text-muted">
-                  {`${device.name}: ${device.address.join(", ")}`}
-                </div>
-              ))}
           </div>
         ))}
       </div>

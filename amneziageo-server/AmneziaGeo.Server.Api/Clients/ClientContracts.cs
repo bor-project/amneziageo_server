@@ -23,11 +23,6 @@ public sealed record ClientStateBody(
     bool IsSpent);
 
 /// <summary>
-/// One port of the host carried to a client.
-/// </summary>
-public sealed record ForwardBody(string Protocol, int From, int To);
-
-/// <summary>
 /// One client as the panel reads it.
 /// </summary>
 public sealed record ClientResponse(
@@ -43,13 +38,9 @@ public sealed record ClientResponse(
     string Note,
     long? TemplateId,
     string SubscriptionId,
-    long? ParentId,
-    bool MultiDevice,
     long DailyLimit,
     string Inbound,
     string Routing,
-    IReadOnlyList<string> Routes,
-    IReadOnlyList<ForwardBody> Forwards,
     ClientStateBody State,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc);
@@ -68,11 +59,8 @@ public sealed record ClientRequest(
     string? Note,
     long? TemplateId = null,
     string? SubscriptionId = null,
-    bool? MultiDevice = null,
     long? DailyLimit = null,
     string? Inbound = null,
-    IReadOnlyList<string>? Routes = null,
-    IReadOnlyList<ForwardBody>? Forwards = null,
     string? Routing = null);
 
 /// <summary>
@@ -152,13 +140,9 @@ public static class ClientAnswers
             client.Note,
             client.TemplateId,
             secrets ? client.SubscriptionId : string.Empty,
-            client.ParentId,
-            client.MultiDevice,
             client.DailyLimit,
             InboundName.Of(client.Inbound),
             RoutingName.Of(client.Routing),
-            client.Routes,
-            [.. client.Forwards.Select(forward => new ForwardBody(forward.Protocol, forward.From, forward.To))],
             new ClientStateBody(
                 state.IsOnline,
                 state.IsPresent,
@@ -171,7 +155,7 @@ public static class ClientAnswers
                 Math.Round(traffic.Rate.Tx, 1),
                 traffic.Used.Rx,
                 traffic.Used.Tx,
-                traffic.Group.Total,
+                traffic.Used.Total,
                 traffic.IsSpent),
             client.CreatedUtc,
             client.UpdatedUtc);
@@ -196,19 +180,11 @@ public static class ClientAnswers
             Note = (request.Note ?? string.Empty).Trim(),
             TemplateId = request.TemplateId,
             SubscriptionId = request.SubscriptionId?.Trim() ?? held?.SubscriptionId ?? ClientDefaults.SubscriptionId(),
-            MultiDevice = request.MultiDevice ?? held?.MultiDevice ?? false,
             DailyLimit = request.DailyLimit ?? held?.DailyLimit ?? 0,
             Inbound = InboundName.Read(request.Inbound, held?.Inbound ?? ClientInbound.Endpoint),
             Routing = RoutingName.Read(request.Routing, held?.Routing ?? ClientRouting.Template),
-            Routes = request.Routes is null ? held?.Routes ?? [] : Clean(request.Routes),
-            Forwards = request.Forwards is null ? held?.Forwards ?? [] : Carried(request.Forwards),
         };
     }
-
-    private static IReadOnlyList<PortForward> Carried(IReadOnlyList<ForwardBody> bodies) =>
-    [
-        .. bodies.Select(body => new PortForward((body.Protocol ?? string.Empty).Trim().ToLowerInvariant(), body.From, body.To))
-    ];
 
     private static IReadOnlyList<string> Clean(IReadOnlyList<string>? values) =>
     [

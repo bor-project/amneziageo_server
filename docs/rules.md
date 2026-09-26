@@ -44,10 +44,10 @@ nothing about either keeps what the rule already carries, so a client written be
 neither takes the hold off nor turns the rule off by touching it. The clients, the interfaces and the source ports are kept the same way:
 a change that does not name them leaves them as they are.
 
-A client named by a rule brings its addresses and the addresses of its devices into the addresses the rule
-matches by, next to the ones written by hand; the names are read without regard to case. The rule is laid on
-the host again whenever a client is added, changed or removed, so a new address or a new device of a named
-client is matched without touching the rule. A name the panel no longer holds is passed over; a rule none of
+A client named by a rule brings its addresses into the addresses the rule matches by, next to the ones written
+by hand; the names are read without regard to case. The rule is laid on the host again whenever a client is
+added, changed or removed, so a new address of a named client is matched without touching the rule. A name the
+panel no longer holds is passed over; a rule none of
 whose clients the panel holds stays off the host with `unknown-client`. An interface is the name of a
 configuration; a rule naming interfaces matches only the traffic that came in on one of them, and a rule none
 of whose interfaces the panel holds stays off the host with `unknown-inbound`. Renaming a client or a

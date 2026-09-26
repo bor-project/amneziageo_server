@@ -650,58 +650,26 @@ public class ClientTests
     };
 
     [Fact]
-    public void AForwardIsReadAndWrittenAsProtocolAndPorts()
+    public void AClientWithABadAccessIsRefused()
     {
-        Assert.True(PortForward.TryParse("tcp:2222:22", out var found));
-        Assert.Equal(new PortForward("tcp", 2222, 22), found);
-        Assert.Equal("udp:5353:53", new PortForward("udp", 5353, 53).ToString());
-        Assert.False(PortForward.TryParse("sctp:1:1", out _));
-        Assert.False(PortForward.TryParse("tcp:0:22", out _));
-        Assert.False(PortForward.TryParse("tcp:65536:22", out _));
-        Assert.False(PortForward.TryParse("tcp:22", out _));
-    }
-
-    [Fact]
-    public void AClientWithABadNetworkOrPortIsRefused()
-    {
-        Assert.Equal(
-            "bad-client-routes",
-            ClientRules.Check(Client() with { Routes = ["not-a-network"] })!.Code);
-        Assert.Equal(
-            "bad-client-routes",
-            ClientRules.Check(Client() with { Routes = ["192.168.88.7/24"] })!.Code);
-        Assert.Equal(
-            "bad-client-forward",
-            ClientRules.Check(Client() with { Forwards = [new PortForward("tcp", 0, 22)] })!.Code);
-        Assert.Equal(
-            "bad-client-forward",
-            ClientRules.Check(Client() with
-            {
-                Forwards = [new PortForward("tcp", 2222, 22), new PortForward("tcp", 2222, 23)],
-            })!.Code);
         Assert.Equal(
             "bad-client-inbound",
             ClientRules.Check(Client() with { Inbound = (ClientInbound)7 })!.Code);
-        Assert.Null(ClientRules.Check(Client() with
-        {
-            Routes = ["192.168.88.0/24"],
-            Forwards = [new PortForward("tcp", 2222, 22), new PortForward("udp", 2222, 22)],
-            Inbound = ClientInbound.Network,
-        }));
+        Assert.Null(ClientRules.Check(Client() with { Inbound = ClientInbound.Network }));
     }
 
     [Fact]
-    public void TheNetworksBehindAClientGoIntoItsPeer()
+    public void ThePeerOfAClientAllowsItsAddressesAlone()
     {
-        var peer = ClientDevice.Peer(Endpoint(), Client() with { Routes = ["192.168.88.0/24"] });
+        var peer = ClientDevice.Peer(Endpoint(), Client());
 
-        Assert.Equal(["10.8.0.2/32", "192.168.88.0/24"], peer.AllowedIps!.Select(range => range.ToString()));
+        Assert.Equal(["10.8.0.2/32"], peer.AllowedIps!.Select(range => range.ToString()));
     }
 
     [Fact]
     public void TheFileOfAClientCarriesNoLineOfTheServerButTheMovedServices()
     {
-        var client = Client() with { Inbound = ClientInbound.Network, Routes = ["192.168.88.0/24"], Routing = ClientRouting.Off };
+        var client = Client() with { Inbound = ClientInbound.Network, Routing = ClientRouting.Off };
 
         var plain = ClientText.Text(Endpoint(), client, new ClientTemplate { Name = "closed", Routing = false });
         var moved = ClientText.Text(Endpoint() with { ServicesPort = 8446 }, Client());
@@ -716,7 +684,7 @@ public class ClientTests
     [Fact]
     public void TheLinkCarriesTheFileWithoutExtras()
     {
-        var client = Client() with { Inbound = ClientInbound.Server, Routes = ["192.168.88.0/24"] };
+        var client = Client() with { Inbound = ClientInbound.Server };
 
         using var document = Opened(ClientLink.Link(Endpoint() with { WebSocket = true }, client));
 

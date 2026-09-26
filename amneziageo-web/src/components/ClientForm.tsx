@@ -9,7 +9,7 @@ import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useTemplates } from "@/api/templates"
 import { Flag, Help, Line, Part, Pick, Regenerate } from "@/components/fields"
-import { card, chip, danger, field, label, note, primary, secondary } from "@/components/styles"
+import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { randomId, randomKey } from "@/keys"
@@ -58,7 +58,6 @@ export function ClientForm({
   const clash = others.some((one) => one.name.toLowerCase() === draft.name.trim().toLowerCase())
   const misnamed = !/^[A-Za-z0-9_-]{0,64}$/.test(draft.subscriptionId)
   const allowed = allowanceOf(limit)
-  const ported = draft.forwards.every((one) => isPort(one.from) && isPort(one.to))
   const inherited = (templates.data ?? []).find((one) => one.id === draft.templateId)?.routing ?? true
   const edited =
     !same(draft, start) ||
@@ -72,7 +71,6 @@ export function ClientForm({
     !clash &&
     !misnamed &&
     allowed !== null &&
-    ported &&
     draft.configId > 0 &&
     (legacy ? parts(listed).length > 0 : whole && spans.length > 0 && problem.length === 0)
 
@@ -243,37 +241,6 @@ export function ClientForm({
             value={draft.isEnabled}
             onChange={(isEnabled) => put({ isEnabled })}
           />
-          <Flag
-            id="client-devices"
-            caption={t("clients.multiDevice")}
-            value={draft.multiDevice}
-            onChange={(multiDevice) => put({ multiDevice })}
-          />
-        </div>
-      </Part>
-
-      <Part
-        title={
-          <span className="flex items-center gap-2">
-            {t("clients.partNetwork")}
-            <span className={chip}>{t("clients.inProgress")}</span>
-          </span>
-        }
-      >
-        <div className="sm:col-span-2">
-          <Fixed caption={t("clients.routes")} value={draft.routes.join(", ")} dash={t("clients.noRoutes")} />
-          <div className={note}>{t("clients.routesNote")}</div>
-        </div>
-
-        <div className="sm:col-span-2">
-          <Fixed
-            caption={t("clients.forwards")}
-            value={draft.forwards
-              .map((one) => `${one.protocol} ${one.from} ${t("clients.forwardTo")} ${one.to}`)
-              .join(", ")}
-            dash={t("clients.dash")}
-          />
-          <div className={note}>{t("clients.forwardsNote")}</div>
         </div>
       </Part>
 
@@ -301,21 +268,6 @@ export function ClientForm({
       </div>
     </div>
   )
-}
-
-function Fixed({ caption, value, dash }: { caption: string; value: string; dash: string }) {
-  return (
-    <div>
-      <span className={label}>{caption}</span>
-      <div className={`mt-1 truncate ${field}`} title={value}>
-        {value.length === 0 ? dash : value}
-      </div>
-    </div>
-  )
-}
-
-function isPort(value: number): boolean {
-  return Number.isInteger(value) && value > 0 && value <= 65535
 }
 
 function spansOf(configs: Config[], configId: number): Span[] {

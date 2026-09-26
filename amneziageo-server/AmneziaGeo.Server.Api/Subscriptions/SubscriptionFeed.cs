@@ -67,7 +67,7 @@ public sealed class SubscriptionFeed
             endpoints,
             members,
             templates.ToDictionary(one => one.Id),
-            _ledger.Group,
+            _ledger.Used,
             endpoint => DnsHandout.For(endpoint, settings),
             (endpoint, member) => ClientText.Title(endpoint, member, naming, host));
     }

@@ -640,19 +640,11 @@ public sealed class ClientEntity
 
     public string SubscriptionId { get; set; } = string.Empty;
 
-    public long? ParentId { get; set; }
-
-    public bool MultiDevice { get; set; }
-
     public long DailyLimit { get; set; }
 
     public int Inbound { get; set; }
 
     public int Routing { get; set; }
-
-    public string Routes { get; set; } = string.Empty;
-
-    public string Forwards { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedUtc { get; set; }
 
@@ -737,6 +729,18 @@ public sealed class TemplateEntity
     public DateTimeOffset? RefreshedUtc { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// The set of standard entries a store has been given, as the database holds it.
+/// </summary>
+public sealed class SeedEntity
+{
+    public string Name { get; set; } = string.Empty;
+
+    public int Version { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }
 }

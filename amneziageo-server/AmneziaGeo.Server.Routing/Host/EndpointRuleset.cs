@@ -17,8 +17,8 @@ public static class EndpointRuleset
     public const string TableName = "amneziageo_in";
 
     /// <summary>
-    /// Returns the ruleset that masquerades the clients, carries the ports of the host to them under the address of
-    /// the endpoint, holds them out of the closed ranges and lets through what the clients take from the tunnel.
+    /// Returns the ruleset that masquerades the clients, holds them out of the closed ranges and lets through what the
+    /// clients take from the tunnel.
     /// </summary>
     public static string Text(
         IReadOnlyList<ServerConfig> configs,
@@ -40,9 +40,8 @@ public static class EndpointRuleset
             Sets(text, config, Open(taken, config));
         }
 
-        Prerouting(text, live, taken, uplink);
-        Postrouting(text, live, taken, uplink);
-        Forward(text, live, taken);
+        Postrouting(text, live, uplink);
+        Forward(text, live);
         text.Append("}\n");
 
         return text.ToString();
@@ -68,33 +67,9 @@ public static class EndpointRuleset
         text.Append("\t}\n\n");
     }
 
-    private static void Prerouting(
-        StringBuilder text,
-        IReadOnlyList<ServerConfig> configs,
-        IReadOnlyList<TunnelClient> clients,
-        string uplink)
-    {
-        text.Append("\tchain prerouting {\n");
-        text.Append("\t\ttype nat hook prerouting priority dstnat; policy accept;\n");
-        if (uplink.Length > 0)
-        {
-            foreach (var carried in Carried(configs, clients))
-            {
-                text.Append("\t\tiifname \"").Append(uplink).Append("\" meta nfproto ")
-                    .Append(carried.Target.IsSix ? "ipv6" : "ipv4").Append(' ').Append(carried.Forward.Protocol)
-                    .Append(" dport ").Append(Number(carried.Forward.From)).Append(" dnat ")
-                    .Append(carried.Target.IsSix ? "ip6" : "ip").Append(" to ").Append(Destination(carried))
-                    .Append('\n');
-            }
-        }
-
-        text.Append("\t}\n\n");
-    }
-
     private static void Postrouting(
         StringBuilder text,
         IReadOnlyList<ServerConfig> configs,
-        IReadOnlyList<TunnelClient> clients,
         string uplink)
     {
         text.Append("\tchain postrouting {\n");
@@ -108,40 +83,16 @@ public static class EndpointRuleset
             }
         }
 
-        if (uplink.Length > 0)
-        {
-            foreach (var config in configs)
-            {
-                foreach (var carried in Carried([config], clients))
-                {
-                    text.Append("\t\toifname \"").Append(config.Name).Append("\" ")
-                        .Append(Family(carried.Target)).Append(" daddr ").Append(carried.Target.Address)
-                        .Append(' ').Append(carried.Forward.Protocol).Append(" dport ")
-                        .Append(Number(carried.Forward.To)).Append(" ct status dnat masquerade\n");
-                }
-            }
-        }
-
         text.Append("\t}\n\n");
     }
 
-    private static void Forward(
-        StringBuilder text,
-        IReadOnlyList<ServerConfig> configs,
-        IReadOnlyList<TunnelClient> clients)
+    private static void Forward(StringBuilder text, IReadOnlyList<ServerConfig> configs)
     {
         text.Append("\tchain forward {\n");
         text.Append("\t\ttype filter hook forward priority filter; policy accept;\n");
         text.Append("\t\tct state established,related accept\n");
         foreach (var config in configs)
         {
-            foreach (var carried in Carried([config], clients))
-            {
-                text.Append("\t\toifname \"").Append(config.Name).Append("\" ").Append(Family(carried.Target))
-                    .Append(" daddr ").Append(carried.Target.Address).Append(' ').Append(carried.Forward.Protocol)
-                    .Append(" dport ").Append(Number(carried.Forward.To)).Append(" accept\n");
-            }
-
             Reach(text, config.Name, "ip", Set4(config.Id));
             Reach(text, config.Name, "ip6", Set6(config.Id));
             text.Append("\t\toifname \"").Append(config.Name).Append("\" drop\n");
@@ -167,39 +118,8 @@ public static class EndpointRuleset
         .. clients
             .Where(client => client.ConfigId == config.Id
                 && InboundName.Taken(client.Inbound, config.Inbound) == ClientInbound.Network)
-            .SelectMany(client => Points(client.Address).Concat(Networks(client.Routes)))
+            .SelectMany(client => Points(client.Address))
     ];
-
-    // Every port of the host carried to a client, with the address of the client it reaches.
-    private static IReadOnlyList<Carry> Carried(
-        IReadOnlyList<ServerConfig> configs,
-        IReadOnlyList<TunnelClient> clients)
-    {
-        var held = configs.Select(config => config.Id).ToHashSet();
-
-        return
-        [
-            .. clients
-                .Where(client => held.Contains(client.ConfigId))
-                .SelectMany(client => client.Forwards.SelectMany(forward => Targets(client, forward)))
-        ];
-    }
-
-    private static IEnumerable<Carry> Targets(TunnelClient client, PortForward forward)
-    {
-        var addresses = client.Address.Select(Range).OfType<AwgAllowedIp>().ToArray();
-        foreach (var six in new[] { false, true })
-        {
-            if (Array.Find(addresses, address => address.IsSix == six) is { } target)
-            {
-                yield return new Carry(forward, target);
-            }
-        }
-    }
-
-    private static string Destination(Carry carried) => carried.Target.IsSix
-        ? $"[{carried.Target.Address}]:{Number(carried.Forward.To)}"
-        : $"{carried.Target.Address}:{Number(carried.Forward.To)}";
 
     private static string Set4(long configId) => Name(configId, "v4");
 
@@ -207,8 +127,6 @@ public static class EndpointRuleset
 
     private static string Name(long configId, string family) =>
         string.Create(CultureInfo.InvariantCulture, $"in{configId}{family}");
-
-    private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
 
     private static string Family(AwgAllowedIp range) => range.IsSix ? "ip6" : "ip";
 
@@ -229,6 +147,4 @@ public static class EndpointRuleset
             .Select(range => AwgAllowedIp.TryParse(range, out var found) ? found.Network() : null)
             .OfType<AwgAllowedIp>()
     ];
-
-    private sealed record Carry(PortForward Forward, AwgAllowedIp Target);
 }

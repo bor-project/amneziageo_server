@@ -277,21 +277,21 @@ public class SubscriptionTests
     }
 
     [Fact]
-    public void AFeedCountsAClientWithItsDevicesOnceAndAddsUpTheLimits()
+    public void AFeedAddsUpTheTrafficAndTheLimitsOfItsClients()
     {
         var on = Endpoint(1, "awg1");
-        var owner = Member(1, "milena") with { Id = 1, MultiDevice = true, DailyLimit = 100 };
-        var device = Member(1, "milena-2") with { Id = 2, ParentId = 1, DailyLimit = 100 };
+        var milena = Member(1, "milena") with { Id = 1, DailyLimit = 100 };
+        var phone = Member(1, "milena-phone") with { Id = 2, DailyLimit = 100 };
         var other = Member(1, "bogdan") with { Id = 3, DailyLimit = 50 };
         var templates = new Dictionary<long, ClientTemplate>();
 
-        var feed = ClientFeed.Of([on], [owner, device, other], templates, Used);
-        var open = ClientFeed.Of([on], [owner, other with { DailyLimit = 0 }], templates, Used);
+        var feed = ClientFeed.Of([on], [milena, phone, other], templates, Used);
+        var open = ClientFeed.Of([on], [milena, other with { DailyLimit = 0 }], templates, Used);
 
-        Assert.Equal(11UL, feed.Upload);
-        Assert.Equal(22UL, feed.Download);
-        Assert.Equal(150UL, feed.Total);
-        Assert.Equal("upload=11; download=22; total=150; expire=0", feed.Usage);
+        Assert.Equal(21UL, feed.Upload);
+        Assert.Equal(42UL, feed.Download);
+        Assert.Equal(250UL, feed.Total);
+        Assert.Equal("upload=21; download=42; total=250; expire=0", feed.Usage);
         Assert.Equal(0UL, open.Total);
 
         static ClientUsage Used(TunnelClient client) => client.Id == 3 ? new ClientUsage(1, 2) : new ClientUsage(10, 20);

@@ -20,9 +20,9 @@ export function Speed({ one }: { one: Client }) {
 
 export function Traffic({ one }: { one: Client }) {
   const t = useText()
-  const used = bytes(t, one.parentId === null ? one.state.used : one.state.todayRx + one.state.todayTx)
+  const used = bytes(t, one.state.used)
 
-  if (one.parentId === null && one.dailyLimit > 0) {
+  if (one.dailyLimit > 0) {
     return <>{t("clients.usedOf", { used, limit: bytes(t, one.dailyLimit) })}</>
   }
 

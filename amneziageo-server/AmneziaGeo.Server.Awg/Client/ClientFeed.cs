@@ -36,8 +36,7 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
     }
 
     /// <summary>
-    /// Returns what a subscription hands out of its clients that are on and hold a private key at endpoints that are on,
-    /// counting a client together with its devices once.
+    /// Returns what a subscription hands out of its clients that are on and hold a private key at endpoints that are on.
     /// </summary>
     public static ClientFeed Of(
         IReadOnlyList<ServerConfig> endpoints,
@@ -53,18 +52,17 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
         ArgumentNullException.ThrowIfNull(used);
 
         var links = new List<string>();
-        var groups = new Dictionary<long, Share>();
+        var shares = new List<Share>();
         foreach (var endpoint in endpoints.Where(one => one.IsEnabled))
         {
             foreach (var member in members.Where(one => one.ConfigId == endpoint.Id && one.IsEnabled && one.PrivateKey.Length > 0))
             {
                 var template = member.TemplateId is { } chosen ? templates.GetValueOrDefault(chosen) : null;
                 links.Add(ClientLink.Link(endpoint, member, template, resolver?.Invoke(endpoint), title?.Invoke(endpoint, member)));
-                groups[member.ParentId ?? member.Id] = new Share(used(member), member.DailyLimit);
+                shares.Add(new Share(used(member), member.DailyLimit));
             }
         }
 
-        var shares = groups.Values;
         var total = shares.Any(one => one.Limit <= 0) ? 0UL : shares.Aggregate(0UL, (sum, one) => sum + (ulong)one.Limit);
 
         return new ClientFeed(

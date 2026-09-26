@@ -241,21 +241,19 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
 /// <summary>
 /// The clients and the interfaces the rules name.
 /// </summary>
-/// <param name="Clients">Every client the panel holds, the devices among them.</param>
+/// <param name="Clients">Every client the panel holds.</param>
 /// <param name="Interfaces">The interfaces the clients arrive on.</param>
 public sealed record RouteKnown(IReadOnlyList<TunnelClient> Clients, IReadOnlyList<string> Interfaces)
 {
     /// <summary>
-    /// Returns the addresses of the named clients and of their devices.
+    /// Returns the addresses of the named clients.
     /// </summary>
     public IEnumerable<AwgAllowedIp?> Addresses(IReadOnlyList<string> names)
     {
         ArgumentNullException.ThrowIfNull(names);
 
-        var named = Clients.Where(client => Named(names, client.Name)).Select(client => client.Id).ToHashSet();
-
         return Clients
-            .Where(client => named.Contains(client.Id) || (client.ParentId is { } parent && named.Contains(parent)))
+            .Where(client => Named(names, client.Name))
             .SelectMany(client => client.Address)
             .Select(address => AwgAllowedIp.TryParse(address, out var range) ? range : null);
     }

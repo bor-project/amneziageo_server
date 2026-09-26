@@ -50,7 +50,6 @@ public static class ServiceRegistration
         services.AddSingleton<IHelloFeature, WebSocketOffer>();
         services.AddSingleton<IHelloFeature, RoutingOffer>();
         services.AddSingleton<IHelloFeature, InboundOffer>();
-        services.AddSingleton<IHelloFeature, RoutesOffer>();
         services.AddSingleton<IHelloFeature, SpeedOffer>();
         services.AddSingleton<IHelloFeature, SubscriptionOffer>();
         services.AddSingleton<ServiceDesk>();

@@ -27,7 +27,7 @@ export function ClientExport() {
     )
   }
 
-  const may = holds(user, scopes.manageClients) && held.parentId === null
+  const may = holds(user, scopes.manageClients)
 
   return (
     <div className="mt-4 flex flex-col gap-4">

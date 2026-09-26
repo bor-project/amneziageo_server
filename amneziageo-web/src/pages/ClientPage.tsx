@@ -1,15 +1,9 @@
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom"
-import { draftOf, useAddClient, useAddDevice, useChangeClient, useClientDraft, useClients } from "@/api/clients"
-import type { Client } from "@/api/clients"
-import { scopes } from "@/api/scopes"
+import { draftOf, useAddClient, useChangeClient, useClientDraft, useClients } from "@/api/clients"
 import { ClientForm } from "@/components/ClientForm"
-import { Handshake, Traffic } from "@/components/ClientStats"
-import { Rows } from "@/components/Rows"
 import { useTail } from "@/components/crumbs"
-import { card, danger, secondary } from "@/components/styles"
+import { secondary } from "@/components/styles"
 import { useText } from "@/i18n"
-import { holds } from "@/store/authSlice"
-import { useAppSelector } from "@/store/hooks"
 import { useSpot } from "@/store/spots"
 
 export function ClientPage() {
@@ -49,11 +43,8 @@ function NewClient() {
 function HeldClient({ clientId }: { clientId: number }) {
   const t = useText()
   const navigate = useNavigate()
-  const user = useAppSelector((s) => s.auth.user)
   const clients = useClients()
   const change = useChangeClient()
-  const addDevice = useAddDevice()
-  const may = holds(user, scopes.manageClients)
   const all = clients.data ?? []
   const held = all.find((one) => one.id === clientId)
   const back = useSpot("/connections/clients")
@@ -72,12 +63,6 @@ function HeldClient({ clientId }: { clientId: number }) {
     )
   }
 
-  if (held.parentId !== null) {
-    return <Navigate to={`/connections/clients/${held.id}/export`} replace />
-  }
-
-  const devices = all.filter((one) => one.parentId === held.id)
-
   return (
     <div className="mt-4 flex flex-col gap-4">
       <div className="flex justify-end">
@@ -95,91 +80,6 @@ function HeldClient({ clientId }: { clientId: number }) {
         onClose={() => navigate(back)}
         onRemove={() => navigate(`/connections/clients/${held.id}/delete`)}
       />
-
-      {(held.multiDevice || devices.length > 0) && (
-        <div className={card}>
-          <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3">
-            <div className="text-sm text-ink">{t("clients.tabDevices")}</div>
-            {held.multiDevice && (
-              <button
-                type="button"
-                onClick={() =>
-                  void addDevice
-                    .mutateAsync(held.id)
-                    .then((made) => navigate(`/connections/clients/${made.id}/export`))
-                }
-                disabled={addDevice.isPending}
-                className={secondary}
-              >
-                {t("clients.addDevice")}
-              </button>
-            )}
-          </div>
-
-          {devices.length === 0 ? (
-            <div className="px-4 py-6 text-sm text-muted">{t("clients.noDevices")}</div>
-          ) : (
-            <Rows
-              name="device"
-              items={devices}
-              keyOf={(one) => one.id}
-              columns={[
-                {
-                  key: "name",
-                  caption: t("clients.name"),
-                  sort: (one: Client) => one.name,
-                  lead: true,
-                  body: "font-semibold text-ink",
-                  cell: (one: Client) => (
-                    <Link to={`/connections/clients/${one.id}/export`} className="hover:text-brand-ink">
-                      {one.name}
-                    </Link>
-                  ),
-                },
-                {
-                  key: "address",
-                  width: 136,
-                  caption: t("clients.address"),
-                  sort: (one: Client) => one.address.join(", "),
-                  cell: (one: Client) => one.address.join(", "),
-                },
-                {
-                  key: "traffic",
-                  width: 136,
-                  caption: t("clients.traffic"),
-                  sort: (one: Client) => one.state.todayRx + one.state.todayTx,
-                  cell: (one: Client) => <Traffic one={one} />,
-                },
-                {
-                  key: "state",
-                  width: 188,
-                  caption: t("clients.state"),
-                  sort: (one: Client) => (one.state.lastHandshake === null ? null : Date.parse(one.state.lastHandshake)),
-                  cell: (one: Client) => <Handshake one={one} />,
-                },
-                {
-                  key: "actions",
-                  width: 56,
-                  caption: t("clients.actions"),
-                  tail: true,
-                  cell: (one: Client) =>
-                    may && (
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/connections/clients/${one.id}/delete`)}
-                          className={`text-sm ${danger}`}
-                        >
-                          {t("clients.remove")}
-                        </button>
-                      </div>
-                    ),
-                },
-              ]}
-            />
-          )}
-        </div>
-      )}
     </div>
   )
 }

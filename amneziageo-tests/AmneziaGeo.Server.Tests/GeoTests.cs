@@ -69,6 +69,19 @@ public class GeoTests
     }
 
     [Fact]
+    public void AFreshInstallTakesDiscordVoiceWithoutReplacingTheMainCountries()
+    {
+        var files = new MemoryGeoFiles();
+        files.Put("zkeenip", GeoBuilder.Ip(("RU", ["10.0.0.0/8"]), ("DISCORD", ["66.22.192.0/18"])));
+        files.Put("geoip", Ip);
+
+        var index = GeoIndex.Load(GeoDefaults.Sources, files);
+
+        Assert.Equal(["66.22.192.0/18"], index.Cidrs("discord"));
+        Assert.Equal(["77.88.8.0/24", "5.255.255.0/24"], index.Cidrs("ru"));
+    }
+
+    [Fact]
     public void ASourceThatIsOffIsNotRead()
     {
         var files = new MemoryGeoFiles();

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Geo;
+using Microsoft.EntityFrameworkCore;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -17,9 +18,88 @@ public class GeoStoreTests
         var held = await bench.Geo.ListAsync(CancellationToken.None);
 
         Assert.Equal(GeoDefaults.Sources.Length, held.Count);
-        Assert.Equal([1, 2, 3, 4], held.Select(source => source.Position));
+        Assert.Equal([1, 2, 3, 4, 5], held.Select(source => source.Position));
         Assert.All(held, source => Assert.True(source.IsEnabled));
         Assert.Equal(0, await bench.Geo.SeedAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task APanelSeededBeforeGetsTheSourceThatJoinedOnTopOnce()
+    {
+        using var bench = new Bench();
+        await SeededBeforeAsync(bench);
+
+        var added = await bench.Geo.SeedAsync(CancellationToken.None);
+        var held = await bench.Geo.ListAsync(CancellationToken.None);
+
+        Assert.Equal(1, added);
+        Assert.Equal(["zkeenip", "geosite", "geoip", "geosite-ru-only", "geoip-ru-only"], held.Select(source => source.Name));
+        Assert.Equal([1, 2, 3, 4, 5], held.Select(source => source.Position));
+        Assert.Equal(0, await bench.Geo.SeedAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AStandardSourceRemovedByHandIsNotBroughtBack()
+    {
+        using var bench = new Bench();
+        await SeededBeforeAsync(bench, "geoip-ru-only");
+
+        var added = await bench.Geo.SeedAsync(CancellationToken.None);
+        var zkeenip = (await bench.Geo.ListAsync(CancellationToken.None))[0];
+        await bench.Geo.RemoveAsync(zkeenip.Id, CancellationToken.None);
+        var again = await bench.Geo.SeedAsync(CancellationToken.None);
+
+        Assert.Equal(1, added);
+        Assert.Equal("zkeenip", zkeenip.Name);
+        Assert.Equal(0, again);
+        Assert.Equal(["geosite", "geoip", "geosite-ru-only"], (await bench.Geo.ListAsync(CancellationToken.None)).Select(source => source.Name));
+    }
+
+    [Fact]
+    public async Task AStandardSourceHeldUnderItsAddressIsNotAddedTwice()
+    {
+        using var bench = new Bench();
+        await SeededBeforeAsync(bench);
+        var url = GeoDefaults.Sources.Single(source => source.Name == "zkeenip").Url;
+        await bench.Geo.AddAsync(Draft("mine", url), CancellationToken.None);
+
+        var added = await bench.Geo.SeedAsync(CancellationToken.None);
+        var held = await bench.Geo.ListAsync(CancellationToken.None);
+
+        Assert.Equal(0, added);
+        Assert.Single(held, source => source.Url == url);
+        Assert.DoesNotContain(held, source => source.Name == "zkeenip");
+    }
+
+    [Fact]
+    public async Task ASourceThatJoinedGoesInFrontOfTheStandardOneThatFollowsIt()
+    {
+        using var bench = new Bench();
+        await SeededBeforeAsync(bench);
+        var mine = await bench.Geo.AddAsync(Draft("mine", "https://example.org/one.dat"), CancellationToken.None);
+        for (var step = 0; step < 4; step++)
+        {
+            await bench.Geo.MoveAsync(mine.Record!.Id, up: true, CancellationToken.None);
+        }
+
+        await bench.Geo.SeedAsync(CancellationToken.None);
+
+        Assert.Equal(
+            ["mine", "zkeenip", "geosite", "geoip", "geosite-ru-only", "geoip-ru-only"],
+            (await bench.Geo.ListAsync(CancellationToken.None)).Select(source => source.Name));
+    }
+
+    [Fact]
+    public async Task APanelWithEverySourceRemovedStaysEmpty()
+    {
+        using var bench = new Bench();
+        foreach (var source in await bench.Geo.ListAsync(CancellationToken.None))
+        {
+            await bench.Geo.RemoveAsync(source.Id, CancellationToken.None);
+        }
+
+        Assert.Equal(0, await bench.Geo.SeedAsync(CancellationToken.None));
+        Assert.Empty(await bench.Geo.ListAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -166,6 +246,25 @@ public class GeoStoreTests
         Kind = GeoKind.Ip,
         Url = url,
     };
+
+    // Turns the fresh panel of a bench into one seeded by the first set: no zkeenip, no mark of the set.
+    private static async Task SeededBeforeAsync(Bench bench, params string[] removed)
+    {
+        var gone = await bench.Db.GeoSources
+            .Where(source => source.Name == "zkeenip" || removed.Contains(source.Name))
+            .ToListAsync();
+        bench.Db.GeoSources.RemoveRange(gone);
+        bench.Db.Seeds.RemoveRange(await bench.Db.Seeds.ToListAsync());
+        await bench.Db.SaveChangesAsync();
+
+        var position = 0;
+        foreach (var source in await bench.Db.GeoSources.OrderBy(source => source.Position).ToListAsync())
+        {
+            source.Position = ++position;
+        }
+
+        await bench.Db.SaveChangesAsync();
+    }
 
     private sealed class Answers : HttpMessageHandler
     {

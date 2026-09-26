@@ -481,7 +481,6 @@ public class ServiceTests
                 new WebSocketOffer(),
                 new RoutingOffer(),
                 new InboundOffer(),
-                new RoutesOffer(),
                 new SpeedOffer(tickets),
                 new SubscriptionOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
             ],

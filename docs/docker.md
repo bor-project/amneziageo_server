@@ -59,8 +59,9 @@ which runs on, so the session goes on and a new port or path takes hold without 
 restart policy of the container on and off, the log is the log of the container read through compose, and a copy of
 the database goes back while the panel is held. An update moves the container onto the new image and ends the
 session. The commands of the console go through the same name: `docker compose exec panel amneziageo-server user
-list`. The items that change the host itself, going back to an older image, taking the panel off, a certificate of
-Let's Encrypt, the rules of ufw, BBR and forwarding, answer that the container does not reach the host.
+list`. The items that change the host itself, going back to an older image, taking the panel off and a certificate of
+Let's Encrypt, answer that the container does not reach the host. The rules of ufw, turning ufw on or off, BBR and
+forwarding print the command for the host instead.
 
 `amneziageo-server install`, see [install.md](install.md#the-menu), puts the container on a bare host when asked
 for Docker: Docker itself from the repository of Docker with `"ip-forward-no-drop": true`,
@@ -138,7 +139,7 @@ AMNEZIAGEO_TAG=<earlier version> docker compose up -d
 
 The database stays as the newer panel left it. The copy from before the update goes back into the volume with
 `docker compose cp`, while the container is stopped. `amneziageo-server rollback` starts the container on the
-newest image the host keeps below the one it runs, and offers to put a copy of the database back.
+newest image of the same name the host keeps below the one it runs, and offers to put a copy of the database back.
 
 ## How it differs from the package
 

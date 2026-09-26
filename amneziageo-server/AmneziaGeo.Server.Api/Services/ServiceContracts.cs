@@ -52,12 +52,6 @@ public sealed record RoutingFeature(bool Allowed);
 public sealed record InboundFeature(string Mode);
 
 /// <summary>
-/// Arguments of the routes feature.
-/// </summary>
-/// <param name="Ranges">The ranges behind the client.</param>
-public sealed record RoutesFeature(IReadOnlyList<string> Ranges);
-
-/// <summary>
 /// The addresses one leg of a measurement goes to.
 /// </summary>
 /// <param name="Down">The address the client pulls bytes from.</param>
@@ -130,11 +124,6 @@ public static class FeatureNames
     /// What the client takes from the tunnel.
     /// </summary>
     public const string Inbound = "inbound";
-
-    /// <summary>
-    /// The ranges behind the client.
-    /// </summary>
-    public const string Routes = "routes";
 
     /// <summary>
     /// The measurement of the speed against the server.
