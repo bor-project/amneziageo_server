@@ -45,7 +45,9 @@ Build it:
 cargo build --release --manifest-path wstunnel/wstunnel/Cargo.toml -p wstunnel-cli
 ```
 
-`deploy/publish.sh` builds it the same way and puts the binary in the package, `deploy/install.sh` puts it
-at `/usr/local/bin/wstunnel` with a service of its own, one instance per endpoint that takes the websocket. The
+`deploy/publish.sh` builds it the same way and puts the binary in the package, `deploy/install.sh` keeps it in
+the release as `/opt/amneziageo-server/current/wstunnel` with a service of its own, one instance per endpoint
+that takes the websocket, and leaves a `/usr/local/bin/wstunnel` of the host alone. The image carries it at
+`/usr/local/bin/wstunnel`. The
 panel writes the arguments and the whitelist of targets, see [services.md](services.md); the tree of the fork
 stays as upstream wrote it.

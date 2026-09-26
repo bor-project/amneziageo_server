@@ -1,4 +1,6 @@
+using System.Collections;
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
@@ -117,6 +119,12 @@ public sealed class Context : IDisposable
     }
 
     /// <summary>
+    /// Returns the settings the panel holds, writing down the ones its first start takes when there are none.
+    /// </summary>
+    public Task<PanelSettings> PanelSettingsAsync(CancellationToken ct) =>
+        Panel.SeedAsync(() => PanelStart.Of(Variables()), ct);
+
+    /// <summary>
     /// Releases the signing key and the services.
     /// </summary>
     public void Dispose()
@@ -125,4 +133,10 @@ public sealed class Context : IDisposable
         _services.Dispose();
         _issuer.Dispose();
     }
+
+    // Returns the environment variables the utility runs under.
+    private static Dictionary<string, string> Variables() =>
+        Environment.GetEnvironmentVariables()
+            .Cast<DictionaryEntry>()
+            .ToDictionary(entry => (string)entry.Key, entry => entry.Value as string ?? string.Empty, StringComparer.Ordinal);
 }

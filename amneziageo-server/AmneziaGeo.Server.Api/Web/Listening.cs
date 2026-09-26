@@ -1,7 +1,5 @@
 using System.Globalization;
 using System.Net;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -236,33 +234,7 @@ public static class Listening
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var port = Split(options.Listen[0]).Port;
-        var path = options.Path.Length > 0 ? options.Path : PanelDefaults.FreshPath();
-        var listen = new List<string>();
-        foreach (var entry in options.Listen)
-        {
-            var (host, own) = Split(entry);
-            if (own != port)
-            {
-                continue;
-            }
-
-            if (host is "*")
-            {
-                return new PanelSettings { Port = port, Path = path };
-            }
-
-            if (IPAddress.TryParse(host, out var address))
-            {
-                listen.Add(address.ToString());
-
-                continue;
-            }
-
-            listen.AddRange(Addresses(host).Select(item => item.ToString()));
-        }
-
-        return new PanelSettings { Listen = PanelList.Of(listen), Port = port, Path = path };
+        return PanelStart.Of(options.Listen, options.Path);
     }
 
     /// <summary>
@@ -276,7 +248,7 @@ public static class Listening
 
         foreach (var entry in entries)
         {
-            var (host, port) = Split(entry);
+            var (host, port) = PanelStart.Split(entry);
             if (host is "*")
             {
                 any.Add(port);
@@ -289,7 +261,7 @@ public static class Listening
                 continue;
             }
 
-            var found = Addresses(host).Select(a => new IPEndPoint(a, port)).ToArray();
+            var found = PanelStart.Addresses(host).Select(a => new IPEndPoint(a, port)).ToArray();
             if (found.Length == 0)
             {
                 missing.Add(host);
@@ -313,34 +285,5 @@ public static class Listening
         }
 
         listen.UseHttps(https => https.ServerCertificateSelector = (_, _) => certificate.Current());
-    }
-
-    private static (string Host, int Port) Split(string entry)
-    {
-        var text = entry.Trim();
-        var mark = text.LastIndexOf(':');
-        if (mark <= 0 || !int.TryParse(text.AsSpan(mark + 1), CultureInfo.InvariantCulture, out var port) || port is < 1 or > 65535)
-        {
-            throw new InvalidOperationException($"the panel is told to listen on {entry}, which is not an address or an interface with a port");
-        }
-
-        return (text[..mark].Trim('[', ']'), port);
-    }
-
-    private static IEnumerable<IPAddress> Addresses(string name)
-    {
-        var found = Array.Find(
-            NetworkInterface.GetAllNetworkInterfaces(),
-            item => string.Equals(item.Name, name, StringComparison.Ordinal));
-
-        if (found is null)
-        {
-            return [];
-        }
-
-        return found.GetIPProperties().UnicastAddresses
-            .Select(item => item.Address)
-            .Where(item => item.AddressFamily is AddressFamily.InterNetwork or AddressFamily.InterNetworkV6)
-            .Where(item => !item.IsIPv6LinkLocal);
     }
 }

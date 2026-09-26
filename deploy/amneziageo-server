@@ -19,6 +19,13 @@ bbr_conf=/etc/sysctl.d/91-amneziageo-bbr.conf
 bbr_module=/etc/modules-load.d/amneziageo-bbr.conf
 qdisc_file=/proc/sys/net/core/default_qdisc
 override_mark='# written by amneziageo-server'
+answers_file=/root/.amneziageo-install
+declare -gA given=() seen=()
+made_password=
+made_client=
+made_link=
+api_base=
+api_work=
 ppa_key=75C9DD72C799870E310542E24166F2C257290828
 release_key='-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEzgZ6s+M0wvE0HMsFuPhwk7cZsCSY
@@ -253,6 +260,11 @@ host_command() {
   fi
 }
 
+# Prints the Web settings the file of the service hands the panel, for the utility to start from the same.
+web_settings() {
+  sed -nE "s/^[[:space:]]*(Web__[A-Za-z0-9_]+)=[\"']?([^\"']*)[\"']?[[:space:]]*$/\1=\2/p" "$etc/server.env" 2> /dev/null
+}
+
 # Runs a command of the utility where the panel is put on, with no input.
 cli() {
   cli_in "$@" < /dev/null
@@ -261,13 +273,18 @@ cli() {
 # Runs a command of the utility that may ask questions.
 cli_in() {
   local tty=-T
+  local -a web=()
   if [ -n "${AMNEZIAGEO_CLI:-}" ]; then
     $AMNEZIAGEO_CLI "$@"
     return
   fi
 
   case $(kind) in
-    package | container)
+    package)
+      mapfile -t web < <(web_settings)
+      env "${web[@]}" "$base/AmneziaGeo.Server.Cli" "$@"
+      ;;
+    container)
       "$base/AmneziaGeo.Server.Cli" "$@"
       ;;
     docker)
@@ -831,7 +848,7 @@ prepare_host() {
     forwarding_on
   fi
 
-  if ! bbr_on && agree "Turn BBR on?"; then
+  if ! bbr_on && answer_yes bbr "Turn BBR on?" yes; then
     bbr_enable
   fi
 }
@@ -855,10 +872,31 @@ install_docker() {
   fi
 
   if [ ! -f /etc/docker/daemon.json ]; then
+    install -d -m 755 /etc/docker
     printf '{\n  "ip-forward-no-drop": true\n}\n' > /etc/docker/daemon.json
-    systemctl restart docker
   elif ! grep -q '"ip-forward-no-drop"' /etc/docker/daemon.json; then
-    bad "add \"ip-forward-no-drop\": true to /etc/docker/daemon.json and restart docker: clients reach nothing past the host without it"
+    cp -p /etc/docker/daemon.json "/etc/docker/daemon.json.$(date -u +%Y%m%d-%H%M%S)"
+    if ! python3 - /etc/docker/daemon.json <<'PY'
+import json, sys
+with open(sys.argv[1]) as f:
+    conf = json.load(f)
+conf["ip-forward-no-drop"] = True
+with open(sys.argv[1], "w") as f:
+    json.dump(conf, f, indent=2)
+    f.write("\n")
+PY
+    then
+      bad "add \"ip-forward-no-drop\": true to /etc/docker/daemon.json and restart docker: clients reach nothing past the host without it"
+      return 0
+    fi
+  fi
+
+  if nft list chain ip filter FORWARD 2> /dev/null | grep -q 'policy drop'; then
+    if [ -z "$(docker ps -q 2> /dev/null)" ] || answer_yes docker_restart "Restart Docker with its containers to let the packets of the clients through?" yes; then
+      systemctl restart docker
+    else
+      bad "docker drops the packets of the clients until it restarts: systemctl restart docker"
+    fi
   fi
 }
 
@@ -929,24 +967,341 @@ install_container() {
   good "the container of $version runs"
 }
 
-# Makes the first administrator of a fresh panel.
-first_admin() {
-  local login
-  login=$(ask "Login of the first administrator [admin]:" admin)
-  cli_in init --user "$login" --permanent
-}
-
-# Item 1: puts the panel on a clean host as a package or a container, on the database of a backup when given one.
-install_panel() {
-  local way channel copy=${1:-} said
-  if [ "$(kind)" != none ]; then
-    say "the panel is already on this host as a $(kind): item 2 updates it"
+# Asks a question of the installation once, an answer given before or in a file of answers standing.
+answer() {
+  local key=$1 question=$2 default=${3:-} value
+  if [ -n "${given[$key]+set}" ]; then
+    say "$question: ${given[$key]}"
     return 0
   fi
 
-  if ! grep -qsE '^ID(_LIKE)?=.*(debian|ubuntu)' /etc/os-release; then
-    bad "the installer knows Debian and Ubuntu"
-    confirm "Go on anyway?" || return 1
+  value=$(ask "$question${default:+ [$default]}:" "$default") || value=$default
+  given[$key]=$value
+  if [ ! -t 0 ]; then
+    say "$question: $value"
+  fi
+}
+
+# Asks a yes or no question of the installation once and tells the answer.
+answer_yes() {
+  local key=$1 question=$2 default=$3 reply
+  if [ -n "${given[$key]+set}" ]; then
+    say "$question ${given[$key]}"
+  else
+    if [ "$default" = yes ]; then
+      reply=$(ask "$question [Y/n]" y) || reply=y
+    else
+      reply=$(ask "$question [y/N]" n) || reply=n
+    fi
+
+    case $reply in
+      [yY]*) given[$key]=yes ;;
+      *) given[$key]=no ;;
+    esac
+
+    if [ ! -t 0 ]; then
+      say "$question ${given[$key]}"
+    fi
+  fi
+
+  [ "${given[$key]}" = yes ]
+}
+
+# Asks a question of the installation until its answer passes a check, giving up where no one answers.
+answer_until() {
+  local key=$1 question=$2 default=$3 check=$4
+  while true; do
+    answer "$key" "$question" "$default"
+    if "$check" "${given[$key]}"; then
+      return 0
+    fi
+
+    unset "given[$key]"
+    if [ ! -t 0 ]; then
+      return 1
+    fi
+  done
+}
+
+# Takes answers of the installation from a file of key=value lines.
+load_answers() {
+  local key value
+  while IFS='=' read -r key value; do
+    case $key in
+      '' | \#*) continue ;;
+    esac
+
+    given[$key]=$value
+  done < "$1"
+}
+
+# Keeps the answers of the installation for the run after the reboot.
+keep_answers() {
+  local key
+  (
+    umask 077
+    for key in "${!given[@]}"; do
+      printf '%s=%s\n' "$key" "${given[$key]}"
+    done > "$answers_file"
+  )
+}
+
+# Tells whether a word is a port that TCP leaves free on the host.
+panel_port_ok() {
+  if ! [[ $1 =~ ^[0-9]+$ ]] || [ "$1" -lt 1 ] || [ "$1" -gt 65535 ]; then
+    bad "'$1' is not a port"
+    return 1
+  fi
+
+  if ! port_free tcp "$1"; then
+    bad "TCP port $1 is taken on this host"
+    return 1
+  fi
+}
+
+# Tells whether a word is a port that UDP and TCP leave free on the host.
+tunnel_port_ok() {
+  panel_port_ok "$1" || return 1
+  if ! port_free udp "$1"; then
+    bad "UDP port $1 is taken on this host"
+    return 1
+  fi
+}
+
+# Tells whether a word may name an interface the host does not carry yet.
+interface_ok() {
+  if ! [[ $1 =~ ^[A-Za-z0-9_.-]{1,15}$ ]]; then
+    bad "'$1' cannot name an interface"
+    return 1
+  fi
+
+  if ip link show "$1" > /dev/null 2>&1 || [ -e "$endpoints/$1.conf" ]; then
+    bad "the host already carries an interface $1"
+    return 1
+  fi
+}
+
+# Tells whether a word may name a client.
+client_ok() {
+  if [ -n "$1" ] && ! [[ $1 =~ ^[A-Za-z0-9_.-]{1,32}$ ]]; then
+    bad "'$1' cannot name a client: letters, digits, dots, dashes and underscores"
+    return 1
+  fi
+}
+
+# Tells whether a word is a name or an address clients can reach.
+host_ok() {
+  if ! [[ $1 =~ ^[A-Za-z0-9.:-]+$ ]]; then
+    bad "'$1' is neither a name nor an address"
+    return 1
+  fi
+}
+
+# Tells whether a word is empty or a name the resolver knows.
+domain_ok() {
+  if [ -n "$1" ] && ! getent ahostsv4 "$1" > /dev/null 2>&1; then
+    bad "$1 does not resolve"
+    return 1
+  fi
+}
+
+# Tells whether a word is empty or looks like an email address.
+email_ok() {
+  if [ -n "$1" ] && ! [[ $1 =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]]; then
+    bad "'$1' is not an email address"
+    return 1
+  fi
+}
+
+# Tells whether a word is empty or a backup the panel can be put on.
+backup_ok() {
+  local said
+  if [ -z "$1" ]; then
+    return 0
+  fi
+
+  said=$(check_copy "$1")
+  if [ "$said" != ok ]; then
+    bad "$1: $said"
+    return 1
+  fi
+}
+
+# Tells whether a port of a protocol is free on the host.
+port_free() {
+  [ -z "$(ss -Hln"${1:0:1}" "sport = :$2" 2> /dev/null)" ]
+}
+
+# Prints the first port from a number on that the protocols named leave free.
+free_port() {
+  local port=$1 protocol busy
+  while [ "$port" -le 65535 ]; do
+    busy=
+    for protocol in "${@:2}"; do
+      port_free "$protocol" "$port" || busy=1
+    done
+
+    if [ -z "$busy" ]; then
+      printf '%s' "$port"
+      return 0
+    fi
+
+    port=$((port + 1))
+  done
+}
+
+# Prints the first name of an interface from a stem on that neither the host nor its files carry.
+free_interface() {
+  local number=0
+  while ip link show "$1$number" > /dev/null 2>&1 || [ -e "$endpoints/$1$number.conf" ]; do
+    number=$((number + 1))
+  done
+
+  printf '%s%s' "$1" "$number"
+}
+
+# Prints the sockets that listen past the loopback as "protocol port process", the kernel for a tunnel.
+listeners() {
+  {
+    ss -Hltnp 2> /dev/null | awk '{print "tcp", $4, $6}'
+    ss -Hlunp 2> /dev/null | awk '{print "udp", $4, $6}'
+  } | awk '$2 !~ /^(127\.|\[::1\]|::1)/ {
+      port = $2
+      sub(/.*:/, "", port)
+      name = "kernel"
+      if (match($3, /"[^"]+"/)) {
+        name = substr($3, RSTART + 1, RLENGTH - 2)
+      }
+      print $1, port, name
+    }' | sort -u | sort -k1,1 -k2,2n
+}
+
+# Prints the kernels the host boots, the newest last.
+kernels() {
+  local file
+  for file in /boot/vmlinuz-*; do
+    if [ -e "$file" ]; then
+      printf '%s\n' "${file#/boot/vmlinuz-}"
+    fi
+  done | sort -V
+}
+
+# Tells whether the host waits for a reboot, into a newer kernel or after an upgrade.
+reboot_pending() {
+  local newest
+  newest=$(kernels | tail -1)
+  [ -f /var/run/reboot-required ] || { [ -n "$newest" ] && [ "$newest" != "$(uname -r)" ]; }
+}
+
+# Prints on when Secure Boot guards the host, off otherwise.
+secure_boot() {
+  local var
+  for var in /sys/firmware/efi/efivars/SecureBoot-*; do
+    if [ -e "$var" ] && [ "$(od -An -t u1 -j 4 -N 1 "$var" 2> /dev/null | tr -d ' ')" = 1 ]; then
+      printf 'on'
+      return 0
+    fi
+  done
+
+  printf 'off'
+}
+
+# Prints the certificates of Let's Encrypt on the host that hold for a day more, as "name last-day".
+certificates() {
+  local live end
+  for live in /etc/letsencrypt/live/*/; do
+    if [ -f "$live/fullchain.pem" ] && openssl x509 -checkend 86400 -noout -in "$live/fullchain.pem" > /dev/null 2>&1; then
+      end=$(openssl x509 -enddate -noout -in "$live/fullchain.pem" | cut -d= -f2)
+      printf '%s %s\n' "$(basename "$live")" "$(date -d "$end" +%F 2> /dev/null || printf '%s' "$end")"
+    fi
+  done
+}
+
+# Tells whether a name points at an address of this host.
+points_here() {
+  local address
+  for address in $(getent ahostsv4 "$1" 2> /dev/null | awk '{print $1}' | sort -u); do
+    if [ "$address" = "${seen[ipv4]:-}" ] || ip -4 -o addr show 2> /dev/null | grep -q " $address/"; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+# Reads what the host carries before the installation, prints it and stops on what the panel cannot live with.
+assess_host() {
+  local memory swap tunnels certs
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  seen[virt]=$(systemd-detect-virt 2> /dev/null)
+  seen[box]=$(systemd-detect-virt -c 2> /dev/null)
+  seen[ipv4]=$(public_address)
+  seen[ipv6]=$(ip -6 route get 2001:4860:4860::8888 2> /dev/null | sed -n 's/.* src \([0-9a-f:]*\).*/\1/p' | head -1)
+  memory=$(awk '/^MemTotal/ {print int($2 / 1024)}' /proc/meminfo)
+  swap=$(awk '/^SwapTotal/ {print int($2 / 1024)}' /proc/meminfo)
+  seen[disk]=$(df -Pm / 2> /dev/null | awk 'NR == 2 {print $4}')
+  if module_loaded; then
+    seen[module]="loaded $(cat /sys/module/amneziawg/version 2> /dev/null)"
+  elif modinfo amneziawg > /dev/null 2>&1; then
+    seen[module]=built
+  else
+    seen[module]=missing
+  fi
+
+  if [ -d "/lib/modules/$(uname -r)/build" ]; then
+    seen[headers]=installed
+  elif apt-cache policy "linux-headers-$(uname -r)" 2> /dev/null | grep -q 'Candidate: [0-9]'; then
+    seen[headers]="in apt"
+  else
+    seen[headers]=missing
+  fi
+
+  seen[upgrades]=$(apt-get -s -o Debug::NoLocking=1 dist-upgrade 2> /dev/null | grep -c '^Inst ')
+  seen[docker]=
+  seen[containers]=
+  seen[leftover]=
+  if command -v docker > /dev/null 2>&1; then
+    seen[docker]=$(docker version --format '{{.Server.Version}}' 2> /dev/null)
+    seen[containers]=$(docker ps --format '{{.Names}}' 2> /dev/null | grep -v '^amneziageo-server-' | tr '\n' ' ')
+    seen[containers]=${seen[containers]% }
+    seen[leftover]=$(docker ps -a --filter label=com.docker.compose.project=amneziageo-server \
+      --format '{{.Names}} ({{.Status}})' 2> /dev/null | head -1)
+  fi
+
+  seen[drop]=
+  if nft list chain ip filter FORWARD 2> /dev/null | grep -q 'policy drop'; then
+    seen[drop]=yes
+  fi
+
+  if ! command -v ufw > /dev/null 2>&1; then
+    seen[ufw]=missing
+  elif ufw status 2> /dev/null | grep -q '^Status: active'; then
+    seen[ufw]=active
+  else
+    seen[ufw]=inactive
+  fi
+
+  tunnels=$({ ip -o link show type amneziawg; ip -o link show type wireguard; } 2> /dev/null | awk -F': ' '{print $2}' | tr '\n' ' ')
+  seen[wstunnel]=
+  if [ -x /usr/local/bin/wstunnel ]; then
+    seen[wstunnel]=$(/usr/local/bin/wstunnel --version 2> /dev/null | head -1)
+    seen[wstunnel]=${seen[wstunnel]:-a binary}
+  fi
+  certs=$(certificates | awk '{printf "%s%s until %s", (NR > 1 ? ", " : ""), $1, $2}')
+  step "the host"
+  say "system        ${PRETTY_NAME:-unknown}, $(uname -m)${seen[virt]:+, ${seen[virt]}}"
+  say "kernel        $(uname -r), headers ${seen[headers]}, ${seen[upgrades]} upgrades wait$(reboot_pending && printf ', a reboot is pending')"
+  say "memory        $memory MB, swap $swap MB, ${seen[disk]} MB free on /"
+  say "module        amneziawg ${seen[module]}"
+  say "network       forwarding $(forwarding && printf on || printf off), BBR $(bbr_state), IPv4 ${seen[ipv4]:-none}, IPv6 ${seen[ipv6]:-none}"
+  say "docker        ${seen[docker]:-none}${seen[containers]:+, containers: ${seen[containers]}}${seen[drop]:+, drops forwarded packets}"
+  say "firewall      ufw ${seen[ufw]}"
+  say "listening     $(listeners | awk '{printf "%s%s/%s %s", (NR > 1 ? ", " : ""), $2, $1, $3}')"
+  say "tunnels       ${tunnels:-none}${seen[wstunnel]:+, /usr/local/bin/wstunnel: ${seen[wstunnel]}}"
+  say "certificates  ${certs:-none}"
+  if [ -n "${seen[leftover]}" ]; then
+    say "a container of an earlier panel stays: ${seen[leftover]}, the new one takes its place"
   fi
 
   if [ -z "$(release_arch)" ]; then
@@ -954,70 +1309,546 @@ install_panel() {
     return 1
   fi
 
-  say "  1. Package"
-  say "  2. Docker"
-  way=$(ask "Install as [1]:" 1)
-  say "  1. Stable"
-  say "  2. Test"
-  channel=stable
-  if [ "$(ask "Channel [1]:" 1)" = 2 ]; then
-    channel=test
+  if ! grep -qsE '^ID(_LIKE)?=.*(debian|ubuntu)' /etc/os-release; then
+    bad "the installer knows Debian and Ubuntu"
+    confirm "Go on anyway?" || return 1
   fi
 
-  if [ -z "$copy" ]; then
-    copy=$(ask "Backup file to restore, empty for a fresh panel:")
+  if [ -n "${seen[box]}" ] && [ "${seen[box]}" != none ] && ! module_loaded; then
+    bad "the host is a ${seen[box]} container: the amneziawg module has to be loaded on the host under it"
+    return 1
   fi
 
-  if [ -n "$copy" ]; then
-    said=$(check_copy "$copy")
-    if [ "$said" != ok ]; then
-      bad "$copy: $said"
-      return 1
+  if [ "${seen[module]}" = missing ] && [ "$(secure_boot)" = on ]; then
+    bad "Secure Boot is on: the module DKMS builds loads once its key is enrolled: mokutil --import /var/lib/dkms/mok.pub, a reboot, MOK Manager"
+  fi
+
+  if [ "${seen[module]}" = missing ] && [ "${seen[headers]}" = missing ]; then
+    bad "apt carries no headers of the kernel $(uname -r): the module builds after an upgrade and a reboot"
+  fi
+
+  if [ "${seen[disk]:-0}" -lt 2048 ]; then
+    bad "${seen[disk]} MB free on /: the panel and its image want about 2 GB"
+  fi
+}
+
+# Prints the ports the answers open to the world, like 8443/tcp.
+planned_ports() {
+  local ports=()
+  if [ -n "${given[domain]:-}" ] || [ "${given[everywhere]:-no}" = yes ]; then
+    ports+=("${given[port]}/tcp")
+  fi
+
+  if [ "${given[certificate]:-none}" = new ]; then
+    ports+=(80/tcp)
+  fi
+
+  if [ "${given[endpoint]:-no}" = yes ]; then
+    ports+=("${given[endpoint_port]}/udp" "${given[endpoint_port]}/tcp")
+  fi
+
+  printf '%s' "${ports[*]}"
+}
+
+# Asks for a name of the server and what its certificate needs, keeping a certificate the host holds for it.
+ask_certificate() {
+  local name suggested
+  suggested=$(certificates | while read -r name _; do
+    if points_here "$name"; then
+      printf '%s' "$name"
+      break
     fi
+  done)
+  answer_until domain "Name of the server for a certificate of Let's Encrypt, empty for none" "$suggested" domain_ok || return 1
+  name=${given[domain]}
+  given[certificate]=none
+  if [ -z "$name" ]; then
+    return 0
   fi
 
-  prepare_host || return 1
-  if [ "$way" = 2 ]; then
-    install_container "$channel" || return 1
+  if certificates | awk -v name="$name" '$1 == name {found = 1} END {exit !found}'; then
+    given[certificate]=keep
+    return 0
+  fi
+
+  if ! port_free tcp 80; then
+    bad "TCP port 80 is taken by $(listeners | awk '$1 == "tcp" && $2 == 80 {print $3; exit}'): certbot answers Let's Encrypt on it, the panel goes on without a certificate"
+    given[domain]=
+    return 0
+  fi
+
+  if ! points_here "$name"; then
+    bad "$name points at $(getent ahostsv4 "$name" | awk '{print $1; exit}'), not at an address of this host: Let's Encrypt reaches it through a forward of TCP 80 alone"
+  fi
+
+  answer_until email "Email for Let's Encrypt, empty for none" "" email_ok || return 1
+  if answer_yes terms "Agree to the terms of Let's Encrypt, https://letsencrypt.org/repository/?" yes; then
+    given[certificate]=new
   else
-    install_package "$channel" || return 1
+    given[domain]=
+  fi
+}
+
+# Asks everything the installation needs before it changes anything.
+ask_installation() {
+  local opening
+  step "questions"
+  if [ "${given[stage]:-}" != upgraded ]; then
+    answer_yes upgrade "Upgrade the system first (apt full-upgrade, ${seen[upgrades]:-0} packages)?" yes || true
   fi
 
-  if [ -n "$copy" ]; then
-    step "the backup"
-    if [ "$way" = 2 ]; then
-      wait_panel
-      refresh_self
+  if [ -z "${given[kind]+set}" ]; then
+    say "  1. Package"
+    say "  2. Docker"
+  fi
+
+  answer kind "Install as" "$([ -n "${seen[docker]}" ] && printf 2 || printf 1)"
+  case ${given[kind]} in
+    2 | docker) given[kind]=docker ;;
+    *) given[kind]=package ;;
+  esac
+
+  if [ -z "${given[channel]+set}" ]; then
+    say "  1. Stable"
+    say "  2. Test"
+  fi
+
+  answer channel "Channel" 1
+  case ${given[channel]} in
+    2 | test | beta) given[channel]='test' ;;
+    *) given[channel]='stable' ;;
+  esac
+
+  answer_until restore "Backup file to restore, empty for a fresh panel" "" backup_ok || return 1
+  if ! bbr_on; then
+    answer_yes bbr "Turn BBR on?" yes || true
+  fi
+
+  if [ "${given[kind]}" = docker ] && [ -n "${seen[drop]}" ] && [ -n "${seen[containers]}" ]; then
+    answer_yes docker_restart "Docker drops the packets of the clients: restart it with its containers ${seen[containers]}?" yes || true
+  fi
+
+  if [ -n "${given[restore]}" ]; then
+    return 0
+  fi
+
+  answer login "Login of the first administrator" admin
+  answer_yes generate "Make up a temporary password for it, replaced at the first sign-in?" yes || true
+  ask_certificate || return 1
+  answer_until port "Port of the panel" "$(free_port 8443 tcp)" panel_port_ok || return 1
+  if [ -z "${given[domain]}" ]; then
+    answer_yes everywhere "Let the panel answer on every address of the host, without TLS?" no || true
+  fi
+
+  if answer_yes endpoint "Make the first interface?" yes; then
+    answer_until endpoint_name "Name of the interface" "$(free_interface awg)" interface_ok || return 1
+    answer_until endpoint_port "UDP port of the interface, its services on TCP of the same number" \
+      "$(free_port 51820 udp tcp)" tunnel_port_ok || return 1
+    answer_until endpoint_host "Address clients reach the server at" "${given[domain]:-${seen[ipv4]}}" host_ok || return 1
+    answer_yes websocket "Carry the tunnel in a websocket too, on TCP ${given[endpoint_port]}?" no || true
+    answer_until client "Name of the first client, empty for none" client1 client_ok || return 1
+    if [ -n "${given[client]}" ]; then
+      answer_yes qr "Show its configuration as a QR code, putting qrencode on?" yes || true
+    fi
+  fi
+
+  opening=$(planned_ports)
+  if [ "${seen[ufw]}" = active ]; then
+    if [ -n "$opening" ]; then
+      answer_yes ufw "Open $opening in ufw?" yes || true
+    fi
+  else
+    if [ -z "${given[ufw_others]+set}" ]; then
+      given[ufw_others]=$(listeners | awk -v ssh="$(ssh_port)" '!($1 == "tcp" && $2 == ssh) {print $2 "/" $1}' | sort -u | tr '\n' ' ')
+      given[ufw_others]=${given[ufw_others]% }
     fi
 
-    restore_copy "$copy"
+    answer_yes ufw "Turn ufw on, letting in $(ssh_port)/tcp for ssh${opening:+, $opening}${given[ufw_others]:+ and what listens now: ${given[ufw_others]}}?" \
+      "$([ "${seen[ufw]}" = missing ] && printf yes || printf no)" || true
+  fi
+}
+
+# Prints what the installation is going to do.
+plan() {
+  step "the plan"
+  if [ "${given[upgrade]:-no}" = yes ] && [ "${given[stage]:-}" != upgraded ]; then
+    say "- upgrade the system; with a new kernel reboot, and the same command goes on after it"
+  fi
+
+  if ! module_loaded; then
+    say "- build the amneziawg module from the PPA of Amnezia"
+  fi
+
+  if ! forwarding; then
+    say "- turn forwarding on"
+  fi
+
+  if [ "${given[bbr]:-no}" = yes ]; then
+    say "- turn BBR on"
+  fi
+
+  if [ "${given[kind]}" = docker ] && [ -z "${seen[docker]}" ]; then
+    say "- put Docker on from the repository of Docker"
+  fi
+
+  say "- put the panel on as a ${given[kind]} of the newest ${given[channel]} release"
+  if [ -n "${given[restore]}" ]; then
+    say "- put the backup ${given[restore]} in place of its database"
+    return 0
+  fi
+
+  if [ "${given[generate]}" = yes ]; then
+    say "- make the administrator ${given[login]} with a temporary password"
+  else
+    say "- make the administrator ${given[login]}, the password typed then"
+  fi
+
+  case ${given[certificate]} in
+    new) say "- get a certificate of Let's Encrypt for ${given[domain]}, renewed by certbot.timer" ;;
+    keep) say "- take the certificate the host holds for ${given[domain]}" ;;
+  esac
+
+  if [ -n "${given[domain]}" ] || [ "${given[everywhere]}" = yes ]; then
+    say "- the panel answers on TCP ${given[port]} on every address$([ -n "${given[domain]}" ] && printf ' under TLS')"
+  else
+    say "- the panel answers on 127.0.0.1:${given[port]}, through ssh"
+  fi
+
+  if [ "${given[endpoint]}" = yes ]; then
+    say "- make the interface ${given[endpoint_name]} on UDP ${given[endpoint_port]} for ${given[endpoint_host]}$([ "${given[websocket]}" = yes ] && printf ', with a websocket')"
+    if [ -n "${given[client]}" ]; then
+      say "- make the client ${given[client]} of it, its configuration in /root"
+    fi
+  fi
+
+  if [ "${given[ufw]:-no}" = yes ]; then
+    if [ "${seen[ufw]}" = active ]; then
+      say "- open $(planned_ports) in ufw"
+    else
+      say "- turn ufw on with $(ssh_port)/tcp $(planned_ports) ${given[ufw_others]:-}"
+    fi
+  fi
+}
+
+# Upgrades the system and stops for a reboot when a new kernel comes, to go on after it.
+upgrade_system() {
+  if [ "${given[upgrade]:-no}" != yes ] || [ "${given[stage]:-}" = upgraded ]; then
+    return 0
+  fi
+
+  step "the system"
+  apt-get update > /dev/null || return 1
+  DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+    full-upgrade || return 1
+  given[stage]=upgraded
+  if ! reboot_pending; then
+    return 0
+  fi
+
+  keep_answers
+  say "the host boots into a new kernel, and the module is built for that one"
+  say "after the reboot run amneziageo-server install again: it goes on with these answers"
+  if answer_yes reboot "Reboot now?" yes; then
+    reboot
+  fi
+
+  exit 0
+}
+
+# Makes the first administrator of a fresh panel, with a temporary password made up unless one is typed.
+first_admin() {
+  local said
+  if [ "${given[generate]:-no}" != yes ]; then
+    cli_in init --user "${given[login]}" --permanent
     return
   fi
 
-  step "the first administrator"
-  first_admin || return 1
-  if [ "$channel" = test ]; then
-    cli panel set --channel test > /dev/null
+  said=$(cli init --user "${given[login]}" --generate | tr -d '\r') || { printf '%s\n' "$said"; return 1; }
+  made_password=$(printf '%s\n' "$said" | sed -n 's/^password: //p')
+  printf '%s\n' "$said" | grep -v '^password: '
+}
+
+# Puts the panel on the port, certificate and addresses of the answers and starts it over on them.
+place_panel() {
+  local name=${given[domain]:-} live
+  step "where the panel answers"
+  if [ "${given[port]}" != "$(setting port)" ]; then
+    cli panel set --port "${given[port]}" > /dev/null || return 1
   fi
 
-  if [ "$way" = 2 ]; then
-    wait_panel
-    refresh_self
-  else
-    start_panel
+  if [ "${given[certificate]:-none}" = new ] && ! certify "$name" "${given[email]:-}"; then
+    bad "no certificate for $name: the panel stays on the loopback, item 22 of the menu gets one later"
+    name=
   fi
 
-  if confirm "Let the panel answer on every address of the host?"; then
+  if [ -n "$name" ]; then
+    live=/etc/letsencrypt/live/$name
+    share_certificates || return 1
+    cli panel set --certificate "$live/fullchain.pem" --key "$live/privkey.pem" > /dev/null || return 1
+  fi
+
+  if [ -n "$name" ] || [ "${given[everywhere]:-no}" = yes ]; then
     if ufw_active; then
       cli panel set --listen all --opened on > /dev/null
     else
       cli panel set --listen all > /dev/null
     fi
-
-    restart_panel
   fi
 
-  show_address
+  restart_panel
+}
+
+# Prints where the API of the panel answers the host.
+panel_api() {
+  local url path
+  url=$(cat "$(data_dir)/health" 2> /dev/null)
+  path=$(setting path)
+  path=${path%/}
+  printf '%s%s/api' "${url%/api/health}" "$path"
+}
+
+# Calls the API of the panel with the token of the installation, the body on the input, and prints its answer.
+api_call() {
+  local method=$1 path=$2 code body=()
+  if [ "$method" != GET ]; then
+    body=(-H 'Content-Type: application/json' --data-binary @-)
+  fi
+
+  code=$(curl -sSk --max-time 60 -X "$method" -H @"$api_work/auth" "${body[@]}" -o "$api_work/answer" \
+    -w '%{http_code}' "$api_base$path") || return 1
+  if [ "${code:0:1}" != 2 ]; then
+    bad "the panel refused $method $path: $(head -c 300 "$api_work/answer")"
+    return 1
+  fi
+
+  cat "$api_work/answer"
+}
+
+# Prints the JSON of the input with fields set from name=json pairs.
+json_set() {
+  python3 -c 'import json, sys
+body = json.load(sys.stdin)
+for pair in sys.argv[1:]:
+    key, value = pair.split("=", 1)
+    body[key] = json.loads(value)
+print(json.dumps(body))' "$@"
+}
+
+# Prints a field of the JSON of the input.
+json_get() {
+  python3 -c 'import json, sys
+value = json.load(sys.stdin).get(sys.argv[1], "")
+print(value if isinstance(value, str) else json.dumps(value))' "$1"
+}
+
+# Makes the interface and the client of the answers through the API of the panel.
+endpoint_calls() {
+  local draft body config client said file websocket=false
+  if [ "${given[websocket]:-no}" = yes ]; then
+    websocket=true
+  fi
+
+  draft=$(api_call GET "/configs/draft?name=${given[endpoint_name]}") || return 1
+  body=$(json_set "name=\"${given[endpoint_name]}\"" "listenPort=${given[endpoint_port]}" \
+    "host=\"${given[endpoint_host]}\"" nat=true opened=true isEnabled=true "webSocket=$websocket" <<< "$draft") || return 1
+  config=$(api_call POST /configs <<< "$body" | json_get id) || return 1
+  good "the interface ${given[endpoint_name]} runs on UDP ${given[endpoint_port]}"
+  if [ -z "${given[client]:-}" ]; then
+    return 0
+  fi
+
+  draft=$(api_call GET "/clients/draft?config=$config&name=${given[client]}") || return 1
+  body=$(json_set isEnabled=true <<< "$draft") || return 1
+  client=$(api_call POST /clients <<< "$body" | json_get id) || return 1
+  said=$(api_call GET "/clients/$client/config") || return 1
+  file=/root/$(json_get fileName <<< "$said")
+  (
+    umask 077
+    json_get text <<< "$said" > "$file"
+  )
+  made_client=$file
+  made_link=$(json_get link <<< "$said")
+  good "the client ${given[client]}: $file"
+}
+
+# Makes the first interface and its client through the API of the panel, with a token of the installation.
+first_endpoint() {
+  local said id rc=0
+  if [ "${given[endpoint]:-no}" != yes ]; then
+    return 0
+  fi
+
+  step "the first interface"
+  api_work=$(mktemp -d) || return 1
+  said=$(cli token add "installer-$(date +%s)" --role admin --days 1 | tr -d '\r')
+  id=$(printf '%s\n' "$said" | sed -n 's/^minted \([0-9]*\) .*/\1/p')
+  if [ -z "$id" ]; then
+    bad "the panel gave the installation no token"
+    rm -rf "$api_work"
+    return 1
+  fi
+
+  (
+    umask 077
+    printf 'Authorization: Bearer %s\n' "$(printf '%s\n' "$said" | tail -1)" > "$api_work/auth"
+  )
+  api_base=$(panel_api)
+  endpoint_calls || rc=$?
+  cli token revoke "$id" --yes > /dev/null
+  rm -rf "$api_work"
+  return "$rc"
+}
+
+# Tells whether ufw already lets a port in, like 8443/tcp.
+ufw_lets() {
+  ufw status 2> /dev/null | awk -v port="${1%/*}" -v exact="$1" \
+    '($1 == port || $1 == exact) && $2 == "ALLOW" && !/\(v6\)/ {found = 1} END {exit !found}'
+}
+
+# Tells whether ufw was given this very rule already, on or off, whatever its comment.
+ufw_holds() {
+  ufw show added 2> /dev/null | grep -qxE "ufw $*( comment .*)?"
+}
+
+# Opens in ufw the ports of the answers it does not let in yet, turning ufw on first when asked.
+guard_host() {
+  local port opened=() first=()
+  if [ "${given[ufw]:-no}" != yes ]; then
+    return 0
+  fi
+
+  step "the firewall"
+  if [ "${seen[ufw]}" != active ]; then
+    if ! command -v ufw > /dev/null 2>&1; then
+      apt-get install -y ufw > /dev/null || return 1
+    fi
+
+    read -r -a first <<< "$(ssh_port)/tcp ${given[ufw_others]:-}"
+  fi
+
+  for port in "${first[@]}" $(planned_ports); do
+    if ! ufw_holds allow "$port" && ! ufw_lets "$port"; then
+      ufw allow "$port" > /dev/null && opened+=("$port")
+    fi
+  done
+
+  if [ "${seen[ufw]}" != active ]; then
+    ufw --force enable > /dev/null || return 1
+    if [ "$(kind)" = package ]; then
+      restart_panel > /dev/null
+    fi
+  fi
+
+  good "ufw lets in $(planned_ports)${opened[*]:+, opened now: ${opened[*]}}"
+}
+
+# Checks the panel the way the guides do and names what the installation made.
+final_check() {
+  local values port prefix name=${given[domain]:-}
+  step "the check"
+  check_status
+  mapfile -t values < <(setting port path)
+  port=${values[0]:-}
+  prefix=${values[1]:-/}
+  if [ -n "$name" ] && [ -n "$(setting certificate)" ]; then
+    if curl -fsS --max-time 10 --resolve "$name:$port:127.0.0.1" "https://$name:$port/api/health" > /dev/null 2>&1; then
+      good "the panel answers under the certificate of $name"
+    else
+      bad "the panel does not answer https://$name:$port under the certificate of $name"
+    fi
+  fi
+
+  if [ "${given[endpoint]:-no}" = yes ]; then
+    if ip link show "${given[endpoint_name]}" > /dev/null 2>&1; then
+      good "the interface ${given[endpoint_name]} is up"
+    else
+      bad "the interface ${given[endpoint_name]} is not up: item 25 of the menu shows the interfaces"
+    fi
+  fi
+
+  step "done"
+  if [ -n "$name" ] && [ -n "$(setting certificate)" ]; then
+    good "the panel: https://$name:$port$prefix"
+  else
+    show_address
+  fi
+
+  if [ -n "$made_password" ]; then
+    say "login ${given[login]}, password $made_password: the panel asks for a new one at the first sign-in"
+  fi
+
+  if [ -n "$made_client" ]; then
+    say "the configuration of ${given[client]}: $made_client"
+    if [ "${given[qr]:-no}" = yes ] && [ -n "$made_link" ]; then
+      if ! command -v qrencode > /dev/null 2>&1; then
+        apt-get install -y qrencode > /dev/null 2>&1
+      fi
+
+      qrencode -t ansiutf8 "$made_link" 2> /dev/null || say "the link does not fit a QR code: $made_link"
+    elif [ -n "$made_link" ]; then
+      say "its link: $made_link"
+    fi
+  fi
+
+  say "the menu: amneziageo-server"
+}
+
+# Item 1: looks the host over, asks everything first, then puts the panel on as a package or a container, fresh or on
+# the database of a backup.
+install_panel() {
+  if [ "$(kind)" != none ]; then
+    say "the panel is already on this host as a $(kind): item 2 updates it"
+    return 0
+  fi
+
+  if [ -f "$answers_file" ] && [ -z "${given[stage]:-}" ]; then
+    if agree "An installation stopped for a reboot: go on with its answers?"; then
+      load_answers "$answers_file"
+    fi
+
+    rm -f "$answers_file"
+  fi
+
+  assess_host || return 1
+  ask_installation || return 1
+  plan
+  answer_yes go "Go on?" yes || return 0
+  upgrade_system || return 1
+  prepare_host || return 1
+  if [ "${given[kind]}" = docker ]; then
+    install_container "${given[channel]}" || return 1
+  else
+    install_package "${given[channel]}" || return 1
+  fi
+
+  if [ -n "${given[restore]}" ]; then
+    step "the backup"
+    if [ "${given[kind]}" = docker ]; then
+      wait_panel
+      refresh_self
+    fi
+
+    restore_copy "${given[restore]}"
+    return
+  fi
+
+  if [ "${given[kind]}" = docker ]; then
+    wait_panel || return 1
+    refresh_self
+  else
+    start_panel || return 1
+  fi
+
+  step "the first administrator"
+  first_admin || return 1
+  if [ "${given[channel]}" = test ]; then
+    cli panel set --channel test > /dev/null
+  fi
+
+  place_panel || return 1
+  first_endpoint || bad "the interface was not made: item 25 of the menu and the panel make one"
+  guard_host || bad "ufw did not take the ports: item 23 of the menu opens them"
+  final_check
 }
 
 # Items 2 and 3: moves the panel to the newest release of its channel, of the test channel for a beta.
@@ -1438,7 +2269,7 @@ clear_host() {
   done
 
   if command -v ufw > /dev/null 2>&1; then
-    while number=$(ufw status numbered 2> /dev/null | grep -m1 'amneziageo' | sed -n 's/^\[ *\([0-9]*\)\].*/\1/p') \
+    while number=$(ufw status numbered 2> /dev/null | grep -m1 '# amneziageo' | sed -n 's/^\[ *\([0-9]*\)\].*/\1/p') \
       && [ -n "$number" ]; do
       ufw --force delete "$number" > /dev/null || break
     done
@@ -1466,7 +2297,7 @@ uninstall_panel() {
 
     rm -f "/etc/systemd/system/$unit.service" /etc/systemd/system/amneziageo-proxy@.service
     systemctl daemon-reload
-    rm -rf "$base" /usr/local/bin/wstunnel
+    rm -rf "$base"
     rm -f "$etc"/proxy-*.env
   else
     repository=$(panel_repository)
@@ -1888,9 +2719,9 @@ get_certificate() {
   use_certificate "$live/fullchain.pem" "$live/privkey.pem"
 }
 
-# Gets a Let's Encrypt certificate for a name of the host.
+# Gets a Let's Encrypt certificate for a name of the host, without questions of certbot when given an email or none.
 certify() {
-  local name=$1
+  local name=$1 who=()
   if ! getent ahostsv4 "$name" > /dev/null; then
     bad "$name does not resolve"
     return 1
@@ -1905,11 +2736,17 @@ certify() {
     apt-get install -y certbot || return 1
   fi
 
-  if ufw_active; then
+  if ufw_active && ! ufw_lets 80/tcp; then
     ufw allow 80/tcp > /dev/null
   fi
 
-  certbot certonly --standalone --preferred-challenges http --cert-name "$name" -d "$name" || return 1
+  if [ $# -gt 1 ] && [ -n "$2" ]; then
+    who=(--non-interactive --agree-tos --no-eff-email -m "$2")
+  elif [ $# -gt 1 ]; then
+    who=(--non-interactive --agree-tos --register-unsafely-without-email)
+  fi
+
+  certbot certonly --standalone --preferred-challenges http "${who[@]}" --cert-name "$name" -d "$name" || return 1
   systemctl enable --now certbot.timer > /dev/null 2>&1
 }
 
@@ -2008,10 +2845,12 @@ ufw_port() {
     return 1
   fi
 
-  if [ "$1" = allow ]; then
-    ufw allow "$port"
-  else
+  if [ "$1" != allow ]; then
     ufw delete allow "$port"
+  elif ufw_holds allow "$port" || ufw_lets "$port"; then
+    say "ufw lets $port in already"
+  else
+    ufw allow "$port"
   fi
 }
 
@@ -2023,7 +2862,10 @@ ufw_on() {
     apt-get install -y ufw || return 1
   fi
 
-  ufw allow "$(ssh_port)/tcp" > /dev/null
+  if ! ufw_holds allow "$(ssh_port)/tcp" && ! ufw_lets "$(ssh_port)/tcp"; then
+    ufw allow "$(ssh_port)/tcp" > /dev/null
+  fi
+
   ufw --force enable
   good "the firewall is on, TCP $(ssh_port) stays open for ssh"
   if [ "$(kind)" != none ]; then
@@ -2338,9 +3180,9 @@ usage() {
   cat <<'EOF'
 usage:
   amneziageo-server                    open the menu
-  amneziageo-server install            put the panel on this host
-  amneziageo-server install --restore <file>
-                                       put the panel on this host on a backup downloaded from a panel
+  amneziageo-server install [--restore <file>] [--answers <file>]
+                                       look the host over, ask what the panel needs and put it on,
+                                       on a backup downloaded from a panel, with answers of a file
   amneziageo-server restore <file>     put a backup downloaded from a panel in place of the database
   amneziageo-server update [beta]      move the panel to the newest release, of the test channel for beta
   amneziageo-server rollback           go back to the release before
@@ -2369,14 +3211,30 @@ main() {
   case ${1:-} in
     "") menu ;;
     install)
-      if [ "${2:-}" = --restore ] && [ -n "${3:-}" ]; then
-        install_panel "$3"
-      elif [ -n "${2:-}" ]; then
-        usage
-        return 1
-      else
-        install_panel
-      fi
+      shift
+      while [ $# -gt 0 ]; do
+        case $1 in
+          --restore)
+            given[restore]=${2:-}
+            ;;
+          --answers)
+            if [ ! -f "${2:-}" ]; then
+              bad "there is no file of answers ${2:-}"
+              return 1
+            fi
+
+            load_answers "$2"
+            ;;
+          *)
+            usage
+            return 1
+            ;;
+        esac
+
+        shift 2 || { usage; return 1; }
+      done
+
+      install_panel
       ;;
     restore) restore_file "${2:-}" ;;
     update)

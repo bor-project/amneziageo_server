@@ -94,10 +94,26 @@ public sealed class PanelStore
     /// <summary>
     /// Writes down the settings the panel started under when it holds none.
     /// </summary>
-    public async Task<PanelSettings> SeedAsync(PanelSettings settings, CancellationToken ct)
+    public Task<PanelSettings> SeedAsync(PanelSettings settings, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
+        return SeedAsync(() => settings, ct);
+    }
+
+    /// <summary>
+    /// Writes down the settings a panel that holds none starts under, made only when it holds none.
+    /// </summary>
+    public Task<PanelSettings> SeedAsync(Func<PanelSettings> fresh, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(fresh);
+
+        return _db.AloneAsync(() => WriteFreshAsync(fresh, ct), ct);
+    }
+
+    // Writes down the fresh settings when the panel holds none, and returns the ones it holds.
+    private async Task<PanelSettings> WriteFreshAsync(Func<PanelSettings> fresh, CancellationToken ct)
+    {
         var held = await _db.Set<PanelEntity>().FirstOrDefaultAsync(row => row.Id == Row, ct).ConfigureAwait(false);
         if (held is not null)
         {
@@ -105,7 +121,7 @@ public sealed class PanelStore
         }
 
         var row = new PanelEntity { Id = Row, UpdatedUtc = _time.GetUtcNow() };
-        Write(row, settings);
+        Write(row, fresh());
         _db.Add(row);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
@@ -157,7 +173,7 @@ public sealed class PanelStore
                     Listen = PanelList.Split(reader.GetString(0)),
                     Domains = PanelList.Split(reader.GetString(1)),
                     Port = reader.GetInt32(2),
-                    Path = reader.GetString(3),
+                    Path = reader.GetString(3).Trim('/'),
                     Certificate = reader.GetString(4),
                     CertificateKey = reader.GetString(5),
                     Language = reader.GetString(6),
@@ -176,7 +192,7 @@ public sealed class PanelStore
         Domains = PanelList.Split(row.Domains),
         Port = row.Port,
         Opened = row.Opened,
-        Path = row.Path,
+        Path = row.Path.Trim('/'),
         Certificate = row.Certificate,
         CertificateKey = row.CertificateKey,
         Language = row.Language,

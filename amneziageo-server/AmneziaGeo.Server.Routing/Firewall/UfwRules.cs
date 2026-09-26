@@ -44,16 +44,17 @@ public static class UfwRules
     {
         ArgumentNullException.ThrowIfNull(text);
 
-        var found = new List<FirewallRule>();
-        foreach (var line in text.Split('\n'))
-        {
-            if (Rule(line.Trim()) is { } rule)
-            {
-                found.Add(rule);
-            }
-        }
+        return [.. Rules(text).Where(Owned)];
+    }
 
-        return found;
+    /// <summary>
+    /// Returns the rules of others among the ones ufw was given, with a comment or without one.
+    /// </summary>
+    public static IReadOnlyList<FirewallRule> Others(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        return [.. Rules(text).Where(rule => !Owned(rule))];
     }
 
     /// <summary>
@@ -79,18 +80,21 @@ public static class UfwRules
     }
 
     /// <summary>
-    /// Returns the rules to put into ufw and the ones of the panel to take out of it.
+    /// Returns the rules to put into ufw and the ones of the panel to take out of it, leaving the rules others hold.
     /// </summary>
     public static (IReadOnlyList<FirewallRule> Put, IReadOnlyList<FirewallRule> Take) Difference(
         IReadOnlyList<FirewallRule> wanted,
-        IReadOnlyList<FirewallRule> held)
+        IReadOnlyList<FirewallRule> held,
+        IReadOnlyList<FirewallRule> others)
     {
         ArgumentNullException.ThrowIfNull(wanted);
         ArgumentNullException.ThrowIfNull(held);
+        ArgumentNullException.ThrowIfNull(others);
 
         var put = wanted
             .Where(rule => !held.Any(one => one.Same(rule)
                 && string.Equals(one.Note, rule.Note, StringComparison.Ordinal)))
+            .Where(rule => !others.Any(one => one.Same(rule)))
             .ToArray();
         var take = held.Where(rule => !wanted.Any(one => one.Same(rule))).ToArray();
 
@@ -121,6 +125,17 @@ public static class UfwRules
 
     private const string Comment = " comment ";
 
+    private static IEnumerable<FirewallRule> Rules(string text)
+    {
+        foreach (var line in text.Split('\n'))
+        {
+            if (Rule(line.Trim()) is { } rule)
+            {
+                yield return rule;
+            }
+        }
+    }
+
     private static FirewallRule? Rule(string line)
     {
         if (!line.StartsWith(Head, StringComparison.Ordinal))
@@ -130,17 +145,13 @@ public static class UfwRules
 
         var body = line[Head.Length..];
         var at = body.IndexOf(Comment, StringComparison.Ordinal);
-        if (at < 0)
-        {
-            return null;
-        }
 
-        var note = body[(at + Comment.Length)..].Trim().Trim('\'');
-
-        return note.StartsWith(Mark, StringComparison.Ordinal)
-            ? new FirewallRule(Words(body[..at]), note)
-            : null;
+        return at < 0
+            ? new FirewallRule(Words(body), string.Empty)
+            : new FirewallRule(Words(body[..at]), body[(at + Comment.Length)..].Trim().Trim('\''));
     }
+
+    private static bool Owned(FirewallRule rule) => rule.Note.StartsWith(Mark, StringComparison.Ordinal);
 
     private static string[] Words(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 

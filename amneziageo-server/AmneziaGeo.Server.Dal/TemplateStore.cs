@@ -101,7 +101,10 @@ public sealed class TemplateStore
     /// <summary>
     /// Puts the built in template in place, once, in a fresh database.
     /// </summary>
-    public async Task SeedAsync(CancellationToken ct)
+    public Task SeedAsync(CancellationToken ct) => _db.AloneAsync(() => AddBuiltInAsync(ct), ct);
+
+    // Adds the built in template when the database holds no template.
+    private async Task AddBuiltInAsync(CancellationToken ct)
     {
         if (await _db.Templates.AnyAsync(ct).ConfigureAwait(false))
         {

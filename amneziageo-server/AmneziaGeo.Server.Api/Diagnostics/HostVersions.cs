@@ -12,7 +12,7 @@ public static class HostVersions
 
     private const string KernelRelease = "/proc/sys/kernel/osrelease";
 
-    private const string Wstunnel = "/usr/local/bin/wstunnel";
+    private static readonly string[] Wstunnels = ["/opt/amneziageo-server/current/wstunnel", "/usr/local/bin/wstunnel"];
 
     private const string PrettyName = "PRETTY_NAME=";
 
@@ -50,12 +50,12 @@ public static class HostVersions
     /// </summary>
     public static async Task<string> WstunnelAsync(CancellationToken ct)
     {
-        if (!File.Exists(Wstunnel))
+        if (Array.Find(Wstunnels, File.Exists) is not { } tool)
         {
             return string.Empty;
         }
 
-        var start = new ProcessStartInfo(Wstunnel, "--version")
+        var start = new ProcessStartInfo(tool, "--version")
         {
             RedirectStandardOutput = true,
             UseShellExecute = false,

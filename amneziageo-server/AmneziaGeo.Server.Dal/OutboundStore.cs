@@ -90,7 +90,10 @@ public sealed class OutboundStore
     /// <summary>
     /// Adds the outbound that leaves through the uplink of the host, once, to a fresh database.
     /// </summary>
-    public async Task SeedAsync(CancellationToken ct)
+    public Task SeedAsync(CancellationToken ct) => _db.AloneAsync(() => AddDirectAsync(ct), ct);
+
+    // Adds the outbound through the uplink of the host when the database holds no outbound.
+    private async Task AddDirectAsync(CancellationToken ct)
     {
         if (await _db.Outbounds.AnyAsync(ct).ConfigureAwait(false))
         {

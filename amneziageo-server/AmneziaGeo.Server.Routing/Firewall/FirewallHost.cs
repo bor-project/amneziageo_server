@@ -104,7 +104,10 @@ public sealed class FirewallHost
             return new FirewallSync(Ufw, false, shown.Complaint);
         }
 
-        var (put, take) = UfwRules.Difference(UfwRules.Wanted(plan), UfwRules.Read(shown.Output));
+        var (put, take) = UfwRules.Difference(
+            UfwRules.Wanted(plan),
+            UfwRules.Read(shown.Output),
+            UfwRules.Others(shown.Output));
         foreach (var rule in put)
         {
             var added = await RunAsync(UfwRules.Add(rule), ct).ConfigureAwait(false);

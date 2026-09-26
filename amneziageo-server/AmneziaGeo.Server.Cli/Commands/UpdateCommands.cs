@@ -74,7 +74,7 @@ public static class UpdateCommands
 
         if (args.Has("beta"))
         {
-            var held = await context.Panel.ReadAsync(ct).ConfigureAwait(false);
+            var held = await context.PanelSettingsAsync(ct).ConfigureAwait(false);
             if (!held.Prereleases)
             {
                 var saved = await context.Panel.SaveAsync(held with { Prereleases = true }, ct).ConfigureAwait(false);

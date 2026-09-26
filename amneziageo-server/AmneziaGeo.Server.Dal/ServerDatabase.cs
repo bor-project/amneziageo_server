@@ -88,15 +88,25 @@ public static class ServerDatabase
     public static async Task PrepareAsync(IServiceProvider services, CancellationToken ct = default)
     {
         using var scope = services.CreateScope();
-        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>().Database;
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var database = db.Database;
         await database.MigrateAsync(ct).ConfigureAwait(false);
         DatabaseFiles.Hide(
             database.GetDbConnection().DataSource,
             scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DatabaseFiles).FullName!));
-        await SeedAsync(scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>()).ConfigureAwait(false);
-        await scope.ServiceProvider.GetRequiredService<GeoStore>().SeedAsync(ct).ConfigureAwait(false);
-        await scope.ServiceProvider.GetRequiredService<OutboundStore>().SeedAsync(ct).ConfigureAwait(false);
-        await scope.ServiceProvider.GetRequiredService<TemplateStore>().SeedAsync(ct).ConfigureAwait(false);
+        var roles = scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();
+        var geo = scope.ServiceProvider.GetRequiredService<GeoStore>();
+        var outbounds = scope.ServiceProvider.GetRequiredService<OutboundStore>();
+        var templates = scope.ServiceProvider.GetRequiredService<TemplateStore>();
+        await db.AloneAsync(
+            async () =>
+            {
+                await SeedAsync(roles).ConfigureAwait(false);
+                await geo.SeedAsync(ct).ConfigureAwait(false);
+                await outbounds.SeedAsync(ct).ConfigureAwait(false);
+                await templates.SeedAsync(ct).ConfigureAwait(false);
+            },
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>

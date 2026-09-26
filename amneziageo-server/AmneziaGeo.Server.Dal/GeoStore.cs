@@ -84,7 +84,10 @@ public sealed class GeoStore
     /// Adds the standard sources a panel has not been given: every one to a fresh panel, the ones that joined the set
     /// since to a panel seeded before.
     /// </summary>
-    public async Task<int> SeedAsync(CancellationToken ct)
+    public Task<int> SeedAsync(CancellationToken ct) => _db.AloneAsync(() => AddStandardAsync(ct), ct);
+
+    // Adds the standard sources the panel has not been given.
+    private async Task<int> AddStandardAsync(CancellationToken ct)
     {
         var seed = await _db.Seeds.FirstOrDefaultAsync(row => row.Name == SeedName, ct).ConfigureAwait(false);
         var held = await _db.GeoSources.OrderBy(source => source.Position).ToListAsync(ct).ConfigureAwait(false);

@@ -21,11 +21,43 @@ chmod 755 /usr/local/bin/amneziageo-server
 amneziageo-server install
 ```
 
-`install` asks for a package or a container and for the channel. It puts on the module of AmneziaWG from the PPA
-of Amnezia when the kernel lacks it, turns forwarding on, offers BBR, checks the release against the key the
-releases are signed with, makes the first administrator and starts the panel. The package puts the script into
-`/usr/local/bin` with every release it installs. Given a backup a panel downloaded, it starts the panel on that
-database instead of making an administrator, see [Moving to another server](#moving-to-another-server).
+`install` looks the host over first and prints what it carries: the system and the kernel, the upgrades waiting,
+the module of AmneziaWG, memory and disk, Docker and its containers, forwarding and BBR, ufw, the ports taken and the
+services behind them, the interfaces of AmneziaWG and WireGuard, the certificates of Let's Encrypt. It stops on what
+the panel cannot live with: a release missing for the architecture, a container host without the module. Then it asks
+everything at once, the answers of the look as defaults, prints the plan and, once told to go on, upgrades the
+system, rebooting when a new kernel comes and going on with the same answers when run again, puts on the module from
+the PPA of Amnezia when the kernel lacks it, turns forwarding and BBR on, checks the release against the key the
+releases are signed with and puts it on as a package or a container, makes the first administrator with a temporary
+password, gets a certificate of Let's Encrypt for the name of the server or takes the one the host holds for it, opens
+the panel on every address, makes the first endpoint and its first client through the API, opens the ports in ufw or
+turns ufw on with ssh and what already listens kept open, and checks the panel, the certificate and the endpoint. The
+configuration of the client goes to `/root`, and to the terminal as a QR code when asked. The package puts the script
+into `/usr/local/bin` with every release it installs. Given a backup a panel downloaded, it starts the panel on that
+database instead of making an administrator and an endpoint, see [Moving to another server](#moving-to-another-server).
+
+`install --answers <file>` takes the answers from a file of `key=value` lines and asks only for what it lacks; with
+every key the installation runs without a question:
+
+| Key | Answer |
+|---|---|
+| `upgrade` | `yes` upgrades the system first |
+| `kind` | `package` or `docker` |
+| `channel` | `stable` or `test` |
+| `restore` | a backup to put the panel on, empty for a fresh panel |
+| `bbr` | `yes` turns BBR on |
+| `docker_restart` | `yes` restarts Docker with its containers while it drops forwarded packets |
+| `login` | the first administrator |
+| `generate` | `yes` makes up a temporary password and prints it once, `no` asks for one |
+| `domain` | the name of the server for a certificate of Let's Encrypt, empty for none |
+| `email`, `terms` | the email for Let's Encrypt, empty for none; `yes` agrees to its terms |
+| `port` | the TCP port of the panel |
+| `everywhere` | `yes` opens the panel on every address without a certificate |
+| `endpoint` | `yes` makes the first endpoint of `endpoint_name`, `endpoint_port`, `endpoint_host` and `websocket` |
+| `client`, `qr` | the name of the first client, empty for none; `yes` shows its configuration as a QR code |
+| `ufw` | `yes` opens the ports in an active ufw or turns ufw on |
+| `reboot` | `yes` reboots after an upgrade that brings a kernel |
+| `go` | `yes` goes on past the plan |
 
 Without arguments the script opens a menu, over ssh as well: updates and the way back, copies of the database,
 the address, the port and the path of the panel, users and tokens, the service and its log, certificates, the
@@ -33,8 +65,9 @@ firewall, endpoints, websocket fronts and BBR. Its items go as commands too:
 
 | Command | Does |
 |---|---|
-| `install` | puts the panel on the host |
+| `install` | looks the host over, asks what the panel needs and puts it on |
 | `install --restore <file>` | puts the panel on the host on a backup a panel downloaded |
+| `install --answers <file>` | puts the panel on the host with the answers of a file |
 | `restore <file>` | puts a backup a panel downloaded in place of the database |
 | `update`, `update beta` | moves the panel to the newest release of its channel, of the test channel for `beta` |
 | `rollback` | goes back to the release before |

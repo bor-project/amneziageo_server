@@ -8,7 +8,7 @@ import type { Client, ClientDraft, Inbound, Routing } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useTemplates } from "@/api/templates"
-import { Flag, Help, Line, Part, Pick, Regenerate } from "@/components/fields"
+import { Help, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -94,6 +94,14 @@ export function ClientForm({
   return (
     <div className="mt-4 flex flex-col gap-4">
       <Part title={t("clients.partMain")}>
+        <div className="sm:col-span-2">
+          <Switch
+            id="client-enabled"
+            caption={t("clients.enabled")}
+            value={draft.isEnabled}
+            onChange={(isEnabled) => put({ isEnabled })}
+          />
+        </div>
         <Pick
           id="client-interface"
           caption={t("clients.endpointName")}
@@ -233,15 +241,6 @@ export function ClientForm({
           <option value="server">{t("clients.inboundServer")}</option>
           <option value="network">{t("clients.inboundNetwork")}</option>
         </Pick>
-
-        <div className="flex flex-wrap items-center gap-6 sm:col-span-2">
-          <Flag
-            id="client-enabled"
-            caption={t("clients.enabled")}
-            value={draft.isEnabled}
-            onChange={(isEnabled) => put({ isEnabled })}
-          />
-        </div>
       </Part>
 
       {error !== null && error !== undefined && (

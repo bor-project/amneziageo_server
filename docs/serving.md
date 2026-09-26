@@ -86,6 +86,12 @@ Web__Path=/
 
 A panel that already holds settings keeps the path it has.
 
+A `panel` command of the utility run before that first start writes the same settings down first, from the
+`Web__Listen__<n>` and `Web__Path` variables it runs under, `127.0.0.1:8443` when there are none, as the package
+and the image start the panel. The command then changes only what it names, and the first start keeps what
+was written. On a package `amneziageo-server` hands the utility the `Web__` lines of
+`/etc/amneziageo-server/server.env`.
+
 ## On the port of the services
 
 The panel shares the TCP port of the services of the endpoints, see [services.md](services.md): giving it the

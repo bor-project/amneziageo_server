@@ -66,6 +66,7 @@ adopt() {
 stage_release() {
   local target=$base/releases/$release
   if [ -d "$target" ]; then
+    [ -x "$target/wstunnel" ] || install -m 755 "$here/wstunnel" "$target/wstunnel"
     return 0
   fi
 
@@ -73,6 +74,7 @@ stage_release() {
   cp -a "$here/publish" "$target.new"
   rm -rf "$target.new/wwwroot"
   cp "$here/install.sh" "$here/release" "$here/server" "$target.new/"
+  install -m 755 "$here/wstunnel" "$target.new/"
   if [ -f "$here/amneziageo-server" ]; then
     install -m 755 "$here/amneziageo-server" "$target.new/"
   fi
@@ -107,7 +109,7 @@ stage_web() {
   mv -T "$target.new" "$target"
 }
 
-# Puts the services, the websocket tool and the menu in place where they differ, and drops the unit of the relays.
+# Puts the services and the menu in place where they differ, and drops the unit of the relays.
 shared() {
   local reload= file
   for file in amneziageo-server.service amneziageo-proxy@.service; do
@@ -121,7 +123,6 @@ shared() {
     reload=1
   fi
 
-  put 755 "$here/wstunnel" /usr/local/bin/wstunnel || true
   if [ -f "$here/amneziageo-server" ]; then
     put 755 "$here/amneziageo-server" /usr/local/bin/amneziageo-server || true
   fi
@@ -138,6 +139,13 @@ shared() {
 # Web__CertificateKey=/etc/letsencrypt/live/example.org/privkey.pem
 ENV
     chmod 600 /etc/amneziageo-server/server.env
+  fi
+}
+
+# Gives a release staged before the websocket tool lived in releases the tool of another release.
+carry_tunnel() {
+  if [ -n "$1" ] && [ -d "$base/$1" ] && [ ! -x "$base/$1/wstunnel" ] && [ -x "$base/$2/wstunnel" ]; then
+    cp -p "$base/$2/wstunnel" "$base/$1/wstunnel"
   fi
 }
 
@@ -260,6 +268,7 @@ whole() {
   echo "$release did not come up, the host goes back to ${before##*/}" >&2
   systemctl stop "$unit" || true
   restore_database "$saved"
+  carry_tunnel "$before" "releases/$release"
   point "$base/current" "$before"
   point "$base/wwwroot" "$before_web"
   if [ -n "$before_previous" ]; then
@@ -325,6 +334,7 @@ rollback() {
     systemctl stop "$unit"
   fi
 
+  carry_tunnel "$before" "$after"
   point "$base/previous-web" "$(readlink "$base/wwwroot")"
   point "$base/wwwroot" "$web"
   point "$base/current" "$before"

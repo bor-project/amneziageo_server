@@ -37,7 +37,7 @@ public static class PanelCommands
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var held = await context.Panel.ReadAsync(ct).ConfigureAwait(false);
+        var held = await context.PanelSettingsAsync(ct).ConfigureAwait(false);
         Terminal.Say($"listen       {(held.Listen.Count == 0 ? "every address" : string.Join(", ", held.Listen))}");
         Terminal.Say($"names        {(held.Domains.Count == 0 ? "any" : string.Join(", ", held.Domains))}");
         Terminal.Say($"port         {held.Port.ToString(CultureInfo.InvariantCulture)}");
@@ -63,7 +63,7 @@ public static class PanelCommands
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(args);
 
-        var held = await context.Panel.ReadAsync(ct).ConfigureAwait(false);
+        var held = await context.PanelSettingsAsync(ct).ConfigureAwait(false);
         var names = args.Positional.Skip(2).ToList();
         var values = names.Select(name => Setting(held, name)).ToList();
         if (names.Count == 0 || values.Any(value => value is null))
@@ -87,7 +87,7 @@ public static class PanelCommands
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(args);
 
-        var held = await context.Panel.ReadAsync(ct).ConfigureAwait(false);
+        var held = await context.PanelSettingsAsync(ct).ConfigureAwait(false);
         var (draft, refusal) = Draft(held, args);
         if (draft is null)
         {
@@ -115,7 +115,7 @@ public static class PanelCommands
             return 1;
         }
 
-        var held = await context.Panel.ReadAsync(ct).ConfigureAwait(false);
+        var held = await context.PanelSettingsAsync(ct).ConfigureAwait(false);
 
         return await SaveAsync(context, PanelEdit.Reset(held), ct).ConfigureAwait(false);
     }

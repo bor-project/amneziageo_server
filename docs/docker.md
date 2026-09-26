@@ -64,7 +64,9 @@ Let's Encrypt, answer that the container does not reach the host. The rules of u
 forwarding print the command for the host instead.
 
 `amneziageo-server install`, see [install.md](install.md#the-menu), puts the container on a bare host when asked
-for Docker: Docker itself from the repository of Docker with `"ip-forward-no-drop": true`,
+for Docker: Docker itself from the repository of Docker with `"ip-forward-no-drop": true` added to
+`/etc/docker/daemon.json`, restarting Docker only while it drops forwarded packets and asking first when other
+containers run,
 `/opt/amneziageo-docker/compose.yaml` that runs the image of the newest release of the channel from
 `ghcr.io/bor-project/amneziageo-server` with directories of the host for the database and the settings, and the
 first administrator. The script it runs from stays on the host and drives the container from outside with the same

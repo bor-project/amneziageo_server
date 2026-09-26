@@ -149,6 +149,45 @@ public class FirewallTests
     }
 
     [Fact]
+    public async Task ARuleTheHostHoldsAlreadyIsLeftToIt()
+    {
+        var tools = new Tools();
+        tools.Answers["ufw show added"] = new CommandResult(
+            0,
+            "Added user rules (see 'ufw status' for running firewall):\n"
+            + "ufw allow 51820/udp comment 'amneziawg inbound 6'\n"
+            + "ufw allow 8443/tcp\n",
+            string.Empty);
+        var host = new FirewallHost(tools, new Ledger(), "ufw");
+
+        var sync = await host.ApplyAsync(
+            FirewallPlan.Of([Endpoint()], new PanelSettings { Opened = true }, new SubscriptionSettings()),
+            CancellationToken.None);
+
+        Assert.True(sync.IsDone);
+        Assert.False(tools.Called("ufw allow 51820/udp"));
+        Assert.False(tools.Called("ufw allow 8443/tcp"));
+        Assert.True(tools.Called("ufw allow 51820/tcp comment amneziageo awg0"));
+        Assert.True(tools.Called("ufw route allow in on awg0 comment amneziageo awg0"));
+    }
+
+    [Fact]
+    public async Task ARuleTheHostHoldsIsNotTakenOutWhenThePortCloses()
+    {
+        var tools = new Tools();
+        tools.Answers["ufw show added"] = new CommandResult(
+            0,
+            "ufw allow 51820/udp comment 'amneziawg inbound 6'\n"
+            + "ufw allow 8443/tcp\n",
+            string.Empty);
+        var host = new FirewallHost(tools, new Ledger(), "ufw");
+
+        await host.ApplyAsync(FirewallPlan.None, CancellationToken.None);
+
+        Assert.Equal(["ufw show added"], tools.Calls);
+    }
+
+    [Fact]
     public async Task AUfwThatRefusesLeavesTheReason()
     {
         var tools = new Tools();

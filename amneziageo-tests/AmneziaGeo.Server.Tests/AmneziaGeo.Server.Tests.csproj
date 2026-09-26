@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Awg\AmneziaGeo.Server.Awg.csproj" />
     <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Auth\AmneziaGeo.Server.Auth.csproj" />
     <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Api\AmneziaGeo.Server.Api.csproj" />
+    <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Cli\AmneziaGeo.Server.Cli.csproj" />
     <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Geo\AmneziaGeo.Server.Geo.csproj" />
     <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Routing\AmneziaGeo.Server.Routing.csproj" />
   </ItemGroup>
