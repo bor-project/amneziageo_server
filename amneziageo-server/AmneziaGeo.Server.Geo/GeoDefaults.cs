@@ -13,9 +13,9 @@ public static class GeoDefaults
     /// <summary>
     /// The number of the set of sources below, raised when a source joins it.
     /// </summary>
-    public const int Version = 3;
+    public const int Version = 4;
 
-    private static readonly Dictionary<string, int> Joined = new(StringComparer.Ordinal) { ["zkeenip"] = 2, ["amneziageo"] = 3 };
+    private static readonly Dictionary<string, int> Joined = new(StringComparer.Ordinal) { ["zkeenip"] = 2, ["amneziageo"] = 3, ["amneziageo-geosite"] = 4 };
 
     /// <summary>
     /// The sources in the order they override each other in.
@@ -63,6 +63,13 @@ public static class GeoDefaults
             Kind = GeoKind.Ip,
             Url = "https://raw.githubusercontent.com/bor-project/amneziageo-geo/release/geoip.dat",
             Position = 6,
+        },
+        new()
+        {
+            Name = "amneziageo-geosite",
+            Kind = GeoKind.Site,
+            Url = "https://raw.githubusercontent.com/bor-project/amneziageo-geo/release/geosite.dat",
+            Position = 7,
         },
     ];
 

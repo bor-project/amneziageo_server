@@ -49,9 +49,10 @@ a source with its neighbour. A source that is off is skipped by every query.
 | `geosite-ru-only` | domains | runetfreedom `russia-blocked-geosite` |
 | `geoip-ru-only` | addresses | runetfreedom `russia-blocked-geoip` |
 | `amneziageo` | addresses | bor-project `amneziageo-geo`, `geoip.dat` |
+| `amneziageo-geosite` | domains | bor-project `amneziageo-geo`, `geosite.dat` |
 
 They are added on the first start of a fresh database and are removed and changed like any other source.
-No file ships with the server: the six are downloaded on the first update. A source that joins the table
+No file ships with the server: the seven are downloaded on the first update. A source that joins the table
 later reaches a panel seeded before on its first start after the update, once: it goes in front of the first
 standard source that follows it here. A standard source removed by hand is not brought back, and one already
 held under its name or address is not added twice. The set a panel has been given is kept in `Seeds`.
@@ -61,9 +62,10 @@ without DNS, so `geosite:discord` misses them: `geoip:discord` from `zkeenip` ca
 first because it also carries `ru`, `google`, `cloudflare`, `telegram` and `fastly`, and those stay with the
 databases below it.
 
-`amneziageo` carries the keys of the project itself. Each starts with `ag-`, so none replaces a key of another
+`amneziageo` and `amneziageo-geosite` carry the keys of the project itself. Each starts with `ag-`, so none replaces a key of another
 source. `geoip:ag-youtube` holds what YouTube needs in a client that routes by address: the Google front ends
-and the video caches Google picks for the project servers, which no other database names.
+and the video caches Google picks for the project servers, which no other database names. `geosite:ag-tiktok`
+holds the names of the TikTok hosts and `geoip:ag-tiktok` the networks they answer with.
 
 ## The download
 

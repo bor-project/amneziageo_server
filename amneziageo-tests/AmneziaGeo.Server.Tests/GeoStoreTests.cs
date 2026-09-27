@@ -18,7 +18,7 @@ public class GeoStoreTests
         var held = await bench.Geo.ListAsync(CancellationToken.None);
 
         Assert.Equal(GeoDefaults.Sources.Length, held.Count);
-        Assert.Equal([1, 2, 3, 4, 5, 6], held.Select(source => source.Position));
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7], held.Select(source => source.Position));
         Assert.All(held, source => Assert.True(source.IsEnabled));
         Assert.Equal(0, await bench.Geo.SeedAsync(CancellationToken.None));
     }
@@ -32,17 +32,17 @@ public class GeoStoreTests
         var added = await bench.Geo.SeedAsync(CancellationToken.None);
         var held = await bench.Geo.ListAsync(CancellationToken.None);
 
-        Assert.Equal(2, added);
-        Assert.Equal(["zkeenip", "geosite", "geoip", "geosite-ru-only", "geoip-ru-only", "amneziageo"], held.Select(source => source.Name));
-        Assert.Equal([1, 2, 3, 4, 5, 6], held.Select(source => source.Position));
+        Assert.Equal(3, added);
+        Assert.Equal(["zkeenip", "geosite", "geoip", "geosite-ru-only", "geoip-ru-only", "amneziageo", "amneziageo-geosite"], held.Select(source => source.Name));
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7], held.Select(source => source.Position));
         Assert.Equal(0, await bench.Geo.SeedAsync(CancellationToken.None));
     }
 
     [Fact]
-    public async Task APanelSeededByTheSecondSetGetsOnlyTheSourceOfTheThirdOnce()
+    public async Task APanelSeededByTheSecondSetGetsTheSourcesOfTheLaterSetsOnce()
     {
         using var bench = new Bench();
-        bench.Db.GeoSources.RemoveRange(await bench.Db.GeoSources.Where(source => source.Name == "amneziageo").ToListAsync());
+        bench.Db.GeoSources.RemoveRange(await bench.Db.GeoSources.Where(source => source.Name.StartsWith("amneziageo")).ToListAsync());
         foreach (var seed in await bench.Db.Seeds.ToListAsync())
         {
             seed.Version = 2;
@@ -53,9 +53,9 @@ public class GeoStoreTests
         var added = await bench.Geo.SeedAsync(CancellationToken.None);
         var held = await bench.Geo.ListAsync(CancellationToken.None);
 
-        Assert.Equal(1, added);
-        Assert.Equal(["zkeenip", "geosite", "geoip", "geosite-ru-only", "geoip-ru-only", "amneziageo"], held.Select(source => source.Name));
-        Assert.Equal([1, 2, 3, 4, 5, 6], held.Select(source => source.Position));
+        Assert.Equal(2, added);
+        Assert.Equal(["zkeenip", "geosite", "geoip", "geosite-ru-only", "geoip-ru-only", "amneziageo", "amneziageo-geosite"], held.Select(source => source.Name));
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7], held.Select(source => source.Position));
         Assert.Equal(0, await bench.Geo.SeedAsync(CancellationToken.None));
     }
 
@@ -70,10 +70,10 @@ public class GeoStoreTests
         await bench.Geo.RemoveAsync(zkeenip.Id, CancellationToken.None);
         var again = await bench.Geo.SeedAsync(CancellationToken.None);
 
-        Assert.Equal(2, added);
+        Assert.Equal(3, added);
         Assert.Equal("zkeenip", zkeenip.Name);
         Assert.Equal(0, again);
-        Assert.Equal(["geosite", "geoip", "geosite-ru-only", "amneziageo"], (await bench.Geo.ListAsync(CancellationToken.None)).Select(source => source.Name));
+        Assert.Equal(["geosite", "geoip", "geosite-ru-only", "amneziageo", "amneziageo-geosite"], (await bench.Geo.ListAsync(CancellationToken.None)).Select(source => source.Name));
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class GeoStoreTests
         var added = await bench.Geo.SeedAsync(CancellationToken.None);
         var held = await bench.Geo.ListAsync(CancellationToken.None);
 
-        Assert.Equal(1, added);
+        Assert.Equal(2, added);
         Assert.Single(held, source => source.Url == url);
         Assert.DoesNotContain(held, source => source.Name == "zkeenip");
     }
@@ -106,7 +106,7 @@ public class GeoStoreTests
         await bench.Geo.SeedAsync(CancellationToken.None);
 
         Assert.Equal(
-            ["mine", "zkeenip", "geosite", "geoip", "geosite-ru-only", "geoip-ru-only", "amneziageo"],
+            ["mine", "zkeenip", "geosite", "geoip", "geosite-ru-only", "geoip-ru-only", "amneziageo", "amneziageo-geosite"],
             (await bench.Geo.ListAsync(CancellationToken.None)).Select(source => source.Name));
     }
 
