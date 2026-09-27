@@ -39,6 +39,7 @@ const complaints: Record<string, TextKey> = {
   "refresh-replayed": "error.sessionEnded",
   "refresh-unknown": "error.sessionEnded",
   "bad-name": "error.badName",
+  "bad-days": "error.badDays",
   "name-taken": "error.nameTaken",
   "host-name": "error.hostName",
   "unknown-user": "error.unknownUser",

@@ -1,4 +1,5 @@
 import { Fragment } from "react"
+import { useSearchParams } from "react-router-dom"
 import { useJournal, useVersions } from "@/api/diagnostics"
 import type { JournalEntry } from "@/api/diagnostics"
 import { useHealth } from "@/api/health"
@@ -6,14 +7,52 @@ import { useOverview } from "@/api/overview"
 import { SortCaption } from "@/components/Rows"
 import { SortControl } from "@/components/SortControl"
 import { ariaSort, useOrder, useSorted } from "@/components/sort"
-import { card, secondary } from "@/components/styles"
+import { card, fieldBox, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
+import { AccessHead, AccessLog } from "@/pages/AccessLog"
 import { useAbove, wideQuery } from "@/theme/width"
 
 const loud = new Set(["Warning", "Error", "Critical"])
 const levels = ["Trace", "Debug", "Information", "Warning", "Error", "Critical"]
 
 export function Diagnostics() {
+  const t = useText()
+  const [params, setParams] = useSearchParams()
+  const connections = params.get("log") === "connections"
+
+  function pick(value: string) {
+    const kept = new URLSearchParams(params)
+
+    if (value === "connections") {
+      kept.set("log", value)
+    } else {
+      kept.delete("log")
+    }
+
+    setParams(kept)
+  }
+
+  const picker = (
+    <select
+      aria-label={t("diagnostics.show")}
+      value={connections ? "connections" : "events"}
+      onChange={(e) => pick(e.target.value)}
+      className={`w-full sm:w-64 ${fieldBox}`}
+    >
+      <option value="events">{t("diagnostics.events")}</option>
+      <option value="connections">{t("diagnostics.connections")}</option>
+    </select>
+  )
+
+  return (
+    <div className="mt-4 flex flex-col gap-4">
+      {connections ? <AccessHead lead={picker} /> : <div className={`px-4 py-3 ${card}`}>{picker}</div>}
+      {connections ? <AccessLog /> : <Events />}
+    </div>
+  )
+}
+
+function Events() {
   const t = useText()
   const language = useLanguage()
   const health = useHealth()
@@ -55,7 +94,7 @@ export function Diagnostics() {
   ]
 
   return (
-    <div className="mt-4 flex flex-col gap-4">
+    <>
       <div className={`px-4 py-3 ${card}`}>
         <div className="text-sm font-semibold text-ink-soft">{t("diagnostics.versions")}</div>
         <div className="mt-2 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-sm">
@@ -120,7 +159,7 @@ export function Diagnostics() {
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }
 

@@ -59,7 +59,7 @@ public class AccessTests
 
         Assert.Contains("\t\tjump decide\n\t\tct mark set meta mark or 0x00010000\n", text, StringComparison.Ordinal);
         Assert.Contains(
-            "\tchain answer {\n\t\ttype filter hook forward priority mangle; policy accept;\n" +
+            "\tchain answer {\n\t\ttype filter hook postrouting priority mangle; policy accept;\n" +
             "\t\toifname != { \"awg1\", \"awg2\" } accept\n\t\tct direction original accept\n" +
             "\t\tct mark and 0x00050000 != 0x00010000 accept\n",
             text,

@@ -73,9 +73,9 @@ when the group is taken and when the ruleset first names it. A host that cannot 
 gets it without, and the log says why.
 
 The log also watches what comes back. While it runs, `prerouting` puts bit `0x00010000` on the connection mark
-of every connection it lets out, and the chain `answer` on the forward hook hands to the same group, under
-`ag:r`, the first packet that comes back to such a connection and, over TCP, the first one that carries data or
-resets or closes it; bits `0x00020000` and `0x00040000` note what went, so no other packet of the connection is
+of every connection it lets out, and the chain `answer` on the postrouting hook, which the answers the host
+passes on and the ones it gives itself both go through, hands to the same group, under `ag:r`, the first packet
+that comes back to such a connection and, over TCP, the first one that carries data or resets or closes it; bits `0x00020000` and `0x00040000` note what went, so no other packet of the connection is
 handed over. An error about MTU (`fragmentation needed`, `packet too big`) is not an answer. The mark that sends
 a connection to its outbound lives in the low 16 bits of the connection mark and is taken back masked
 (`ct mark and 0x0000ffff`), so the bits of the log never reach the routing rules. The panel holds a record

@@ -264,7 +264,7 @@ public static class RouteRuleset
         var answered = Hex8(AccessDefaults.Answered);
         var settled = Hex8(AccessDefaults.Answered | AccessDefaults.Settled);
         text.Append("\n\tchain answer {\n");
-        text.Append("\t\ttype filter hook forward priority mangle; policy accept;\n");
+        text.Append("\t\ttype filter hook postrouting priority mangle; policy accept;\n");
         text.Append("\t\toifname != { ").Append(Quoted(plan.Inbound)).Append(" } accept\n");
         text.Append("\t\tct direction original accept\n");
         text.Append($"\t\tct mark and {open} != {watching} accept\n");

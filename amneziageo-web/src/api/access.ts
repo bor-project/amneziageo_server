@@ -120,23 +120,28 @@ export function useAccessSummary(filter: AccessFilter, by: Grouping) {
   return useQuery({
     queryKey: ["access", "summary", filter, by],
     queryFn: async () =>
-      (await client.get<AccessSummary>("/access/summary", { params: { ...filter, by }, timeout: 60000 })).data,
+      (await client.get<AccessSummary>("/access/summary", { params: { ...given(filter), by }, timeout: 60000 })).data,
     placeholderData: keepPreviousData,
   })
 }
 
-export function useAccessRecords(filter: AccessFilter) {
+export function useAccessRecords(filter: AccessFilter, enabled = true) {
   return useInfiniteQuery({
     queryKey: ["access", "records", filter],
     queryFn: async ({ pageParam }) =>
       (
         await client.get<AccessRecord[]>("/access/records", {
-          params: { ...filter, limit: page, before: pageParam },
+          params: { ...given(filter), limit: page, before: pageParam },
           timeout: 60000,
         })
       ).data,
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (last) => (last.length < page ? undefined : last[last.length - 1].id),
     placeholderData: keepPreviousData,
+    enabled,
   })
+}
+
+function given(filter: AccessFilter): Partial<AccessFilter> {
+  return Object.fromEntries(Object.entries(filter).filter(([, value]) => value !== ""))
 }
