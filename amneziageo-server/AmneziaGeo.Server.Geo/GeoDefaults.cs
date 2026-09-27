@@ -13,9 +13,9 @@ public static class GeoDefaults
     /// <summary>
     /// The number of the set of sources below, raised when a source joins it.
     /// </summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
-    private static readonly Dictionary<string, int> Joined = new(StringComparer.Ordinal) { ["zkeenip"] = 2 };
+    private static readonly Dictionary<string, int> Joined = new(StringComparer.Ordinal) { ["zkeenip"] = 2, ["amneziageo"] = 3 };
 
     /// <summary>
     /// The sources in the order they override each other in.
@@ -56,6 +56,13 @@ public static class GeoDefaults
             Kind = GeoKind.Ip,
             Url = "https://github.com/runetfreedom/russia-blocked-geoip/releases/latest/download/geoip-ru-only.dat",
             Position = 5,
+        },
+        new()
+        {
+            Name = "amneziageo",
+            Kind = GeoKind.Ip,
+            Url = "https://raw.githubusercontent.com/bor-project/amneziageo-geo/release/geoip.dat",
+            Position = 6,
         },
     ];
 

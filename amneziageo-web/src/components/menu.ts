@@ -105,6 +105,7 @@ export const settings: Item[] = [
 export const sections: Section[] = [
   { to: "/", label: "nav.overview", scope: scopes.readState, items: [] },
   { to: "/connections", label: "nav.connections", scope: scopes.readState, items: connections },
+  { to: "/routing", label: "nav.routing", scope: scopes.readState, items: routing },
   { to: "/settings", label: "nav.settings", scope: scopes.manageAccess, items: settings },
 ]
 

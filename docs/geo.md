@@ -48,9 +48,10 @@ a source with its neighbour. A source that is off is skipped by every query.
 | `geoip` | addresses | Loyalsoldier `v2ray-rules-dat`, `geoip.dat` |
 | `geosite-ru-only` | domains | runetfreedom `russia-blocked-geosite` |
 | `geoip-ru-only` | addresses | runetfreedom `russia-blocked-geoip` |
+| `amneziageo` | addresses | bor-project `amneziageo-geo`, `geoip.dat` |
 
 They are added on the first start of a fresh database and are removed and changed like any other source.
-No file ships with the server: the five are downloaded on the first update. A source that joins the table
+No file ships with the server: the six are downloaded on the first update. A source that joins the table
 later reaches a panel seeded before on its first start after the update, once: it goes in front of the first
 standard source that follows it here. A standard source removed by hand is not brought back, and one already
 held under its name or address is not added twice. The set a panel has been given is kept in `Seeds`.
@@ -59,6 +60,10 @@ Voice and video calls of Discord go to the bare addresses of its voice servers, 
 without DNS, so `geosite:discord` misses them: `geoip:discord` from `zkeenip` carries them. `zkeenip` stands
 first because it also carries `ru`, `google`, `cloudflare`, `telegram` and `fastly`, and those stay with the
 databases below it.
+
+`amneziageo` carries the keys of the project itself. Each starts with `ag-`, so none replaces a key of another
+source. `geoip:ag-youtube` holds what YouTube needs in a client that routes by address: the Google front ends
+and the video caches Google picks for the project servers, which no other database names.
 
 ## The download
 
@@ -82,7 +87,7 @@ database file, in that order. One file per source, named after it, with the `.da
 
 `GET /api/geo/keys` answers with every country code and category code across the sources that are on.
 The standard databases give about 260 countries and 1500 categories, `zkeenip` adds some 25 networks such
-as `discord`, `hetzner` or `youtube`, and the answer costs
+as `discord`, `hetzner` or `youtube`, `amneziageo` adds `ag-youtube`, and the answer costs
 milliseconds: the codes are taken from the head of each entry, the bodies are stepped over.
 
 A rule names a key as `geoip:ru` or `geosite:youtube`, a domain, or a range. `GeoMaterializer` turns a
