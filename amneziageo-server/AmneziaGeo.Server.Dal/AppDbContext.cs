@@ -52,6 +52,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<DnsStandingEntity> Standings => Set<DnsStandingEntity>();
 
+    public DbSet<AccessEntity> Access => Set<AccessEntity>();
+
     public DbSet<PanelEntity> Panel => Set<PanelEntity>();
 
     public DbSet<TemplateEntity> Templates => Set<TemplateEntity>();

@@ -42,7 +42,7 @@ public static class UpdateEndpoints
 
         var writing = routes.MapGroup("/api/update").RequireScope(Scopes.ManageUpdates);
         writing.MapPost("/check", CheckAsync);
-        writing.MapPost("/apply", Apply);
+        writing.MapPost("/apply", ApplyAsync);
 
         return routes;
     }
@@ -50,9 +50,14 @@ public static class UpdateEndpoints
     private static async Task<IResult> CheckAsync(UpdateCenter center, CancellationToken ct) =>
         Results.Ok(await center.CheckAsync(ct).ConfigureAwait(false));
 
-    private static IResult Apply(UpdateApplyRequest request, UpdateCenter center, ILoggerFactory loggers)
+    private static async Task<IResult> ApplyAsync(
+        UpdateApplyRequest request,
+        UpdateCenter center,
+        ILoggerFactory loggers,
+        CancellationToken ct)
     {
         var version = request.Version?.Trim() ?? string.Empty;
+        await center.RefreshAsync(ct).ConfigureAwait(false);
         var refusal = center.Apply(version);
         if (refusal is not null)
         {
@@ -61,8 +66,10 @@ public static class UpdateEndpoints
             return Results.Json(refusal, statusCode: status);
         }
 
-        loggers.CreateLogger(typeof(UpdateEndpoints)).LogInformation("the panel was told to move to {Version}", version);
+        var moving = center.Status();
+        loggers.CreateLogger(typeof(UpdateEndpoints))
+            .LogInformation("the panel was told to move to {Version} and moves to {Newest}", version, moving.Latest?.Version);
 
-        return Results.Accepted(value: center.Status());
+        return Results.Accepted(value: moving);
     }
 }

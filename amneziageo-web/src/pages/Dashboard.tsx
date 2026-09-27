@@ -258,8 +258,8 @@ function Update() {
   async function go(version: string) {
     setFault(null)
     try {
-      await apply.mutateAsync(version)
-      dispatch(updateWatched({ to: version, started: Date.now() }))
+      const moved = await apply.mutateAsync(version)
+      dispatch(updateWatched({ to: moved.latest?.version ?? version, started: Date.now() }))
     } catch (error) {
       setFault(complaint(error))
     }

@@ -2,6 +2,7 @@ using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Geo.Files;
+using AmneziaGeo.Server.Routing.Access;
 using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Route;
@@ -57,6 +58,8 @@ public sealed class RouteApplier
 
     private readonly OutboundHost _host;
 
+    private readonly AccessGate _gate;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -73,7 +76,8 @@ public sealed class RouteApplier
         BalanceLive live,
         DnsSets sets,
         ClientStore clients,
-        OutboundHost host)
+        OutboundHost host,
+        AccessGate gate)
     {
         _rules = rules;
         _outbounds = outbounds;
@@ -88,6 +92,7 @@ public sealed class RouteApplier
         _sets = sets;
         _clients = clients;
         _host = host;
+        _gate = gate;
     }
 
     /// <summary>
@@ -113,7 +118,7 @@ public sealed class RouteApplier
             balancers,
             _live.Alive,
             clients,
-            basic);
+            basic) with { Journal = _gate.Group };
 
         _plans.Keep(plan);
 
@@ -132,9 +137,8 @@ public sealed class RouteApplier
     public async Task<RoutePlan> ApplyAsync(CancellationToken ct)
     {
         var plan = await BuildAsync(ct).ConfigureAwait(false);
-        await _sets.LayAsync(RouteRuleset.Text(plan), plan, ct).ConfigureAwait(false);
 
-        return plan;
+        return await LayAsync(plan, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -157,12 +161,31 @@ public sealed class RouteApplier
         var plan = await BuildAsync(ct).ConfigureAwait(false);
         try
         {
-            await _sets.LayAsync(RouteRuleset.Text(plan), plan, ct).ConfigureAwait(false);
+            return await LayAsync(plan, ct).ConfigureAwait(false);
         }
         catch (HostNetworkException)
         {
         }
 
         return plan;
+    }
+
+    private async Task<RoutePlan> LayAsync(RoutePlan plan, CancellationToken ct)
+    {
+        try
+        {
+            await _sets.LayAsync(RouteRuleset.Text(plan), plan, ct).ConfigureAwait(false);
+
+            return plan;
+        }
+        catch (HostNetworkException ex) when (plan.Journal is not null)
+        {
+            var bare = plan with { Journal = null };
+            await _sets.LayAsync(RouteRuleset.Text(bare), bare, ct).ConfigureAwait(false);
+            _gate.Close($"the host did not take the rules that log the connections: {ex.Message}");
+            _plans.Keep(bare);
+
+            return bare;
+        }
     }
 }

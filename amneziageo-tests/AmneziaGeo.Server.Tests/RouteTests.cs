@@ -208,7 +208,7 @@ public class RouteTests
         Assert.Contains("set r1v6 {", text, StringComparison.Ordinal);
         Assert.Contains("set n1v4 {", text, StringComparison.Ordinal);
         Assert.Contains("timeout 60m", text, StringComparison.Ordinal);
-        Assert.Contains("ct mark != 0x00000000 meta mark set ct mark accept", text, StringComparison.Ordinal);
+        Assert.Contains("ct mark and 0x0000ffff != 0x00000000 meta mark set ct mark and 0x0000ffff accept", text, StringComparison.Ordinal);
         Assert.Contains("iifname != { \"awg1\", \"awg2\" } accept", text, StringComparison.Ordinal);
         Assert.Contains("meta mark != 0x00000000 ct mark set meta mark", text, StringComparison.Ordinal);
         Assert.Contains("ip daddr @r1v4 meta mark set 0xa602 return", text, StringComparison.Ordinal);
@@ -220,7 +220,7 @@ public class RouteTests
     {
         var text = RouteRuleset.Text(Plan(Out("awgbor") with { Targets = ["geoip:ru"] }));
         var clients = text.IndexOf("iifname != { \"awg1\", \"awg2\" } accept", StringComparison.Ordinal);
-        var mark = text.IndexOf("ct mark != 0x00000000 meta mark set ct mark accept", StringComparison.Ordinal);
+        var mark = text.IndexOf("ct mark and 0x0000ffff != 0x00000000 meta mark set ct mark and 0x0000ffff accept", StringComparison.Ordinal);
         var fresh = text.IndexOf("ct state != new accept", StringComparison.Ordinal);
         var decide = text.IndexOf("jump decide", StringComparison.Ordinal);
 
@@ -233,7 +233,7 @@ public class RouteTests
         var text = RouteRuleset.Text(Plan(Out("awgbor") with { Targets = ["geoip:ru"] }));
         var clients = text.IndexOf("iifname != { \"awg1\", \"awg2\" } accept", StringComparison.Ordinal);
         var invalid = text.IndexOf("ct state invalid drop", StringComparison.Ordinal);
-        var mark = text.IndexOf("ct mark != 0x00000000 meta mark set ct mark accept", StringComparison.Ordinal);
+        var mark = text.IndexOf("ct mark and 0x0000ffff != 0x00000000 meta mark set ct mark and 0x0000ffff accept", StringComparison.Ordinal);
 
         Assert.True(clients >= 0 && clients < invalid && invalid < mark, text);
     }

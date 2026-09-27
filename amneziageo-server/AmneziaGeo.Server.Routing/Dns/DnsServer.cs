@@ -146,7 +146,8 @@ public sealed class DnsServer : IAsyncDisposable
     {
         try
         {
-            var answer = await _resolver.AnswerAsync(question, false, ct).ConfigureAwait(false);
+            var answer = await _resolver.AnswerAsync(question, false, (client as IPEndPoint)?.Address, ct)
+                .ConfigureAwait(false);
             if (answer is not null)
             {
                 await socket.SendToAsync(answer, SocketFlags.None, client, ct).ConfigureAwait(false);
@@ -183,6 +184,7 @@ public sealed class DnsServer : IAsyncDisposable
     private async Task ServeAsync(Socket client, CancellationToken ct)
     {
         using var held = client;
+        var from = (held.RemoteEndPoint as IPEndPoint)?.Address;
         var head = new byte[2];
         try
         {
@@ -194,7 +196,7 @@ public sealed class DnsServer : IAsyncDisposable
                     return;
                 }
 
-                var answer = await _resolver.AnswerAsync(question, true, ct).ConfigureAwait(false);
+                var answer = await _resolver.AnswerAsync(question, true, from, ct).ConfigureAwait(false);
                 if (answer is null)
                 {
                     return;

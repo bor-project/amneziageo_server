@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using AmneziaGeo.Server.Routing.Access;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Dns;
 
@@ -14,6 +15,8 @@ public static class RouteRuleset
     /// The firewall table the routing rules live in.
     /// </summary>
     public const string TableName = "amneziageo_rt";
+
+    private const uint RouteMarks = 0x0000_FFFF;
 
     /// <summary>
     /// Returns the name of the set that holds the ranges of a rule.
@@ -78,20 +81,29 @@ public static class RouteRuleset
         {
             text.Append("\t\tiifname != { ").Append(Quoted(plan.Inbound)).Append(" } accept\n");
             text.Append("\t\tct state invalid drop\n");
-            text.Append("\t\tct mark != 0x00000000 meta mark set ct mark accept\n");
+            text.Append("\t\tct mark and ").Append(Hex8(RouteMarks)).Append(" != 0x00000000 meta mark set ct mark and ");
+            text.Append(Hex8(RouteMarks)).Append(" accept\n");
             text.Append("\t\tct state != new accept\n");
             text.Append("\t\tjump decide\n");
-            text.Append("\t\tmeta mark != 0x00000000 ct mark set meta mark\n");
+            text.Append(plan.Journal is null
+                ? "\t\tmeta mark != 0x00000000 ct mark set meta mark\n"
+                : $"\t\tct mark set meta mark or {Hex8(AccessDefaults.Watching)}\n");
         }
 
         text.Append("\t}\n\n\tchain decide {\n");
-        foreach (var line in Guard(plan.Dns).Concat(live.SelectMany(Lines)))
+        foreach (var line in Guard(plan.Dns, plan.Journal).Concat(live.SelectMany(leg => Lines(leg, plan.Journal))))
         {
             text.Append("\t\t").Append(line).Append('\n');
         }
 
+        if (plan.Journal is { } group)
+        {
+            text.Append("\t\t").Append(AccessTag.Statement(AccessTag.Nothing, group)).Append('\n');
+        }
+
         text.Append("\t}\n");
         Redirect(text, plan);
+        Answers(text, plan);
         text.Append("}\n");
 
         return text.ToString();
@@ -100,7 +112,7 @@ public static class RouteRuleset
     /// <summary>
     /// Returns the lines that keep the clients off the name servers they carry their own way.
     /// </summary>
-    public static IReadOnlyList<string> Guard(DnsSettings dns)
+    public static IReadOnlyList<string> Guard(DnsSettings dns, ushort? journal = null)
     {
         ArgumentNullException.ThrowIfNull(dns);
 
@@ -112,13 +124,14 @@ public static class RouteRuleset
         var lines = new List<string>();
         if (dns.BlockDot)
         {
-            lines.Add("meta l4proto { tcp, udp } th dport 853 drop");
+            lines.Add("meta l4proto { tcp, udp } th dport 853 " + Log(AccessTag.Dot, journal) + "drop");
         }
 
         if (dns.BlockDoh)
         {
-            lines.Add($"ip daddr @{HttpsSet(false)} meta l4proto {{ tcp, udp }} th dport 443 drop");
-            lines.Add($"ip6 daddr @{HttpsSet(true)} meta l4proto {{ tcp, udp }} th dport 443 drop");
+            var log = Log(AccessTag.Doh, journal);
+            lines.Add($"ip daddr @{HttpsSet(false)} meta l4proto {{ tcp, udp }} th dport 443 {log}drop");
+            lines.Add($"ip6 daddr @{HttpsSet(true)} meta l4proto {{ tcp, udp }} th dport 443 {log}drop");
         }
 
         return lines;
@@ -127,13 +140,18 @@ public static class RouteRuleset
     /// <summary>
     /// Returns the lines one rule takes in the decision chain.
     /// </summary>
-    public static IReadOnlyList<string> Lines(RouteLeg leg)
+    public static IReadOnlyList<string> Lines(RouteLeg leg) => Lines(leg, null);
+
+    /// <summary>
+    /// Returns the lines one rule takes in the decision chain, handing what it decides to a log group.
+    /// </summary>
+    public static IReadOnlyList<string> Lines(RouteLeg leg, ushort? journal)
     {
         ArgumentNullException.ThrowIfNull(leg);
 
         if (leg.Rule.Targets.Count == 0 && !leg.IsBySource)
         {
-            return Plain(leg);
+            return Plain(leg, journal);
         }
 
         var lines = new List<string>();
@@ -146,7 +164,7 @@ public static class RouteRuleset
                 continue;
             }
 
-            var tail = Ports(leg.Rule) + Verdict(leg, six);
+            var tail = Ports(leg.Rule) + Verdict(leg, six, journal);
             var head = Inbound(leg.Rule)
                 + (sources.Count > 0 ? $"{family} saddr {{ {string.Join(", ", sources)} }} " : string.Empty);
             foreach (var set in Sets(leg, six))
@@ -163,18 +181,18 @@ public static class RouteRuleset
         return lines;
     }
 
-    private static IReadOnlyList<string> Plain(RouteLeg leg)
+    private static IReadOnlyList<string> Plain(RouteLeg leg, ushort? journal)
     {
         var head = Inbound(leg.Rule);
         if (!Sticky(leg))
         {
-            return [head + Ports(leg.Rule) + Verdict(leg, false)];
+            return [head + Ports(leg.Rule) + Verdict(leg, false, journal)];
         }
 
         return
         [
-            head + "meta nfproto ipv4 " + Ports(leg.Rule) + Verdict(leg, false),
-            head + "meta nfproto ipv6 " + Ports(leg.Rule) + Verdict(leg, true),
+            head + "meta nfproto ipv4 " + Ports(leg.Rule) + Verdict(leg, false, journal),
+            head + "meta nfproto ipv6 " + Ports(leg.Rule) + Verdict(leg, true, journal),
         ];
     }
 
@@ -233,6 +251,32 @@ public static class RouteRuleset
         text.Append("\t}\n");
     }
 
+    private static void Answers(StringBuilder text, RoutePlan plan)
+    {
+        if (plan.Journal is not { } group || plan.Inbound.Count == 0)
+        {
+            return;
+        }
+
+        var log = AccessTag.Statement(AccessTag.Reply, group);
+        var watching = Hex8(AccessDefaults.Watching);
+        var open = Hex8(AccessDefaults.Watching | AccessDefaults.Settled);
+        var answered = Hex8(AccessDefaults.Answered);
+        var settled = Hex8(AccessDefaults.Answered | AccessDefaults.Settled);
+        text.Append("\n\tchain answer {\n");
+        text.Append("\t\ttype filter hook forward priority mangle; policy accept;\n");
+        text.Append("\t\toifname != { ").Append(Quoted(plan.Inbound)).Append(" } accept\n");
+        text.Append("\t\tct direction original accept\n");
+        text.Append($"\t\tct mark and {open} != {watching} accept\n");
+        text.Append("\t\ticmp type destination-unreachable icmp code 4 accept\n");
+        text.Append("\t\ticmpv6 type packet-too-big accept\n");
+        text.Append($"\t\ttcp flags & (fin | rst | psh) != 0 ct mark set ct mark or {settled} {log} accept\n");
+        text.Append($"\t\tmeta l4proto tcp ct mark and {answered} != 0x00000000 accept\n");
+        text.Append($"\t\tmeta l4proto tcp ct mark set ct mark or {answered} {log} accept\n");
+        text.Append($"\t\tct mark set ct mark or {settled} {log}\n");
+        text.Append("\t}\n");
+    }
+
     private static void Range(StringBuilder text, string name, string type, IReadOnlyList<string> ranges)
     {
         if (ranges.Count == 0)
@@ -280,22 +324,26 @@ public static class RouteRuleset
         (from.Length > 0 ? $"{head} sport {{ {from} }} " : string.Empty)
         + (to.Length > 0 ? $"{head} dport {{ {to} }} " : string.Empty);
 
-    private static string Verdict(RouteLeg leg, bool six)
+    private static string Verdict(RouteLeg leg, bool six, ushort? journal)
     {
+        var log = Log(AccessTag.Of(leg), journal);
         if (leg.IsBlock || leg.IsHeld)
         {
-            return "drop";
+            return log + "drop";
         }
 
         if (leg.IsDirect)
         {
-            return "return";
+            return log + "return";
         }
 
         return leg.Exit.IsSpread
-            ? "meta mark set " + Pick(leg.Exit, six) + " map { " + Map(leg.Exit) + " } return"
-            : "meta mark set " + Hex(leg.Exit.Mark) + " return";
+            ? "meta mark set " + Pick(leg.Exit, six) + " map { " + Map(leg.Exit) + " } " + log + "return"
+            : "meta mark set " + Hex(leg.Exit.Mark) + " " + log + "return";
     }
+
+    private static string Log(string prefix, ushort? journal) =>
+        journal is { } group ? AccessTag.Statement(prefix, group) + " " : string.Empty;
 
     private static string Pick(RouteExit exit, bool six)
     {
@@ -310,6 +358,8 @@ public static class RouteRuleset
         string.Join(", ", exit.Marks.Select((mark, at) => $"{at.ToString(CultureInfo.InvariantCulture)} : {Hex(mark)}"));
 
     private static string Hex(uint mark) => "0x" + mark.ToString("x", CultureInfo.InvariantCulture);
+
+    private static string Hex8(uint mark) => "0x" + mark.ToString("x8", CultureInfo.InvariantCulture);
 
     private static string Tag(long id) =>
         id < 0 ? "b" + (-id).ToString(CultureInfo.InvariantCulture) : id.ToString(CultureInfo.InvariantCulture);

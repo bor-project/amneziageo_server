@@ -93,8 +93,8 @@ host swaps one ruleset for the next in a single step. The table carries:
   it asks about the names of the rule itself, see [dns.md](dns.md);
 - a `prerouting` chain at mangle priority that leaves alone anything that did not arrive on an endpoint of
   the panel, drops a packet of a client that belongs to no connection the host tracks (`ct state invalid`),
-  restores the mark of a connection that already has one, and hands only a new connection to the decision
-  chain;
+  restores the mark of a connection that already has one from the low 16 bits of the connection mark, and
+  hands only a new connection to the decision chain;
 - a `decide` chain that carries the basic lists and then the rules themselves.
 
 A rule naming interfaces starts each of its lines with `iifname { ... }`, a rule naming clients matches their
@@ -114,6 +114,11 @@ The mark comes back only to what the clients send. An answer that returns throug
 mark, so the host finds the client in its own tables instead of sending the answer back into the outbound.
 
 Traffic that matches no rule carries no mark and takes the way out the host itself picks.
+
+While the connection log runs, every line of `decide` hands the packet it decides to log group 7317 before its
+verdict, a last line hands over what no rule took, and the chain `answer` hands over what comes back to the
+connections let out, keeping its own bits above the low 16 of the connection mark; see
+[diagnostics.md](diagnostics.md).
 
 ## What stays off the host
 

@@ -53,7 +53,7 @@ for a token like any other route. The shapes of the answers are not in it; the p
 | geo sources | [geo.md](geo.md) |
 | services of an endpoint | [services.md](services.md) |
 | where the panel listens | [serving.md](serving.md) |
-| diagnostics | [diagnostics.md](diagnostics.md) |
+| diagnostics, the connection log | [diagnostics.md](diagnostics.md) |
 | the overview | [overview.md](overview.md) |
 | updates of the panel | [updates.md](updates.md) |
 

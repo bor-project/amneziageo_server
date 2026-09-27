@@ -117,6 +117,11 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
     public RouteWays Ways { get; init; } = RouteWays.None;
 
     /// <summary>
+    /// The log group the new connections of the clients go to, or null while the log is off.
+    /// </summary>
+    public ushort? Journal { get; init; }
+
+    /// <summary>
     /// Expands the rules over the geo index, the outbounds and the balancers the panel holds.
     /// </summary>
     public static RoutePlan Build(

@@ -185,6 +185,41 @@ public sealed class UpdateTests : IDisposable
     }
 
     [Fact]
+    public async Task AStaleLookIsTakenAgainBeforeAnUpdateWhichMovesToTheNewestRelease()
+    {
+        using var bench = new Bench();
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var older = Manifest("1.0.1.3");
+        var files = Published(older, Sign(key, older));
+        using var handler = new Files(files);
+        var pem = Path.Combine(_folder.FullName, "key.pem");
+        File.WriteAllText(pem, key.ExportSubjectPublicKeyInfoPem());
+        var options = new UpdateOptions
+        {
+            Manifest = "https://releases.test/1.0.1.0/update.json",
+            Key = pem,
+            Directory = Path.Combine(_folder.FullName, "update"),
+        };
+        var center = new UpdateCenter(options, new Clients(handler), bench.Clock, NullLogger<UpdateCenter>.Instance, bench.Scopes);
+        await center.CheckAsync(CancellationToken.None);
+        var newer = Manifest("1.0.1.5");
+        files["https://releases.test/1.0.1.0/update.json"] = newer;
+        files["https://releases.test/1.0.1.0/update.json.sig"] = Sign(key, newer);
+
+        await center.RefreshAsync(CancellationToken.None);
+        var kept = center.Status().Latest?.Version;
+        bench.Clock.Pass(UpdateCenter.Fresh);
+        await center.RefreshAsync(CancellationToken.None);
+
+        Assert.Equal("1.0.1.3", kept);
+        Assert.Equal("1.0.1.5", center.Status().Latest?.Version);
+        Assert.Equal("update-blocked", center.Apply("1.0.1.3")?.Error);
+        Assert.Equal("update-blocked", center.Apply("1.0.1.5")?.Error);
+        Assert.Equal("update-unknown", center.Apply("1.0.1.9")?.Error);
+        Assert.Equal("update-unknown", center.Apply("latest")?.Error);
+    }
+
+    [Fact]
     public async Task APackageIsDownloadedCheckedAndUnpacked()
     {
         var archive = Package();

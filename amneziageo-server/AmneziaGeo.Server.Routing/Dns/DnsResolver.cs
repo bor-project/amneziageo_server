@@ -1,3 +1,4 @@
+using System.Net;
 using AmneziaGeo.Server.Routing.Route;
 
 namespace AmneziaGeo.Server.Routing.Dns;
@@ -21,6 +22,8 @@ public sealed class DnsResolver
 
     private readonly Func<CancellationToken, Task> _land;
 
+    private readonly Action<IPAddress?, DnsMessage>? _heard;
+
     private readonly Lock _sync = new();
 
     private RoutePlan? _seen;
@@ -37,7 +40,8 @@ public sealed class DnsResolver
         Func<RoutePlan?> plan,
         DnsSettings settings,
         DnsState state,
-        Func<CancellationToken, Task> land)
+        Func<CancellationToken, Task> land,
+        Action<IPAddress?, DnsMessage>? heard = null)
     {
         _upstream = upstream;
         _cache = cache;
@@ -46,12 +50,19 @@ public sealed class DnsResolver
         _settings = settings;
         _state = state;
         _land = land;
+        _heard = heard;
     }
 
     /// <summary>
     /// Returns the answer to send back, or null when the question is not one.
     /// </summary>
-    public async Task<byte[]?> AnswerAsync(ReadOnlyMemory<byte> question, bool stream, CancellationToken ct)
+    public Task<byte[]?> AnswerAsync(ReadOnlyMemory<byte> question, bool stream, CancellationToken ct) =>
+        AnswerAsync(question, stream, null, ct);
+
+    /// <summary>
+    /// Returns the answer to send back to a client, or null when the question is not one.
+    /// </summary>
+    public async Task<byte[]?> AnswerAsync(ReadOnlyMemory<byte> question, bool stream, IPAddress? client, CancellationToken ct)
     {
         var asked = DnsMessage.Read(question.Span);
         if (asked is null || asked.IsResponse)
@@ -64,7 +75,9 @@ public sealed class DnsResolver
         if (held is not null)
         {
             _state.Held();
-            await LandAsync(DnsMessage.Read(held), ct).ConfigureAwait(false);
+            var kept = DnsMessage.Read(held);
+            Heard(client, kept);
+            await LandAsync(kept, ct).ConfigureAwait(false);
 
             return held;
         }
@@ -81,10 +94,19 @@ public sealed class DnsResolver
         if (read is { Code: 0 })
         {
             _cache.Keep(read.Question, read.Type, answer, Lifetime(read));
+            Heard(client, read);
             await LandAsync(read, ct).ConfigureAwait(false);
         }
 
         return answer;
+    }
+
+    private void Heard(IPAddress? client, DnsMessage? answer)
+    {
+        if (answer is not null && _heard is not null)
+        {
+            _heard(client, answer);
+        }
     }
 
     private TimeSpan Lifetime(DnsMessage answer)

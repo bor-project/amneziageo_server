@@ -33,6 +33,16 @@ public sealed class UpdateCenter
     /// </summary>
     public const string Starting = "starting";
 
+    /// <summary>
+    /// How long a look at the releases stays good for an update to start from.
+    /// </summary>
+    public static readonly TimeSpan Fresh = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// How long an update waits for a new look at the releases.
+    /// </summary>
+    public static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
+
     private readonly UpdateOptions _options;
 
     private readonly IHttpClientFactory _clients;
@@ -175,7 +185,29 @@ public sealed class UpdateCenter
     }
 
     /// <summary>
-    /// Starts the move to a release found by the last look, or tells why it does not start.
+    /// Looks the releases over again when the last look is older than it may be, waiting for it a short while.
+    /// </summary>
+    public async Task RefreshAsync(CancellationToken ct)
+    {
+        if (Checked() is { } last && _time.GetUtcNow() - last < Fresh)
+        {
+            return;
+        }
+
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limit.CancelAfter(Patience);
+        try
+        {
+            await CheckAsync(limit.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogWarning(ex, "the releases were not looked over again, the update takes the last look");
+        }
+    }
+
+    /// <summary>
+    /// Starts the move to the newest release the last look found when it is the one asked for or newer, or tells why it does not start.
     /// </summary>
     public Failure? Apply(string version)
     {
@@ -187,7 +219,7 @@ public sealed class UpdateCenter
                 return new Failure("update-busy", "the panel is busy with an update");
             }
 
-            if (_offer is null || !string.Equals(_offer.Manifest.Version.ToString(), version, StringComparison.Ordinal))
+            if (_offer is null || !Version.TryParse(version, out var asked) || _offer.Manifest.Version < asked)
             {
                 return new Failure("update-unknown", $"there is no release {version} to move to");
             }
@@ -204,6 +236,14 @@ public sealed class UpdateCenter
         }
 
         return null;
+    }
+
+    private DateTimeOffset? Checked()
+    {
+        lock (_gate)
+        {
+            return _checked;
+        }
     }
 
     private async Task RunAsync(UpdateOffer offer, DockerPlace? place)

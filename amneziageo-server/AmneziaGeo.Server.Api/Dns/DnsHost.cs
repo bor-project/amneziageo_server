@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Access;
 using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Route;
@@ -28,6 +29,8 @@ public sealed class DnsHost : BackgroundService
     private readonly DnsSets _sets;
 
     private readonly DnsState _state;
+
+    private readonly AccessNames _names;
 
     private readonly TimeProvider _time;
 
@@ -57,6 +60,7 @@ public sealed class DnsHost : BackgroundService
         RoutePlans plans,
         DnsSets sets,
         DnsState state,
+        AccessNames names,
         TimeProvider time,
         ILogger<DnsHost> logger)
     {
@@ -64,6 +68,7 @@ public sealed class DnsHost : BackgroundService
         _plans = plans;
         _sets = sets;
         _state = state;
+        _names = names;
         _time = time;
         _logger = logger;
     }
@@ -198,7 +203,8 @@ public sealed class DnsHost : BackgroundService
             () => _plans.Held,
             _settings,
             _state,
-            FlushAsync);
+            FlushAsync,
+            _names.Hear);
 
         var server = new DnsServer(resolver);
         var taken = default(IReadOnlyList<IPAddress>);

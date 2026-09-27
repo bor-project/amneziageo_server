@@ -734,6 +734,20 @@ public sealed class TemplateEntity
 }
 
 /// <summary>
+/// The settings of the connection log as the database holds them.
+/// </summary>
+public sealed class AccessEntity
+{
+    public long Id { get; set; }
+
+    public bool IsEnabled { get; set; }
+
+    public int Days { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
 /// The set of standard entries a store has been given, as the database holds it.
 /// </summary>
 public sealed class SeedEntity

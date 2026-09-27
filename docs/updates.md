@@ -39,7 +39,7 @@ the tab says. `GET /api/update` names the channel in `channel`.
 |---|---|---|
 | `GET /api/update` | `state:read` | the version that runs, the release newer than it, whether the panel can put it on by itself, how the last update went |
 | `POST /api/update/check` | `updates:write` | looks the releases over now |
-| `POST /api/update/apply` | `updates:write` | `{"version": "<version>"}` moves the panel to the release the last look found |
+| `POST /api/update/apply` | `updates:write` | `{"version": "<version>"}` moves the panel to the newest release, that one or a newer one; a look older than ten minutes is taken again first, waiting for it at most ten seconds |
 
 `blocker` in the answer tells why the panel cannot put a release on by itself:
 
