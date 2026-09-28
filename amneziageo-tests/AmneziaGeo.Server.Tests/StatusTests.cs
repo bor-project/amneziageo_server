@@ -161,4 +161,23 @@ public class StatusTests
         Assert.Equal(0, ProcText.Sockets(string.Empty, string.Empty).Tcp);
         Assert.Equal(TimeSpan.Zero, ProcText.Uptime(string.Empty));
     }
+
+    [Fact]
+    public void AListeningSocketIsFoundByItsPortInBothFamilies()
+    {
+        const string tcp = """
+              sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+               0: 0100007F:EE49 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 4051 1 0 100 0 0 10 0
+               1: 0100007F:EE4A 0100007F:A1B2 01 00000000:00000000 00:00000000 00000000     0        0 4052 1 0 20 4 30 10 -1
+            """;
+        const string tcp6 = """
+              sl  local_address                         remote_address                        st tx_queue rx_queue
+               0: 00000000000000000000000000000000:20FE 00000000000000000000000000000000:0000 0A 00000000:00000000
+            """;
+
+        Assert.True(ProcText.Listens(tcp, 61001));
+        Assert.False(ProcText.Listens(tcp, 61002));
+        Assert.True(ProcText.Listens(tcp6, 8446));
+        Assert.False(ProcText.Listens(string.Empty, 61001));
+    }
 }

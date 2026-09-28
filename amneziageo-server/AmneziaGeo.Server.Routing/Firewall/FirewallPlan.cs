@@ -95,7 +95,9 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         }
     }
 
-    // Tells whether what is bound is reached from outside the host.
-    private static bool Reached(IReadOnlyList<string> listen) => listen.Count == 0
+    /// <summary>
+    /// Tells whether what is bound is reached from outside the host.
+    /// </summary>
+    public static bool Reached(IReadOnlyList<string> listen) => listen.Count == 0
         || listen.Any(address => !IPAddress.TryParse(address, out var found) || !IPAddress.IsLoopback(found));
 }

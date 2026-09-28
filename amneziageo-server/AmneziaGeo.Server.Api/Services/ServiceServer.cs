@@ -138,6 +138,8 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 
     private readonly Dictionary<int, Served> _served = [];
 
+    private volatile IReadOnlyDictionary<int, string> _refused = new Dictionary<int, string>();
+
     private bool _sourcesForgotten;
 
     private bool _bbrMissing;
@@ -162,6 +164,11 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         _share = share;
         _logger = logger;
     }
+
+    /// <summary>
+    /// The TCP ports of the services the host did not let the panel bind, with why.
+    /// </summary>
+    public IReadOnlyDictionary<int, string> Refused => _refused;
 
     /// <summary>
     /// Serves the services of the endpoints the database holds.
@@ -225,6 +232,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
                 _served[port].Point = kept;
             }
 
+            var refused = new Dictionary<int, string>();
             foreach (var point in own.Where(one => !_served.ContainsKey(one.Port)))
             {
                 var fault = await ServeAsync(point, ct).ConfigureAwait(false);
@@ -233,11 +241,14 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
                     continue;
                 }
 
+                refused[point.Port] = fault;
                 foreach (var endpoint in point.Endpoints.Where(one => one.WebSocket))
                 {
                     faults.TryAdd(endpoint.ConfigId, fault);
                 }
             }
+
+            _refused = refused;
         }
         finally
         {

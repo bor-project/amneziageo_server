@@ -128,7 +128,9 @@ starting over leaves a front whose files did not change alone.
 
 When the front does not come up or another service holds the port of the services, adding, changing or turning on
 the endpoint turns its `WebSocket proxy` off and answers `websocket-down` (409) with the reason and the number of
-the endpoint; the form shows the reason under the flag.
+the endpoint; the form shows the reason under the flag. A front that falls over later, a port of the services the
+host did not give and a port the firewall keeps closed show in the services of the overview, see
+[overview.md](overview.md).
 
 An outbound of the `ws` kind proves its keys to the front of another AmneziaGeo server the same way, see
 [outbounds.md](outbounds.md).

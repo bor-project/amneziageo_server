@@ -9,6 +9,8 @@ public static class ProcText
 {
     private static readonly char[] Blanks = [' ', '\t'];
 
+    private const string Listen = "0A";
+
     private static readonly char[] Breaks = ['\n'];
 
     /// <summary>
@@ -94,6 +96,26 @@ public static class ProcText
     public static SocketCounts Sockets(string sockstat, string sockstat6) => new(
         InUse(sockstat, "TCP:") + InUse(sockstat6, "TCP6:"),
         InUse(sockstat, "UDP:") + InUse(sockstat6, "UDP6:"));
+
+    /// <summary>
+    /// Tells whether a socket of /proc/net/tcp or /proc/net/tcp6 listens on a port.
+    /// </summary>
+    public static bool Listens(string table, int port)
+    {
+        var wanted = ":" + port.ToString("X4", CultureInfo.InvariantCulture);
+        foreach (var line in Lines(table ?? string.Empty))
+        {
+            var parts = Parts(line);
+            if (parts.Length > 3
+                && parts[3] == Listen
+                && parts[1].EndsWith(wanted, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Reads how long the host has been up off /proc/uptime.

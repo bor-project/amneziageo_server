@@ -80,20 +80,38 @@ public sealed class FirewallHost
     /// <summary>
     /// Tells whether the firewall of the host lets a port in from outside: open, closed or unknown.
     /// </summary>
-    public async Task<string> StateAsync(string protocol, int port, CancellationToken ct)
+    public async Task<string> StateAsync(string protocol, int port, CancellationToken ct) =>
+        (await StatesAsync([new FirewallPort(protocol, port, string.Empty)], ct).ConfigureAwait(false))[0];
+
+    /// <summary>
+    /// Tells for each port whether the firewall of the host lets it in from outside, reading the firewall once.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> StatesAsync(IReadOnlyList<FirewallPort> ports, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(ports);
+
+        if (ports.Count == 0)
+        {
+            return [];
+        }
+
         if (_tool.Length > 0)
         {
             var status = await RunAsync(["status", "verbose"], ct).ConfigureAwait(false);
 
-            return status.IsOk ? PortState.OfUfw(status.Output, protocol, port) : PortState.Unknown;
+            return [.. ports.Select(one => status.IsOk ? PortState.OfUfw(status.Output, one.Protocol, one.Port) : PortState.Unknown)];
         }
 
         var input = await _commands.RunAsync(Nft, ["list", "chain", "ip", "filter", "INPUT"], null, ct).ConfigureAwait(false);
         var rules = await _commands.RunAsync(Nft, ["list", "chain", "ip", "filter", "ufw-user-input"], null, ct)
             .ConfigureAwait(false);
 
-        return input.IsOk && rules.IsOk ? PortState.OfChains(input.Output, rules.Output, protocol, port) : PortState.Unknown;
+        return
+        [
+            .. ports.Select(one => input.IsOk && rules.IsOk
+                ? PortState.OfChains(input.Output, rules.Output, one.Protocol, one.Port)
+                : PortState.Unknown),
+        ];
     }
 
     private async Task<FirewallSync> UfwAsync(FirewallPlan plan, CancellationToken ct)

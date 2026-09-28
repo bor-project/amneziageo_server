@@ -462,6 +462,8 @@ public class ServiceTests
             Assert.Equal([blocked.Id, fallen.Id], faults.Keys.Order().ToArray());
             Assert.Contains(busy.ToString(CultureInfo.InvariantCulture), faults[blocked.Id], StringComparison.Ordinal);
             Assert.Equal("the front fell over", faults[fallen.Id]);
+            Assert.Equal([busy], server.Refused.Keys.ToArray());
+            Assert.Contains(busy.ToString(CultureInfo.InvariantCulture), server.Refused[busy], StringComparison.Ordinal);
         }
         finally
         {

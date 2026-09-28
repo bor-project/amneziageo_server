@@ -184,6 +184,10 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
 
         private string _fault = string.Empty;
 
+        private string _fell = string.Empty;
+
+        private long _falls;
+
         public Child(ProxyCommand command, TimeSpan pause)
         {
             _command = command;
@@ -196,7 +200,9 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
             {
                 lock (_sync)
                 {
-                    return _process is { HasExited: false } ? ProxyState.Up : new ProxyState(false, _fault);
+                    return _process is { HasExited: false }
+                        ? new ProxyState(true, _fell, _falls)
+                        : new ProxyState(false, _fault.Length > 0 ? _fault : _fell, _falls);
                 }
             }
         }
@@ -286,6 +292,8 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
                 if (ReferenceEquals(_process, process))
                 {
                     _fault = $"{Path.GetFileName(_command.File)} ended with code {process.ExitCode}";
+                    _fell = _fault;
+                    _falls++;
                     _process = null;
                     process.Dispose();
                 }

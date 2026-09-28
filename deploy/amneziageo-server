@@ -447,6 +447,20 @@ front_units() {
   } | grep -v '^$' | sort -u
 }
 
+# Prints the line the panel writes about the services it runs for the clients, nothing without one.
+services_line() {
+  case $(kind) in
+    package | container)
+      head -1 "$data/services" 2>/dev/null
+      ;;
+    docker)
+      if [ "$(container_state)" = running ]; then
+        dcompose exec -T panel head -1 /var/lib/amneziageo-server/services < /dev/null 2>/dev/null
+      fi
+      ;;
+  esac | tr -d '\r'
+}
+
 # Counts the websocket fronts that run.
 fronts_running() {
   case $(kind) in
@@ -2545,7 +2559,7 @@ view_settings() {
 
 # Item 18: the service, the answer of the panel and what the host lacks, with the fixes it takes.
 check_status() {
-  local kind version
+  local kind version services
   kind=$(kind)
   step "the panel"
   case $kind in
@@ -2594,6 +2608,14 @@ check_status() {
   fi
 
   say "websocket fronts $(fronts_running), BBR $(bbr_state)"
+  if [ "$(panel_state)" = running ]; then
+    services=$(services_line)
+    case $services in
+      '') ;;
+      *down*) bad "services: $services" ;;
+      *) good "services: $services" ;;
+    esac
+  fi
 }
 
 # Item 19: the logs of the panel, of its updates and of its fronts.
@@ -3066,7 +3088,7 @@ rule() {
 
 # Writes the state of the panel and the host under the menu.
 status_block() {
-  local kind state line version channel
+  local kind state line version channel services
   kind=$(kind)
   state=$(panel_state)
   line=$state
@@ -3086,6 +3108,13 @@ status_block() {
   printf 'Kernel:     amneziawg %s, forwarding %s\n' \
     "$(module_loaded && printf loaded || printf 'not loaded')" "$(forwarding && printf on || printf off)"
   printf 'Websocket:  %s front(s), BBR %s\n' "$(fronts_running)" "$(bbr_state)"
+  [ "$state" = running ] || return 0
+  services=$(services_line)
+  case $services in
+    '') ;;
+    *down*) printf 'Services:   %s%s%s\n' "$red" "$services" "$plain" ;;
+    *) printf 'Services:   %s%s%s\n' "$green" "$services" "$plain" ;;
+  esac
 }
 
 # Draws the menu and runs the item chosen until the menu is left.

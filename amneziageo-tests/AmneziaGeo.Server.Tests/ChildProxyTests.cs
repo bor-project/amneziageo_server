@@ -88,6 +88,29 @@ public class ChildProxyTests
     }
 
     [Fact]
+    public async Task AProxyThatFallsOverCountsItsFallsAndSaysWhy()
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+
+        using var place = new Place();
+        place.Tool("#!/bin/sh\nexit 3\n");
+        place.Arguments("awg0", "PROXY_ARGS=ws://127.0.0.1:61001\n");
+        using var proxies = place.Proxies();
+
+        await proxies.StartAsync("awg0", CancellationToken.None);
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        var state = await proxies.StateAsync("awg0", CancellationToken.None);
+        while (state.Falls < 3 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50);
+            state = await proxies.StateAsync("awg0", CancellationToken.None);
+        }
+
+        Assert.True(state.Falls >= 3);
+        Assert.Equal("tool ended with code 3", state.Message);
+    }
+
+    [Fact]
     public async Task AProxyWithoutItsFileSaysWhy()
     {
         using var place = new Place();

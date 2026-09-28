@@ -39,6 +39,7 @@ builder.Services.AddEndpointServices(builder.Configuration);
 builder.Services.AddFirewall();
 builder.Services.AddTunnelGate();
 builder.Services.AddSubscriptions();
+builder.Services.AddServiceWatch();
 builder.Services.AddUpdates(builder.Configuration);
 builder.Services.AddApiDescription();
 
