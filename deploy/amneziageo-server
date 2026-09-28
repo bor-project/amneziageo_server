@@ -24,6 +24,7 @@ declare -gA given=() seen=()
 made_password=
 made_client=
 made_link=
+server_name=
 api_base=
 api_work=
 ppa_key=75C9DD72C799870E310542E24166F2C257290828
@@ -1243,6 +1244,20 @@ points_here() {
   return 1
 }
 
+# Prints the address clients reach the server at, empty when the host cannot tell it.
+client_address() {
+  if [ -n "$server_name" ]; then
+    printf '%s' "$server_name"
+    return 0
+  fi
+
+  case ${seen[ipv4]:-} in
+    '' | 10.* | 127.* | 169.254.* | 192.168.* | 172.1[6-9].* | 172.2[0-9].* | 172.3[01].*) ;;
+    100.6[4-9].* | 100.[7-9][0-9].* | 100.1[01][0-9].* | 100.12[0-7].*) ;;
+    *) printf '%s' "${seen[ipv4]}" ;;
+  esac
+}
+
 # Reads what the host carries before the installation, prints it and stops on what the panel cannot live with.
 assess_host() {
   local memory swap tunnels certs
@@ -1375,6 +1390,7 @@ ask_certificate() {
   done)
   answer_until domain "Name of the server for a certificate of Let's Encrypt, empty for none" "$suggested" domain_ok || return 1
   name=${given[domain]}
+  server_name=$name
   given[certificate]=none
   if [ -z "$name" ]; then
     return 0
@@ -1458,7 +1474,15 @@ ask_installation() {
     answer_until endpoint_name "Name of the interface" "$(free_interface awg)" interface_ok || return 1
     answer_until endpoint_port "UDP port of the interface, its services on TCP of the same number" \
       "$(free_port 51820 udp tcp)" tunnel_port_ok || return 1
-    answer_until endpoint_host "Address clients reach the server at" "${given[domain]:-${seen[ipv4]}}" host_ok || return 1
+    if [ -z "${given[endpoint_host]:-}" ]; then
+      given[endpoint_host]=$(client_address)
+    fi
+
+    if [ -z "${given[endpoint_host]}" ] || ! host_ok "${given[endpoint_host]}"; then
+      unset 'given[endpoint_host]'
+      answer_until endpoint_host "Address clients reach the server at" "" host_ok || return 1
+    fi
+
     answer_yes websocket "Carry the tunnel in a websocket too, on TCP ${given[endpoint_port]}?" no || true
     answer_until client "Name of the first client, empty for none" client1 client_ok || return 1
     if [ -n "${given[client]}" ]; then

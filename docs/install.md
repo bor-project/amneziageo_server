@@ -54,6 +54,7 @@ every key the installation runs without a question:
 | `port` | the TCP port of the panel |
 | `everywhere` | `yes` opens the panel on every address without a certificate |
 | `endpoint` | `yes` makes the first endpoint of `endpoint_name`, `endpoint_port`, `endpoint_host` and `websocket` |
+| `endpoint_host` | the address clients reach the endpoint at; without it the name of the server, or the address of the host when it is public, and a question when there is neither |
 | `client`, `qr` | the name of the first client, empty for none; `yes` shows its configuration as a QR code |
 | `ufw` | `yes` opens the ports in an active ufw or turns ufw on |
 | `reboot` | `yes` reboots after an upgrade that brings a kernel |
