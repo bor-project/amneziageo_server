@@ -10,10 +10,10 @@ export interface FirewallPort {
   engine: string
 }
 
-export function usePortState(port: number, enabled: boolean) {
+export function usePortState(port: number, enabled: boolean, protocol: "tcp" | "udp" = "tcp") {
   return useQuery({
-    queryKey: ["firewall", "port", port],
-    queryFn: async () => (await client.get<FirewallPort>("/firewall/port", { params: { port } })).data,
+    queryKey: ["firewall", "port", protocol, port],
+    queryFn: async () => (await client.get<FirewallPort>("/firewall/port", { params: { port, protocol } })).data,
     enabled: enabled && Number.isInteger(port) && port > 0 && port <= 65535,
     staleTime: 10000,
   })

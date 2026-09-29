@@ -100,7 +100,8 @@ public static class PanelEndpoints
         ILoggerFactory loggers,
         CancellationToken ct)
     {
-        var draft = PanelAnswers.Draft(request);
+        var before = await store.ReadAsync(ct).ConfigureAwait(false);
+        var draft = PanelAnswers.Draft(request, before);
         var logger = loggers.CreateLogger(typeof(PanelEndpoints));
         var fault = PanelRules.Check(draft) is null
             ? CertificateFiles.Check(draft.Certificate, draft.CertificateKey, logger)
@@ -119,7 +120,6 @@ public static class PanelEndpoints
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var before = await store.ReadAsync(ct).ConfigureAwait(false);
         var result = await store.SaveAsync(draft, ct).ConfigureAwait(false);
         if (!result.IsOk || result.Record is null)
         {

@@ -30,8 +30,8 @@ The port answers under TLS: the certificate of the panel when it has one, see [s
 certificate the panel makes for itself at start when it has none. A client does not check it: the token below
 proves the client, and what the server answers is sealed for that client alone.
 
-`Open the port in the firewall` of the endpoint opens the TCP port of the services together with its UDP port,
-see [firewall.md](firewall.md).
+Holding the ports of the endpoint open, item 23 of the menu of the server, opens the TCP port of the services together
+with its UDP port, see [firewall.md](firewall.md).
 
 ## The token
 

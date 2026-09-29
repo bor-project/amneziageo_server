@@ -72,7 +72,6 @@ export interface ConfigDraft {
   offlineAfter: number
   isEnabled: boolean
   nat: boolean
-  opened: boolean
   inbound: Inbound
   webSocket: boolean
   servicesPort: number
@@ -198,7 +197,6 @@ export function draftOf(config: Config): ConfigDraft {
     offlineAfter: config.offlineAfter,
     isEnabled: config.isEnabled,
     nat: config.nat,
-    opened: config.opened,
     inbound: config.inbound,
     webSocket: config.webSocket,
     servicesPort: config.servicesPort,

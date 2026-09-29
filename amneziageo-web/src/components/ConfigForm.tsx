@@ -4,6 +4,7 @@ import { complaint } from "@/api/auth"
 import { downedOf, failure, useConfigs, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
+import { usePortState } from "@/api/firewall"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { Count, Flag, Help, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { pathFault, portFault, usePathHolders, usePortHolders, useServicesHolders } from "@/components/ports"
@@ -41,7 +42,9 @@ export function ConfigForm({
   const t = useText()
   const keys = useKeyPair()
   const shared = usePresharedKey()
-  const others = (useConfigs().data ?? []).filter((one) => one.id !== self)
+  const configs = useConfigs().data ?? []
+  const others = configs.filter((one) => one.id !== self)
+  const opened = configs.find((one) => one.id === self)?.opened ?? false
   const held = usePortHolders({ config: self })
   const taken = useServicesHolders()
   const claimed = usePathHolders()
@@ -55,10 +58,17 @@ export function ConfigForm({
   const port = portFault(t, draft.listenPort, held)
   const services = draft.servicesPort === 0 ? "" : portFault(t, draft.servicesPort, taken)
   const servicesAt = draft.servicesPort > 0 ? draft.servicesPort : draft.listenPort
+  const servicesWere = start.servicesPort > 0 ? start.servicesPort : start.listenPort
+  const udpAhead = opened && draft.listenPort !== start.listenPort
+  const tcpAhead = opened && servicesAt !== servicesWere
+  const udp = usePortState(draft.listenPort, draft.isEnabled && !udpAhead, "udp")
+  const tcp = usePortState(servicesAt, draft.isEnabled && !tcpAhead)
+  const udpClosed = closedHint(t, draft.isEnabled && !udpAhead && udp.data?.state === "closed", `${draft.listenPort}/udp`)
+  const tcpClosed = closedHint(t, draft.isEnabled && !tcpAhead && tcp.data?.state === "closed", `${servicesAt}/tcp`)
   const socket = pathFault(t, draft.webSocketPath, draft.webSocket ? servicesAt : null, claimed)
   const name = nameFault(t, draft.name, others.map((one) => one.name))
   const address = addressFault(t, draft.address)
-  const host = draft.host.length > 255 ? t("error.badHost") : ""
+  const host = hostFault(t, draft)
   const edited = !same(draft, start)
   const ready =
     edited &&
@@ -132,7 +142,7 @@ export function ConfigForm({
           caption={t("configs.port")}
           value={draft.listenPort}
           onChange={(value) => put({ listenPort: value })}
-          fault={port}
+          fault={port || udpClosed}
         />
         <Line
           id="config-address"
@@ -179,7 +189,7 @@ export function ConfigForm({
           value={draft.servicesPort}
           unset={String(draft.listenPort)}
           onChange={(value) => put({ servicesPort: value })}
-          fault={services}
+          fault={services || tcpClosed}
         />
         <Line
           id="config-websocket-path"
@@ -321,6 +331,18 @@ function nameFault(t: Text, name: string, taken: string[]): string {
   }
 
   return taken.includes(name) ? t("error.nameTaken") : ""
+}
+
+function hostFault(t: Text, draft: ConfigDraft): string {
+  if (draft.host.length > 255) {
+    return t("error.badHost")
+  }
+
+  return draft.isEnabled && draft.host.trim().length === 0 ? t("error.hostNeeded") : ""
+}
+
+function closedHint(t: Text, closed: boolean, port: string): string {
+  return closed ? t("configs.portClosed", { port }) : ""
 }
 
 function addressFault(t: Text, address: string[]): string {

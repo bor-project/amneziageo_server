@@ -80,6 +80,7 @@ const complaints: Record<string, TextKey> = {
   "too-many-entries": "error.tooManyEntries",
   "bad-interface-name": "error.badInterfaceName",
   "bad-host": "error.badHost",
+  "host-needed": "error.hostNeeded",
   "bad-port": "error.badPort",
   "bad-services-port": "error.badPort",
   "bad-address": "error.badAddress",

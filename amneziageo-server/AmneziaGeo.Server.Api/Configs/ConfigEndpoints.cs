@@ -4,6 +4,7 @@ using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Api.Services;
 using AmneziaGeo.Server.Api.Rules;
+using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
@@ -58,13 +59,25 @@ public static class ConfigEndpoints
             : Results.Ok(ConfigAnswers.Config(found, Secrets(context)));
     }
 
-    private static async Task<IResult> DraftAsync(string? name, ConfigStore store, CancellationToken ct)
+    private static async Task<IResult> DraftAsync(
+        string? name,
+        HttpContext context,
+        ConfigStore store,
+        PanelStore panels,
+        WebOptions options,
+        CancellationToken ct)
     {
         var wanted = string.IsNullOrWhiteSpace(name) ? "awg0" : name.Trim();
         var fresh = ConfigDefaults.Fresh(wanted);
         var port = await store.FreePortAsync(fresh.ListenPort, ct).ConfigureAwait(false);
+        var host = ConfigHosts.Guess(
+            await store.ListAsync(ct).ConfigureAwait(false),
+            await panels.ReadAsync(ct).ConfigureAwait(false),
+            options.CertificateRoot,
+            context.Request.Host.Host,
+            PanelChoices.Addresses());
 
-        return Results.Ok(ConfigAnswers.Config(fresh with { ListenPort = port }, true));
+        return Results.Ok(ConfigAnswers.Config(fresh with { ListenPort = port, Host = host }, true));
     }
 
     private static IResult Keys()
@@ -98,7 +111,13 @@ public static class ConfigEndpoints
         FirewallApplier firewall,
         CancellationToken ct)
     {
-        var result = await store.AddAsync(ConfigAnswers.Draft(request), ct).ConfigureAwait(false);
+        var draft = ConfigAnswers.Draft(request);
+        if (ConfigRules.CheckReach(draft) is { } unreached)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, unreached.Code, unreached.Message);
+        }
+
+        var result = await store.AddAsync(draft, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -130,7 +149,13 @@ public static class ConfigEndpoints
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
-        var result = await store.ChangeAsync(id, ConfigAnswers.Draft(request), ct).ConfigureAwait(false);
+        var draft = ConfigAnswers.Draft(request, held);
+        if (ConfigRules.CheckReach(draft) is { } unreached)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, unreached.Code, unreached.Message);
+        }
+
+        var result = await store.ChangeAsync(id, draft, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -165,6 +190,13 @@ public static class ConfigEndpoints
         if (request.On is not { } on)
         {
             return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a switch needs the on field");
+        }
+
+        if (on
+            && await store.FindAsync(id, ct).ConfigureAwait(false) is { } held
+            && ConfigRules.CheckReach(held with { IsEnabled = true }) is { } unreached)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, unreached.Code, unreached.Message);
         }
 
         var result = await store.SwitchAsync(id, on, ct).ConfigureAwait(false);

@@ -4,17 +4,21 @@ The panel writes its own nftables tables, and a table of its own says nothing to
 already runs: a `drop` in the chain of ufw ends the packet whatever another table accepts. So a port is
 opened where the host closes it, in ufw itself.
 
-Every port stays closed until it is asked for, and nothing is asked for by default. An endpoint carries `Open the
-port in the firewall` in the panel. The port of the panel and the port of the subscriptions are held open from the
-menu of the server, `amneziageo-server`, item 23 `Firewall Management`, or by
+Every port stays closed until it is asked for, and nothing is asked for by default. The ports of an endpoint, the
+port of the panel and the port of the subscriptions are held open from the menu of the server, `amneziageo-server`,
+item 23 `Firewall Management`, or by `amneziageo-server endpoint open <name>`,
 `amneziageo-server panel set --opened on` and `amneziageo-server subscriptions set --opened on`. Nothing changes on a
 host that was set up by hand until one of them goes on.
+
+The page of the panel does not carry these switches. `PUT /api/configs/{id}`, `PUT /api/panel` and
+`PUT /api/subscription` without `opened` keep the one held, so a form saved after a change in the menu does not undo
+it; a request that names `opened` changes it.
 
 ## What is opened
 
 | Toggle | What it opens |
 |---|---|
-| An endpoint, see [configs.md](configs.md) | its UDP port, the TCP port of its services, see [services.md](services.md), and both ways through its interface, so what its clients send and what comes back to them passes |
+| An endpoint, item 23 of the menu, see [configs.md](configs.md) | its UDP port, the TCP port of its services, see [services.md](services.md), and both ways through its interface, so what its clients send and what comes back to them passes |
 | The panel, item 23 of the menu, see [serving.md](serving.md) | the port the panel binds, unless it binds the loopback alone |
 | The subscriptions, item 23 of the menu, see [subscriptions.md](subscriptions.md) | the port they are served on, while they are handed out on a port of their own |
 
@@ -48,7 +52,15 @@ nothing, and on a host closing ports in a table of its own the ports are still t
 The tabs `Server` and `Subscriptions` of the settings ask the firewall of the host whether their port is let in, and
 name a closed port under the field along with where it is opened: item 23 of the menu. A new port the firewall
 closes is not saved until it is opened, so the panel does not move where nobody reaches it; a port that stays as it
-was is only named. Where the host carries ufw, the panel reads `ufw status verbose`: the first rule that names the
+was is only named.
+
+The form of an endpoint that is turned on asks the same about its UDP port and the TCP port of its services and names
+each closed one under its field, with item 23, subitem 6 of the menu. The endpoint is saved all the same, since the
+menu opens the ports of an endpoint that is already there. A new port of an endpoint whose ports the panel holds open
+is not asked about: the panel opens it once the endpoint is saved. The list of the endpoints names the closed ports of
+an endpoint that is turned on under its connection address.
+
+Where the host carries ufw, the panel reads `ufw status verbose`: the first rule that names the
 port decides, the policy for what comes in otherwise. Where it does not, as in a container, the panel reads the
 chains ufw leaves in nftables, `ufw-user-input` and the policy of `INPUT`. A host with neither tells nothing, and
 nothing is named.

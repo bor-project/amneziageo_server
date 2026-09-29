@@ -1,6 +1,7 @@
-# Builds a release of the panel from a tag vX.Y.Z.W on master: the packages for x64 and arm64, the image for both
-# in ghcr.io, and update.json signed with UPDATE_SIGNING_KEY, which the panels read to update themselves. A tag
-# with a fourth number above zero, or with a suffix, makes a prerelease that only panels on the test channel take.
+# Builds a release of the panel from a tag vX.Y.Z.W on master: the packages for x64 and arm64, each beside its files
+# packed one by one and their list, the image for both in ghcr.io, and update.json signed with UPDATE_SIGNING_KEY,
+# which the panels read to update themselves. A tag with a fourth number above zero, or with a suffix, makes a
+# prerelease that only panels on the test channel take.
 name: release
 
 on:
@@ -88,11 +89,13 @@ jobs:
         run: |
           deploy/publish.sh
           mkdir -p dist
-          mv out/amneziageo-server.tar.gz "dist/amneziageo-server-$VERSION-linux-${{ matrix.arch }}.tar.gz"
+          for kind in tar.gz pack files; do
+            mv "out/amneziageo-server.$kind" "dist/amneziageo-server-$VERSION-linux-${{ matrix.arch }}.$kind"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.arch }}
-          path: dist/*.tar.gz
+          path: dist/*
           if-no-files-found: error
 
   image:
@@ -124,6 +127,8 @@ jobs:
           file: deploy/docker/Dockerfile
           platforms: ${{ matrix.platform }}
           build-args: VERSION=${{ needs.version.outputs.version }}
+          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-${{ matrix.name }}
+          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache-${{ matrix.name }},mode=max,ignore-error=true
           provenance: false
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
       - name: Keep the digest
@@ -206,13 +211,20 @@ jobs:
 
           packages=$(
             for file in amneziageo-server-*.tar.gz; do
-              arch=${file%.tar.gz}
+              base=${file%.tar.gz}
               jq -n \
                 --arg name "$file" \
-                --arg arch "${arch##*-linux-}" \
+                --arg arch "${base##*-linux-}" \
                 --argjson size "$(stat -c %s "$file")" \
                 --arg sha256 "$(sha256sum "$file" | cut -d' ' -f1)" \
-                '{name: $name, arch: $arch, size: $size, sha256: $sha256}'
+                --arg list "$base.files" \
+                --argjson listSize "$(stat -c %s "$base.files")" \
+                --arg listSha256 "$(sha256sum "$base.files" | cut -d' ' -f1)" \
+                --arg pack "$base.pack" \
+                --argjson packSize "$(stat -c %s "$base.pack")" \
+                '{name: $name, arch: $arch, size: $size, sha256: $sha256,
+                  files: {name: $list, size: $listSize, sha256: $listSha256},
+                  pack: {name: $pack, size: $packSize}}'
             done | jq -s .
           )
 
@@ -247,4 +259,5 @@ jobs:
           fi
 
           cp ../deploy/amneziageo-server amneziageo-server
-          gh release create "$GITHUB_REF_NAME" "${flags[@]}" amneziageo-server-*.tar.gz update.json update.json.sig amneziageo-server
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}" amneziageo-server-*.tar.gz amneziageo-server-*.pack \
+            amneziageo-server-*.files update.json update.json.sig amneziageo-server

@@ -135,6 +135,11 @@ public static class ServiceChecks
     public const string Hello = "hello";
 
     /// <summary>
+    /// The endpoint names no host, so its clients get no address to reach it at.
+    /// </summary>
+    public const string NoHost = "no-host";
+
+    /// <summary>
     /// The interface of the endpoint is not on the host.
     /// </summary>
     public const string InterfaceDown = "interface-down";
@@ -268,7 +273,7 @@ public static class ServiceChecks
             return services.Count == 0 ? "none to run" : $"all {services.Count.ToString(CultureInfo.InvariantCulture)} work";
         }
 
-        var named = down.Select(one => $"{Label(one)} ({string.Join(", ", one.Faults.Select(fault => fault.Code))})");
+        var named = down.Select(one => $"{Label(one)} ({string.Join(", ", one.Faults.Select(Short))})");
 
         return $"{down.Count.ToString(CultureInfo.InvariantCulture)} of {services.Count.ToString(CultureInfo.InvariantCulture)} down: "
             + string.Join(", ", named);
@@ -308,6 +313,11 @@ public static class ServiceChecks
         var tunnel = new ServicePort(FirewallPlan.Udp, config.ListenPort);
         var services = new ServicePort(FirewallPlan.Tcp, ConfigServices.Port(config));
         var faults = new List<ServiceFault>();
+        if (string.IsNullOrWhiteSpace(config.Host))
+        {
+            faults.Add(new ServiceFault(NoHost, string.Empty));
+        }
+
         if (facts.Links is { } links && !links.Contains(config.Name))
         {
             faults.Add(new ServiceFault(InterfaceDown, facts.Module ? string.Empty : NoModule));
@@ -385,6 +395,10 @@ public static class ServiceChecks
 
         return parts;
     }
+
+    // Names a fault for the line of the menu, a closed port with its protocol and number.
+    private static string Short(ServiceFault fault) =>
+        fault.Code == PortClosed && fault.Detail.Length > 0 ? $"{fault.Code} {fault.Detail}" : fault.Code;
 
     // Notes a port the firewall of the host keeps closed.
     private static void Wall(ServiceFacts facts, ServicePort port, List<ServiceFault> faults)

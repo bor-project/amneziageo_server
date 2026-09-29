@@ -148,7 +148,7 @@ newest image of the same name the host keeps below the one it runs, and offers t
 | What | In the container |
 |---|---|
 | Websocket fronts | the panel runs `wstunnel` itself and starts it again three seconds after it falls over; the fronts go down and come up with the container |
-| Firewall | the image carries no ufw, so the panel lays its own nftables tables; on a host whose ufw is turned on, its `drop` wins, and the ports are opened in ufw by hand; the tabs of the settings name such a port as closed, see [firewall.md](firewall.md) |
+| Firewall | the image carries no ufw, so the panel lays its own nftables tables; on a host whose ufw is turned on, its `drop` wins, and the ports are opened in ufw by hand; the tabs of the settings and the forms and the list of the endpoints name such a port as closed, see [firewall.md](firewall.md) |
 | Accounts of the host | turned off: `Auth__HostLogin=Off` and `Auth__HostUsers=false`, the panel signs in its own accounts alone and refuses to carry one to the host |
 | Restart from the panel | the server ends, and the restart policy of compose starts the container again |
 | The web interface alone | not updated apart: every image carries the server and the interface together |

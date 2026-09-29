@@ -50,7 +50,7 @@ public static class SubscriptionEndpoints
         ILoggerFactory loggers,
         CancellationToken ct)
     {
-        var draft = SubscriptionAnswers.Draft(request);
+        var draft = SubscriptionAnswers.Draft(request, await store.ReadAsync(ct).ConfigureAwait(false));
         var logger = loggers.CreateLogger(typeof(SubscriptionEndpoints));
         var fault = SubscriptionRules.Check(draft, panel)
             ?? CertificateFiles.Check(draft.Certificate, draft.CertificateKey, logger);

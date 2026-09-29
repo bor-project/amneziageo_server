@@ -45,12 +45,21 @@ public sealed class PackageUpdater
     }
 
     /// <summary>
-    /// Downloads the package of a release for an architecture, checks it against the manifest and unpacks it,
-    /// returning its installer.
+    /// Puts the package of a release for an architecture into a folder of its own and returns its installer: from the
+    /// files under the folders held and the files of its pack they lack where the release lists them, downloaded
+    /// whole, checked against the manifest and unpacked otherwise. Note hears how the package was put together.
     /// </summary>
-    public async Task<string> StageAsync(UpdateOffer offer, string arch, string folder, CancellationToken ct)
+    public async Task<string> StageAsync(
+        UpdateOffer offer,
+        string arch,
+        IReadOnlyList<string> held,
+        string folder,
+        Action<string> note,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(offer);
+        ArgumentNullException.ThrowIfNull(held);
+        ArgumentNullException.ThrowIfNull(note);
 
         var manifest = offer.Manifest;
         var package = manifest.PackageFor(arch)
@@ -63,12 +72,20 @@ public sealed class PackageUpdater
         Directory.CreateDirectory(target);
         Room(target, package.Size);
 
-        var archive = Path.Combine(target, package.Name);
-        await DownloadAsync(new Uri(offer.Files, package.Name), archive, package, ct).ConfigureAwait(false);
-
         var unpacked = Path.Combine(target, "package");
-        await UnpackAsync(archive, unpacked, ct).ConfigureAwait(false);
-        File.Delete(archive);
+        var pieces = await PiecesAsync(offer, package, held, unpacked, note, ct).ConfigureAwait(false);
+        if (pieces is not null)
+        {
+            note($"fetched {pieces.Fetched} of the {pieces.Files} files, {Megabytes(pieces.Bytes)} of the "
+                + $"{Megabytes(package.Size)} package, the others came from the running release");
+        }
+        else
+        {
+            var archive = Path.Combine(target, package.Name);
+            await DownloadAsync(new Uri(offer.Files, package.Name), archive, package, ct).ConfigureAwait(false);
+            await UnpackAsync(archive, unpacked, ct).ConfigureAwait(false);
+            File.Delete(archive);
+        }
 
         return Installer(unpacked)
             ?? throw new InvalidDataException($"the package of {manifest.Version} carries no install.sh");
@@ -137,6 +154,38 @@ public sealed class PackageUpdater
     ];
 
     private static string? Launcher() => Launchers.FirstOrDefault(File.Exists);
+
+    private static string Megabytes(long bytes) => $"{bytes / (1024.0 * 1024):0.0} MB";
+
+    private async Task<PieceCount?> PiecesAsync(
+        UpdateOffer offer,
+        UpdatePackage package,
+        IReadOnlyList<string> held,
+        string unpacked,
+        Action<string> note,
+        CancellationToken ct)
+    {
+        if (package.Files is null || package.Pack is null || held.Count == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await new PackagePieces(_http).StageAsync(offer.Files, package, held, unpacked, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or HttpRequestException or UnauthorizedAccessException
+            || (ex is OperationCanceledException && !ct.IsCancellationRequested))
+        {
+            note($"the changed files were not fetched apart, the whole package is downloaded: {ex.Message}");
+            if (Directory.Exists(unpacked))
+            {
+                Directory.Delete(unpacked, recursive: true);
+            }
+
+            return null;
+        }
+    }
 
     private static void Room(string folder, long size)
     {

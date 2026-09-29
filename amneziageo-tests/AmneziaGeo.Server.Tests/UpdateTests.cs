@@ -229,7 +229,7 @@ public sealed class UpdateTests : IDisposable
             ["https://releases.test/r/amneziageo-server-1.0.1.0-linux-x64.tar.gz"] = archive,
         }));
 
-        var installer = await new PackageUpdater(http).StageAsync(offer, "x64", _folder.FullName, CancellationToken.None);
+        var installer = await new PackageUpdater(http).StageAsync(offer, "x64", [], _folder.FullName, _ => { }, CancellationToken.None);
 
         Assert.Equal(Path.Combine(_folder.FullName, "stage-1.0.1.0", "package", "amneziageo-server", "install.sh"), installer);
         Assert.Equal("#!/bin/sh\n", File.ReadAllText(installer));
@@ -246,9 +246,9 @@ public sealed class UpdateTests : IDisposable
         }));
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
-            new PackageUpdater(http).StageAsync(Offer(archive, Digest), "x64", _folder.FullName, CancellationToken.None));
+            new PackageUpdater(http).StageAsync(Offer(archive, Digest), "x64", [], _folder.FullName, _ => { }, CancellationToken.None));
         await Assert.ThrowsAsync<InvalidDataException>(() =>
-            new PackageUpdater(http).StageAsync(Offer(archive, Digest), "riscv64", _folder.FullName, CancellationToken.None));
+            new PackageUpdater(http).StageAsync(Offer(archive, Digest), "riscv64", [], _folder.FullName, _ => { }, CancellationToken.None));
     }
 
     [Fact]

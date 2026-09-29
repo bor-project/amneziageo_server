@@ -5,7 +5,6 @@ export interface PanelDraft {
   listen: string[]
   domains: string[]
   port: number
-  opened: boolean
   path: string
   certificate: string
   certificateKey: string
@@ -21,6 +20,7 @@ export interface PanelPlace {
 }
 
 export interface Panel extends PanelDraft {
+  opened: boolean
   certificates: string[]
   addresses: string[]
   certificateRoot: string
@@ -81,7 +81,6 @@ export function draftOf(panel: Panel): PanelDraft {
     listen: panel.listen,
     domains: panel.domains,
     port: panel.port,
-    opened: panel.opened,
     path: panel.path,
     certificate: panel.certificate,
     certificateKey: panel.certificateKey,

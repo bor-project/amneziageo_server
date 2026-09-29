@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Builds the panel into a package a server takes as it is, whole or its web interface alone.
-# VERSION names the version of the build, RUNTIME the platform it runs on.
+# Builds the panel into a package a server takes as it is, whole or its web interface alone; beside a whole package
+# lie its files packed one by one and their list. VERSION names the version of the build, RUNTIME the platform it
+# runs on.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -17,6 +18,29 @@ if [ "$kind" = ui ]; then
 else
   out=${1:-$root/out/amneziageo-server}
 fi
+
+# Packs every file of a package on its own and lists them, so an update fetches only the files a host lacks.
+pack() {
+  local top=$1 file name piece offset=0 length
+  if [ -n "$(find "$top" ! -type f ! -type d -print -quit)" ]; then
+    echo "the package holds more than files and directories" >&2
+    exit 1
+  fi
+
+  piece=$(mktemp)
+  : > "$top.pack"
+  echo '# amneziageo-server files 1' > "$top.files"
+  while IFS= read -r -d '' file; do
+    name=${file#"$(dirname "$top")"/}
+    gzip -9nc "$file" > "$piece"
+    length=$(stat -c %s "$piece")
+    cat "$piece" >> "$top.pack"
+    printf '%s %s %s %s %s %s\n' "$(sha256sum "$file" | cut -c1-64)" "$(stat -c %a "$file")" \
+      "$(stat -c %s "$file")" "$offset" "$length" "$name" >> "$top.files"
+    offset=$((offset + length))
+  done < <(find "$top" -type f -print0 | LC_ALL=C sort -z)
+  rm -f "$piece"
+}
 
 commit=$(git -C "$root" rev-parse --short HEAD 2>/dev/null || echo local)
 if [ -n "$(git -C "$root" status --porcelain 2>/dev/null || true)" ]; then
@@ -90,4 +114,8 @@ else
 fi
 
 tar -czf "$out.tar.gz" -C "$(dirname "$out")" "$(basename "$out")"
+if [ "$kind" = whole ]; then
+  pack "$out"
+fi
+
 echo "$(cat "$out/release") $(du -sh "$out.tar.gz" | cut -f1) $out.tar.gz"

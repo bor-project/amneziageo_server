@@ -280,7 +280,7 @@ public sealed class UpdateCenter
         var arch = UpdateModes.Arch();
         _journal.Note(to, Stamp($"downloading the package of {to} for {arch}"));
         var installer = await new PackageUpdater(_clients.CreateClient(Client))
-            .StageAsync(offer, arch, _journal.Folder, CancellationToken.None)
+            .StageAsync(offer, arch, Held(), _journal.Folder, line => Quietly(() => _journal.Note(to, Stamp(line))), CancellationToken.None)
             .ConfigureAwait(false);
 
         Move(Starting, null);
@@ -301,6 +301,17 @@ public sealed class UpdateCenter
         await DockerUpdater
             .StartAsync(_options.Docker, place, new DockerHandover(image, from, to, _data, _journal.Folder), CancellationToken.None)
             .ConfigureAwait(false);
+    }
+
+    private static List<string> Held()
+    {
+        var held = new List<string> { AppContext.BaseDirectory };
+        if (Environment.GetEnvironmentVariable("ASPNETCORE_WEBROOT") is { Length: > 0 } web)
+        {
+            held.Add(web);
+        }
+
+        return held;
     }
 
     private async Task<string> BlockerAsync(CancellationToken ct)

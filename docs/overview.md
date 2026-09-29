@@ -30,7 +30,7 @@ checks at once; both take `state:read`. The answer lists what should run:
 | Service | Listed when | Down when |
 |---|---|---|
 | `subscription` | the subscriptions are turned on | on a port of their own: the host refused the port (`port-refused`) or the firewall keeps it closed (`port-closed`); on the ports of the endpoints: none of those ports answers (`no-endpoint`) |
-| `endpoint` | the endpoint is turned on | its interface is not on the host (`interface-down`, with `no-module` when the module is not loaded), the host refused its TCP port (`port-refused`), its websocket front does not run (`front-down`), fell over since the check before (`front-fell`) or does not listen on its loopback port (`front-deaf`), the firewall keeps its UDP or TCP port closed (`port-closed`) |
+| `endpoint` | the endpoint is turned on | it names no host, so the files of its clients carry no `Endpoint` (`no-host`), its interface is not on the host (`interface-down`, with `no-module` when the module is not loaded), the host refused its TCP port (`port-refused`), its websocket front does not run (`front-down`), fell over since the check before (`front-fell`) or does not listen on its loopback port (`front-deaf`), the firewall keeps its UDP or TCP port closed (`port-closed`) |
 | `dns` | the resolver of the clients is turned on | it does not run (`resolver-down`) or its way out is broken (`resolver-way`) |
 
 Each service carries its ports, whether it answers on the port of the panel, what the TCP port of an endpoint
@@ -43,7 +43,8 @@ is new to it. The panel cannot see a firewall outside the host, the one of the h
 
 A service that stops working writes `the service <name> is down: <faults>` to the log of the panel, one that
 works again writes `the service <name> works again`. The line for the menu of the host, like
-`2 of 3 down: subscriptions (port-refused), endpoint awg1 (front-fell)` or `all 3 work`, goes to the file
+`2 of 3 down: subscriptions (port-refused), endpoint awg1 (port-closed udp 443)` or `all 3 work`, where a closed port
+carries its protocol and number, goes to the file
 `services` beside the database whenever it changes; while the panel runs, the status of the menu shows it as
 `Services:` and item 18 as `services:`.
 

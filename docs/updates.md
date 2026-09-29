@@ -7,8 +7,9 @@ or in a container.
 
 A release is a tag `vX.Y.Z.W` on a commit of the branch `master` of `bor-project/amneziageo_server`; a tag outside
 `master` builds nothing. The workflow `.github/workflows/release.yml` builds it: the packages for x64 and arm64,
-the image `ghcr.io/bor-project/amneziageo-server` for both, and
-`update.json`, which names the version, the image pinned to its digest and the digest of every package.
+beside each package its files packed one by one (`.pack`) and their list (`.files`), the image
+`ghcr.io/bor-project/amneziageo-server` for both, and `update.json`, which names the version, the image pinned to
+its digest, the digest of every package and of its list.
 `update.json.sig` signs the manifest with the key of the releases. A tag whose fourth number is above zero, or
 that carries a suffix, makes a prerelease.
 
@@ -56,8 +57,23 @@ the tab says. `GET /api/update` names the channel in `channel`.
 
 ## From the package
 
-The panel downloads the package for the architecture of the host into `update/stage-<version>`, checks its
-digest, unpacks it and starts its `install.sh` apart from itself, through `systemd-run` as the unit
+The panel puts the package for the architecture of the host together in `update/stage-<version>`. It reads the
+list of the files of the package, checks it against the digest in `update.json` and looks for every file among the
+files of the release it runs and of its web interface. The files it holds are copied, the others are fetched from
+the pack of the release in parts (HTTP `Range`), a few requests in all, and every file is checked against its
+digest in the list. Between two releases these are the assemblies of the panel, and the web interface and the
+websocket tool where they changed: a megabyte or a few out of about 55.
+
+The panel downloads the whole package instead, checks its digest and unpacks it where the release carries no
+list, the files of the release are not served in parts, a file does not match its digest, or more than three
+quarters of the package changed; the log of the update says which. A panel before these lists always downloads
+the whole package, so the first update onto a release that carries them is whole too.
+
+Each line of the list names one file: its digest, its rights in octal, its size, where it starts in the pack and
+how many bytes it takes there, and its path in the package. Each file lies in the pack compressed by gzip on its
+own, one after another in the order of the list; `deploy/publish.sh` writes both beside the package.
+
+Then the panel starts `install.sh` of the package apart from itself, through `systemd-run` as the unit
 `amneziageo-server-update-<version>`. The script does what it does by hand, see [install.md](install.md): it
 stops the server, copies the database aside, starts the new release and goes back to the one before where the
 new one does not come up. What it prints goes to `update/<version>.log`, how it ended to `update/<version>.rc`.
@@ -72,6 +88,13 @@ The container reaches the daemon through its socket, which `compose.yaml` hands 
 
 The socket gives the container the host: whoever holds the panel holds the host as well. A host that does not
 want that leaves the line out and updates by hand, see [docker.md](docker.md).
+
+The layers of the image go from those that change least to those every release changes: the packages of the
+system, the websocket tool, the scripts of the container, the libraries the panel takes, the assemblies of the
+panel, its web interface and the menu. The workflow builds the image on the cache of the release before, kept in
+the registry as `buildcache-amd64` and `buildcache-arm64`, so a layer whose sources did not change stays the same
+layer, and the daemon pulls only the top ones, a megabyte or two. A new base image or new packages of the system
+change every layer above them once.
 
 The panel pulls the image of the release by its digest, names it the way the project names the image of the
 panel, with the version as the tag, and starts a container of the new image, `amneziageo-server-update-<version>`,

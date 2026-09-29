@@ -293,6 +293,18 @@ public static partial class ConfigRules
             : Fault("bad-host", $"'{host}' is neither an address nor a host name");
     }
 
+    /// <summary>
+    /// Returns why an endpoint that is on lacks the host its clients reach it at, or null when it holds.
+    /// </summary>
+    public static ConfigFault? CheckReach(ServerConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        return config.IsEnabled && string.IsNullOrWhiteSpace(config.Host)
+            ? Fault("host-needed", "an endpoint that is on needs the host its clients reach it at")
+            : null;
+    }
+
     private static ConfigFault? CheckPort(int port) =>
         port is > 0 and <= 65535 ? null : Fault("bad-port", "the port is outside 1 to 65535");
 

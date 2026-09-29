@@ -183,9 +183,9 @@ public static class ConfigAnswers
         settings.DisableCookies);
 
     /// <summary>
-    /// Reads the endpoint an interface sends.
+    /// Reads the endpoint an interface sends; a request without opened keeps the one held.
     /// </summary>
-    public static ServerConfig Draft(ConfigRequest request) => new()
+    public static ServerConfig Draft(ConfigRequest request, ServerConfig? held = null) => new()
     {
         Name = (request.Name ?? string.Empty).Trim(),
         Host = (request.Host ?? string.Empty).Trim(),
@@ -198,7 +198,7 @@ public static class ConfigAnswers
         OfflineAfter = request.OfflineAfter ?? ConfigDefaults.OfflineAfter,
         IsEnabled = request.IsEnabled ?? true,
         Nat = request.Nat ?? true,
-        Opened = request.Opened ?? false,
+        Opened = request.Opened ?? held?.Opened ?? false,
         Inbound = InboundName.Read(request.Inbound, ClientInbound.Off),
         WebSocket = request.WebSocket ?? false,
         ServicesPort = request.ServicesPort ?? 0,

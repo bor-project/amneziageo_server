@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { useClients } from "@/api/clients"
 import { failure, useConfigs, useSwitchConfig } from "@/api/configs"
 import type { Config } from "@/api/configs"
+import { usePortState } from "@/api/firewall"
 import { scopes } from "@/api/scopes"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
@@ -98,9 +99,15 @@ export function Configs() {
             {
               key: "endpoint",
               width: 208,
+              wrap: true,
               caption: t("configs.endpoint"),
               sort: (one) => (one.host.length > 0 ? `${one.host}:${one.listenPort}` : one.listenPort),
-              cell: (one) => (one.host.length > 0 ? `${one.host}:${one.listenPort}` : one.listenPort),
+              cell: (one) => (
+                <div className="flex flex-col gap-1">
+                  <span>{one.host.length > 0 ? `${one.host}:${one.listenPort}` : one.listenPort}</span>
+                  <Closed one={one} />
+                </div>
+              ),
             },
             {
               key: "address",
@@ -138,6 +145,29 @@ export function Configs() {
         />
       )}
     </div>
+  )
+}
+
+function Closed({ one }: { one: Config }) {
+  const t = useText()
+  const services = one.servicesPort > 0 ? one.servicesPort : one.listenPort
+  const udp = usePortState(one.listenPort, one.isEnabled, "udp")
+  const tcp = usePortState(services, one.isEnabled)
+  const closed = [
+    one.isEnabled && udp.data?.state === "closed" ? `${one.listenPort}/udp` : "",
+    one.isEnabled && tcp.data?.state === "closed" ? `${services}/tcp` : "",
+  ].filter((port) => port.length > 0)
+
+  if (closed.length === 0) {
+    return null
+  }
+
+  return (
+    <span className="text-xs text-alarm">
+      {closed.length === 2
+        ? t("configs.closedBoth", { udp: closed[0], tcp: closed[1] })
+        : t("configs.closedOne", { port: closed[0] })}
+    </span>
   )
 }
 

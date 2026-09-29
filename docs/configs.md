@@ -34,16 +34,16 @@ go only to a caller that holds `interfaces:write`; to anyone else they come back
 | Setting | Holds |
 |---|---|
 | Name | the name of the interface, up to 15 characters |
-| Host | the address or the host name clients come to, empty when it is not known yet |
-| Port | the UDP port the endpoint listens on |
-| Services port | the TCP port hello, the measurement and the websocket answer on, empty for the number of the UDP port, see [services.md](services.md) |
+| Host | the address or the host name clients come to, which the files of the clients carry as `Endpoint`; an endpoint that is turned on is not saved or turned on without it, one that stays off may go without |
+| Port | the UDP port the endpoint listens on; the form names it under the field when the firewall of the host closes it, see [firewall.md](firewall.md) |
+| Services port | the TCP port hello, the measurement and the websocket answer on, empty for the number of the UDP port, see [services.md](services.md); named under the field the same way when the firewall closes it |
 | WebSocket proxy | whether the endpoint takes the tunnel inside a websocket on the port of its services; when it does not start, the panel turns it off and says why |
 | MTU | the packet size clients take, 0 leaves it to the system |
 | Interface address | the address ranges the interface carries |
 | Closed to clients | the ranges clients of the endpoint are not let into |
 | Raise the interface | whether the panel puts the endpoint on the host |
 | NAT for clients | whether what clients send out is masqueraded behind the address of the host |
-| Open the port in the firewall | whether the panel holds the port of the endpoint open in the firewall of the host, together with both ways through its interface; set it with `amneziageo-server-cli endpoint open\|close`, see [firewall.md](firewall.md) |
+| Open the port in the firewall | whether the panel holds the port of the endpoint open in the firewall of the host, together with both ways through its interface; set it in item 23 of the menu of the server or with `amneziageo-server-cli endpoint open\|close`; the form does not carry it and a save keeps it, see [firewall.md](firewall.md) |
 | Access to the clients | what reaches the clients of the endpoint from the tunnel unless a client names it itself: closed, the server alone, or the whole tunnel network, see [clients.md](clients.md) |
 | AllowedIPs | the ranges a client sends through the tunnel |
 | DNS | the name servers a client takes, unless the resolver of the panel answers inside the tunnel |
@@ -72,6 +72,10 @@ Jmin 50, Jmax 1000, S1 and S2 from 15 to 149, H1 to H4 from 5 up, all four diffe
 the first free name of the `awgN` shape and the TCP port the endpoints already serve on, 0 when there are
 none, see [services.md](services.md).
 
+The host of the draft is the one another endpoint names, else the domain of the certificate of the panel or the
+first of its names, else the host the request came to when clients from outside reach it by that name or address,
+else a public IPv4 of the host; it is empty when none of them holds, and the form asks for it.
+
 The draft is never written down; it reaches the database only when the endpoint is added.
 
 ## Taking an interface file
@@ -92,6 +96,7 @@ the code into a phrase of its own language.
 |---|---|
 | `bad-interface-name` | the name is empty, longer than 15 characters or outside `^[a-z][a-z0-9_-]*$` |
 | `bad-host` | the host is neither an address nor a host name, or longer than 255 characters |
+| `host-needed` | an endpoint that is turned on names no host, when it is added, changed or turned on |
 | `bad-port` | the port is outside 1 to 65535 |
 | `bad-address` | the interface carries no range, or one of them is not a range |
 | `bad-allowed` | the client is given no range, or one of them is not a range |

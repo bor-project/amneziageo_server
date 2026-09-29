@@ -32,7 +32,7 @@ public sealed record SubscriptionRequest(
     IReadOnlyList<string>? Listen,
     IReadOnlyList<string>? Domains,
     int Port,
-    bool Opened,
+    bool? Opened,
     string? Path,
     string? Certificate,
     string? CertificateKey,
@@ -72,9 +72,9 @@ public static class SubscriptionAnswers
     }
 
     /// <summary>
-    /// Returns what a request asks the subscriptions to become.
+    /// Returns what a request asks the subscriptions to become; a request without opened keeps the one held.
     /// </summary>
-    public static SubscriptionSettings Draft(SubscriptionRequest request)
+    public static SubscriptionSettings Draft(SubscriptionRequest request, SubscriptionSettings? held = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -85,7 +85,7 @@ public static class SubscriptionAnswers
             Listen = PanelList.Of(request.Listen),
             Domains = PanelList.Of(request.Domains),
             Port = request.Port,
-            Opened = request.Opened,
+            Opened = request.Opened ?? held?.Opened ?? false,
             Path = Trim(request.Path).Trim('/'),
             Certificate = Trim(request.Certificate),
             CertificateKey = Trim(request.CertificateKey),

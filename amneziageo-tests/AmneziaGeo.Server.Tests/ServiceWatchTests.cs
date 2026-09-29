@@ -19,9 +19,9 @@ public class ServiceWatchTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
 
-    private static readonly ServerConfig Awg1 = ConfigDefaults.Fresh("awg1") with { Id = 1, WebSocket = true, ServicesPort = 8446 };
+    private static readonly ServerConfig Awg1 = ConfigDefaults.Fresh("awg1") with { Id = 1, Host = "vpn.example.org", WebSocket = true, ServicesPort = 8446 };
 
-    private static readonly ServerConfig Awg2 = ConfigDefaults.Fresh("awg2") with { Id = 2, ListenPort = 51821, ServicesPort = 8443 };
+    private static readonly ServerConfig Awg2 = ConfigDefaults.Fresh("awg2") with { Id = 2, Host = "vpn.example.org", ListenPort = 51821, ServicesPort = 8443 };
 
     [Fact]
     public void AHostThatRunsEverythingHasEveryServiceWorking()
@@ -136,6 +136,33 @@ public class ServiceWatchTests
     }
 
     [Fact]
+    public void AnEndpointWithoutAHostIsDownForItsClientsGetNoAddress()
+    {
+        var bare = ServiceChecks.Of(Fine(Awg1 with { Host = " " }), Now)[1];
+
+        Assert.Equal([new ServiceFault(ServiceChecks.NoHost, string.Empty)], bare.Faults);
+        Assert.Equal("1 of 3 down: endpoint awg1 (no-host)", ServiceChecks.Line(ServiceChecks.Of(Fine(Awg1 with { Host = string.Empty }), Now)));
+    }
+
+    [Fact]
+    public void TheLineOfTheMenuNamesTheClosedPorts()
+    {
+        var facts = Fine(Awg1) with
+        {
+            Walls = new Dictionary<ServicePort, string>
+            {
+                [new ServicePort("udp", 51820)] = PortState.Closed,
+                [new ServicePort("tcp", 8446)] = PortState.Closed,
+            },
+        };
+
+        var services = ServiceChecks.Of(facts, Now);
+
+        Assert.Equal("1 of 3 down: endpoint awg1 (port-closed udp 51820, port-closed tcp 8446)", ServiceChecks.Line(services));
+        Assert.Equal("port-closed (udp 51820); port-closed (tcp 8446)", ServiceChecks.Reason(services[1]));
+    }
+
+    [Fact]
     public void TheResolverSaysWhyItDoesNotRunOrWhereItsWayBroke()
     {
         var down = ServiceChecks.Of(Fine() with { Resolver = new ResolverFacts(true, false, 53, "there is no address", string.Empty) }, Now);
@@ -239,7 +266,7 @@ public class ServiceWatchTests
         using var bench = new Bench(now: Now);
         using var place = new Place();
         var endpoint = (await bench.Configs.AddAsync(
-            ConfigDefaults.Fresh("lo") with { Address = ["10.8.0.1/24"], WebSocket = true, ServicesPort = Free() },
+            ConfigDefaults.Fresh("lo") with { Host = "vpn.example.org", Address = ["10.8.0.1/24"], WebSocket = true, ServicesPort = Free() },
             CancellationToken.None)).Record!;
         using var front = new TcpListener(IPAddress.Loopback, ConfigServices.Front(endpoint));
         front.Start();

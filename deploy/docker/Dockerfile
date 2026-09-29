@@ -20,7 +20,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY wstunnel/wstunnel/ ./
-RUN cargo build --release --package wstunnel-cli \
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo build --release --package wstunnel-cli \
  && cp target/release/wstunnel /wstunnel
 
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:$DOTNET AS server
@@ -29,7 +31,8 @@ ARG VERSION=0.0.1
 WORKDIR /src
 COPY Directory.Build.props .editorconfig ./
 COPY amneziageo-server/ amneziageo-server/
-RUN case "$TARGETARCH" in \
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    case "$TARGETARCH" in \
       amd64) rid=linux-x64 ;; \
       arm64) rid=linux-arm64 ;; \
       *) echo "no build for $TARGETARCH" >&2; exit 1 ;; \
@@ -38,23 +41,28 @@ RUN case "$TARGETARCH" in \
       dotnet publish "amneziageo-server/AmneziaGeo.Server.$project" -c Release -r "$rid" --self-contained false \
         -p:Version="$VERSION" -o /out --nologo -v minimal || exit 1; \
     done \
- && rm -rf /out/wwwroot
+ && rm -rf /out/wwwroot amneziageo-server/*/bin amneziageo-server/*/obj \
+ && mkdir /out/own /out/deps \
+ && find /out -mindepth 1 -maxdepth 1 \( -name 'AmneziaGeo.*' -o -name 'appsettings*.json' \) -exec mv -t /out/own {} + \
+ && find /out -mindepth 1 -maxdepth 1 ! -name own ! -name deps -exec mv -t /out/deps {} +
 
+# The layers go from those that change least to those every release changes, so an update pulls only the top ones.
 FROM mcr.microsoft.com/dotnet/aspnet:$DOTNET
-ARG VERSION=0.0.1
-LABEL org.opencontainers.image.source=https://github.com/bor-project/amneziageo_server \
-      org.opencontainers.image.version=$VERSION
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl docker-compose-v2 iproute2 nftables tini tzdata \
  && rm -rf /var/lib/apt/lists/* \
- && ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
-COPY --from=server /out/ /opt/amneziageo-server/
-COPY --from=web /src/amneziageo-server/AmneziaGeo.Server.Api/wwwroot/ /opt/amneziageo-server/wwwroot/
+ && ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose \
+ && ln -s /usr/local/share/amneziageo-server/amneziageo-server /usr/local/bin/amneziageo-server
 COPY --from=tunnel /wstunnel /usr/local/bin/wstunnel
 COPY --chmod=755 deploy/docker/entrypoint.sh /usr/local/bin/amneziageo-server-entrypoint
 COPY --chmod=755 deploy/docker/update.sh /usr/local/bin/amneziageo-server-update
+COPY --from=server /out/deps/ /opt/amneziageo-server/
+COPY --from=server /out/own/ /opt/amneziageo-server/
+COPY --from=web /src/amneziageo-server/AmneziaGeo.Server.Api/wwwroot/ /opt/amneziageo-server/wwwroot/
 COPY --chmod=755 deploy/amneziageo-server /usr/local/share/amneziageo-server/amneziageo-server
-RUN ln -s /usr/local/share/amneziageo-server/amneziageo-server /usr/local/bin/amneziageo-server
+ARG VERSION=0.0.1
+LABEL org.opencontainers.image.source=https://github.com/bor-project/amneziageo_server \
+      org.opencontainers.image.version=$VERSION
 ENV DOTNET_NOLOGO=1 \
     AMNEZIAGEO_CONTAINER=1 \
     ASPNETCORE_HTTP_PORTS= \

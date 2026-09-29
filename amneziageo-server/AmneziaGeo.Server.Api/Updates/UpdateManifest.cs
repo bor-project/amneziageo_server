@@ -5,13 +5,29 @@ using System.Text.RegularExpressions;
 namespace AmneziaGeo.Server.Api.Updates;
 
 /// <summary>
+/// A file of a release that goes with a package.
+/// </summary>
+/// <param name="Name">The file among the files of the release.</param>
+/// <param name="Size">The size of the file, in bytes.</param>
+/// <param name="Sha256">The digest of the file, empty where the manifest names none.</param>
+public sealed record UpdateFile(string Name, long Size, string Sha256);
+
+/// <summary>
 /// A package of the panel for one architecture.
 /// </summary>
 /// <param name="Name">The file of the package among the files of the release.</param>
 /// <param name="Arch">The architecture the package runs on.</param>
 /// <param name="Size">The size of the package, in bytes.</param>
 /// <param name="Sha256">The digest of the package.</param>
-public sealed record UpdatePackage(string Name, string Arch, long Size, string Sha256);
+/// <param name="Files">The list of the files of the package, null where the release carries none.</param>
+/// <param name="Pack">The files of the package packed one by one, null where the release carries none.</param>
+public sealed record UpdatePackage(
+    string Name,
+    string Arch,
+    long Size,
+    string Sha256,
+    UpdateFile? Files = null,
+    UpdateFile? Pack = null);
 
 /// <summary>
 /// What a release of the panel carries, as its signed manifest names it.
@@ -120,7 +136,31 @@ public sealed partial record UpdateManifest(
             throw new InvalidDataException($"the package '{name}' carries no digest");
         }
 
-        return new UpdatePackage(name, arch, Size(item), sha);
+        return new UpdatePackage(
+            name,
+            arch,
+            Size(item),
+            sha,
+            Part(item, "files", ListFile(), digest: true),
+            Part(item, "pack", PackFile(), digest: false));
+    }
+
+    private static UpdateFile? Part(JsonElement item, string property, Regex names, bool digest)
+    {
+        if (!item.TryGetProperty(property, out var part) || part.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var name = Text(part, "name");
+        var size = Size(part);
+        var sha = Text(part, "sha256").ToLowerInvariant();
+        if (!names.IsMatch(name) || size == 0 || (digest && !Digest().IsMatch(sha)))
+        {
+            return null;
+        }
+
+        return new UpdateFile(name, size, sha);
     }
 
     private static long Size(JsonElement item) =>
@@ -144,6 +184,12 @@ public sealed partial record UpdateManifest(
 
     [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._-]*\.tar\.gz$")]
     private static partial Regex PackageFile();
+
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._-]*\.files$")]
+    private static partial Regex ListFile();
+
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._-]*\.pack$")]
+    private static partial Regex PackFile();
 
     [GeneratedRegex("^[a-z0-9_]+$")]
     private static partial Regex ArchName();
