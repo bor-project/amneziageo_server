@@ -45,9 +45,12 @@ Build it:
 cargo build --release --manifest-path wstunnel/wstunnel/Cargo.toml -p wstunnel-cli
 ```
 
-`deploy/publish.sh` builds it the same way and puts the binary in the package, `deploy/install.sh` keeps it in
+`deploy/publish.sh` builds it static against musl instead, for `x86_64-unknown-linux-musl` or
+`aarch64-unknown-linux-musl` with jemalloc, as upstream builds its releases, so the binary of the package runs on any
+glibc of the host. That build needs the target (`rustup target add x86_64-unknown-linux-musl`) and `musl-gcc`
+(`musl-tools`). The script puts the binary in the package, `deploy/install.sh` keeps it in
 the release as `/opt/amneziageo-server/current/wstunnel` with a service of its own, one instance per endpoint
-that takes the websocket, and leaves a `/usr/local/bin/wstunnel` of the host alone. The image carries it at
-`/usr/local/bin/wstunnel`. The
+that takes the websocket, and leaves a `/usr/local/bin/wstunnel` of the host alone. The image builds its own
+against the glibc of the image and carries it at `/usr/local/bin/wstunnel`. The
 panel writes the arguments and the whitelist of targets, see [services.md](services.md); the tree of the fork
 stays as upstream wrote it.

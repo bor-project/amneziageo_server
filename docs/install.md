@@ -92,7 +92,9 @@ On the machine the code lives on:
 ```
 
 It builds the panel, publishes the server and the console for `linux-x64` with the runtime inside them and
-writes `out/amneziageo-server.tar.gz`, about 50 MB. The server needs no .NET installed. `./deploy/publish.sh --ui`
+writes `out/amneziageo-server.tar.gz`, about 50 MB. The server needs no .NET installed. The websocket tool goes in
+static, built against musl, so it runs on any glibc of the host; what that build takes is in
+[The websocket proxy](submodules.md#the-websocket-proxy). `./deploy/publish.sh --ui`
 builds the web interface alone into `out/amneziageo-web.tar.gz`, see [Only the web interface](#only-the-web-interface).
 
 A package is a release named after the time it was built and the commit it was built from, as in

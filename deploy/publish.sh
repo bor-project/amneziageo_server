@@ -61,10 +61,28 @@ else
       --output "$out/publish"
   done
 
-  PATH="$HOME/.cargo/bin:$PATH" cargo build --release \
+  case $runtime in
+    linux-x64) target=x86_64-unknown-linux-musl page=12 atomics= ;;
+    linux-arm64) target=aarch64-unknown-linux-musl page=14 atomics=-mno-outline-atomics ;;
+    *)
+      echo "no websocket tool for $runtime" >&2
+      exit 1
+      ;;
+  esac
+  compiler=CC_${target//-/_}
+  flags=CFLAGS_${target//-/_}
+  env PATH="$HOME/.cargo/bin:$PATH" "$compiler=${!compiler:-musl-gcc}" "$flags=${!flags:-} $atomics" \
+    JEMALLOC_SYS_WITH_LG_PAGE=$page \
+    cargo build --release \
     --manifest-path "$root/wstunnel/wstunnel/Cargo.toml" \
-    --package wstunnel-cli
-  cp "$root/wstunnel/wstunnel/target/release/wstunnel" "$out/"
+    --package wstunnel-cli \
+    --features jemalloc \
+    --target "$target"
+  cp "$root/wstunnel/wstunnel/target/$target/release/wstunnel" "$out/"
+  if readelf -lW "$out/wstunnel" | grep -q 'program interpreter'; then
+    echo "wstunnel is linked dynamically" >&2
+    exit 1
+  fi
 
   cp "$root/deploy/amneziageo-server.service" "$out/"
   cp "$root/deploy/amneziageo-proxy@.service" "$out/"
