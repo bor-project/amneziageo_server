@@ -51,7 +51,7 @@ public class SubscriptionTests
 
     [Theory]
     [InlineData("api", "subscription-path-taken")]
-    [InlineData("v1/sub", "subscription-path-taken")]
+    [InlineData("v1/sub", null)]
     [InlineData("sub", null)]
     [InlineData("panel", null)]
     public void APathTheServicesAnswerUnderIsRefusedOnTheirPorts(string path, string? code)

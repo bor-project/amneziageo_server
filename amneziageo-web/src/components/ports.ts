@@ -1,4 +1,5 @@
 import { useConfigs } from "@/api/configs"
+import type { Config } from "@/api/configs"
 import { usePanel } from "@/api/panel"
 import { scopes } from "@/api/scopes"
 import { useSubscription } from "@/api/subscription"
@@ -12,6 +13,12 @@ export interface PortHolder {
   name: string
 }
 
+export interface PathHolder {
+  port: number | null
+  path: string
+  name: string
+}
+
 export function useServicesHolders(): PortHolder[] {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
@@ -20,44 +27,40 @@ export function useServicesHolders(): PortHolder[] {
   const subscription = useSubscription(may).data
   const held: PortHolder[] = []
 
-  if (panel !== undefined && panel.path === "/") {
-    held.push({ port: panel.port, name: t("ports.panel") })
-  }
-
-  if (subscription !== undefined && subscription.isEnabled && subscription.separate) {
+  if (subscription !== undefined && subscription.isEnabled && subscription.separate && subscription.port !== panel?.port) {
     held.push({ port: subscription.port, name: t("ports.subscription") })
   }
 
   return held
 }
 
-export function usePortHolders(mine: { config?: number } = {}): PortHolder[] {
+export function usePathHolders(): PathHolder[] {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
   const may = holds(user, scopes.manageAccess)
-  const configs = useConfigs().data ?? []
   const panel = usePanel(may).data
   const subscription = useSubscription(may).data
-  const held: PortHolder[] = []
+  const held: PathHolder[] = []
 
-  for (const one of configs) {
-    if (one.id !== mine.config) {
-      held.push({ port: one.listenPort, name: one.name })
-      if (one.servicesPort > 0 && one.servicesPort !== one.listenPort) {
-        held.push({ port: one.servicesPort, name: one.name })
-      }
-    }
+  if (panel !== undefined && bare(panel.path).length > 0) {
+    held.push({ port: panel.port, path: bare(panel.path), name: t("ports.panel") })
   }
 
-  if (panel !== undefined) {
-    held.push({ port: panel.port, name: t("ports.panel") })
+  if (subscription !== undefined && subscription.isEnabled && !subscription.separate) {
+    held.push({ port: null, path: bare(subscription.path), name: t("ports.subscription") })
   }
 
-  if (subscription !== undefined && subscription.isEnabled) {
-    held.push({ port: subscription.port, name: t("ports.subscription") })
+  if (subscription !== undefined && subscription.isEnabled && subscription.separate && subscription.port === panel?.port) {
+    held.push({ port: subscription.port, path: bare(subscription.path), name: t("ports.subscription") })
   }
 
   return held
+}
+
+export function usePortHolders(mine: { config?: number } = {}): PortHolder[] {
+  const configs = useConfigs().data ?? []
+
+  return configs.filter((one) => one.id !== mine.config).map((one) => ({ port: one.listenPort, name: one.name }))
 }
 
 export function portFault(t: Text, port: number, held: PortHolder[]): string {
@@ -68,4 +71,35 @@ export function portFault(t: Text, port: number, held: PortHolder[]): string {
   const holder = held.find((one) => one.port === port)
 
   return holder === undefined ? "" : t("error.portBusy", { name: holder.name })
+}
+
+export function pathFault(t: Text, path: string, port: number | null, held: PathHolder[]): string {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(path)) {
+    return t("error.badWebSocketPath")
+  }
+
+  const holder =
+    port === null ? undefined : held.find((one) => (one.port === null || one.port === port) && same(one.path, path))
+
+  return holder === undefined ? "" : t("error.pathTaken", { name: holder.name })
+}
+
+export function socketFault(t: Text, configs: Config[], port: number | null, path: string): string {
+  const socket = configs.find(
+    (one) => one.webSocket && (port === null || servicesPort(one) === port) && same(one.webSocketPath, bare(path)),
+  )
+
+  return socket === undefined ? "" : t("error.pathTaken", { name: t("ports.webSocketOf", { name: socket.name }) })
+}
+
+function servicesPort(config: Config): number {
+  return config.servicesPort > 0 ? config.servicesPort : config.listenPort
+}
+
+function bare(path: string): string {
+  return path.replace(/^\/+|\/+$/g, "")
+}
+
+function same(one: string, other: string): boolean {
+  return one.length > 0 && one.toLowerCase() === other.toLowerCase()
 }

@@ -6,7 +6,7 @@ import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { Count, Flag, Help, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
-import { portFault, usePortHolders, useServicesHolders } from "@/components/ports"
+import { pathFault, portFault, usePathHolders, usePortHolders, useServicesHolders } from "@/components/ports"
 import { card, danger, field, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
 import { useText } from "@/i18n"
@@ -44,6 +44,7 @@ export function ConfigForm({
   const others = (useConfigs().data ?? []).filter((one) => one.id !== self)
   const held = usePortHolders({ config: self })
   const taken = useServicesHolders()
+  const claimed = usePathHolders()
   const [draft, setDraft] = useState(start)
   const [shown, setShown] = useState(publicKey)
   const read = useImportConfig()
@@ -53,6 +54,8 @@ export function ConfigForm({
   const proxy = (failed ? downedOf(error)?.error : faultOf) === "websocket-down" ? said : ""
   const port = portFault(t, draft.listenPort, held)
   const services = draft.servicesPort === 0 ? "" : portFault(t, draft.servicesPort, taken)
+  const servicesAt = draft.servicesPort > 0 ? draft.servicesPort : draft.listenPort
+  const socket = pathFault(t, draft.webSocketPath, draft.webSocket ? servicesAt : null, claimed)
   const name = nameFault(t, draft.name, others.map((one) => one.name))
   const address = addressFault(t, draft.address)
   const host = draft.host.length > 255 ? t("error.badHost") : ""
@@ -61,7 +64,7 @@ export function ConfigForm({
     edited &&
     !pending &&
     draft.name.length > 0 &&
-    [port, services, name, address, host].every((one) => one.length === 0)
+    [port, services, socket, name, address, host].every((one) => one.length === 0)
   const twisted = JSON.stringify(draft.obfuscation) !== JSON.stringify(start.obfuscation)
 
   function put(change: Partial<ConfigDraft>) {
@@ -129,8 +132,8 @@ export function ConfigForm({
           caption={t("configs.port")}
           value={draft.listenPort}
           onChange={(value) => put({ listenPort: value })}
+          fault={port}
         />
-        {port.length > 0 && <div className="-mt-2 text-xs text-alarm">{port}</div>}
         <Line
           id="config-address"
           caption={t("configs.address")}
@@ -161,7 +164,7 @@ export function ConfigForm({
           <option value="server">{t("clients.inboundServer")}</option>
           <option value="network">{t("clients.inboundNetwork")}</option>
         </Pick>
-        <div className="flex flex-col justify-center">
+        <div className="sm:col-span-2">
           <Flag
             id="config-websocket"
             caption={t("configs.webSocket")}
@@ -170,16 +173,21 @@ export function ConfigForm({
           />
           {proxy.length > 0 && <div className="mt-1 text-xs text-alarm">{proxy}</div>}
         </div>
-        <div>
-          <Count
-            id="config-services-port"
-            caption={t("configs.servicesPort")}
-            value={draft.servicesPort}
-            unset={String(draft.listenPort)}
-            onChange={(value) => put({ servicesPort: value })}
-          />
-          {services.length > 0 && <div className="mt-1 text-xs text-alarm">{services}</div>}
-        </div>
+        <Count
+          id="config-services-port"
+          caption={t("configs.servicesPort")}
+          value={draft.servicesPort}
+          unset={String(draft.listenPort)}
+          onChange={(value) => put({ servicesPort: value })}
+          fault={services}
+        />
+        <Line
+          id="config-websocket-path"
+          caption={t("configs.webSocketPath")}
+          value={draft.webSocketPath}
+          onChange={(value) => put({ webSocketPath: value.trim() })}
+          fault={socket}
+        />
       </Part>
 
       <Part title={t("configs.clients")}>

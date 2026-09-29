@@ -24,7 +24,10 @@ public sealed class WebSocketOffer : IHelloFeature
     {
         ArgumentNullException.ThrowIfNull(peer);
 
-        return ValueTask.FromResult<object?>(peer.Endpoint.WebSocket ? new WebSocketFeature(ConfigServices.Port(peer.Endpoint)) : null);
+        return ValueTask.FromResult<object?>(
+            peer.Endpoint.WebSocket
+                ? new WebSocketFeature(ConfigServices.Port(peer.Endpoint), ConfigServices.WebSocketPath(peer.Endpoint))
+                : null);
     }
 }
 

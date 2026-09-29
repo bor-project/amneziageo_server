@@ -29,11 +29,6 @@ public sealed class ServiceDesk
     public const string SpeedPath = "/api/speed";
 
     /// <summary>
-    /// The path the websocket of the tunnel sits under.
-    /// </summary>
-    public const string FrontPath = "/v1";
-
-    /// <summary>
     /// The scheme the token travels under in the header of a websocket.
     /// </summary>
     public const string TokenScheme = PeerToken.Scheme;
@@ -198,6 +193,13 @@ public sealed class ServiceDesk
             return;
         }
 
+        if (!Under(context.Request.Path, endpoint.Path))
+        {
+            Refuse(context, point.Names, "wrong-path");
+
+            return;
+        }
+
         await FrontRelay.PassAsync(context, endpoint.Front, _logger).ConfigureAwait(false);
     }
 
@@ -206,8 +208,7 @@ public sealed class ServiceDesk
     {
         var path = context.Request.Path;
         var method = context.Request.Method;
-        if (point.WebSocket
-            && path.StartsWithSegments(FrontPath, StringComparison.Ordinal)
+        if (point.Endpoints.Any(one => one.WebSocket && Under(path, one.Path))
             && context.Features.Get<IHttpUpgradeFeature>() is { IsUpgradableRequest: true })
         {
             return Wanted.Front;
@@ -236,6 +237,10 @@ public sealed class ServiceDesk
             ? Wanted.Subscription
             : Wanted.None;
     }
+
+    // Tells whether a request comes under the path of a websocket.
+    private static bool Under(PathString path, string socket) =>
+        path.StartsWithSegments("/" + socket, StringComparison.Ordinal);
 
     private void Refuse(HttpContext context, string endpoint, string reason)
     {

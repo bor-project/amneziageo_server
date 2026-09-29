@@ -129,7 +129,7 @@ public class PanelTests
     {
         var settings = PanelDefaults.Settings with { Path = "panel" };
 
-        var answer = PanelAnswers.Panel(settings, settings, new WebOptions());
+        var answer = PanelAnswers.Panel(settings, settings, new WebOptions(), false, Here(settings));
 
         Assert.Equal("/panel/", answer.Path);
         Assert.False(answer.Pending);
@@ -140,7 +140,7 @@ public class PanelTests
     {
         var running = PanelDefaults.Settings;
 
-        var answer = PanelAnswers.Panel(running with { Port = 9443 }, running, new WebOptions());
+        var answer = PanelAnswers.Panel(running with { Port = 9443 }, running, new WebOptions(), false, Here(running));
 
         Assert.True(answer.Pending);
     }
@@ -159,7 +159,7 @@ public class PanelTests
         var running = PanelDefaults.Settings;
 
         Assert.False((running with { Prereleases = true }).Differs(running));
-        Assert.True(PanelAnswers.Panel(running with { Prereleases = true }, running, new WebOptions()).Prereleases);
+        Assert.True(PanelAnswers.Panel(running with { Prereleases = true }, running, new WebOptions(), false, Here(running)).Prereleases);
     }
 
     [Fact]
@@ -204,7 +204,22 @@ public class PanelTests
         Assert.Equal(ConfigName.Default, blank.NameTemplate);
         Assert.Equal(ConfigName.Default, absent.NameTemplate);
         Assert.Equal("{CLIENT}-DE", given.NameTemplate);
-        Assert.Equal("{CLIENT}-DE", PanelAnswers.Panel(given, given, new WebOptions()).NameTemplate);
+        Assert.Equal("{CLIENT}-DE", PanelAnswers.Panel(given, given, new WebOptions(), false, Here(given)).NameTemplate);
+    }
+
+    [Fact]
+    public void TheAnswerTellsWhereThePanelAnswersNowAndWhetherItSpeaksTlsAfterARestart()
+    {
+        var running = PanelDefaults.Settings with { Path = "sub/q1w2e3r4t5y6u7i8" };
+        var saved = running with { Path = "k9m8n7b6v5c4x3z2", Port = 9443 };
+
+        var answer = PanelAnswers.Panel(saved, running, new WebOptions(), true, Here(running));
+
+        Assert.True(answer.Pending);
+        Assert.True(answer.Secure);
+        Assert.Equal("/k9m8n7b6v5c4x3z2/", answer.Path);
+        Assert.Equal(9443, answer.Port);
+        Assert.Equal(new PanelPlace(PanelDefaults.Port, "/sub/q1w2e3r4t5y6u7i8/", false), answer.Running);
     }
 
     [Fact]
@@ -339,6 +354,18 @@ public class PanelTests
     }
 
     [Fact]
+    public async Task APanelMaySitUnderThePathOfTheSubscriptions()
+    {
+        using var bench = new Bench();
+
+        var saved = await bench.Panel.SaveAsync(PanelDefaults.Settings with { Path = "sub/abc" }, CancellationToken.None);
+        var held = await bench.Panel.ReadAsync(CancellationToken.None);
+
+        Assert.True(saved.IsOk);
+        Assert.Equal("sub/abc", held.Path);
+    }
+
+    [Fact]
     public async Task TheNameTemplateIsReadBackAsItWasSaved()
     {
         using var bench = new Bench();
@@ -382,4 +409,6 @@ public class PanelTests
     {
         Assert.Null(PanelStore.Held(Path.Combine(Path.GetTempPath(), $"amneziageo-{Guid.NewGuid():N}.db")));
     }
+
+    private static PanelPlace Here(PanelSettings settings) => new(settings.Port, settings.Prefix, false);
 }

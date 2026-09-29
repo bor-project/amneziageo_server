@@ -19,7 +19,7 @@ public static class SubscriptionRules
 
     private static readonly string[] Held = ["api", "assets"];
 
-    private static readonly string[] Served = ["api", "v1"];
+    private static readonly string[] Served = ["api"];
 
     /// <summary>
     /// Returns the first rule the settings break next to the panel they may share a port with.

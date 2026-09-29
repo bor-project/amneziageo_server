@@ -234,20 +234,88 @@ public class ConfigTests
     }
 
     [Fact]
-    public async Task AnEndpointLeavesThePortOfAPanelThatSitsAtTheRootAlone()
+    public async Task AnEndpointSharesThePortOfAPanelThatSitsAtTheRoot()
     {
         using var bench = new Bench();
         await bench.Panel.SaveAsync(PanelDefaults.Settings with { Port = 8443, Path = string.Empty }, default);
 
-        var taken = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { ServicesPort = 8443 }, default);
-        await bench.Panel.SaveAsync(PanelDefaults.Settings with { Port = 8443, Path = "sub/l4kg8s0xq1zc7ab2" }, default);
-        var shared = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { ServicesPort = 8443 }, default);
+        var shared = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { ServicesPort = 8443, WebSocket = true }, default);
 
-        Assert.Equal(ConfigOutcome.PortTaken, taken.Outcome);
-        Assert.Equal("panel-path-needed", taken.Code);
         Assert.True(shared.IsOk);
         Assert.True(await bench.Configs.ServesAsync(8443, default));
         Assert.False(await bench.Configs.ServesAsync(8444, default));
+    }
+
+    [Fact]
+    public async Task AWebSocketUnderThePathOfThePanelIsRefusedOnItsPortAlone()
+    {
+        using var bench = new Bench();
+        await bench.Panel.SaveAsync(PanelDefaults.Settings with { Port = 8443, Path = "q1w2e3r4t5y6u7i8" }, default);
+        var draft = ConfigDefaults.Fresh("awg1") with { ServicesPort = 8443, WebSocket = true, WebSocketPath = "Q1W2E3R4T5Y6U7I8" };
+
+        var taken = await bench.Configs.AddAsync(draft, default);
+        var elsewhere = await bench.Configs.AddAsync(draft with { ServicesPort = 9443 }, default);
+        var off = await bench.Configs.AddAsync(draft with { Name = "awg2", ListenPort = 51821, WebSocket = false }, default);
+        await bench.Panel.SaveAsync(PanelDefaults.Settings with { Port = 8443, Path = "q1w2e3r4t5y6u7i8/panel" }, default);
+        var deeper = await bench.Configs.ChangeAsync(off.Record!.Id, off.Record with { WebSocket = true }, default);
+
+        Assert.Equal(ConfigOutcome.PortTaken, taken.Outcome);
+        Assert.Equal("websocket-path-taken", taken.Code);
+        Assert.Contains("the panel", taken.Message, StringComparison.Ordinal);
+        Assert.True(elsewhere.IsOk);
+        Assert.True(off.IsOk);
+        Assert.True(deeper.IsOk);
+    }
+
+    [Fact]
+    public async Task AWebSocketUnderThePathOfTheSubscriptionsIsRefusedWhereTheyAnswer()
+    {
+        using var bench = new Bench();
+        var feed = new SubscriptionStore(bench.Db, bench.Clock);
+        await feed.SaveAsync(SubscriptionDefaults.Settings with { IsEnabled = true, Separate = false, Path = "feed" }, default);
+        var draft = ConfigDefaults.Fresh("awg1") with { WebSocket = true, WebSocketPath = "feed" };
+
+        var taken = await bench.Configs.AddAsync(draft, default);
+        await feed.SaveAsync(SubscriptionDefaults.Settings with { IsEnabled = true, Separate = true, Port = 2096, Path = "feed" }, default);
+        var apart = await bench.Configs.AddAsync(draft, default);
+
+        Assert.Equal("websocket-path-taken", taken.Code);
+        Assert.Contains("the subscriptions", taken.Message, StringComparison.Ordinal);
+        Assert.True(apart.IsOk);
+    }
+
+    [Fact]
+    public async Task AnEndpointTakesAPathOfItsOwnForItsWebSocket()
+    {
+        using var bench = new Bench();
+
+        var added = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { WebSocketPath = string.Empty }, default);
+        var kept = await bench.Configs.ChangeAsync(added.Record!.Id, added.Record with { WebSocketPath = string.Empty }, default);
+        var moved = await bench.Configs.ChangeAsync(added.Record.Id, added.Record with { WebSocketPath = "my-front_1" }, default);
+        var broken = await bench.Configs.ChangeAsync(added.Record.Id, added.Record with { WebSocketPath = "a/b" }, default);
+
+        Assert.Matches("^[a-z0-9]{16}$", added.Record.WebSocketPath);
+        Assert.Equal(added.Record.WebSocketPath, kept.Record!.WebSocketPath);
+        Assert.Equal("my-front_1", moved.Record!.WebSocketPath);
+        Assert.Equal("bad-websocket-path", broken.Code);
+        Assert.Matches("^[a-z0-9]{16}$", ConfigDefaults.Fresh("awg2").WebSocketPath);
+        Assert.Equal(0, ConfigDefaults.Fresh("awg2").ServicesPort);
+        Assert.Equal(ConfigServices.OldPath, ConfigServices.WebSocketPath(ConfigDefaults.Fresh("awg3") with { WebSocketPath = string.Empty }));
+    }
+
+    [Fact]
+    public async Task TheWebSocketOfAPathIsFoundOnItsPortOrOnAny()
+    {
+        using var bench = new Bench();
+        var added = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { WebSocket = true, WebSocketPath = "front1", ServicesPort = 8443 },
+            default)).Record!;
+
+        Assert.Equal(added.Id, (await bench.Configs.SocketUnderAsync(8443, "/FRONT1/", default))?.Id);
+        Assert.Equal(added.Id, (await bench.Configs.SocketUnderAsync(null, "front1", default))?.Id);
+        Assert.Null(await bench.Configs.SocketUnderAsync(9443, "front1", default));
+        Assert.Null(await bench.Configs.SocketUnderAsync(8443, "front1/panel", default));
+        Assert.Null(await bench.Configs.SocketUnderAsync(8443, "/", default));
     }
 
     [Fact]

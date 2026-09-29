@@ -50,6 +50,7 @@ export interface Config {
   inbound: Inbound
   webSocket: boolean
   servicesPort: number
+  webSocketPath: string
   blocked: string[]
   publicKey: string
   privateKey: string | null
@@ -75,6 +76,7 @@ export interface ConfigDraft {
   inbound: Inbound
   webSocket: boolean
   servicesPort: number
+  webSocketPath: string
   blocked: string[]
   privateKey: string
   presharedKey: string
@@ -200,6 +202,7 @@ export function draftOf(config: Config): ConfigDraft {
     inbound: config.inbound,
     webSocket: config.webSocket,
     servicesPort: config.servicesPort,
+    webSocketPath: config.webSocketPath,
     blocked: config.blocked,
     privateKey: config.privateKey ?? "",
     presharedKey: config.presharedKey ?? "",

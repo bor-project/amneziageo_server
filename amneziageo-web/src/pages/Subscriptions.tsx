@@ -1,10 +1,13 @@
 import { useState } from "react"
 import { complaint, reason } from "@/api/auth"
+import { useConfigs } from "@/api/configs"
 import { outside, usePortState } from "@/api/firewall"
+import { usePanel } from "@/api/panel"
 import { scopes } from "@/api/scopes"
 import { draftOf, useSaveSubscription, useSubscription } from "@/api/subscription"
 import type { Subscription, SubscriptionDraft } from "@/api/subscription"
 import { Count, Flag, Line, Multi, Part, Pick } from "@/components/fields"
+import { socketFault } from "@/components/ports"
 import { card, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -34,6 +37,11 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
   const port = usePortState(draft.port, draft.isEnabled && draft.separate && outside(draft.listen))
   const closed = port.data?.state === "closed"
   const blocked = closed && (draft.port !== saved.port || !saved.separate || !saved.isEnabled)
+  const configs = useConfigs().data ?? []
+  const panel = usePanel(may).data
+  const where = draft.separate ? draft.port : null
+  const shared = !draft.separate || draft.port === panel?.port
+  const socket = draft.isEnabled && shared ? socketFault(t, configs, where, draft.path) : ""
   const refused = fault ?? (kept === null && settings.fault.length > 0 ? reason(settings.fault) : null)
 
   function set(change: Partial<SubscriptionDraft>) {
@@ -141,6 +149,7 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
           caption={t("subscription.path")}
           value={draft.path}
           onChange={(path) => set({ path })}
+          fault={socket}
         />
 
         <Count
@@ -199,7 +208,7 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
         <button
           type="button"
           className={primary}
-          disabled={!may || kept === null || save.isPending || blocked}
+          disabled={!may || kept === null || save.isPending || blocked || socket.length > 0}
           onClick={() => void keep()}
         >
           {t("settings.save")}

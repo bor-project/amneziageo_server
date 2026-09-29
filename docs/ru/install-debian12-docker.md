@@ -259,7 +259,7 @@ docker compose exec panel amneziageo-server init --user admin
 (`password: ...`), сохраните его. `init` работает, только пока в панели нет включённого администратора. Ключ
 `--user` в контейнере обязателен: учётки хоста в него не заходят.
 
-Последней строкой утилита называет порт и путь панели (`the panel answers on port 8443 under /sub/...`).
+Последней строкой утилита называет порт и путь панели (`the panel answers on port 8443 under /<путь>/`).
 
 Пароль выдаётся временным: при первом входе панель попросит его сменить. Ключ `--permanent` оставляет пароль как
 есть.
@@ -274,7 +274,7 @@ docker compose exec panel amneziageo-server init --user admin
 работал, адрес меняют в самой панели: «Настройки» > «Сервер» > «Слушать на адресах» > «Все адреса», и
 `server.env` на него больше не влияет.
 
-На первом старте панель придумывает себе путь вида `/sub/<16 букв и цифр>/` и пишет его в журнал контейнера:
+На первом старте панель придумывает себе путь вида `/<16 букв и цифр>/` и пишет его в журнал контейнера:
 
 ```bash
 docker compose -f /opt/amneziageo-docker/compose.yaml logs | grep "the panel answers"
@@ -291,7 +291,7 @@ docker compose -f /opt/amneziageo-docker/compose.yaml logs | grep "the panel ans
 ssh -N -L 8443:127.0.0.1:8443 root@<адрес сервера>
 ```
 
-и в браузере `http://localhost:8443/sub/<путь из журнала>/`.
+и в браузере `http://localhost:8443/<путь из журнала>/`.
 
 **Б. В сети по TLS с сертификатом Let's Encrypt**
 

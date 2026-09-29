@@ -64,11 +64,11 @@ public sealed class ProxyHost
     /// <summary>
     /// Puts the front of an interface on the host, starting its service over only when its files change or it is down.
     /// </summary>
-    public async Task<ProxyState> ApplyAsync(string name, int front, int target, CancellationToken ct)
+    public async Task<ProxyState> ApplyAsync(string name, int front, int target, string path, CancellationToken ct)
     {
         try
         {
-            var written = await WriteAsync(name, front, target, ct).ConfigureAwait(false);
+            var written = await WriteAsync(name, front, target, path, ct).ConfigureAwait(false);
             if (written.Fault.Length > 0)
             {
                 return new ProxyState(false, written.Fault);
@@ -148,13 +148,13 @@ public sealed class ProxyHost
         }
     }
 
-    private async Task<Written> WriteAsync(string name, int front, int target, CancellationToken ct)
+    private async Task<Written> WriteAsync(string name, int front, int target, string path, CancellationToken ct)
     {
         try
         {
             Directory.CreateDirectory(_directory);
             var rules = RulesPath(name);
-            var whitelist = await PutAsync(rules, ProxyFile.Whitelist(target), ct).ConfigureAwait(false);
+            var whitelist = await PutAsync(rules, ProxyFile.Whitelist(target, path), ct).ConfigureAwait(false);
             var arguments = await PutAsync(ArgumentsPath(name), ProxyFile.Line(front, rules), ct).ConfigureAwait(false);
 
             return new Written(whitelist || arguments, string.Empty);

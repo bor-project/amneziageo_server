@@ -107,9 +107,10 @@ the code into a phrase of its own language.
 | `bad-blocked` | a range closed to clients is not an address range |
 | `bad-header-key` | the header protection key is not 32 bytes in base64 |
 | `name-taken` | the panel already carries an endpoint under this name |
-| `port-taken` | the panel already listens on this port |
+| `port-taken` | another endpoint already listens on this UDP port |
 | `bad-services-port` | the port of the services is outside 1 to 65535 |
-| `panel-path-needed` | the panel answers on this TCP port from the root, see [serving.md](serving.md) |
+| `bad-websocket-path` | the path of the websocket takes letters the rules do not, see [services.md](services.md) |
+| `websocket-path-taken` | the websocket comes under the very path the panel or the subscriptions answer under on its TCP port |
 | `unknown-config` | there is no endpoint under this number |
 | `bad-import` | the interface file carries no private key, or nothing at all |
 

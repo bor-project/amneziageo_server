@@ -51,6 +51,13 @@ public static class ConfigDefaults
     public const int OfflineAfter = 60;
 
     /// <summary>
+    /// How many letters and digits the path of the websocket of a new endpoint takes.
+    /// </summary>
+    public const int PathLength = 16;
+
+    private const string PathLetters = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+    /// <summary>
     /// Returns an endpoint with a key pair and obfuscation of its own.
     /// </summary>
     public static ServerConfig Fresh(string name)
@@ -70,6 +77,7 @@ public static class ConfigDefaults
             IsEnabled = true,
             Nat = true,
             Blocked = [.. Blocked],
+            WebSocketPath = WebSocketPath(),
             PrivateKey = pair.PrivateKey,
             PublicKey = pair.PublicKey,
             Obfuscation = Obfuscation(),
@@ -77,17 +85,9 @@ public static class ConfigDefaults
     }
 
     /// <summary>
-    /// Returns the port the services of a new endpoint answer on: the one the endpoints already answer on, else the
-    /// port of the endpoint itself.
+    /// Returns a path for the websocket of a new endpoint that is not guessed.
     /// </summary>
-    public static int Services(IReadOnlyList<ServerConfig> held)
-    {
-        ArgumentNullException.ThrowIfNull(held);
-
-        var first = held.Where(one => one.IsEnabled).MinBy(one => one.Id) ?? held.MinBy(one => one.Id);
-
-        return first is null ? 0 : ConfigServices.Port(first);
-    }
+    public static string WebSocketPath() => RandomNumberGenerator.GetString(PathLetters, PathLength);
 
     /// <summary>
     /// Returns obfuscation another endpoint is unlikely to repeat.

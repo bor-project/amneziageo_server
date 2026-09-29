@@ -80,7 +80,7 @@ file and the link.
 | `bad-port`, `bad-listen`, `bad-domain`, `bad-certificate` | as on the Server tab, see [serving.md](serving.md) |
 | `certificate-*`, `certificate-key-*` | the certificate files do not load, as on the Certificates tab |
 | `bad-subscription-path` | the path is empty or takes letters the rules do not |
-| `subscription-path-taken` | on the port of the panel the path is one the panel answers under |
+| `subscription-path-taken` | on the port of the panel the path is one the panel answers under, or the websocket of an endpoint comes under the very same path where the subscriptions answer |
 | `bad-subscription-interval` | the interval is outside 1 to 720 hours |
 | `bad-subscription-title` | the title is longer than 128 characters or breaks the line |
 | `subscription-port-busy` | another service holds the port |

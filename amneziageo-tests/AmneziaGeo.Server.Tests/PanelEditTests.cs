@@ -26,7 +26,7 @@ public class PanelEditTests
         Assert.Equal([PanelEdit.Loopback], reset.Listen);
         Assert.Empty(reset.Domains);
         Assert.Equal(PanelDefaults.Port, reset.Port);
-        Assert.Matches("^sub/[a-z0-9]{16}$", reset.Path);
+        Assert.Matches("^[a-z0-9]{16}$", reset.Path);
         Assert.Equal(string.Empty, reset.Certificate);
         Assert.Equal(string.Empty, reset.CertificateKey);
         Assert.True(reset.Opened);
@@ -48,7 +48,7 @@ public class PanelEditTests
     [Fact]
     public void ARandomPathIsOneNoOneGuesses()
     {
-        Assert.Matches("^sub/[a-z0-9]{16}$", PanelEdit.PathOf(PanelEdit.Random));
+        Assert.Matches("^[a-z0-9]{16}$", PanelEdit.PathOf(PanelEdit.Random));
         Assert.NotEqual(PanelEdit.PathOf(PanelEdit.Random), PanelEdit.PathOf(PanelEdit.Random));
     }
 

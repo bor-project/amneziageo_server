@@ -13,7 +13,7 @@ public class PanelStartTests
 
         Assert.Equal(["127.0.0.1"], fresh.Listen);
         Assert.Equal(8443, fresh.Port);
-        Assert.Matches("^sub/[a-z0-9]{16}$", fresh.Path);
+        Assert.Matches("^[a-z0-9]{16}$", fresh.Path);
     }
 
     [Fact]

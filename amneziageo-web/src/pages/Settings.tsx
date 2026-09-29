@@ -1,11 +1,13 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
+import { useConfigs } from "@/api/configs"
 import { outside, usePortState } from "@/api/firewall"
 import { draftOf, useNameSample, usePanel, useSavePanel } from "@/api/panel"
 import type { Panel, PanelDraft } from "@/api/panel"
 import { scopes } from "@/api/scopes"
 import { Count, Flag, Help, Line, Multi, Part, Pick } from "@/components/fields"
 import { defaultName, fillName, unknownKeys } from "@/components/names"
+import { socketFault } from "@/components/ports"
 import { card, label, primary, secondary } from "@/components/styles"
 import { languageNames, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -45,6 +47,8 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
   const port = usePortState(draft.port, part === "server" && outside(draft.listen))
   const closed = port.data?.state === "closed"
   const blocked = closed && draft.port !== saved.port
+  const configs = useConfigs().data ?? []
+  const socket = socketFault(t, configs, draft.port, draft.path)
   const domain = domainOf(draft, settings.certificateRoot)
   const template = draft.nameTemplate.trim() || defaultName
   const strange = unknownKeys(template)
@@ -132,7 +136,13 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
             fault={closed ? t("settings.portClosed", { port: String(draft.port) }) : ""}
           />
 
-          <Line id="panel-path" caption={t("settings.path")} value={draft.path} onChange={(path) => set({ path })} />
+          <Line
+            id="panel-path"
+            caption={t("settings.path")}
+            value={draft.path}
+            onChange={(path) => set({ path })}
+            fault={socket}
+          />
 
           <Pick
             id="panel-language"
@@ -210,7 +220,7 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
         <button
           type="button"
           className={primary}
-          disabled={!may || kept === null || save.isPending || blocked}
+          disabled={!may || kept === null || save.isPending || blocked || socket.length > 0}
           onClick={() => void keep()}
         >
           {t("settings.save")}

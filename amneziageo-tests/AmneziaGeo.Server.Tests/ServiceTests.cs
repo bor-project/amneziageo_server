@@ -148,7 +148,7 @@ public class ServiceTests
             [("awg1", true, 61002, 51821)],
             points[1].Endpoints.Select(one => (one.Name, one.WebSocket, one.Front, one.Target)).ToArray());
         Assert.Equal("awg0, awg3", points[0].Names);
-        Assert.True(points[0].WebSocket);
+        Assert.Contains(points[0].Endpoints, one => one.WebSocket);
         Assert.Equal(4, points[0].Of(4)!.ConfigId);
         Assert.Null(points[0].Of(3));
         Assert.All(points, point => Assert.Equal("/tls/chain.pem", point.Chain));
@@ -198,11 +198,63 @@ public class ServiceTests
         var context = new DefaultHttpContext();
         context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpUpgradeFeature>(new Upgradable());
         context.Request.Method = "GET";
-        context.Request.Path = "/v1/events";
+        context.Request.Path = $"/{first.WebSocketPath}/events";
         context.Request.Headers.Authorization = PeerToken.Header(mine.PrivateKey, other.PublicKey, bench.Clock.GetUtcNow());
 
         await desk.AnswerAsync(context, point);
 
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AWebSocketComesUnderThePathOfItsEndpointAlone()
+    {
+        using var bench = new Bench();
+        var fresh = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true },
+            CancellationToken.None)).Record!;
+        var old = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg2") with
+            {
+                ListenPort = 51821,
+                Address = ["10.9.0.1/24"],
+                WebSocket = true,
+                WebSocketPath = ConfigServices.OldPath,
+                ServicesPort = fresh.ListenPort,
+            },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var point = ServicePoints.Of([fresh, old], string.Empty, string.Empty)[0];
+
+        Assert.True(desk.Takes(Upgrading($"/{fresh.WebSocketPath}/events"), point));
+        Assert.True(desk.Takes(Upgrading("/v1/events"), point));
+        Assert.False(desk.Takes(Upgrading("/v2/events"), point));
+        Assert.False(desk.Takes(Upgrading("/v1/events"), Point(fresh)));
+        Assert.False(desk.Takes(Asking("GET", $"/{fresh.WebSocketPath}/events"), point));
+    }
+
+    [Fact]
+    public async Task AWebSocketUnderThePathOfAnotherEndpointIsRefused()
+    {
+        using var bench = new Bench();
+        var first = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true },
+            CancellationToken.None)).Record!;
+        var other = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg2") with { ListenPort = 51821, Address = ["10.9.0.1/24"], WebSocket = true, ServicesPort = first.ListenPort },
+            CancellationToken.None)).Record!;
+        var mine = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(other.Id, "milena") with { Address = ["10.9.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var point = ServicePoints.Of([first, other], string.Empty, string.Empty)[0];
+        var context = Upgrading($"/{first.WebSocketPath}/events");
+        context.Request.Headers.Authorization = PeerToken.Header(mine.PrivateKey, other.PublicKey, bench.Clock.GetUtcNow());
+
+        await desk.AnswerAsync(context, point);
+
+        Assert.NotEqual(first.WebSocketPath, other.WebSocketPath);
+        Assert.Equal(other.WebSocketPath, point.Of(other.Id)!.Path);
         Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
     }
 
@@ -313,6 +365,7 @@ public class ServiceTests
         Assert.Equal("amneziageo", root.GetProperty("server").GetString());
         Assert.Equal("milena", root.GetProperty("client").GetString());
         Assert.Equal(endpoint.ListenPort, features.GetProperty("websocket").GetProperty("port").GetInt32());
+        Assert.Equal(endpoint.WebSocketPath, features.GetProperty("websocket").GetProperty("path").GetString());
         Assert.False(features.GetProperty("routing").GetProperty("allowed").GetBoolean());
         Assert.StartsWith($"https://10.8.0.1:{endpoint.ListenPort}/api/speed/down?", features.GetProperty("speed").GetProperty("inside").GetProperty("down").GetString(), StringComparison.Ordinal);
         Assert.StartsWith($"https://vpn.example:{endpoint.ListenPort}/api/speed/up?", features.GetProperty("speed").GetProperty("outside").GetProperty("up").GetString(), StringComparison.Ordinal);
@@ -419,7 +472,7 @@ public class ServiceTests
         var context = new DefaultHttpContext();
         context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpUpgradeFeature>(new Upgradable());
         context.Request.Method = "GET";
-        context.Request.Path = "/v1/events";
+        context.Request.Path = $"/{endpoint.WebSocketPath}/events";
 
         await desk.AnswerAsync(context, Point(endpoint));
 
@@ -492,6 +545,16 @@ public class ServiceTests
     }
 
     private static ServicePoint Point(ServerConfig endpoint) => ServicePoints.Of([endpoint], string.Empty, string.Empty)[0];
+
+    private static DefaultHttpContext Upgrading(string path)
+    {
+        var context = new DefaultHttpContext();
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpUpgradeFeature>(new Upgradable());
+        context.Request.Method = "GET";
+        context.Request.Path = path;
+
+        return context;
+    }
 
     private static DefaultHttpContext Asking(string method, string path)
     {

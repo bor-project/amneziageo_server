@@ -3,6 +3,11 @@ using AmneziaGeo.Server.Core.Panel;
 namespace AmneziaGeo.Server.Api.Web;
 
 /// <summary>
+/// Where the panel answers: the port, the path and whether it speaks TLS.
+/// </summary>
+public sealed record PanelPlace(int Port, string Path, bool Secure);
+
+/// <summary>
 /// The settings of the panel as it reads them.
 /// </summary>
 public sealed record PanelResponse(
@@ -19,7 +24,9 @@ public sealed record PanelResponse(
     IReadOnlyList<string> Certificates,
     IReadOnlyList<string> Addresses,
     string CertificateRoot,
-    bool Pending);
+    bool Pending,
+    bool Secure,
+    PanelPlace Running);
 
 /// <summary>
 /// The settings the panel is changed with.
@@ -48,13 +55,15 @@ public sealed record NameSample(IReadOnlyDictionary<string, string> Values, stri
 public static class PanelAnswers
 {
     /// <summary>
-    /// Returns the settings with what the host offers to pick from and whether they wait for a restart.
+    /// Returns the settings with what the host offers to pick from, whether they wait for a restart, whether the panel
+    /// speaks TLS under them and where it answers now.
     /// </summary>
-    public static PanelResponse Panel(PanelSettings settings, PanelSettings running, WebOptions options)
+    public static PanelResponse Panel(PanelSettings settings, PanelSettings running, WebOptions options, bool secure, PanelPlace answering)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(running);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(answering);
 
         return new PanelResponse(
             settings.Listen,
@@ -70,7 +79,9 @@ public static class PanelAnswers
             PanelChoices.Domains(options.CertificateRoot),
             PanelChoices.Addresses(),
             options.CertificateRoot,
-            settings.Differs(running));
+            settings.Differs(running),
+            secure,
+            answering);
     }
 
     /// <summary>

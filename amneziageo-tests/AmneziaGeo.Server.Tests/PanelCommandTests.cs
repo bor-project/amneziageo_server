@@ -31,7 +31,7 @@ public sealed class PanelCommandTests : IDisposable
         Assert.NotNull(held);
         Assert.Equal(["127.0.0.1"], held.Listen);
         Assert.Equal(8443, held.Port);
-        Assert.Matches("^sub/[a-z0-9]{16}$", held.Path);
+        Assert.Matches("^[a-z0-9]{16}$", held.Path);
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public sealed class PanelCommandTests : IDisposable
 
         Assert.NotNull(first);
         Assert.NotNull(second);
-        Assert.Matches("^sub/[a-z0-9]{16}$", first.Path);
+        Assert.Matches("^[a-z0-9]{16}$", first.Path);
         Assert.Equal(first.Path, second.Path);
     }
 

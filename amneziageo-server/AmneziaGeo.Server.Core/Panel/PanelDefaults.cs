@@ -13,11 +13,6 @@ public static class PanelDefaults
     public const int Port = 8443;
 
     /// <summary>
-    /// The path a fresh panel sits under, ahead of the name it is given.
-    /// </summary>
-    public const string PathHead = "sub";
-
-    /// <summary>
     /// The language that leaves the choice to the browser.
     /// </summary>
     public const string Language = "auto";
@@ -50,7 +45,7 @@ public static class PanelDefaults
     /// <summary>
     /// Returns the path a panel that holds no settings sits under.
     /// </summary>
-    public static string FreshPath() => PathHead + "/" + RandomNumberGenerator.GetString(Letters, NameLength);
+    public static string FreshPath() => RandomNumberGenerator.GetString(Letters, NameLength);
 
     private const string Letters = "abcdefghijklmnopqrstuvwxyz0123456789";
 

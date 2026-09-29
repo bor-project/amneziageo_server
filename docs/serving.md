@@ -13,7 +13,7 @@ of their own and take hold without a restart, see [subscriptions.md](subscriptio
 | Listen domains | the names the panel answers to, empty for any; a request carrying another name answers 404, a caller from the loopback is let through |
 | Port | the port the panel binds, 8443 when nothing is set; a port the firewall of the host closes is named under the field, and a new port it closes is not saved until it is opened, see [firewall.md](firewall.md) |
 | Path | what follows the port, `/` for the root: `/panel/` puts the panel there and everything outside it answers 404 |
-| | a panel that holds no settings yet takes `/sub/<16 letters and digits>/`, so the way in is not guessed |
+| | a panel that holds no settings yet takes `/<16 letters and digits>/`, so the way in is not guessed |
 | Certificate domain | a directory of `/etc/letsencrypt/live`, picking one fills the two paths below it |
 | Certificate path | the chain in PEM, empty for the certificate the configuration names |
 | Certificate key path | the key of that chain, taken together with it |
@@ -23,7 +23,10 @@ of their own and take hold without a restart, see [subscriptions.md](subscriptio
 
 `POST /api/panel/restart` stops the server, systemd starts it again, or compose in a container. `GET /api/panel` carries `pending`,
 true while the saved settings differ from the ones the panel started under; the language, the prereleases and the
-name template do not count.
+name template do not count. It carries `secure` as well, whether the panel speaks TLS once it starts under the saved
+settings, and `running`, the port, the path and TLS the panel answers under now. After a restart that moves the
+panel the page goes to the new address by itself: the new path on the same address, and the new port and scheme
+too when the page is opened on the port the panel listens on.
 
 The page of the panel carries the path in its `base` tag, so the interface and `/api` follow the panel
 wherever it sits.
@@ -69,11 +72,11 @@ The list becomes the settings the panel starts holding: the port of its first en
 the entries carrying that port, `*` for every address of the host. From then on the panel rules, and the list
 is read again only when the settings are dropped from the database.
 
-The path comes with them. A panel that holds no settings yet takes `/sub/<16 letters and digits>/`, made up
+The path comes with them. A panel that holds no settings yet takes `/<16 letters and digits>/`, made up
 once at that first start, written down with the other settings and named in the log:
 
 ```
-the panel answers from *:8443 under /sub/l4kg8s0xq1zc7ab2/
+the panel answers from *:8443 under /l4kg8s0xq1zc7ab2/
 ```
 
 `journalctl -u amneziageo-server | grep "the panel answers"` reads it back, `amneziageo-server-cli init` names
@@ -99,10 +102,11 @@ port they serve on is all it takes. The panel then answers the hello, the measur
 tunnel and the subscriptions on that port itself, and no listener of its own is raised for it, so the server
 answers one TCP port to the world.
 
-The panel takes a path of its own to share a port, `/sub/<...>/` or any other: at the root there is nothing
-left for the services, and saving it that way is refused with `panel-path-needed`, as is giving an endpoint the
-port of a panel that sits at the root. A shared port always answers over TLS: under the certificate of the
-panel when it has one, under a certificate the panel makes for itself when it has none.
+The panel shares a port at the root as well as under a path: the services answer their own paths first and leave
+the rest to the panel. The one thing refused is the very path the websocket of an endpoint on that port comes
+under: saving the panel that way is refused with `panel-path-taken`, which names the endpoint, see
+[services.md](services.md). A shared port always answers over TLS: under the certificate of the panel when it has
+one, under a certificate the panel makes for itself when it has none.
 
 ## Under a certificate
 

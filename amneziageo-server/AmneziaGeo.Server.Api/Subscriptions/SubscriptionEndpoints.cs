@@ -2,6 +2,7 @@ using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 
@@ -40,6 +41,7 @@ public static class SubscriptionEndpoints
     private static async Task<IResult> SaveAsync(
         SubscriptionRequest request,
         SubscriptionStore store,
+        ConfigStore configs,
         SubscriptionServer server,
         SubscriptionState state,
         PanelSettings panel,
@@ -55,6 +57,15 @@ public static class SubscriptionEndpoints
         if (fault is not null)
         {
             return Refuse(fault.Code, fault.Message);
+        }
+
+        if (draft.IsEnabled
+            && (!draft.Separate || draft.Port == panel.Port)
+            && await configs.SocketUnderAsync(draft.Separate ? draft.Port : null, draft.Path, ct).ConfigureAwait(false) is { } socket)
+        {
+            return Refuse(
+                "subscription-path-taken",
+                $"the websocket of {socket.Name} comes under '/{ConfigServices.WebSocketPath(socket)}' on TCP port {ConfigServices.Port(socket)}");
         }
 
         var refused = await server.ApplyAsync(draft, ct).ConfigureAwait(false);

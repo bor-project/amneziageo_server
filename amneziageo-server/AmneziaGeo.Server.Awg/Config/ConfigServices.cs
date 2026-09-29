@@ -16,6 +16,11 @@ public static class ConfigServices
     public const int FrontSpan = 4000;
 
     /// <summary>
+    /// The path the websocket of every endpoint came under before an endpoint held a path of its own.
+    /// </summary>
+    public const string OldPath = "v1";
+
+    /// <summary>
     /// Returns the TCP port the services of an endpoint answer on.
     /// </summary>
     public static int Port(ServerConfig config)
@@ -23,6 +28,16 @@ public static class ConfigServices
         ArgumentNullException.ThrowIfNull(config);
 
         return config.ServicesPort > 0 ? config.ServicesPort : config.ListenPort;
+    }
+
+    /// <summary>
+    /// Returns the path the websocket of an endpoint comes under, one part without slashes.
+    /// </summary>
+    public static string WebSocketPath(ServerConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        return config.WebSocketPath.Length > 0 ? config.WebSocketPath : OldPath;
     }
 
     /// <summary>

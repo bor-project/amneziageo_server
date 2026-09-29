@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using AmneziaGeo.Server.Core.Proxy;
 
 namespace AmneziaGeo.Server.Routing.Proxy;
@@ -13,11 +14,6 @@ public static class ProxyFile
     /// The name of the variable the service takes its arguments from.
     /// </summary>
     public const string Variable = "PROXY_ARGS";
-
-    /// <summary>
-    /// The path prefix the websocket of the tunnel comes under.
-    /// </summary>
-    public const string Prefix = "v1";
 
     private const string Head = "proxy-";
 
@@ -48,15 +44,17 @@ public static class ProxyFile
     }
 
     /// <summary>
-    /// Returns the whitelist that lets a tunnel reach one port on the loopback of the host.
+    /// Returns the whitelist that lets a tunnel under a path reach one port on the loopback of the host.
     /// </summary>
-    public static string Whitelist(int target)
+    public static string Whitelist(int target, string path)
     {
+        ArgumentNullException.ThrowIfNull(path);
+
         var text = new StringBuilder();
         text.Append("restrictions:\n");
         text.Append("  - name: amneziageo\n");
         text.Append("    match:\n");
-        text.Append($"      - !PathPrefix '^{Prefix}$'\n");
+        text.Append($"      - !PathPrefix '^{Regex.Escape(path)}$'\n");
         text.Append("    allow:\n");
         text.Append("      - !Tunnel\n");
         text.Append("        protocol:\n");

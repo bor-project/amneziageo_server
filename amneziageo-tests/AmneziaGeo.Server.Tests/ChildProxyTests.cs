@@ -34,9 +34,9 @@ public class ChildProxyTests
     [Fact]
     public void TheWhitelistLetsTheTunnelReachThePortOfItsInterfaceAlone()
     {
-        var text = ProxyFile.Whitelist(51820);
+        var text = ProxyFile.Whitelist(51820, "q1w2e3r4t5y6u7i8");
 
-        Assert.Contains("!PathPrefix '^v1$'", text, StringComparison.Ordinal);
+        Assert.Contains("!PathPrefix '^q1w2e3r4t5y6u7i8$'", text, StringComparison.Ordinal);
         Assert.Contains("- Udp", text, StringComparison.Ordinal);
         Assert.Contains("- 51820\n", text, StringComparison.Ordinal);
         Assert.Contains("host: '^127\\.0\\.0\\.1$'", text, StringComparison.Ordinal);
@@ -139,6 +139,26 @@ public class ChildProxyTests
     }
 
     [Fact]
+    public async Task AFrontTakesTheNewPathOfItsWebSocket()
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+
+        using var place = new Place();
+        place.Tool("#!/bin/sh\nexec sleep 30\n");
+        using var proxies = place.Proxies();
+        var host = new ProxyHost(new Ledger(), proxies, place.Root);
+
+        await host.ApplyAsync("awg0", 61001, 51820, "v1", CancellationToken.None);
+        var moved = await host.ApplyAsync("awg0", 61001, 51820, "q1w2e3r4t5y6u7i8", CancellationToken.None);
+        var rules = await File.ReadAllTextAsync(host.RulesPath("awg0"));
+        await host.WithdrawAsync("awg0", CancellationToken.None);
+
+        Assert.True(moved.IsRunning);
+        Assert.Contains("!PathPrefix '^q1w2e3r4t5y6u7i8$'", rules, StringComparison.Ordinal);
+        Assert.DoesNotContain("'^v1$'", rules, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task TheHostOfTheFrontsRunsThemThroughTheRunnerItIsGiven()
     {
         Skip.IfNot(OperatingSystem.IsLinux());
@@ -148,8 +168,8 @@ public class ChildProxyTests
         using var proxies = place.Proxies();
         var host = new ProxyHost(new Ledger(), proxies, place.Root);
 
-        var state = await host.ApplyAsync("awg0", 61001, 51820, CancellationToken.None);
-        var again = await host.ApplyAsync("awg0", 61001, 51820, CancellationToken.None);
+        var state = await host.ApplyAsync("awg0", 61001, 51820, "v1", CancellationToken.None);
+        var again = await host.ApplyAsync("awg0", 61001, 51820, "v1", CancellationToken.None);
         var held = host.Held();
         var line = await File.ReadAllTextAsync(host.ArgumentsPath("awg0"));
         var gone = await host.WithdrawAsync("awg0", CancellationToken.None);

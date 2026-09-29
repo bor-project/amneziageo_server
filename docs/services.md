@@ -12,8 +12,8 @@ the endpoint (`servicesPort` in `POST /api/configs` and `PUT /api/configs/{id}`)
 keeps the number of the endpoint. A port outside 1 to 65535 is refused with `bad-services-port`.
 
 Endpoints share a port: naming the port another endpoint already serves on leaves one listener answering for
-all of them, and the key of the client in the token says which endpoint a request belongs to. The form of a new
-endpoint offers the port the endpoints already serve on, the port of the endpoint itself when there are none.
+all of them, and the key of the client in the token says which endpoint a request belongs to. A new endpoint takes
+the number of its own port.
 Removing an endpoint takes down its own front and leaves the port to the endpoints that stay on it. The panel
 answers on the port itself when it holds that port, see [serving.md](serving.md).
 
@@ -67,7 +67,7 @@ and `features` carries what the server offers this client, each under its name:
 
 | Feature | Arguments | Offered when |
 |---|---|---|
-| `websocket` | `port` | the endpoint takes the tunnel inside a websocket |
+| `websocket` | `port`, `path` | the endpoint takes the tunnel inside a websocket on that port under that path |
 | `routing` | `allowed` | always: whether the client may route by its own lists, from the client and its template, see [templates.md](templates.md) |
 | `inbound` | `mode`: `server` or `network` | the client lets connections in from the tunnel, see [clients.md](clients.md) |
 | `speed` | `inside`, `outside` (each `down` and `up`), `limit`, `expires` | always: where to measure and until when |
@@ -105,11 +105,25 @@ the server does not hold with `unknown-ticket` (403).
 `WebSocket proxy` in the form of the endpoint (`webSocket` in the API) lets a network that passes nothing but web
 traffic carry the tunnel. The panel then runs one `wstunnel` per endpoint on `127.0.0.1`, at port
 `61000 + id % 4000`, whose whitelist lets it reach the UDP port of its own endpoint on the loopback and nothing
-else. On a port several endpoints share, the token of the websocket says whose front the upgrade goes to. The
-client opens
+else. On a port several endpoints share, the token of the websocket says whose front the upgrade goes to.
+
+`WebSocket path` next to the port of the services (`webSocketPath` in the API) names the path the websocket
+comes under: one part of letters, digits, `-` and `_`, up to 64, or `bad-websocket-path`. A new endpoint takes 16
+letters and digits made up for it; an endpoint of the releases before keeps `v1`, the path every endpoint came
+under then, so the clients it already has go on. Leaving it out of `POST /api/configs` makes one up, out of
+`PUT /api/configs/{id}` keeps the one held. The hello names the path next to the port, and the whitelist of the
+front lets that path alone in.
+
+The panel, the subscriptions and the services of the endpoints may all answer on one TCP port; they part by path.
+The websocket of an endpoint may not come under the very path the panel or the subscriptions answer under on its
+port: adding or changing the endpoint with the websocket on is refused with `websocket-path-taken` (409), and the
+message names which of them holds the path. Endpoints on one port may take one path, the token parts them. Their
+UDP ports are theirs alone, see [configs.md](configs.md).
+
+The client opens
 
 ```
-GET /v1/events HTTP/1.1
+GET /<the path of the endpoint>/events HTTP/1.1
 Sec-WebSocket-Protocol: v1, authorization.bearer.<the token of wstunnel>
 Authorization: AmneziaGeo <base64url of the JSON of the token>
 ```
@@ -117,8 +131,8 @@ Authorization: AmneziaGeo <base64url of the JSON of the token>
 on the port of the services. The panel checks the token the way hello does, except that a websocket may come
 again with the same token within the five minutes: a client that reads its headers from a file dials with one
 token until it is written anew. The panel takes the `Authorization` header off and hands the upgrade to the
-`wstunnel` of that endpoint. A websocket without a token that holds, under
-another path or to an endpoint without `WebSocket` finds nothing (404).
+`wstunnel` of that endpoint. A websocket without a token that holds, under a path other than the one of its
+endpoint or to an endpoint without `WebSocket` finds nothing (404).
 
 On a host with systemd the front of an endpoint is the service `amneziageo-proxy@<name>`, with its arguments in
 `/etc/amneziageo-server/proxy-<name>.env` and its whitelist in `proxy-<name>.yaml`. On a host without it, a

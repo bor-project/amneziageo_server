@@ -90,6 +90,31 @@ public sealed class ConfigStore
             .ConfigureAwait(false);
 
     /// <summary>
+    /// Returns the endpoint whose websocket comes under a path on a TCP port, on any port when none is named; null when
+    /// none does.
+    /// </summary>
+    public async Task<ServerConfig?> SocketUnderAsync(int? port, string path, CancellationToken ct)
+    {
+        var wanted = path.Trim('/');
+        if (wanted.Length == 0)
+        {
+            return null;
+        }
+
+        var sockets = await _db.Configs
+            .AsNoTracking()
+            .Where(config => config.WebSocket)
+            .OrderBy(config => config.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return sockets
+            .Select(Read)
+            .FirstOrDefault(config => (port is null || ConfigServices.Port(config) == port)
+                && string.Equals(ConfigServices.WebSocketPath(config), wanted, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Returns the first port from the wanted one up that no endpoint listens on.
     /// </summary>
     public async Task<int> FreePortAsync(int wanted, CancellationToken ct)
@@ -109,6 +134,7 @@ public sealed class ConfigStore
     /// </summary>
     public async Task<ConfigResult> AddAsync(ServerConfig draft, CancellationToken ct)
     {
+        draft = draft.WebSocketPath.Length > 0 ? draft : draft with { WebSocketPath = ConfigDefaults.WebSocketPath() };
         if (ConfigRules.Check(draft) is { } fault)
         {
             return ConfigResult.No(ConfigOutcome.Invalid, fault.Code, fault.Message);
@@ -130,7 +156,7 @@ public sealed class ConfigStore
                 $"the panel already listens on port {draft.ListenPort}");
         }
 
-        if (await PanelTakenAsync(draft, ct).ConfigureAwait(false) is { } busy)
+        if (await PathTakenAsync(draft, ct).ConfigureAwait(false) is { } busy)
         {
             return busy;
         }
@@ -156,6 +182,7 @@ public sealed class ConfigStore
             return Missing(id);
         }
 
+        draft = draft.WebSocketPath.Length > 0 ? draft : draft with { WebSocketPath = entity.WebSocketPath };
         if (ConfigRules.Check(draft) is { } fault)
         {
             return ConfigResult.No(ConfigOutcome.Invalid, fault.Code, fault.Message);
@@ -178,7 +205,7 @@ public sealed class ConfigStore
                 $"the panel already listens on port {draft.ListenPort}");
         }
 
-        if (await PanelTakenAsync(draft, ct).ConfigureAwait(false) is { } busy)
+        if (await PathTakenAsync(draft, ct).ConfigureAwait(false) is { } busy)
         {
             return busy;
         }
@@ -250,22 +277,37 @@ public sealed class ConfigStore
     private static ConfigResult Missing(long id) =>
         ConfigResult.No(ConfigOutcome.Unknown, "unknown-config", $"there is no endpoint under the number {id}");
 
-    // Returns the refusal when the draft serves on the port of a panel that sits at the root.
-    private async Task<ConfigResult?> PanelTakenAsync(ServerConfig draft, CancellationToken ct)
+    // Returns the refusal when the websocket of the draft comes under the very path the panel or the subscriptions
+    // answer under on its TCP port.
+    private async Task<ConfigResult?> PathTakenAsync(ServerConfig draft, CancellationToken ct)
     {
-        var port = ConfigServices.Port(draft);
-        var panel = await _db.Set<PanelEntity>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(row => row.Port == port, ct)
-            .ConfigureAwait(false);
+        if (!draft.WebSocket)
+        {
+            return null;
+        }
 
-        return panel is not null && panel.Path.Trim('/').Length == 0
-            ? ConfigResult.No(
-                ConfigOutcome.PortTaken,
-                "panel-path-needed",
-                $"the panel answers on TCP port {port} from the root, give it a path of its own to share the port")
-            : null;
+        var port = ConfigServices.Port(draft);
+        var path = ConfigServices.WebSocketPath(draft);
+        var panel = await _db.Set<PanelEntity>().AsNoTracking().FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (panel is not null && panel.Port == port && Same(panel.Path, path))
+        {
+            return Taken($"the panel answers under '/{path}/' on TCP port {port}");
+        }
+
+        var feed = await _db.Set<SubscriptionEntity>().AsNoTracking().FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (feed is null || !feed.IsEnabled || (feed.Separate && (panel is null || feed.Port != panel.Port || port != panel.Port)))
+        {
+            return null;
+        }
+
+        return Same(feed.Path, path) ? Taken($"the subscriptions answer under '/{path}/' on TCP port {port}") : null;
     }
+
+    private static bool Same(string path, string socket) =>
+        string.Equals(path.Trim('/'), socket, StringComparison.OrdinalIgnoreCase);
+
+    private static ConfigResult Taken(string message) =>
+        ConfigResult.No(ConfigOutcome.PortTaken, "websocket-path-taken", message);
 
     private static ServerConfig Read(ConfigEntity entity) => new()
     {
@@ -285,6 +327,7 @@ public sealed class ConfigStore
         Inbound = (ClientInbound)entity.Inbound,
         WebSocket = entity.WebSocket,
         ServicesPort = entity.ServicesPort,
+        WebSocketPath = entity.WebSocketPath,
         Blocked = Parts(entity.Blocked),
         PrivateKey = entity.PrivateKey,
         PublicKey = entity.PublicKey,
@@ -311,6 +354,7 @@ public sealed class ConfigStore
         entity.Inbound = (int)config.Inbound;
         entity.WebSocket = config.WebSocket;
         entity.ServicesPort = config.ServicesPort;
+        entity.WebSocketPath = config.WebSocketPath;
         entity.Blocked = string.Join(", ", config.Blocked);
         entity.PrivateKey = config.PrivateKey;
         entity.PublicKey = Curve25519.PublicOf(config.PrivateKey);

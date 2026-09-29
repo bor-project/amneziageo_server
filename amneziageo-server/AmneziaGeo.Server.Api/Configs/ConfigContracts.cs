@@ -53,6 +53,7 @@ public sealed record ConfigResponse(
     string Inbound,
     bool WebSocket,
     int ServicesPort,
+    string WebSocketPath,
     string[] Blocked,
     string PublicKey,
     string? PrivateKey,
@@ -83,7 +84,8 @@ public sealed record ConfigRequest(
     int? OfflineAfter = null,
     string? Inbound = null,
     bool? WebSocket = null,
-    int? ServicesPort = null);
+    int? ServicesPort = null,
+    string? WebSocketPath = null);
 
 /// <summary>
 /// What a request to turn an endpoint on or off carries.
@@ -141,6 +143,7 @@ public static class ConfigAnswers
         InboundName.Of(config.Inbound),
         config.WebSocket,
         config.ServicesPort,
+        Awg.Config.ConfigServices.WebSocketPath(config),
         [.. config.Blocked],
         config.PublicKey,
         secrets ? config.PrivateKey : null,
@@ -199,6 +202,7 @@ public static class ConfigAnswers
         Inbound = InboundName.Read(request.Inbound, ClientInbound.Off),
         WebSocket = request.WebSocket ?? false,
         ServicesPort = request.ServicesPort ?? 0,
+        WebSocketPath = (request.WebSocketPath ?? string.Empty).Trim().Trim('/'),
         Blocked = request.Blocked ?? [],
         PrivateKey = (request.PrivateKey ?? string.Empty).Trim(),
         PresharedKey = (request.PresharedKey ?? string.Empty).Trim(),

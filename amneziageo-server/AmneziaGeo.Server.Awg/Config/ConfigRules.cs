@@ -67,6 +67,11 @@ public static partial class ConfigRules
     public const int MaxSpecialLength = 1024;
 
     /// <summary>
+    /// The longest path the websocket of an endpoint comes under.
+    /// </summary>
+    public const int MaxWebSocketPathLength = 64;
+
+    /// <summary>
     /// Returns why the settings of an endpoint are unusable, or null when they hold.
     /// </summary>
     public static ConfigFault? Check(ServerConfig config) =>
@@ -74,6 +79,7 @@ public static partial class ConfigRules
         ?? CheckHost(config.Host)
         ?? CheckPort(config.ListenPort)
         ?? CheckServicesPort(config.ServicesPort)
+        ?? CheckWebSocketPath(config.WebSocketPath)
         ?? CheckRanges(config.Address, "bad-address", "the interface")
         ?? CheckRanges(config.AllowedIps, "bad-allowed", "the client")
         ?? CheckBlocked(config.Blocked)
@@ -292,6 +298,11 @@ public static partial class ConfigRules
 
     private static ConfigFault? CheckServicesPort(int port) =>
         port is >= 0 and <= 65535 ? null : Fault("bad-services-port", "the port of the services is outside 1 to 65535");
+
+    private static ConfigFault? CheckWebSocketPath(string path) =>
+        path.Length <= MaxWebSocketPathLength && path.All(letter => char.IsAsciiLetterOrDigit(letter) || letter is '-' or '_')
+            ? null
+            : Fault("bad-websocket-path", $"'{path}' is not a path the websocket comes under: one part of letters, digits, '-' and '_'");
 
     private static ConfigFault? CheckRanges(IReadOnlyList<string> ranges, string code, string owner)
     {

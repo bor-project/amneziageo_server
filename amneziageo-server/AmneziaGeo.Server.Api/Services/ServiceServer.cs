@@ -19,7 +19,8 @@ namespace AmneziaGeo.Server.Api.Services;
 /// <param name="WebSocket">Whether the endpoint takes the tunnel inside a websocket.</param>
 /// <param name="Front">The loopback port the websocket front of the endpoint listens on.</param>
 /// <param name="Target">The UDP port the front hands the tunnel to.</param>
-public sealed record ServiceEndpoint(long ConfigId, string Name, bool WebSocket, int Front, int Target);
+/// <param name="Path">The path the websocket of the endpoint comes under.</param>
+public sealed record ServiceEndpoint(long ConfigId, string Name, bool WebSocket, int Front, int Target, string Path);
 
 /// <summary>
 /// Where the services of the endpoints that share a TCP port answer.
@@ -30,11 +31,6 @@ public sealed record ServiceEndpoint(long ConfigId, string Name, bool WebSocket,
 /// <param name="Key">The key of the chain.</param>
 public sealed record ServicePoint(int Port, IReadOnlyList<ServiceEndpoint> Endpoints, string Chain, string Key)
 {
-    /// <summary>
-    /// Tells whether the port takes a tunnel inside a websocket.
-    /// </summary>
-    public bool WebSocket => Endpoints.Any(one => one.WebSocket);
-
     /// <summary>
     /// Names the endpoints the port serves.
     /// </summary>
@@ -89,7 +85,13 @@ public static class ServicePoints
                 continue;
             }
 
-            var endpoint = new ServiceEndpoint(config.Id, config.Name, config.WebSocket, ConfigServices.Front(config), config.ListenPort);
+            var endpoint = new ServiceEndpoint(
+                config.Id,
+                config.Name,
+                config.WebSocket,
+                ConfigServices.Front(config),
+                config.ListenPort,
+                ConfigServices.WebSocketPath(config));
             var held = points.FindIndex(point => point.Port == port);
             if (held < 0)
             {
@@ -293,7 +295,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 
         foreach (var endpoint in kept)
         {
-            var state = await _fronts.ApplyAsync(endpoint.Name, endpoint.Front, endpoint.Target, ct).ConfigureAwait(false);
+            var state = await _fronts.ApplyAsync(endpoint.Name, endpoint.Front, endpoint.Target, endpoint.Path, ct).ConfigureAwait(false);
             if (!state.IsRunning)
             {
                 _logger.LogWarning("the websocket front of {Name} is down: {Reason}", endpoint.Name, state.Message);

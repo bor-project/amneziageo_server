@@ -102,6 +102,7 @@ public static class Listening
             ?? (PanelStore.ServesOn(path, settings.Port) ? WebCertificate.MadeUp() : null);
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(settings);
+        builder.Services.AddSingleton(new PanelPlace(settings.Port, settings.Prefix, certificate is not null));
         builder.Services.AddSingleton(plan);
         builder.Services.AddSingleton(new PanelHealth(
             Health(plan, settings, certificate is not null),

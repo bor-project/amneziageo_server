@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.NetworkInformation;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -227,9 +228,9 @@ public static class PanelCommands
             return unread.Message;
         }
 
-        if (draft.Prefix.Length == 1 && await context.Configs.ServesAsync(draft.Port, ct).ConfigureAwait(false))
+        if (await context.Configs.SocketUnderAsync(draft.Port, draft.Path, ct).ConfigureAwait(false) is { } socket)
         {
-            return $"the services of an endpoint answer on TCP port {draft.Port.ToString(CultureInfo.InvariantCulture)}, give the panel a path of its own to share the port";
+            return $"the websocket of {socket.Name} comes under '/{ConfigServices.WebSocketPath(socket)}' on TCP port {draft.Port.ToString(CultureInfo.InvariantCulture)}";
         }
 
         var strange = draft.Listen.FirstOrDefault(address => !Carried(address));

@@ -3,6 +3,7 @@ using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Api.Updates;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 
@@ -55,13 +56,16 @@ public static class PanelEndpoints
 
     private static async Task<IResult> ReadAsync(
         PanelStore store,
+        ConfigStore configs,
         PanelSettings running,
+        PanelPlace answering,
         WebOptions options,
         CancellationToken ct)
     {
         var settings = await store.ReadAsync(ct).ConfigureAwait(false);
+        var secure = await SecureAsync(settings, configs, options, ct).ConfigureAwait(false);
 
-        return Results.Ok(PanelAnswers.Panel(settings, running, options));
+        return Results.Ok(PanelAnswers.Panel(settings, running, options, secure, answering));
     }
 
     private static async Task<IResult> NamesAsync(
@@ -89,6 +93,7 @@ public static class PanelEndpoints
         PanelStore store,
         ConfigStore configs,
         PanelSettings running,
+        PanelPlace answering,
         WebOptions options,
         FirewallApplier firewall,
         UpdateCenter updates,
@@ -105,12 +110,12 @@ public static class PanelEndpoints
             return Results.Json(new Failure(fault.Code, fault.Message), statusCode: StatusCodes.Status400BadRequest);
         }
 
-        if (draft.Prefix.Length == 1 && await configs.ServesAsync(draft.Port, ct).ConfigureAwait(false))
+        if (await configs.SocketUnderAsync(draft.Port, draft.Path, ct).ConfigureAwait(false) is { } socket)
         {
             return Results.Json(
                 new Failure(
-                    "panel-path-needed",
-                    $"the services of an endpoint answer on TCP port {draft.Port}, give the panel a path of its own to share the port"),
+                    "panel-path-taken",
+                    $"the websocket of {socket.Name} comes under '/{ConfigServices.WebSocketPath(socket)}' on TCP port {draft.Port}"),
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
@@ -127,8 +132,15 @@ public static class PanelEndpoints
             updates.Recheck();
         }
 
-        return Results.Ok(PanelAnswers.Panel(result.Record, running, options));
+        var secure = await SecureAsync(result.Record, configs, options, ct).ConfigureAwait(false);
+
+        return Results.Ok(PanelAnswers.Panel(result.Record, running, options, secure, answering));
     }
+
+    // Tells whether the panel speaks TLS once it starts under the settings: under their certificate, or under one made
+    // up on a port it shares with the services.
+    private static async Task<bool> SecureAsync(PanelSettings settings, ConfigStore configs, WebOptions options, CancellationToken ct) =>
+        Listening.Chain(options, settings).Length > 0 || await configs.ServesAsync(settings.Port, ct).ConfigureAwait(false);
 
     private static IResult Restart(IHostApplicationLifetime life, ILoggerFactory loggers)
     {

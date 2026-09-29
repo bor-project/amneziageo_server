@@ -37,7 +37,8 @@ public sealed record FeatureResponse(
 /// Arguments of the websocket feature.
 /// </summary>
 /// <param name="Port">The TCP port the websocket answers on.</param>
-public sealed record WebSocketFeature(int Port);
+/// <param name="Path">The path the websocket comes under.</param>
+public sealed record WebSocketFeature(int Port, string Path);
 
 /// <summary>
 /// Arguments of the routing feature.

@@ -120,6 +120,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
         {
             entity.Property(config => config.Name).HasMaxLength(ConfigRules.MaxNameLength);
             entity.Property(config => config.Host).HasMaxLength(ConfigRules.MaxHostLength);
+            entity.Property(config => config.WebSocketPath).HasMaxLength(ConfigRules.MaxWebSocketPathLength);
             entity.HasIndex(config => config.Name).IsUnique();
         });
 

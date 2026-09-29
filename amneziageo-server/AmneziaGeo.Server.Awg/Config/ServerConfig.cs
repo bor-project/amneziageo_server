@@ -224,6 +224,12 @@ public sealed record ServerConfig
     public int ServicesPort { get; init; }
 
     /// <summary>
+    /// The path the websocket of the tunnel comes under on the port of the services, empty for the one of the releases
+    /// before.
+    /// </summary>
+    public string WebSocketPath { get; init; } = string.Empty;
+
+    /// <summary>
     /// The private key of the interface, in base64.
     /// </summary>
     public string PrivateKey { get; init; } = string.Empty;
