@@ -9,7 +9,8 @@ and the routes they call are gathered in [The HTTP API](api.md).
 Accounts, roles and claims are kept by ASP.NET Core Identity over EF Core on SQLite: `AspNetUsers`,
 `AspNetRoles`, `AspNetUserRoles`, `AspNetRoleClaims`, `AspNetUserClaims`, beside the tables the server adds of
 its own (`Sessions`, `RefreshTokens`, `ApiTokens`, `AuditEntries`). The schema is carried by EF migrations in
-`AmneziaGeo.Server.Dal/Migrations` and applied on start.
+`AmneziaGeo.Server.Dal/Migrations` and applied on start. The audit trail keeps its latest 10000 records: each
+record past that lets the oldest one go.
 
 ## Roles and rights
 

@@ -1,3 +1,6 @@
+using AmneziaGeo.Server.Core.Diagnostics;
+using AmneziaGeo.Server.Dal;
+
 namespace AmneziaGeo.Server.Api.Diagnostics;
 
 /// <summary>
@@ -5,18 +8,21 @@ namespace AmneziaGeo.Server.Api.Diagnostics;
 /// </summary>
 public static class DiagnosticsServices
 {
-    private const int Capacity = 500;
-
     /// <summary>
-    /// Registers the journal of the panel as a log provider.
+    /// Registers the journal of the panel as a log provider, its file beside the database and the service that fills it.
     /// </summary>
     public static WebApplicationBuilder AddJournal(this WebApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var journal = new PanelJournal(Capacity, TimeProvider.System);
+        var database = builder.Configuration["Database:Path"] is { Length: > 0 } set ? set : ServerDatabase.DefaultPath();
+        var journal = new PanelJournal(JournalDefaults.View, TimeProvider.System);
         builder.Logging.AddProvider(journal);
         builder.Services.AddSingleton(journal);
+        builder.Services.AddSingleton(new JournalRecords(JournalRecords.PathNear(database)));
+        builder.Services.AddSingleton(JournalLimits.From(builder.Configuration));
+        builder.Services.AddSingleton<JournalHost>();
+        builder.Services.AddHostedService(provider => provider.GetRequiredService<JournalHost>());
 
         return builder;
     }

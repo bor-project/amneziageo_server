@@ -11,8 +11,22 @@ panel.
 The versions of the panel and of the AmneziaWG module come from `/api/health` and `/api/overview`.
 
 The journal keeps what passes the `Logging` levels of `appsettings.json`: `Information` by default,
-`Warning` for ASP.NET Core and Entity Framework. It lives in memory and starts empty after a restart;
-journald keeps the whole log of the service.
+`Warning` for ASP.NET Core and Entity Framework. The page gets the latest 500 records the panel holds in
+memory. Every record also goes to `journal.db` beside the database of the panel: the code that logs only puts
+it in line, and the line goes to the file once a second in one transaction. After a restart the panel reads
+the latest 500 records back from the file, so the page shows what happened before it.
+
+The file keeps at most a hundred thousand records and 32 MB together with its write-ahead log. Past either
+limit the oldest records go: a tenth of the limit of records at once, or a tenth of the records at a time
+until the file fits. `Journal__MostRecords` and `Journal__MostBytes` in the environment of the panel set other
+limits, no lower than 1000 records and 1 MB. A record keeps at most 4000 characters of its message, 200 of
+its category and 1000 of its fault. At most 10000 records wait for the file; the ones past that stay on the
+page alone. The file is not copied by the backups. A panel that cannot open the file keeps its journal in
+memory and says so in it.
+
+What the process prints goes where the host keeps it: to journald under systemd (by default at most 10% of
+its file system and not over 4 GB), to the log of the container under Docker (`json-file`, 10 MB in 3 files,
+as the compose file of the menu and `deploy/docker/compose.yaml` set it).
 
 ## The connection log
 

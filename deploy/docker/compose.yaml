@@ -26,6 +26,11 @@ services:
       - settings:/etc/amneziageo-server
       - /etc/amnezia/amneziawg:/etc/amnezia/amneziawg
       - /var/run/docker.sock:/var/run/docker.sock
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     restart: unless-stopped
 
 volumes:
