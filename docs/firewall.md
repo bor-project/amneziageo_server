@@ -62,8 +62,11 @@ an endpoint that is turned on under its connection address.
 
 Where the host carries ufw, the panel reads `ufw status verbose`: the first rule that names the
 port decides, the policy for what comes in otherwise. Where it does not, as in a container, the panel reads the
-chains ufw leaves in nftables, `ufw-user-input` and the policy of `INPUT`. A host with neither tells nothing, and
-nothing is named.
+chains ufw leaves in nftables, `ufw-user-input` and the policy of `INPUT`. Where iptables before 1.8.9 wrote the
+rules of ufw, as on Ubuntu 22.04 and Debian 11, they stay matches of iptables in nftables, and nft shows their ports
+only with the extensions of iptables beside it, which the image carries. A rule nft still shows as `xt match "tcp"`
+without the port leaves a port that no rule ahead of it names unknown, and nothing is named. A host with neither
+tells nothing, and nothing is named.
 
 `GET /api/firewall/port?port=<port>`, with `&protocol=udp` for a UDP port, takes the right `state:read` and answers
 `{"port":9443,"protocol":"tcp","state":"closed","engine":"ufw"}`; `state` is `open`, `closed` or `unknown`.

@@ -54,6 +54,19 @@ public sealed class FirewallPortTests
         }
         """;
 
+    private const string Unread = """
+        table ip filter {
+            chain ufw-user-input {
+                meta l4proto 6 xt match "tcp" xt match "comment" counter packets 5113 bytes 297269 accept
+                meta l4proto 17 xt match "multiport" counter packets 141 bytes 46285 accept
+                meta l4proto 6 xt match "tcp" counter packets 185090 bytes 10906097 accept
+                meta l4proto 17 xt match "udp" counter packets 166 bytes 156198 accept
+                meta l4proto 17 xt match "udp" counter packets 258 bytes 124263 accept
+                meta l4proto 6 xt match "tcp" counter packets 66058 bytes 3895472 accept
+            }
+        }
+        """;
+
     [Theory]
     [InlineData("tcp", 8443, PortState.Open)]
     [InlineData("tcp", 22, PortState.Open)]
@@ -121,6 +134,30 @@ public sealed class FirewallPortTests
         Assert.Equal(PortState.Open, PortState.OfChains(accepting, Rules, "tcp", 9443));
     }
 
+    [Theory]
+    [InlineData("udp", 51820)]
+    [InlineData("udp", 443)]
+    [InlineData("tcp", 443)]
+    [InlineData("tcp", 8443)]
+    [InlineData("tcp", 9443)]
+    public void ARuleWhosePortNftablesDoesNotShowLeavesThePortUnknown(string protocol, int port)
+    {
+        Assert.Equal(PortState.Unknown, PortState.OfChains(Input, Unread, protocol, port));
+    }
+
+    [Fact]
+    public void ARuleThatNamesThePortAheadOfOneWithoutAPortStillDecides()
+    {
+        var rules = Unread.Replace(
+            "chain ufw-user-input {",
+            "chain ufw-user-input {\n        tcp dport 8443 counter packets 3 bytes 180 accept\n        tcp dport 7000 counter packets 0 bytes 0 drop",
+            StringComparison.Ordinal);
+
+        Assert.Equal(PortState.Open, PortState.OfChains(Input, rules, "tcp", 8443));
+        Assert.Equal(PortState.Closed, PortState.OfChains(Input, rules, "tcp", 7000));
+        Assert.Equal(PortState.Unknown, PortState.OfChains(Input, rules, "tcp", 443));
+    }
+
     [Fact]
     public async Task TheHostAsksUfwWhereItHasUfwAndTheChainsOfNftablesElsewhere()
     {
@@ -137,5 +174,19 @@ public sealed class FirewallPortTests
         Assert.Equal(PortState.Closed, await new FirewallHost(bare, new Ledger(), string.Empty).StateAsync("tcp", 9443, CancellationToken.None));
         Assert.Equal(PortState.Unknown, await new FirewallHost(none, new Ledger(), string.Empty).StateAsync("tcp", 8443, CancellationToken.None));
         Assert.True(withUfw.Called("ufw status verbose"));
+    }
+
+    [Fact]
+    public async Task AHostWhoseRulesNftablesDoesNotShowTellsNothingOfItsPorts()
+    {
+        var tools = new Tools();
+        tools.Answers["nft list chain ip filter INPUT"] = new CommandResult(0, Input, string.Empty);
+        tools.Answers["nft list chain ip filter ufw-user-input"] = new CommandResult(0, Unread, "# Warning: XT match tcp not found\n");
+
+        var states = await new FirewallHost(tools, new Ledger(), string.Empty).StatesAsync(
+            [new FirewallPort("udp", 443, string.Empty), new FirewallPort("tcp", 443, string.Empty)],
+            CancellationToken.None);
+
+        Assert.Equal([PortState.Unknown, PortState.Unknown], states);
     }
 }

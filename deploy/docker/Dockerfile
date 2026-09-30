@@ -49,7 +49,7 @@ RUN --mount=type=cache,target=/root/.nuget/packages \
 # The layers go from those that change least to those every release changes, so an update pulls only the top ones.
 FROM mcr.microsoft.com/dotnet/aspnet:$DOTNET
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl docker-compose-v2 iproute2 nftables tini tzdata \
+ && apt-get install -y --no-install-recommends curl docker-compose-v2 iproute2 iptables nftables tini tzdata \
  && rm -rf /var/lib/apt/lists/* \
  && ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose \
  && ln -s /usr/local/share/amneziageo-server/amneziageo-server /usr/local/bin/amneziageo-server

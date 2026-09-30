@@ -80,7 +80,7 @@ public static partial class PortState
 
     /// <summary>
     /// Reads what the chains of ufw in nftables say of a port: the chain of the rules ufw was given, the policy of the
-    /// input chain otherwise.
+    /// input chain otherwise, unknown from a rule whose port nftables shows only as a match of iptables.
     /// </summary>
     public static string OfChains(string input, string rules, string protocol, int port)
     {
@@ -89,16 +89,21 @@ public static partial class PortState
 
         foreach (var line in rules.Split('\n', StringSplitOptions.TrimEntries))
         {
-            var match = Destination().Match(line);
-            if (!match.Success
-                || !string.Equals(match.Groups[1].Value, protocol, StringComparison.OrdinalIgnoreCase)
-                || !match.Groups[2].Value.Trim('{', '}', ' ').Split(',').Any(part => Within(part.Trim(), '-', port)))
+            var verdict = Verdict(line);
+            if (verdict.Length == 0)
             {
                 continue;
             }
 
-            var verdict = Verdict(line);
-            if (verdict.Length > 0)
+            var match = Destination().Match(line);
+            if (!match.Success && line.Contains("xt match", StringComparison.Ordinal))
+            {
+                return Unknown;
+            }
+
+            if (match.Success
+                && string.Equals(match.Groups[1].Value, protocol, StringComparison.OrdinalIgnoreCase)
+                && match.Groups[2].Value.Trim('{', '}', ' ').Split(',').Any(part => Within(part.Trim(), '-', port)))
             {
                 return verdict == "accept" ? Open : Closed;
             }
