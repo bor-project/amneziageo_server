@@ -20,15 +20,18 @@ public static class GuardRuleset
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(180);
 
     /// <summary>
+    /// The text that takes the table off the firewall.
+    /// </summary>
+    public const string Removal = "table inet " + TableName + "\ndelete table inet " + TableName + "\n";
+
+    /// <summary>
     /// Returns the table holding the addresses off the ports they were caught at.
     /// </summary>
     public static string Text(IReadOnlyList<GuardHold> holds)
     {
         ArgumentNullException.ThrowIfNull(holds);
 
-        var text = new StringBuilder();
-        text.Append("table inet ").Append(TableName).Append('\n');
-        text.Append("delete table inet ").Append(TableName).Append('\n');
+        var text = new StringBuilder(Removal);
         text.Append("table inet ").Append(TableName).Append(" {\n");
         Set(text, "cut4", "ipv4_addr", holds.Where(hold => hold.Source.AddressFamily == AddressFamily.InterNetwork));
         Set(text, "cut6", "ipv6_addr", holds.Where(hold => hold.Source.AddressFamily == AddressFamily.InterNetworkV6));

@@ -7,6 +7,7 @@ using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Routing.Guard;
 using AmneziaGeo.Server.Routing.Traffic;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -59,24 +60,135 @@ public class DeviceTests
     {
         var guard = new PeerGuard();
 
-        var cuts = Watch(guard, ("10.99.1.2:40000", 0), ("10.99.3.2:40001", 4), ("10.99.3.2:40001", 8), ("10.99.3.2:40001", 12));
+        var cuts = Watch(
+            guard,
+            ("10.99.1.2:40000", 0, 0),
+            ("10.99.3.2:40001", 4, 3),
+            ("10.99.3.2:40001", 8, 3),
+            ("10.99.3.2:40001", 12, 3));
 
         Assert.Empty(cuts);
         Assert.Empty(guard.Holds());
     }
 
     [Fact]
-    public void ASecondDeviceIsCaughtOnceTheFirstSpeaksAgain()
+    public void ADeviceGoingBetweenTwoNetworksIsNotCut()
     {
         var guard = new PeerGuard();
 
         var cuts = Watch(
             guard,
-            ("10.99.1.2:40000", 0),
-            ("10.99.2.2:50000", 2),
-            ("10.99.1.2:40000", 4),
-            ("10.99.2.2:50000", 6),
-            ("10.99.1.2:40000", 8));
+            ("10.99.1.2:40000", 0, 0),
+            ("10.99.2.2:50000", 2, 0),
+            ("10.99.1.2:40000", 4, 0),
+            ("10.99.2.2:50000", 6, 0),
+            ("10.99.1.2:40000", 8, 0));
+
+        Assert.Empty(cuts);
+        Assert.Empty(guard.Holds());
+    }
+
+    [Fact]
+    public void ADeviceGoingBetweenTwoNetworksThroughItsRekeysIsNotCut()
+    {
+        var guard = new PeerGuard();
+
+        var cuts = Watch(
+            guard,
+            ("10.99.1.2:40000", 0, 0),
+            ("10.99.2.2:50000", 20, 0),
+            ("10.99.1.2:40000", 40, 0),
+            ("10.99.2.2:50000", 130, 120),
+            ("10.99.1.2:40000", 150, 120),
+            ("10.99.2.2:50000", 250, 240),
+            ("10.99.1.2:40000", 270, 240),
+            ("10.99.2.2:50000", 370, 360),
+            ("10.99.1.2:40000", 390, 360),
+            ("10.99.2.2:50000", 490, 480),
+            ("10.99.1.2:40000", 510, 480));
+
+        Assert.Empty(cuts);
+        Assert.Empty(guard.Holds());
+    }
+
+    [Fact]
+    public void ADeviceOnAnInterfaceThatRenewsItsKeysOftenIsNotCut()
+    {
+        var guard = new PeerGuard();
+        var cuts = new List<GuardCut>();
+
+        for (var second = 0; second <= 300; second += 5)
+        {
+            var point = second / 10 % 2 == 0 ? "10.99.1.2:40000" : "10.99.2.2:50000";
+            var device = Device(point, (ulong)second + 1, Start.AddSeconds(second / 25 * 25), 25);
+            cuts.AddRange(guard.Observe(device, Quiet, Start.AddSeconds(second)));
+        }
+
+        Assert.Empty(cuts);
+        Assert.Empty(guard.Holds());
+    }
+
+    [Fact]
+    public void ASecondDeviceIsCaughtOnAnInterfaceThatRenewsItsKeysOften()
+    {
+        var guard = new PeerGuard();
+        var cuts = new List<GuardCut>();
+
+        foreach (var (point, seconds, shake) in TwoRounds("10.99.1.2:40000", "10.99.2.2:50000", 0))
+        {
+            var device = Device(point, (ulong)(seconds * 10) + 1, Start.AddSeconds(shake), 25);
+            cuts.AddRange(guard.Observe(device, Quiet, Start.AddSeconds(seconds)));
+        }
+
+        var cut = Assert.Single(cuts);
+        Assert.Equal(IPEndPoint.Parse("10.99.1.2:40000"), cut.First);
+    }
+
+    [Fact]
+    public void ASecondDeviceComingAfterTheScheduleIsStillTheSecond()
+    {
+        var guard = new PeerGuard();
+
+        var cuts = Watch(
+            guard,
+            ("10.99.1.2:40000", 0, 0),
+            ("10.99.2.2:50000", 200, 200),
+            ("10.99.1.2:40000", 216, 215),
+            ("10.99.2.2:50000", 230, 230),
+            ("10.99.1.2:40000", 246, 245));
+
+        var cut = Assert.Single(cuts);
+        Assert.Equal(IPEndPoint.Parse("10.99.1.2:40000"), cut.First);
+        Assert.Equal([IPEndPoint.Parse("10.99.2.2:50000")], cut.Cut);
+    }
+
+    [Fact]
+    public void OneRoundOfHandshakesCutsNothing()
+    {
+        var guard = new PeerGuard();
+
+        var cuts = Watch(guard, ("10.99.1.2:40000", 0, 0), ("10.99.2.2:50000", 10, 10), ("10.99.1.2:40000", 26, 25));
+
+        Assert.Empty(cuts);
+        Assert.Empty(guard.Holds());
+    }
+
+    [Fact]
+    public void ASecondDeviceIsCaughtAfterTwoRoundsOfHandshakes()
+    {
+        var guard = new PeerGuard();
+
+        var cuts = Watch(
+            guard,
+            ("10.99.1.2:40000", 0, 0),
+            ("10.99.2.2:50000", 10, 10),
+            ("10.99.1.2:40000", 12, 10),
+            ("10.99.2.2:50000", 14, 10),
+            ("10.99.1.2:40000", 26, 25),
+            ("10.99.2.2:50000", 28, 25),
+            ("10.99.2.2:50000", 40, 40),
+            ("10.99.1.2:40000", 42, 40),
+            ("10.99.1.2:40000", 56, 55));
 
         var cut = Assert.Single(cuts);
         Assert.Equal(IPEndPoint.Parse("10.99.1.2:40000"), cut.First);
@@ -86,11 +198,17 @@ public class DeviceTests
     }
 
     [Fact]
-    public void AnAddressComingBackAfterTheSilenceCutsNothing()
+    public void RoundsFartherApartThanTheMemoryCutNothing()
     {
         var guard = new PeerGuard();
 
-        var cuts = Watch(guard, ("10.99.1.2:40000", 0), ("10.99.2.2:50000", 2), ("10.99.1.2:40000", 70));
+        var cuts = Watch(
+            guard,
+            ("10.99.1.2:40000", 0, 0),
+            ("10.99.2.2:50000", 100, 100),
+            ("10.99.1.2:40000", 200, 200),
+            ("10.99.2.2:50000", 300, 300),
+            ("10.99.1.2:40000", 400, 400));
 
         Assert.Empty(cuts);
     }
@@ -99,11 +217,11 @@ public class DeviceTests
     public void TheCutIsLiftedWhenTheKeptDeviceFallsSilent()
     {
         var guard = new PeerGuard();
-        Watch(guard, ("10.99.1.2:40000", 0), ("10.99.2.2:50000", 2), ("10.99.1.2:40000", 4));
+        Watch(guard, TwoRounds("10.99.1.2:40000", "10.99.2.2:50000", 0));
 
-        guard.Observe(Device("10.99.1.2:40000", 1000), Quiet, Start.AddSeconds(30));
+        guard.Observe(Device("10.99.1.2:40000", 1000, Start.AddSeconds(55)), Quiet, Start.AddSeconds(70));
         var held = guard.Holds();
-        guard.Observe(Device("10.99.1.2:40000", 1000), Quiet, Start.AddSeconds(100));
+        guard.Observe(Device("10.99.1.2:40000", 1000, Start.AddSeconds(55)), Quiet, Start.AddSeconds(150));
 
         Assert.Single(held);
         Assert.Empty(guard.Holds());
@@ -113,13 +231,83 @@ public class DeviceTests
     public void AThirdAddressComingBetweenIsCutToo()
     {
         var guard = new PeerGuard();
-        Watch(guard, ("10.99.1.2:40000", 0), ("10.99.2.2:50000", 2), ("10.99.1.2:40000", 4));
+        Watch(guard, TwoRounds("10.99.1.2:40000", "10.99.2.2:50000", 0));
 
-        var cuts = Watch(guard, ("10.99.4.2:60000", 10), ("10.99.1.2:40000", 12), ("10.99.4.2:60000", 14), ("10.99.1.2:40000", 16));
+        var cuts = Watch(guard, TwoRounds("10.99.1.2:40000", "10.99.4.2:60000", 60)[1..]);
 
         var cut = Assert.Single(cuts);
         Assert.Equal(IPEndPoint.Parse("10.99.1.2:40000"), cut.First);
         Assert.Equal(2, guard.Holds().Count);
+    }
+
+    [Fact]
+    public void ADeviceTakingAnotherPortKeepsItsTurns()
+    {
+        var guard = new PeerGuard();
+
+        var cuts = Watch(
+            guard,
+            ("10.99.1.2:40000", 0, 0),
+            ("10.99.2.2:50000", 10, 10),
+            ("10.99.1.2:40001", 26, 25),
+            ("10.99.2.2:50000", 40, 40),
+            ("10.99.1.2:40002", 56, 55));
+
+        var cut = Assert.Single(cuts);
+        Assert.Equal(IPEndPoint.Parse("10.99.1.2:40002"), cut.First);
+        Assert.Equal([new GuardHold(IPEndPoint.Parse("10.99.2.2:50000"), 51820)], guard.Holds());
+    }
+
+    [Fact]
+    public void ADeviceRaisingItsSessionAgainOnOneNetworkIsNotCut()
+    {
+        var guard = new PeerGuard();
+
+        var cuts = Watch(
+            guard,
+            ("10.99.1.2:40000", 0, 0),
+            ("10.99.2.2:50000", 10, 10),
+            ("10.99.1.2:40001", 26, 25),
+            ("10.99.1.2:40002", 40, 40),
+            ("10.99.1.2:40003", 56, 55));
+
+        Assert.Empty(cuts);
+        Assert.Empty(guard.Holds());
+    }
+
+    [Fact]
+    public void TwoDevicesBehindOneRouterAreToldApartByThePort()
+    {
+        var guard = new PeerGuard();
+
+        var cuts = Watch(guard, TwoRounds("10.99.1.2:40000", "10.99.1.2:50000", 0));
+
+        var cut = Assert.Single(cuts);
+        Assert.Equal(IPEndPoint.Parse("10.99.1.2:40000"), cut.First);
+        Assert.Equal([new GuardHold(IPEndPoint.Parse("10.99.1.2:50000"), 51820)], guard.Holds());
+    }
+
+    [Fact]
+    public void TheFrontOfWebSocketIsNotCut()
+    {
+        var guard = new PeerGuard();
+
+        var cuts = Watch(guard, TwoRounds("127.0.0.1:41000", "127.0.0.1:42000", 0));
+
+        Assert.Empty(cuts);
+        Assert.Empty(guard.Holds());
+    }
+
+    [Fact]
+    public void ASecondDeviceIsCutWhileTheFirstComesThroughTheFront()
+    {
+        var guard = new PeerGuard();
+
+        var cuts = Watch(guard, TwoRounds("127.0.0.1:41000", "10.99.2.2:50000", 0));
+
+        var cut = Assert.Single(cuts);
+        Assert.Equal(IPEndPoint.Parse("127.0.0.1:41000"), cut.First);
+        Assert.Equal([new GuardHold(IPEndPoint.Parse("10.99.2.2:50000"), 51820)], guard.Holds());
     }
 
     [Fact]
@@ -184,6 +372,78 @@ public class DeviceTests
     }
 
     [Fact]
+    public void TheGuardIsOffUnlessItIsAskedFor()
+    {
+        Assert.False(new GuardOptions().IsEnabled);
+    }
+
+    [Fact]
+    public async Task AGuardThatIsOffCutsNoSecondDevice()
+    {
+        using var bench = new Bench();
+        await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), CancellationToken.None);
+        var kernel = new Kernel();
+        var ledger = new Ledger();
+        var guard = Guard(bench, kernel, ledger, new GuardOptions());
+
+        await WatchAsync(bench, guard, kernel, TwoRounds("10.99.1.2:40000", "10.99.2.2:50000", 0));
+
+        Assert.Empty(kernel.Updates);
+        Assert.Empty(guard.Cut("awg1", Key));
+        Assert.DoesNotContain("elements", ledger.Ruleset, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AGuardThatIsOffTakesItsTableOffTheFirewallOnce()
+    {
+        using var bench = new Bench();
+        await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), CancellationToken.None);
+        var kernel = new Kernel();
+        var ledger = new Ledger();
+        var guard = Guard(bench, kernel, ledger, new GuardOptions { IsEnabled = false });
+
+        await WatchAsync(bench, guard, kernel, TwoRounds("10.99.1.2:40000", "10.99.2.2:50000", 0));
+
+        Assert.Contains("delete table inet amneziageo_guard", ledger.Ruleset, StringComparison.Ordinal);
+        Assert.DoesNotContain("chain", ledger.Ruleset, StringComparison.Ordinal);
+        Assert.Single(ledger.Steps, step => step == "firewall");
+    }
+
+    [Fact]
+    public async Task AGuardThatIsOffStillHearsWhoIsOnline()
+    {
+        using var bench = new Bench();
+        var added = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), CancellationToken.None);
+        var kernel = new Kernel();
+        var guard = Guard(bench, kernel, new Ledger(), new GuardOptions { IsEnabled = false });
+
+        await WatchAsync(bench, guard, kernel, ("10.99.1.2:40000", 0, 0), ("10.99.1.2:40000", 30, 0));
+        var online = guard.Online(added.Record!, Key);
+        bench.Clock.Pass(TimeSpan.FromSeconds(61));
+
+        Assert.True(online);
+        Assert.False(guard.Online(added.Record!, Key));
+    }
+
+    [Fact]
+    public async Task AGuardThatIsOnCutsTheSecondDeviceAndLaysThePeerAnew()
+    {
+        using var bench = new Bench();
+        await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), CancellationToken.None);
+        var kernel = new Kernel();
+        var ledger = new Ledger();
+        var guard = Guard(bench, kernel, ledger, new GuardOptions { IsEnabled = true });
+
+        await WatchAsync(bench, guard, kernel, TwoRounds("10.99.1.2:40000", "10.99.2.2:50000", 0));
+
+        Assert.Equal(["10.99.2.2:50000"], guard.Cut("awg1", Key));
+        Assert.Contains("10.99.2.2 . 50000 . 51820", ledger.Ruleset, StringComparison.Ordinal);
+        Assert.Equal(2, kernel.Updates.Count);
+        Assert.True(kernel.Updates[0].Peers[0].Remove);
+        Assert.Equal(IPEndPoint.Parse("10.99.1.2:40000"), kernel.Updates[1].Peers[0].Endpoint);
+    }
+
+    [Fact]
     public void ASecondDeviceIsRefusedWhileTheFirstHoldsTheConfiguration()
     {
         var holds = new DeviceHolds();
@@ -216,21 +476,49 @@ public class DeviceTests
         Assert.True(free.IsHeld);
     }
 
-    private static List<GuardCut> Watch(PeerGuard guard, params (string Point, int Seconds)[] steps)
+    private static (string Point, int Seconds, int Shake)[] TwoRounds(string first, string second, int from) =>
+    [
+        (first, from, from),
+        (second, from + 10, from + 10),
+        (first, from + 26, from + 25),
+        (second, from + 40, from + 40),
+        (first, from + 56, from + 55),
+    ];
+
+    private static List<GuardCut> Watch(PeerGuard guard, params (string Point, int Seconds, int Shake)[] steps)
     {
         var cuts = new List<GuardCut>();
-        foreach (var (point, seconds) in steps)
+        foreach (var (point, seconds, shake) in steps)
         {
-            cuts.AddRange(guard.Observe(Device(point, (ulong)(seconds * 10) + 1), Quiet, Start.AddSeconds(seconds)));
+            var device = Device(point, (ulong)(seconds * 10) + 1, Start.AddSeconds(shake));
+            cuts.AddRange(guard.Observe(device, Quiet, Start.AddSeconds(seconds)));
         }
 
         return cuts;
     }
 
-    private static AwgDevice Device(string point, ulong rx, DateTimeOffset? handshake = null) => new()
+    private static ClientGuard Guard(Bench bench, Kernel kernel, Ledger ledger, GuardOptions options) =>
+        new(bench.Scopes, kernel, ledger, options, bench.Clock, NullLogger<ClientGuard>.Instance);
+
+    private static async Task WatchAsync(
+        Bench bench,
+        ClientGuard guard,
+        Kernel kernel,
+        params (string Point, int Seconds, int Shake)[] steps)
+    {
+        foreach (var (point, seconds, shake) in steps)
+        {
+            kernel.Hold(Device(point, (ulong)(seconds * 10) + 1, Start.AddSeconds(shake)));
+            bench.Clock.Now = Start.AddSeconds(seconds);
+            await guard.LookAsync(CancellationToken.None);
+        }
+    }
+
+    private static AwgDevice Device(string point, ulong rx, DateTimeOffset? handshake = null, uint rekey = 0) => new()
     {
         Name = "awg1",
         ListenPort = 51820,
+        Obfuscation = new AwgObfuscation { RekeyAfterTime = new AwgRange(rekey) },
         Peers = [new AwgPeer { PublicKey = Key, Endpoint = IPEndPoint.Parse(point), RxBytes = rx, LastHandshake = handshake }],
     };
 }

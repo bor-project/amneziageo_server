@@ -20,11 +20,28 @@ public sealed record GuardCut(string Interface, AwgPeer Peer, IPEndPoint First, 
 public sealed record GuardHold(IPEndPoint Source, ushort Port);
 
 /// <summary>
-/// Catches the peers whose address comes back to a device that is still sending and keeps the second devices cut off.
+/// Hears the peers and, unless it is told only to hear, catches the ones two devices take from each other handshake
+/// by handshake and keeps the second devices cut off.
 /// </summary>
 public sealed class PeerGuard
 {
+    private const int Rounds = 2;
+
+    private const uint Rekey = 120;
+
+    private static readonly TimeSpan Memory = TimeSpan.FromSeconds(180);
+
     private readonly Dictionary<string, Track> _tracks = new(StringComparer.Ordinal);
+
+    private readonly bool _cuts;
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public PeerGuard(bool cuts = true)
+    {
+        _cuts = cuts;
+    }
 
     /// <summary>
     /// Takes the peers an interface carries now and returns the ones just caught carrying a second device, a device
@@ -46,7 +63,8 @@ public sealed class PeerGuard
                 _tracks[key] = track;
             }
 
-            if (Step(device, peer, track, quiet, now) is { } cut)
+            Hear(peer, track, now);
+            if (_cuts && Step(device, peer, track, quiet, now) is { } cut)
             {
                 caught.Add(cut);
             }
@@ -86,37 +104,60 @@ public sealed class PeerGuard
     public DateTimeOffset? Heard(string name, string publicKey) =>
         _tracks.TryGetValue(Key(name, publicKey), out var track) ? track.HeardAt : null;
 
-    private static GuardCut? Step(AwgDevice device, AwgPeer peer, Track track, TimeSpan quiet, DateTimeOffset now)
+    private static void Hear(AwgPeer peer, Track track, DateTimeOffset now)
     {
-        track.Port = device.ListenPort;
         if (peer.RxBytes != track.Rx)
         {
             track.Rx = peer.RxBytes;
             track.HeardAt = now;
         }
+    }
 
+    private static GuardCut? Step(AwgDevice device, AwgPeer peer, Track track, TimeSpan quiet, DateTimeOffset now)
+    {
+        track.Port = device.ListenPort;
         if (track.Cut.Count > 0 && Silent(track, quiet, now))
         {
             track.Cut.Clear();
-            track.Changes.Clear();
+            track.Turns.Clear();
         }
 
-        if (Plain(peer.Endpoint) is { } point && (track.Changes.Count == 0 || !track.Changes[^1].Point.Equals(point)))
-        {
-            track.Changes.Add(new Change(now, point));
-        }
-
-        while (track.Changes.Count > 1 && now - track.Changes[1].At > quiet)
-        {
-            track.Changes.RemoveAt(0);
-        }
-
-        if (Returned(track.Changes) is not { } flap)
+        if (Plain(peer.Endpoint) is not { } point || peer.LastHandshake is not { } shake)
         {
             return null;
         }
 
-        var fresh = flap.Rest.Where(point => !track.Cut.Contains(point)).ToArray();
+        if (track.Turns.Count == 0)
+        {
+            track.Turns.Add(new Turn(now, point, shake));
+        }
+        else if (shake - track.Turns[^1].Shake >= Schedule(device))
+        {
+            var before = track.Turns[^1];
+            track.Turns.Clear();
+            if (!before.Point.Equals(point))
+            {
+                track.Turns.Add(before);
+            }
+
+            track.Turns.Add(new Turn(now, point, shake));
+        }
+        else if (!track.Turns[^1].Point.Equals(point) && shake > track.Turns[^1].Shake)
+        {
+            track.Turns.Add(new Turn(now, point, shake));
+        }
+
+        while (track.Turns.Count > 1 && now - track.Turns[1].At > Memory)
+        {
+            track.Turns.RemoveAt(0);
+        }
+
+        if (Returned(track.Turns) is not { } flap)
+        {
+            return null;
+        }
+
+        var fresh = flap.Rest.Where(one => !track.Cut.Contains(one)).ToArray();
         if (fresh.Length == 0)
         {
             return null;
@@ -124,28 +165,40 @@ public sealed class PeerGuard
 
         track.Cut.Remove(flap.First);
         track.Cut.AddRange(fresh);
-        track.Changes.Clear();
-        track.Changes.Add(new Change(now, flap.First));
+        track.Turns.Clear();
+        track.Turns.Add(new Turn(now, flap.First, shake));
 
         return new GuardCut(device.Name, peer, flap.First, [.. track.Cut]);
     }
 
-    private static Flap? Returned(IReadOnlyList<Change> changes)
+    private static Flap? Returned(IReadOnlyList<Turn> turns)
     {
-        if (changes.Count < 3)
+        var back = turns[^1].Point;
+        var apart = turns.Any(turn => !turn.Point.Address.Equals(back.Address));
+        var taken = turns
+            .Where((turn, index) => Same(turn.Point) && (index == 0 || !Same(turns[index - 1].Point)))
+            .Count();
+        if (taken <= Rounds)
         {
             return null;
         }
 
-        var back = changes[^1].Point;
-        if (!changes.Take(changes.Count - 2).Any(change => change.Point.Equals(back)))
-        {
-            return null;
-        }
-
-        var rest = changes.Select(change => change.Point).Where(point => !point.Equals(back)).Distinct().ToArray();
+        var rest = turns
+            .Select(turn => turn.Point)
+            .Where(point => !Same(point) && !IPAddress.IsLoopback(point.Address))
+            .Distinct()
+            .ToArray();
 
         return rest.Length == 0 ? null : new Flap(back, rest);
+
+        bool Same(IPEndPoint point) => apart ? point.Address.Equals(back.Address) : point.Equals(back);
+    }
+
+    private static TimeSpan Schedule(AwgDevice device)
+    {
+        var rekey = device.Obfuscation.RekeyAfterTime;
+
+        return TimeSpan.FromSeconds(rekey.IsZero ? Rekey : rekey.Low);
     }
 
     private static bool Silent(Track track, TimeSpan quiet, DateTimeOffset now) =>
@@ -163,7 +216,7 @@ public sealed class PeerGuard
 
     private static string Key(string name, string publicKey) => name + "/" + publicKey;
 
-    private sealed record Change(DateTimeOffset At, IPEndPoint Point);
+    private sealed record Turn(DateTimeOffset At, IPEndPoint Point, DateTimeOffset Shake);
 
     private sealed record Flap(IPEndPoint First, IReadOnlyList<IPEndPoint> Rest);
 
@@ -175,7 +228,7 @@ public sealed class PeerGuard
 
         public DateTimeOffset? HeardAt { get; set; }
 
-        public List<Change> Changes { get; } = [];
+        public List<Turn> Turns { get; } = [];
 
         public List<IPEndPoint> Cut { get; } = [];
     }

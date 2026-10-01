@@ -23,15 +23,27 @@ never serves two devices at once: every device of a person takes a client of its
 Every packet of a device, the keepalive included, adds to the counter of its peer and brings the address of the
 peer back to it. **Client online for** of the interface, 60 seconds by default, is how long after its last
 packet a device counts as online; it takes 10 to 3600 seconds and not less than two keepalive intervals, so a
-device that keeps its keepalive on does not drop out between two of them. The list of clients shows a client as
-online by it; without the guard, by a handshake within three minutes.
+device that keeps its keepalive on does not drop out between two of them. The panel reads the peers of the
+interfaces every two seconds, and the list of clients shows a client as online by it; a panel that cannot read
+the interfaces shows it by a handshake within three minutes.
 
 ## The second device
 
-The panel reads the peers of the interfaces every two seconds. When the address of a peer moves to a new one and
-the old address sends again within **Client online for**, the old device is still online and the new one is a
-second device. A device moving from one network to another changes the address once and does not come back. The
-old address is kept, the others are cut off:
+The guard is off unless `Guard:IsEnabled` is `true` (the variable `Guard__IsEnabled`). Off, the panel only hears
+the peers for the list of clients: it cuts nothing off, lays no peer anew and takes the table an earlier run left
+off the firewall, so two devices with one key go on as in the table above. The rest of this section is the guard
+that is on.
+
+A device that goes from one network to another keeps its session: the address of its peer changes and its
+handshake does not, however often it comes back, so the guard leaves it alone. Two devices with one key take the
+session from each other, and each gets it back only by a handshake of its own.
+
+A turn is an address that takes the peer under a handshake that came sooner after the one before than the
+interface renews its keys (**Rekey after**, 120 seconds unless set); a handshake on that schedule belongs to one
+device and starts the count over. When a device takes its turn back for the second time within three minutes,
+the peer carries two devices; with the 15 seconds above that is 45 to 60 seconds after the second one came. A
+device that took another source port in between keeps its turns as long as the other one comes from another
+address. The device whose turn it is stays, the others are cut off:
 
 - the firewall drops what they send to the port of the interface, in the table `inet amneziageo_guard`, by
   address, source port and the port of the interface, so another device behind the same router is not touched;
@@ -39,23 +51,29 @@ old address is kept, the others are cut off:
   device gets its session back at once, and the keepalive returns to what the peer had;
 - the list of clients shows the address that is cut off.
 
+An address of the host itself is never cut off: a client that comes through WebSocket is seen at the loopback,
+where its port goes to another client later. A second device that takes another source port with every handshake
+comes in again each time, since the cut names the port it had. On an interface whose **Rekey after** is shorter
+than those 15 seconds every handshake is on the schedule, and the guard cuts nothing.
+
 The cut lasts while the kept device is online: once it stays silent longer than **Client online for**, the cut
 is lifted and the next device gets in.
 The firewall holds an address for three minutes on its own, so a panel that stops leaves nothing behind for
 long. Laying the peer anew starts the counters of the interface over.
 
 On the stand, with **Client online for** at 60 seconds, a second device with the configuration of the first was
-cut off 3 seconds after it came and the first one lost 2.4 seconds; once the first left, the cut was lifted
-63 seconds later and the second one got in a second after.
+cut off 48 seconds after it came, and before that each of the two fell silent for 15 seconds at a time; once the
+first left, the cut was lifted 59 seconds later and the second one got in 4 seconds after. A device that went
+between two networks every 10 seconds for three minutes kept its session: one of its 818 echoes was lost.
 
 The guard reads the interfaces and changes the firewall, so it works under root; without the rights it says so
-once in the log and stays out. `Guard:IsEnabled` set to `false` turns it off.
+once in the log and stays out.
 
 ## What an application can do
 
 An application that knows these routes tells the second device why it is not let in, instead of leaving it
 without a handshake. The application of AmneziaGeo does not follow them yet: it sends neither `X-Hwid` nor the
-hold, so a second device of it meets the firewall guard above alone. The contract:
+hold, so a second device of it meets the firewall guard above alone, where that guard is on. The contract:
 
 1. Every request to the subscription carries `X-Hwid`, a name of the installation that does not change, up to
    128 characters; a random one the application keeps will do.
@@ -75,4 +93,4 @@ hold, so a second device of it meets the firewall guard above alone. The contrac
 
 A hold lasts 150 seconds unless it is repeated, and only the device that holds it lets it go. The holds live in
 the memory of the panel, a restart forgets them. The panel answers from the holds alone: a configuration no
-application reports stays under the firewall guard above.
+application reports stays under the firewall guard above, where that guard is on.

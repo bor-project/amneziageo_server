@@ -18,13 +18,14 @@ public sealed class GuardOptions
     public const string Section = "Guard";
 
     /// <summary>
-    /// Whether the guard watches the interfaces.
+    /// Whether the guard cuts the second devices off.
     /// </summary>
-    public bool IsEnabled { get; set; } = true;
+    public bool IsEnabled { get; set; }
 }
 
 /// <summary>
-/// Watches the peers of the endpoints and cuts off a second device that shares the configuration of a first one.
+/// Hears the peers of the endpoints and, where the guard is on, cuts off a second device that shares the
+/// configuration of a first one.
 /// </summary>
 public sealed class ClientGuard : BackgroundService
 {
@@ -50,7 +51,7 @@ public sealed class ClientGuard : BackgroundService
 
     private readonly ILogger<ClientGuard> _logger;
 
-    private readonly PeerGuard _guard = new();
+    private readonly PeerGuard _guard;
 
     private readonly Lock _sync = new();
 
@@ -67,6 +68,8 @@ public sealed class ClientGuard : BackgroundService
     private bool _blind;
 
     private bool _refused;
+
+    private bool _cleared;
 
     /// <summary>
     /// ctor
@@ -85,6 +88,7 @@ public sealed class ClientGuard : BackgroundService
         _options = options;
         _time = time;
         _logger = logger;
+        _guard = new PeerGuard(options.IsEnabled);
     }
 
     /// <summary>
@@ -115,7 +119,8 @@ public sealed class ClientGuard : BackgroundService
     }
 
     /// <summary>
-    /// Reads the interfaces once, cuts off the second devices it catches and keeps the firewall level with them.
+    /// Reads the interfaces once and, where the guard is on, cuts off the second devices it catches and keeps the
+    /// firewall level with them.
     /// </summary>
     public async Task LookAsync(CancellationToken ct)
     {
@@ -141,6 +146,13 @@ public sealed class ClientGuard : BackgroundService
             }
         }
 
+        if (!_options.IsEnabled)
+        {
+            await ClearAsync(ct).ConfigureAwait(false);
+
+            return;
+        }
+
         await LayAsync(now, ct).ConfigureAwait(false);
         foreach (var cut in caught)
         {
@@ -153,11 +165,6 @@ public sealed class ClientGuard : BackgroundService
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.IsEnabled)
-        {
-            return;
-        }
-
         try
         {
             using var timer = new PeriodicTimer(Tick, _time);
@@ -194,6 +201,24 @@ public sealed class ClientGuard : BackgroundService
             }
 
             return null;
+        }
+    }
+
+    private async Task ClearAsync(CancellationToken ct)
+    {
+        if (_cleared)
+        {
+            return;
+        }
+
+        _cleared = true;
+        try
+        {
+            await _network.FirewallAsync(GuardRuleset.Removal, ct).ConfigureAwait(false);
+        }
+        catch (HostNetworkException ex)
+        {
+            _logger.LogDebug(ex, "the firewall kept the table of the guard");
         }
     }
 
