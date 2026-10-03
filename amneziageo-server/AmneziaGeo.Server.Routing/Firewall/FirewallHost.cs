@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Routing.Firewall;
@@ -17,6 +18,31 @@ public sealed record FirewallSync(string Engine, bool IsDone, string Message)
 }
 
 /// <summary>
+/// Whether the panel may change the firewall of the host, and what keeps it from doing so.
+/// </summary>
+/// <param name="Engine">What the panel holds the ports open with.</param>
+/// <param name="IsAble">Whether the panel may change the firewall.</param>
+/// <param name="Reason">What keeps the panel from it: no-rights or host-ufw, empty when nothing does.</param>
+/// <param name="Message">What the host answered when it refused.</param>
+public sealed record FirewallReach(string Engine, bool IsAble, string Reason, string Message)
+{
+    /// <summary>
+    /// The host does not let the panel change its firewall.
+    /// </summary>
+    public const string NoRights = "no-rights";
+
+    /// <summary>
+    /// The host runs a ufw the panel does not reach, and what that ufw drops the table of the panel does not let in.
+    /// </summary>
+    public const string HostUfw = "host-ufw";
+
+    /// <summary>
+    /// Returns the answer of a host whose firewall the panel may change.
+    /// </summary>
+    public static FirewallReach Able(string engine) => new(engine, true, string.Empty, string.Empty);
+}
+
+/// <summary>
 /// Holds the ports of the panel open in the firewall of the host.
 /// </summary>
 public sealed class FirewallHost
@@ -32,6 +58,11 @@ public sealed class FirewallHost
     public const string Table = "nft";
 
     private const string Nft = "nft";
+
+    private const string UserInput = "ufw-user-input";
+
+    private const string Unreached =
+        "the host runs ufw, which the panel does not reach from here, and what ufw drops the table of the panel does not let in";
 
     private static readonly string[] Places = ["/usr/sbin/ufw", "/sbin/ufw", "/usr/bin/ufw", "/bin/ufw"];
 
@@ -78,6 +109,84 @@ public sealed class FirewallHost
     }
 
     /// <summary>
+    /// Hands ports the panel holds open no longer over to the host, right before the plan that drops them is applied:
+    /// ufw takes the rule of the panel for each one again under a comment without its mark, so the port stays open as
+    /// a rule of the host that the panel never takes out. The table of the open ports keeps nothing.
+    /// </summary>
+    public async Task<FirewallSync> KeepAsync(IReadOnlyList<FirewallPort> ports, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(ports);
+
+        if (_tool.Length == 0 || ports.Count == 0)
+        {
+            return FirewallSync.Done(Engine);
+        }
+
+        try
+        {
+            var shown = await RunAsync(["show", "added"], ct).ConfigureAwait(false);
+            if (!shown.IsOk)
+            {
+                return new FirewallSync(Ufw, false, shown.Complaint);
+            }
+
+            foreach (var rule in UfwRules.Kept(ports, UfwRules.Read(shown.Output)))
+            {
+                var kept = await RunAsync(UfwRules.Add(rule), ct).ConfigureAwait(false);
+                if (!kept.IsOk)
+                {
+                    return new FirewallSync(Ufw, false, kept.Complaint);
+                }
+            }
+
+            return FirewallSync.Done(Ufw);
+        }
+        catch (Exception ex)
+            when (ex is HostNetworkException or IOException or UnauthorizedAccessException
+                or InvalidOperationException)
+        {
+            return new FirewallSync(Ufw, false, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Tells whether the panel may change the firewall of the host: ufw shows the rules it was given only to a caller
+    /// that may change them; where the host has no ufw of its own here, the chains of a ufw outside the reach of the
+    /// panel are looked for, and the table of the open ports has to pass a dry run.
+    /// </summary>
+    public async Task<FirewallReach> ReachAsync(CancellationToken ct)
+    {
+        try
+        {
+            if (_tool.Length > 0)
+            {
+                var shown = await RunAsync(["show", "added"], ct).ConfigureAwait(false);
+
+                return shown.IsOk
+                    ? FirewallReach.Able(Ufw)
+                    : new FirewallReach(Ufw, false, FirewallReach.NoRights, shown.Complaint);
+            }
+
+            var chain = await _commands.RunAsync(Nft, ["list", "chain", "ip", "filter", UserInput], null, ct)
+                .ConfigureAwait(false);
+            if (chain.IsOk)
+            {
+                return new FirewallReach(Table, false, FirewallReach.HostUfw, Unreached);
+            }
+
+            await _network.CheckFirewallAsync(OpenRuleset.Text(FirewallPlan.None), ct).ConfigureAwait(false);
+
+            return FirewallReach.Able(Table);
+        }
+        catch (Exception ex)
+            when (ex is HostNetworkException or IOException or UnauthorizedAccessException
+                or InvalidOperationException or Win32Exception)
+        {
+            return new FirewallReach(Engine, false, FirewallReach.NoRights, ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Tells whether the firewall of the host lets a port in from outside: open, closed or unknown.
     /// </summary>
     public async Task<string> StateAsync(string protocol, int port, CancellationToken ct) =>
@@ -103,7 +212,7 @@ public sealed class FirewallHost
         }
 
         var input = await _commands.RunAsync(Nft, ["list", "chain", "ip", "filter", "INPUT"], null, ct).ConfigureAwait(false);
-        var rules = await _commands.RunAsync(Nft, ["list", "chain", "ip", "filter", "ufw-user-input"], null, ct)
+        var rules = await _commands.RunAsync(Nft, ["list", "chain", "ip", "filter", UserInput], null, ct)
             .ConfigureAwait(false);
 
         return

@@ -53,6 +53,8 @@ for a token like any other route. The shapes of the answers are not in it; the p
 | geo sources | [geo.md](geo.md) |
 | services of an endpoint | [services.md](services.md) |
 | where the panel listens | [serving.md](serving.md) |
+| the ports in the firewall of the host | [firewall.md](firewall.md) |
+| backups of the database | [install.md](install.md#moving-to-another-server) |
 | diagnostics, the connection log | [diagnostics.md](diagnostics.md) |
 | the overview | [overview.md](overview.md) |
 | updates of the panel | [updates.md](updates.md) |

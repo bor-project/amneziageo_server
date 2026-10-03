@@ -5,7 +5,7 @@ import type { TextKey } from "@/i18n"
 export interface Item {
   to: string
   label: TextKey
-  about: TextKey
+  about?: TextKey
   icon: GlyphName
   scope: string
   add?: { to: string; scope: string }
@@ -23,7 +23,6 @@ export const interfaces: Item[] = [
   {
     to: "/interfaces",
     label: "tab.interfaces",
-    about: "about.interfaces",
     icon: "shield",
     scope: scopes.readState,
     add: { to: "/interfaces/new", scope: scopes.manageInterfaces },
@@ -35,7 +34,6 @@ export const clients: Item[] = [
   {
     to: "/clients",
     label: "tab.configs",
-    about: "about.clients",
     icon: "devices",
     scope: scopes.readState,
     add: { to: "/clients/new", scope: scopes.manageClients },
@@ -43,7 +41,6 @@ export const clients: Item[] = [
   {
     to: "/clients/templates",
     label: "tab.templates",
-    about: "about.templates",
     icon: "layout",
     scope: scopes.readState,
     add: { to: "/clients/templates/new", scope: scopes.manageClients },

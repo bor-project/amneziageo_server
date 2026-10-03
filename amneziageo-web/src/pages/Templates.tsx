@@ -1,4 +1,6 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
+import { complaint } from "@/api/auth"
+import { useFailure } from "@/api/failure"
 import { scopes } from "@/api/scopes"
 import { useTemplateDefaults, useTemplates } from "@/api/templates"
 import type { Template } from "@/api/templates"
@@ -6,7 +8,7 @@ import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { Find } from "@/components/fields"
-import { card } from "@/components/styles"
+import { alarmBar, alarmLine, card } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { Text } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -19,10 +21,12 @@ export function Templates() {
   const user = useAppSelector((s) => s.auth.user)
   const [params, setParams] = useSearchParams()
   const templates = useTemplates()
+  const failed = useFailure(templates)
   const defaults = useTemplateDefaults().data
   const may = holds(user, scopes.manageClients)
   const find = params.get("find") ?? ""
-  const list = (templates.data ?? []).filter((one) => matches(one, find))
+  const all = templates.data ?? []
+  const list = all.filter((one) => matches(one, find))
   const allowed = defaults?.allowedIps.join(", ") ?? ""
 
   function put(key: string, value: string) {
@@ -61,11 +65,17 @@ export function Templates() {
   return (
     <div className="mt-4 flex flex-col gap-4">
       <div className={card}>
-        {(templates.data ?? []).length === 0 && (
+        {templates.isPending && failed === null && (
+          <div className="px-4 py-6 text-sm text-muted">{t("templates.loading")}</div>
+        )}
+        {failed !== null && (
+          <div className={all.length === 0 ? alarmLine : alarmBar}>{t(complaint(failed))}</div>
+        )}
+        {templates.isSuccess && all.length === 0 && (
           <div className="px-4 py-6 text-sm text-muted">{t("templates.empty")}</div>
         )}
 
-        {(templates.data ?? []).length > 0 && (
+        {all.length > 0 && (
           <Rows
             items={list}
             keyOf={(one) => one.id}
@@ -80,11 +90,14 @@ export function Templates() {
                 sort: (one) => one.name,
                 lead: true,
                 body: "font-semibold text-ink",
-                cell: (one) => (
-                  <Link to={`/clients/templates/${one.id}/edit`} className="hover:text-brand-ink">
-                    {one.name}
-                  </Link>
-                ),
+                cell: (one) =>
+                  may ? (
+                    <Link to={`/clients/templates/${one.id}/edit`} className="hover:text-brand-ink">
+                      {one.name}
+                    </Link>
+                  ) : (
+                    one.name
+                  ),
               },
               {
                 key: "allowed",

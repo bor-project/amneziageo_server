@@ -1,6 +1,7 @@
 import { useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
 import { card, field, label, note as noteText } from "@/components/styles"
+import { parts } from "@/format"
 import { useText } from "@/i18n"
 
 export function Part({ title, children }: { title: ReactNode; children: ReactNode }) {
@@ -28,9 +29,10 @@ export function Line({
   onChange,
   wide = false,
   placeholder = "",
-  hint = "",
+  preview = "",
   fault = "",
   after,
+  onBlur,
 }: {
   id: string
   caption: ReactNode
@@ -38,9 +40,10 @@ export function Line({
   onChange: (value: string) => void
   wide?: boolean
   placeholder?: string
-  hint?: string
+  preview?: string
   fault?: string
   after?: ReactNode
+  onBlur?: () => void
 }) {
   const input = (
     <input
@@ -48,6 +51,7 @@ export function Line({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
       className={after === undefined ? `mt-1 ${field}` : `min-w-0 flex-1 ${field}`}
     />
   )
@@ -65,10 +69,104 @@ export function Line({
           {after}
         </div>
       )}
-      {hint.length > 0 && <div className={noteText}>{hint}</div>}
+      {preview.length > 0 && <div className={noteText}>{preview}</div>}
       {fault.length > 0 && <div className="mt-1 text-xs text-alarm">{fault}</div>}
     </div>
   )
+}
+
+// A line that holds a list: what is typed stays as it is, a comma or a space included, and the list it reads goes out.
+// Leaving the field tidies the text to "a, b".
+export function ListLine({
+  id,
+  caption,
+  value,
+  onChange,
+  wide = false,
+  placeholder = "",
+  fault = "",
+}: {
+  id: string
+  caption: ReactNode
+  value: string[]
+  onChange: (value: string[]) => void
+  wide?: boolean
+  placeholder?: string
+  fault?: string
+}) {
+  const [text, setText] = useListed(value, ", ")
+
+  return (
+    <Line
+      id={id}
+      caption={caption}
+      value={text}
+      onChange={(typed) => {
+        setText(typed)
+        onChange(parts(typed))
+      }}
+      onBlur={() => setText(parts(text).join(", "))}
+      wide={wide}
+      placeholder={placeholder}
+      fault={fault}
+    />
+  )
+}
+
+// A box that holds a list, an item on a line: Enter starts the next one.
+export function ListArea({
+  id,
+  caption,
+  value,
+  onChange,
+  rows = 6,
+}: {
+  id: string
+  caption: ReactNode
+  value: string[]
+  onChange: (value: string[]) => void
+  rows?: number
+}) {
+  const [text, setText] = useListed(value, "\n")
+
+  return (
+    <div>
+      <label className={label} htmlFor={id}>
+        {caption}
+      </label>
+      <textarea
+        id={id}
+        rows={rows}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value)
+          onChange(parts(e.target.value))
+        }}
+        onBlur={() => setText(parts(text).join("\n"))}
+        className={`mt-1 font-mono text-xs ${field}`}
+      />
+    </div>
+  )
+}
+
+// The text of a list field. A list that comes from outside, an import or a reset, replaces the text only when the text
+// reads otherwise, so a separator just typed is not lost.
+function useListed(value: string[], glue: string): [string, (text: string) => void] {
+  const [text, setText] = useState(() => value.join(glue))
+  const [held, setHeld] = useState(value)
+
+  if (!alike(held, value)) {
+    setHeld(value)
+    if (!alike(parts(text), value)) {
+      setText(value.join(glue))
+    }
+  }
+
+  return [text, setText]
+}
+
+function alike(one: string[], other: string[]): boolean {
+  return one.length === other.length && one.every((item, at) => item === other[at])
 }
 
 export function Regenerate({
@@ -113,6 +211,16 @@ export function Help({ text }: { text?: string }) {
   )
 }
 
+// A caption with its short note behind a question mark, shown as the pointer rests on it.
+export function Hinted({ caption, text }: { caption: string; text: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      {caption}
+      <Help text={text} />
+    </span>
+  )
+}
+
 export function Pick({
   id,
   caption,
@@ -120,7 +228,6 @@ export function Pick({
   onChange,
   children,
   wide = false,
-  hint = "",
   disabled = false,
 }: {
   id: string
@@ -129,7 +236,6 @@ export function Pick({
   onChange: (value: string) => void
   children: ReactNode
   wide?: boolean
-  hint?: string
   disabled?: boolean
 }) {
   return (
@@ -146,7 +252,6 @@ export function Pick({
       >
         {children}
       </select>
-      {hint.length > 0 && <div className={noteText}>{hint}</div>}
     </div>
   )
 }
@@ -156,7 +261,6 @@ export function Count({
   caption,
   value,
   onChange,
-  hint = "",
   unset = "",
   fault = "",
   note,
@@ -165,7 +269,6 @@ export function Count({
   caption: ReactNode
   value: number
   onChange: (value: number) => void
-  hint?: string
   unset?: string
   fault?: string
   note?: ReactNode
@@ -183,7 +286,6 @@ export function Count({
         onChange={(e) => onChange(Number(e.target.value))}
         className={`mt-1 ${field}`}
       />
-      {hint.length > 0 && <div className={noteText}>{hint}</div>}
       {fault.length > 0 && <div className="mt-1 text-xs text-alarm">{fault}</div>}
       {fault.length === 0 && note}
     </div>
@@ -195,15 +297,13 @@ export function Flag({
   caption,
   value,
   onChange,
-  hint = "",
 }: {
   id: string
   caption: ReactNode
   value: boolean
   onChange: (value: boolean) => void
-  hint?: string
 }) {
-  const box = (
+  return (
     <label className="flex items-center gap-2 text-sm text-muted" htmlFor={id}>
       <input
         id={id}
@@ -214,15 +314,6 @@ export function Flag({
       />
       {caption}
     </label>
-  )
-
-  return hint.length > 0 ? (
-    <div>
-      {box}
-      <div className={noteText}>{hint}</div>
-    </div>
-  ) : (
-    box
   )
 }
 

@@ -95,14 +95,14 @@ export function KeepQuestion({
 
   return (
     <Dialog
-      title={t("ports.keepTitle")}
+      title={t(ports.length === 1 ? "ports.keepOne" : "ports.keepMany", { list: ports.join(", ") })}
       onClose={onCancel}
       actions={
         <>
           <button type="button" className={secondary} onClick={onCancel}>
             {t("ports.cancel")}
           </button>
-          <button type="button" className={secondary} onClick={() => onAnswer(true)}>
+          <button type="button" className={secondary} title={t("ports.keepHint")} onClick={() => onAnswer(true)}>
             {t("ports.keep")}
           </button>
           <button type="button" className={primary} onClick={() => onAnswer(false)}>
@@ -110,9 +110,6 @@ export function KeepQuestion({
           </button>
         </>
       }
-    >
-      <p>{t("ports.keepText", { list: ports.join(", ") })}</p>
-      <p className="mt-2 text-muted">{t("ports.keepHint")}</p>
-    </Dialog>
+    />
   )
 }

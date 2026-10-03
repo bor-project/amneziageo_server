@@ -4,6 +4,7 @@ import { complaint } from "@/api/auth"
 import { useClients, useSwitchClient, useSwitchClients } from "@/api/clients"
 import type { Client } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
+import { useFailure } from "@/api/failure"
 import { scopes } from "@/api/scopes"
 import { useTemplates } from "@/api/templates"
 import { Handshake, Speed, Traffic } from "@/components/ClientStats"
@@ -13,7 +14,7 @@ import { Rows } from "@/components/Rows"
 import { summary } from "@/components/batch"
 import type { Summary } from "@/components/batch"
 import { Find, Knob } from "@/components/fields"
-import { card, fieldBox, tool, toolRisky } from "@/components/styles"
+import { alarmBar, alarmLine, card, fieldBox, tool, toolRisky } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
@@ -29,6 +30,7 @@ export function Clients() {
   const [params, setParams] = useSearchParams()
   const configs = useConfigs()
   const clients = useClients()
+  const failed = useFailure(clients)
   const templates = useTemplates()
   const turn = useSwitchClient()
   const turnMany = useSwitchClients()
@@ -85,7 +87,13 @@ export function Clients() {
 
   return (
     <div className={`mt-4 ${card}`}>
-      {shown.length === 0 && all.length === 0 && (
+      {clients.isPending && failed === null && (
+        <div className="px-4 py-6 text-sm text-muted">{t("clients.loading")}</div>
+      )}
+      {failed !== null && (
+        <div className={all.length === 0 ? alarmLine : alarmBar}>{t(complaint(failed))}</div>
+      )}
+      {clients.isSuccess && all.length === 0 && (
         <div className="px-4 py-6 text-sm text-muted">{t("clients.empty")}</div>
       )}
 
@@ -179,13 +187,19 @@ export function Clients() {
               body: "font-semibold text-ink",
               cell: (one) => (
                 <span className="flex min-w-0 items-center gap-2">
-                  <Link
-                    to={`/clients/${one.id}/export`}
-                    title={one.name}
-                    className="max-w-full shrink-0 truncate hover:text-brand-ink"
-                  >
-                    {one.name}
-                  </Link>
+                  {may ? (
+                    <Link
+                      to={`/clients/${one.id}/export`}
+                      title={one.name}
+                      className="max-w-full shrink-0 truncate hover:text-brand-ink"
+                    >
+                      {one.name}
+                    </Link>
+                  ) : (
+                    <span title={one.name} className="max-w-full shrink-0 truncate">
+                      {one.name}
+                    </span>
+                  )}
                   {one.state.isOnline && <span className="min-w-0 truncate text-xs text-good">{t("clients.online")}</span>}
                   {!one.isEnabled && <span className="min-w-0 truncate text-xs text-muted">{t("clients.off")}</span>}
                 </span>
@@ -206,10 +220,12 @@ export function Clients() {
               cell: (one) =>
                 one.templateId === null ? (
                   t("clients.dash")
-                ) : (
+                ) : may ? (
                   <Link to={`/clients/templates/${one.templateId}/edit`} className="text-brand-ink hover:text-brand-lit">
                     {named(one)}
                   </Link>
+                ) : (
+                  named(one)
                 ),
             },
             {

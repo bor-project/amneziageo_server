@@ -24,7 +24,8 @@ public sealed record SubscriptionResponse(
     string Fault);
 
 /// <summary>
-/// The settings the subscriptions are changed with.
+/// The settings the subscriptions are changed with; keep leaves the port the panel held open before it moved open in
+/// the firewall of the host, as a rule of the host, instead of closing it.
 /// </summary>
 public sealed record SubscriptionRequest(
     bool IsEnabled,
@@ -37,7 +38,8 @@ public sealed record SubscriptionRequest(
     string? Certificate,
     string? CertificateKey,
     int UpdateHours,
-    string? Title);
+    string? Title,
+    bool? Keep = null);
 
 /// <summary>
 /// Turns the settings of the subscriptions into what the panel reads and back.

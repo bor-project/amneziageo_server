@@ -4,9 +4,8 @@ import type { Obfuscation } from "@/api/configs"
 import { useImportOutbound, useOutboundKeys } from "@/api/outbounds"
 import type { OutboundDraft, OutboundKind } from "@/api/outbounds"
 import { ObfuscationFields } from "@/components/Obfuscation"
-import { Count, Flag, Line, Part } from "@/components/fields"
+import { Count, Flag, Line, ListLine, Part } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
-import { parts } from "@/format"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { same } from "@/store/draftSlice"
@@ -142,18 +141,18 @@ export function OutboundForm({
               wide
             />
           )}
-          <Line
+          <ListLine
             id="outbound-address"
             caption={t("outbounds.address")}
-            value={draft.address.join(", ")}
-            onChange={(value) => put({ address: parts(value) })}
+            value={draft.address}
+            onChange={(address) => put({ address })}
             wide
           />
-          <Line
+          <ListLine
             id="outbound-dns"
             caption={t("outbounds.dns")}
-            value={draft.dns.join(", ")}
-            onChange={(value) => put({ dns: parts(value) })}
+            value={draft.dns}
+            onChange={(dns) => put({ dns })}
           />
           <Count
             id="outbound-mtu"

@@ -22,6 +22,7 @@ if (args is [HandoverCommand.Name, ..])
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.RestoreDatabase();
 builder.Services.AddSystemd();
 builder.AddJournal();
 builder.AddListening();

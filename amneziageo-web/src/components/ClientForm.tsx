@@ -8,7 +8,7 @@ import type { Client, ClientDraft, Inbound, Routing } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useTemplates } from "@/api/templates"
-import { Help, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
+import { Help, Hinted, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -193,10 +193,9 @@ export function ClientForm({
 
         <Pick
           id="client-routing"
-          caption={t("templates.routing")}
+          caption={<Hinted caption={t("templates.routing")} text={t("templates.routingHint")} />}
           value={draft.routing}
           onChange={(value) => put({ routing: value as Routing })}
-          hint={t("templates.routingHint")}
         >
           <option value="template">
             {t(inherited ? "clients.routingTemplateOn" : "clients.routingTemplateOff")}

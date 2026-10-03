@@ -1,6 +1,7 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { reason } from "@/api/auth"
+import { complaint, reason } from "@/api/auth"
 import { useBalancers } from "@/api/balancers"
+import { useFailure } from "@/api/failure"
 import { useMoveRule, usePlaceRule, useRules, useSwitchRule } from "@/api/rules"
 import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
@@ -8,7 +9,7 @@ import { Find, Knob } from "@/components/fields"
 import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { card } from "@/components/styles"
+import { alarmBar, alarmLine, card } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -20,6 +21,7 @@ export function Rules() {
   const user = useAppSelector((s) => s.auth.user)
   const [params, setParams] = useSearchParams()
   const rules = useRules()
+  const failed = useFailure(rules)
   const balancers = useBalancers()
   const move = useMoveRule()
   const place = usePlaceRule()
@@ -46,7 +48,11 @@ export function Rules() {
 
   return (
     <div className={`mt-4 ${card}`}>
-      {all.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("rules.empty")}</div>}
+      {rules.isPending && failed === null && <div className="px-4 py-6 text-sm text-muted">{t("rules.loading")}</div>}
+      {failed !== null && (
+        <div className={all.length === 0 ? alarmLine : alarmBar}>{t(complaint(failed))}</div>
+      )}
+      {rules.isSuccess && all.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("rules.empty")}</div>}
 
       {all.length > 0 && (
         <Rows

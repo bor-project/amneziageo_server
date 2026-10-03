@@ -68,6 +68,40 @@ public sealed class DatabaseCheckTests : IDisposable
     }
 
     [Fact]
+    public void EveryVerdictOnABackupGoesByACodeOfItsOwnWithTheSameWords()
+    {
+        var text = Path.Combine(_folder.FullName, "notes.db");
+        File.WriteAllText(text, "not a database at all, just some words");
+        var other = Path.Combine(_folder.FullName, "other.db");
+        using (var connection = new SqliteConnection($"Data Source={other};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "create table Notes (Id integer primary key)";
+            command.ExecuteNonQuery();
+        }
+
+        var damaged = Database("broken.db", "20260901000000_Earlier");
+        var bytes = File.ReadAllBytes(damaged);
+        Array.Fill(bytes, (byte)0x5a, 4096, bytes.Length - 4096);
+        File.WriteAllBytes(damaged, bytes);
+
+        var newest = DatabaseCheck.Newest();
+        var sound = DatabaseCheck.Judge(Database("older.db", "20260901000000_Earlier"), newest);
+
+        Assert.Equal(
+            new DatabaseVerdict(DatabaseCheck.NotDatabase, "there is no such file"),
+            DatabaseCheck.Judge(Path.Combine(_folder.FullName, "none.db"), newest));
+        Assert.Equal(new DatabaseVerdict("backup-not-database", "not a database"), DatabaseCheck.Judge(text, newest));
+        Assert.Equal(new DatabaseVerdict("backup-foreign", "not a database of the panel"), DatabaseCheck.Judge(other, newest));
+        Assert.Equal(new DatabaseVerdict("backup-damaged", "the database is damaged"), DatabaseCheck.Judge(damaged, newest));
+        Assert.Equal("backup-newer", DatabaseCheck.Judge(Database("newer.db", "99990101000000_Later"), newest).Code);
+        Assert.True(sound.IsSound);
+        Assert.Equal(new DatabaseVerdict(string.Empty, DatabaseCheck.Sound), sound);
+        Assert.Equal(DatabaseCheck.Judge(other, newest).Message, DatabaseCheck.Inspect(other, newest));
+    }
+
+    [Fact]
     public void ADamagedDatabaseIsTurnedDown()
     {
         var file = Database("damaged.db", "20260901000000_Earlier");

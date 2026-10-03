@@ -9,11 +9,10 @@ import type { Holding } from "@/api/firewall"
 import { scopes } from "@/api/scopes"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { KeepQuestion, PortNote } from "@/components/PortNote"
-import { Count, Flag, Help, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
+import { Count, Flag, Help, Hinted, Line, ListLine, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { manual, useOpening } from "@/components/opening"
 import { pathFault, portFault, usePathHolders, usePortHolders, useServicesHolders } from "@/components/ports"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
-import { parts } from "@/format"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { same } from "@/store/draftSlice"
@@ -186,11 +185,11 @@ export function ConfigForm({
             )
           }
         />
-        <Line
+        <ListLine
           id="config-address"
           caption={t("configs.address")}
-          value={draft.address.join(", ")}
-          onChange={(value) => put({ address: parts(value) })}
+          value={draft.address}
+          onChange={(address) => put({ address })}
           fault={address}
           wide
         />
@@ -257,18 +256,18 @@ export function ConfigForm({
       </Part>
 
       <Part title={t("configs.clients")}>
-        <Line
+        <ListLine
           id="config-allowed"
           caption={t("configs.allowed")}
-          value={draft.allowedIps.join(", ")}
-          onChange={(value) => put({ allowedIps: parts(value) })}
+          value={draft.allowedIps}
+          onChange={(allowedIps) => put({ allowedIps })}
           wide
         />
-        <Line
+        <ListLine
           id="config-dns"
           caption={t("configs.dns")}
-          value={draft.dns.join(", ")}
-          onChange={(value) => put({ dns: parts(value) })}
+          value={draft.dns}
+          onChange={(dns) => put({ dns })}
         />
         <Count id="config-mtu" caption={t("configs.mtu")} value={draft.mtu} onChange={(value) => put({ mtu: value })} />
         <Count
@@ -279,16 +278,15 @@ export function ConfigForm({
         />
         <Count
           id="config-online"
-          caption={t("configs.offlineAfter")}
+          caption={<Hinted caption={t("configs.offlineAfter")} text={t("configs.offlineAfterHint")} />}
           value={draft.offlineAfter}
           onChange={(value) => put({ offlineAfter: value })}
-          hint={t("configs.offlineAfterHint")}
         />
-        <Line
+        <ListLine
           id="config-blocked"
           caption={t("configs.blocked")}
-          value={draft.blocked.join(", ")}
-          onChange={(value) => put({ blocked: parts(value) })}
+          value={draft.blocked}
+          onChange={(blocked) => put({ blocked })}
           wide
         />
       </Part>

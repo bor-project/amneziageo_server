@@ -26,9 +26,12 @@ const leaf = "block rounded-lg px-2.5 py-1.5 text-[13px]"
 const active = "bg-active font-medium text-ink"
 const idle = "text-muted hover:bg-nav hover:text-ink"
 const opened = "font-medium text-ink hover:bg-nav"
-const column = "flex w-56 shrink-0 flex-col gap-5 border-r border-line bg-chrome px-3 py-4"
+const column =
+  "sticky top-0 flex h-dvh w-56 shrink-0 flex-col gap-5 overflow-y-auto border-r border-line bg-chrome px-3 py-4"
 const drawer = "fixed inset-y-0 left-0 z-50 flex w-64 flex-col gap-5 border-r border-line bg-chrome px-3 py-4 shadow-xl"
 const glyph = "size-[18px] shrink-0"
+const bar =
+  "sticky top-0 z-20 flex min-h-14 items-center justify-between gap-3 border-b border-line bg-chrome px-5 py-2"
 const folded = "amneziageo.menu"
 
 export function Layout() {
@@ -70,7 +73,7 @@ export function Layout() {
 
   return (
     <CrumbsHolder>
-      <div className="flex h-full bg-canvas text-ink">
+      <div className="flex min-h-full bg-canvas text-ink">
         {open && !wide && (
           <div className="fixed inset-0 z-40 bg-black/50" onMouseDown={() => dispatch(sidebarSet(false))} />
         )}
@@ -95,7 +98,7 @@ export function Layout() {
         )}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex min-h-14 items-center justify-between gap-3 border-b border-line bg-chrome px-5 py-2">
+          <header className={bar}>
             <div className="flex min-w-0 items-center gap-2">
               {!wide && (
                 <button
@@ -118,7 +121,7 @@ export function Layout() {
             </div>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-auto p-5">
+          <main className="flex-1 p-5">
             <div className="mx-auto max-w-[1240px]">
               <Outlet />
             </div>

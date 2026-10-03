@@ -16,6 +16,15 @@ namespace AmneziaGeo.Server.Api.Firewall;
 public sealed record FirewallPortAnswer(int Port, string Protocol, string State, string Engine);
 
 /// <summary>
+/// Whether the panel may change the firewall of the host, as the interface reads it.
+/// </summary>
+/// <param name="Engine">What the panel holds its ports open with: ufw or nft.</param>
+/// <param name="Able">Whether the panel may change the firewall.</param>
+/// <param name="Reason">What keeps the panel from it: no-rights or host-ufw, empty when nothing does.</param>
+/// <param name="Message">What the host answered when it refused.</param>
+public sealed record FirewallAnswer(string Engine, bool Able, string Reason, string Message);
+
+/// <summary>
 /// Registers what the ports of the panel are held open with.
 /// </summary>
 public static class FirewallServices
@@ -36,13 +45,15 @@ public static class FirewallServices
     }
 
     /// <summary>
-    /// Maps the route that tells whether the firewall of the host lets a port in.
+    /// Maps the routes that tell whether the panel may change the firewall of the host and whether it lets a port in.
     /// </summary>
     public static IEndpointRouteBuilder MapFirewall(this IEndpointRouteBuilder routes)
     {
         ArgumentNullException.ThrowIfNull(routes);
 
-        routes.MapGroup("/api/firewall").RequireScope(Scopes.ReadState).MapGet("/port", PortAsync);
+        var reading = routes.MapGroup("/api/firewall").RequireScope(Scopes.ReadState);
+        reading.MapGet("/", ReachAsync);
+        reading.MapGet("/port", PortAsync);
 
         return routes;
     }
@@ -61,6 +72,14 @@ public static class FirewallServices
             .GetResult();
 
         return app;
+    }
+
+    // Answers whether the panel may change the firewall of the host, and what keeps it from doing so.
+    private static async Task<IResult> ReachAsync(FirewallHost host, CancellationToken ct)
+    {
+        var reach = await host.ReachAsync(ct).ConfigureAwait(false);
+
+        return Results.Ok(new FirewallAnswer(reach.Engine, reach.IsAble, reach.Reason, reach.Message));
     }
 
     private static async Task<IResult> PortAsync(

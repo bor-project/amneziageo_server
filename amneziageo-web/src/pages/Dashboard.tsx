@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import axios from "axios"
 import { complaint } from "@/api/auth"
 import { useBackup, useRestore } from "@/api/backup"
+import { useFailure } from "@/api/failure"
 import { useHealth } from "@/api/health"
 import { useOverview } from "@/api/overview"
 import type { Overview } from "@/api/overview"
@@ -11,6 +12,7 @@ import { Sparkline } from "@/components/Chart"
 import type { Trace } from "@/components/Chart"
 import { Dialog } from "@/components/Dialog"
 import { useCrumbs } from "@/components/crumbs"
+import { Help } from "@/components/fields"
 import { card, danger, quiet, secondary, tool } from "@/components/styles"
 import { average, bytes, peak, percent, rate, share, span } from "@/format"
 import { useText } from "@/i18n"
@@ -27,12 +29,22 @@ export function Dashboard() {
   const health = useHealth()
   const overview = useOverview()
   const data = overview.data
+  const failed = useFailure(overview)
   const keeps = holds(user, scopes.readBackup) || holds(user, scopes.manageAccess)
 
   useCrumbs([{ label: t("nav.overview") }])
 
   if (!data) {
-    return <div />
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="text-2xl leading-10 font-semibold tracking-[-0.02em]">{t("nav.overview")}</h1>
+        {failed !== null ? (
+          <div className="text-sm text-alarm">{t(complaint(failed))}</div>
+        ) : (
+          <div className="text-sm text-muted">{t("page.loading")}</div>
+        )}
+      </div>
+    )
   }
 
   const window = data.window
@@ -43,6 +55,7 @@ export function Dashboard() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl leading-10 font-semibold tracking-[-0.02em]">{t("nav.overview")}</h1>
+      {failed !== null && <div className="text-sm text-alarm">{t(complaint(failed))}</div>}
 
       <Head data={data} version={health.data?.version} />
 
@@ -196,8 +209,8 @@ function Backup() {
       <div className="flex items-center gap-2 text-sm font-medium text-ink">
         <Box />
         {t("backup.title")}
+        <Help text={t("backup.about")} />
       </div>
-      <p className="text-[13px] leading-5 text-muted">{t("backup.about")}</p>
 
       <div className="mt-auto flex flex-wrap gap-2">
         {take && (
@@ -276,7 +289,6 @@ function Backup() {
           }
         >
           <p>{t("backup.confirmFile", { name: file.name, size: bytes(t, file.size) })}</p>
-          <p className="mt-2 text-muted">{t("backup.confirmText")}</p>
         </Dialog>
       )}
     </div>

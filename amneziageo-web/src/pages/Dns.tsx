@@ -3,9 +3,10 @@ import { complaint } from "@/api/auth"
 import { draftOf, useResolver, useSaveResolver } from "@/api/dns"
 import type { DnsDraft, DnsState, Resolver as ResolverSettings } from "@/api/dns"
 import { useBalancers } from "@/api/balancers"
+import { useFailure } from "@/api/failure"
 import { useOutbounds } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
-import { Box, Count, Flag, Line, Part, Pick } from "@/components/fields"
+import { Box, Count, Flag, ListLine, Part, Pick } from "@/components/fields"
 import { footer, primary, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -14,12 +15,18 @@ import { dnsDrafted, same } from "@/store/draftSlice"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 
 export function Dns() {
+  const t = useText()
   const user = useAppSelector((s) => s.auth.user)
   const resolver = useResolver()
+  const failed = useFailure(resolver)
   const may = holds(user, scopes.manageRouting)
 
   return (
     <div className="mt-4 flex flex-col gap-4">
+      {resolver.isPending && failed === null && <div className="text-sm text-muted">{t("page.loading")}</div>}
+      {failed !== null && resolver.data === undefined && (
+        <div className="text-sm text-alarm">{t(complaint(failed))}</div>
+      )}
       {resolver.data && (
         <>
           <Watch state={resolver.data.state} />
@@ -116,18 +123,18 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
           value={draft.nameMinutes}
           onChange={(v) => set({ nameMinutes: v })}
         />
-        <Line
+        <ListLine
           id="dns-listen"
           caption={t("dns.listen")}
-          value={draft.listen.join(", ")}
-          onChange={(v) => set({ listen: parts(v) })}
+          value={draft.listen}
+          onChange={(listen) => set({ listen })}
           wide
         />
-        <Line
+        <ListLine
           id="dns-upstreams"
           caption={t("dns.upstreams")}
-          value={draft.upstreams.join(", ")}
-          onChange={(v) => set({ upstreams: parts(v) })}
+          value={draft.upstreams}
+          onChange={(upstreams) => set({ upstreams })}
           wide
         />
         <Pick
@@ -200,11 +207,4 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
       )}
     </>
   )
-}
-
-function parts(text: string): string[] {
-  return text
-    .split(/[,\s]+/)
-    .map((one) => one.trim())
-    .filter((one) => one.length > 0)
 }

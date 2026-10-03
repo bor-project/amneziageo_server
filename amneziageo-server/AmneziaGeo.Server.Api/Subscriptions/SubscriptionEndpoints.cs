@@ -23,6 +23,7 @@ public static class SubscriptionEndpoints
         var group = routes.MapGroup("/api/subscription").RequireScope(Scopes.ManageAccess);
         group.MapGet("/", ReadAsync);
         group.MapPut("/", SaveAsync);
+        group.MapPost("/open", OpenAsync);
 
         return routes;
     }
@@ -74,10 +75,28 @@ public static class SubscriptionEndpoints
             return Refuse(refused, $"the host did not serve the subscriptions on port {draft.Port}");
         }
 
+        var previous = request.Keep == true ? await firewall.PlanAsync(ct).ConfigureAwait(false) : null;
         var saved = await store.SaveAsync(draft, ct).ConfigureAwait(false);
-        await firewall.SettleAsync(ct).ConfigureAwait(false);
+        await firewall.SettleAsync(previous, ct).ConfigureAwait(false);
 
         return Results.Ok(SubscriptionAnswers.Settings(saved, state.Fault, options));
+    }
+
+    // Holds the port of the subscriptions open in the firewall of the host at once, answering as a save does.
+    private static async Task<IResult> OpenAsync(
+        SubscriptionStore store,
+        SubscriptionState state,
+        WebOptions options,
+        FirewallApplier firewall,
+        CancellationToken ct)
+    {
+        var held = await store.ReadAsync(ct).ConfigureAwait(false);
+        var saved = await store.SaveAsync(held with { Opened = true }, ct).ConfigureAwait(false);
+        var sync = await firewall.SettleAsync(ct).ConfigureAwait(false);
+
+        return sync.IsDone
+            ? Results.Ok(SubscriptionAnswers.Settings(saved, state.Fault, options))
+            : Results.Json(new Failure("firewall-refused", sync.Message), statusCode: StatusCodes.Status409Conflict);
     }
 
     private static IResult Refuse(string code, string message) =>

@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Net;
+using System.Net.NetworkInformation;
+using System.Security.Cryptography;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -92,12 +94,7 @@ public static class Listening
         var settings = held ?? Draft(options);
         var entries = held is null ? options.Listen : settings.Entries.ToArray();
 
-        var plan = Plan(entries);
-        if (plan.IsEmpty)
-        {
-            throw new InvalidOperationException("the panel listens on no address this host carries: " + string.Join(", ", entries));
-        }
-
+        var plan = Bound(entries);
         var certificate = WebCertificate.Of(Chain(options, settings), Key(options, settings))
             ?? (PanelStore.ServesOn(path, settings.Port) ? WebCertificate.MadeUp() : null);
         builder.Services.AddSingleton(options);
@@ -229,6 +226,36 @@ public static class Listening
     }
 
     /// <summary>
+    /// Returns why the panel would not come up on this host under settings it reads from a database at start: a listen
+    /// list that binds nothing here or names an address the host does not carry, a certificate or a key that is not
+    /// there or does not load; null when it would come up.
+    /// </summary>
+    public static string? Fault(WebOptions options, PanelSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        try
+        {
+            var plan = Bound(settings.Entries);
+            var carried = Carried();
+            if (plan.Points.FirstOrDefault(point => !Local(point.Address, carried)) is { } foreign)
+            {
+                return $"the panel listens on {foreign.Address}, an address this host does not carry";
+            }
+
+            _ = WebCertificate.Of(Chain(options, settings), Key(options, settings));
+
+            return null;
+        }
+        catch (Exception ex)
+            when (ex is InvalidOperationException or CryptographicException or IOException or UnauthorizedAccessException)
+        {
+            return ex.Message;
+        }
+    }
+
+    /// <summary>
     /// Returns the settings behind a listen list the configuration names.
     /// </summary>
     public static PanelSettings Draft(WebOptions options)
@@ -274,6 +301,31 @@ public static class Listening
 
         return new ListenPlan([.. any.Distinct()], [.. points.Distinct()], missing);
     }
+
+    // Resolves a listen list, refusing one that binds nothing on this host.
+    private static ListenPlan Bound(IReadOnlyList<string> entries)
+    {
+        var plan = Plan(entries);
+
+        return plan.IsEmpty
+            ? throw new InvalidOperationException("the panel listens on no address this host carries: " + string.Join(", ", entries))
+            : plan;
+    }
+
+    // Returns the addresses the interfaces of the host carry.
+    private static HashSet<IPAddress> Carried() =>
+    [
+        .. NetworkInterface.GetAllNetworkInterfaces()
+            .SelectMany(item => item.GetIPProperties().UnicastAddresses)
+            .Select(item => item.Address),
+    ];
+
+    // Tells whether the host binds an address: every address, the loopback and the ones its interfaces carry.
+    private static bool Local(IPAddress address, HashSet<IPAddress> carried) =>
+        address.Equals(IPAddress.Any)
+        || address.Equals(IPAddress.IPv6Any)
+        || IPAddress.IsLoopback(address)
+        || carried.Contains(address);
 
     /// <summary>
     /// Puts a listener under the certificate, leaving it plain without one.

@@ -183,7 +183,9 @@ them on, off and their removal.
 
 `Clients` carries two tabs: `Configs`, the clients themselves, and `Templates`, see [templates.md](templates.md).
 A client opens on two tabs of its own: `Export`, the QR codes of its file, its link and its subscription with
-copying and downloading, and `Settings`, its form, for a holder of `clients:write`.
+copying and downloading, and `Settings`, its form, for a holder of `clients:write`. A panel served over plain HTTP
+copies the text all the same; a QR code is copied as a picture only over HTTPS or from `localhost`, where the
+browser allows it, and the button is not shown elsewhere.
 
 The tab `Configs` lists the clients of every endpoint or of one, with the addresses they carry, whether they are
 online, how fast they move bytes now, what they made today and when they last completed a handshake. A client

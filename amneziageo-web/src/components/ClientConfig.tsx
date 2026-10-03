@@ -34,6 +34,9 @@ const misses: Record<Miss, TextKey> = {
   "no-key": "clients.subscriptionNoKey",
 }
 
+// The browser copies a picture only on a page served over HTTPS or from localhost.
+const pictures = window.isSecureContext && typeof ClipboardItem !== "undefined"
+
 export function ClientConfig({ id, editable }: { id: number; editable: boolean }) {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
@@ -143,16 +146,18 @@ function Sheet({
             >
               {taken === "text" ? <Tick /> : <Papers />}
             </button>
-            <button
-              type="button"
-              title={t("action.copyImage")}
-              aria-label={t("action.copyImage")}
-              onClick={() => void put("image")}
-              disabled={picture === null}
-              className={`${quiet} ${taken === "image" ? "text-good" : ""}`}
-            >
-              {taken === "image" ? <Tick /> : <Frame />}
-            </button>
+            {pictures && (
+              <button
+                type="button"
+                title={t("action.copyImage")}
+                aria-label={t("action.copyImage")}
+                onClick={() => void put("image")}
+                disabled={picture === null}
+                className={`${quiet} ${taken === "image" ? "text-good" : ""}`}
+              >
+                {taken === "image" ? <Tick /> : <Frame />}
+              </button>
+            )}
             <button
               type="button"
               title={t("clients.download")}
@@ -252,13 +257,40 @@ async function draw(text: string): Promise<Picture | null> {
   return { url: await qr.toDataURL(text, { errorCorrectionLevel: level, margin: 1, scale: 8 }), modules }
 }
 
+// A page served over plain HTTP gets no clipboard from the browser, so the text goes through a selection then.
 async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text)
+  if (navigator.clipboard !== undefined) {
+    try {
+      await navigator.clipboard.writeText(text)
 
-    return true
+      return true
+    } catch {
+      return select(text)
+    }
+  }
+
+  return select(text)
+}
+
+function select(text: string): boolean {
+  const before = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  const area = document.createElement("textarea")
+  area.value = text
+  area.readOnly = true
+  area.style.position = "fixed"
+  area.style.top = "0"
+  area.style.left = "-9999px"
+  document.body.append(area)
+  area.select()
+  area.setSelectionRange(0, text.length)
+
+  try {
+    return document.execCommand("copy")
   } catch {
     return false
+  } finally {
+    area.remove()
+    before?.focus()
   }
 }
 

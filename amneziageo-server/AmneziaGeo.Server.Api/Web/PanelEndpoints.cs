@@ -27,6 +27,7 @@ public static class PanelEndpoints
 
         var writing = routes.MapGroup("/api/panel").RequireScope(Scopes.ManageAccess);
         writing.MapPut("/", SaveAsync);
+        writing.MapPost("/open", OpenAsync);
         writing.MapPost("/restart", Restart);
 
         return routes;
@@ -52,6 +53,20 @@ public static class PanelEndpoints
             .ExcludeFromDescription();
 
         return routes;
+    }
+
+    /// <summary>
+    /// Stops the panel a moment after the answer leaves, so systemd, or compose in a container, starts it again.
+    /// </summary>
+    internal static void StartOver(IHostApplicationLifetime life)
+    {
+        ArgumentNullException.ThrowIfNull(life);
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(300)).ConfigureAwait(false);
+            life.StopApplication();
+        });
     }
 
     private static async Task<IResult> ReadAsync(
@@ -120,16 +135,45 @@ public static class PanelEndpoints
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
+        var previous = request.Keep == true ? await firewall.PlanAsync(ct).ConfigureAwait(false) : null;
         var result = await store.SaveAsync(draft, ct).ConfigureAwait(false);
         if (!result.IsOk || result.Record is null)
         {
             return Results.Json(new Failure(result.Code, result.Message), statusCode: StatusCodes.Status400BadRequest);
         }
 
-        await firewall.SettleAsync(ct).ConfigureAwait(false);
+        await firewall.SettleAsync(previous, ct).ConfigureAwait(false);
         if (result.Record.Prereleases != before.Prereleases)
         {
             updates.Recheck();
+        }
+
+        var secure = await SecureAsync(result.Record, configs, options, ct).ConfigureAwait(false);
+
+        return Results.Ok(PanelAnswers.Panel(result.Record, running, options, secure, answering));
+    }
+
+    // Holds the port of the panel open in the firewall of the host at once, answering as a save does.
+    private static async Task<IResult> OpenAsync(
+        PanelStore store,
+        ConfigStore configs,
+        PanelSettings running,
+        PanelPlace answering,
+        WebOptions options,
+        FirewallApplier firewall,
+        CancellationToken ct)
+    {
+        var held = await store.ReadAsync(ct).ConfigureAwait(false);
+        var result = await store.SaveAsync(held with { Opened = true }, ct).ConfigureAwait(false);
+        if (!result.IsOk || result.Record is null)
+        {
+            return Results.Json(new Failure(result.Code, result.Message), statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var sync = await firewall.SettleAsync(ct).ConfigureAwait(false);
+        if (!sync.IsDone)
+        {
+            return Results.Json(new Failure("firewall-refused", sync.Message), statusCode: StatusCodes.Status409Conflict);
         }
 
         var secure = await SecureAsync(result.Record, configs, options, ct).ConfigureAwait(false);
@@ -146,12 +190,7 @@ public static class PanelEndpoints
     {
         var logger = loggers.CreateLogger(typeof(PanelEndpoints));
         logger.LogInformation("the panel was told to start over");
-
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(300)).ConfigureAwait(false);
-            life.StopApplication();
-        });
+        StartOver(life);
 
         return Results.Accepted();
     }

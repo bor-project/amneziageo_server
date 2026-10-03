@@ -80,6 +80,24 @@ public static class UfwRules
     }
 
     /// <summary>
+    /// Returns the rules that hand ports over to the host: the rule of the panel that lets each of them in, under a
+    /// comment that no longer starts with the mark, so ufw keeps the port open as a rule of the host. A port the panel
+    /// holds no rule for is left out, and so is a rule of the host itself.
+    /// </summary>
+    public static IReadOnlyList<FirewallRule> Kept(IReadOnlyList<FirewallPort> ports, IReadOnlyList<FirewallRule> held)
+    {
+        ArgumentNullException.ThrowIfNull(ports);
+        ArgumentNullException.ThrowIfNull(held);
+
+        return
+        [
+            .. ports
+                .Select(port => new FirewallRule(Allow(port), KeptBy + port.Note))
+                .Where(rule => held.Any(one => one.Same(rule) && Owned(one))),
+        ];
+    }
+
+    /// <summary>
     /// Returns the rules to put into ufw and the ones of the panel to take out of it, leaving the rules others hold.
     /// </summary>
     public static (IReadOnlyList<FirewallRule> Put, IReadOnlyList<FirewallRule> Take) Difference(
@@ -124,6 +142,8 @@ public static class UfwRules
     private const string Head = "ufw ";
 
     private const string Comment = " comment ";
+
+    private const string KeptBy = "kept by " + Mark + " ";
 
     private static IEnumerable<FirewallRule> Rules(string text)
     {

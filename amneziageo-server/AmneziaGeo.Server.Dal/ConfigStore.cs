@@ -257,6 +257,24 @@ public sealed class ConfigStore
     }
 
     /// <summary>
+    /// Holds the ports of an endpoint open in the firewall of the host, or leaves them to the host.
+    /// </summary>
+    public async Task<ConfigResult> OpenedAsync(long id, bool on, CancellationToken ct)
+    {
+        var held = await _db.Configs.FirstOrDefaultAsync(row => row.Id == id, ct).ConfigureAwait(false);
+        if (held is null)
+        {
+            return Missing(id);
+        }
+
+        held.Opened = on;
+        held.UpdatedUtc = _time.GetUtcNow();
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return ConfigResult.Done(Read(held));
+    }
+
+    /// <summary>
     /// Removes an endpoint.
     /// </summary>
     public async Task<ConfigResult> RemoveAsync(long id, CancellationToken ct)

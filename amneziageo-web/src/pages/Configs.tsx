@@ -4,13 +4,14 @@ import { complaint } from "@/api/auth"
 import { useClients } from "@/api/clients"
 import { failure, useConfigs, useSwitchConfig } from "@/api/configs"
 import type { Config } from "@/api/configs"
+import { useFailure } from "@/api/failure"
 import { useOpenPort, usePortState } from "@/api/firewall"
 import { scopes } from "@/api/scopes"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { Find, Knob } from "@/components/fields"
 import { useOpening } from "@/components/opening"
-import { card } from "@/components/styles"
+import { alarmBar, alarmLine, card } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
@@ -21,6 +22,7 @@ export function Configs() {
   const user = useAppSelector((s) => s.auth.user)
   const [params, setParams] = useSearchParams()
   const configs = useConfigs()
+  const failed = useFailure(configs)
   const clients = useClients()
   const turn = useSwitchConfig()
   const [faults, setFaults] = useState<Record<number, string>>({})
@@ -54,7 +56,15 @@ export function Configs() {
 
   return (
     <div className={`mt-4 ${card}`}>
-      {all.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("configs.empty")}</div>}
+      {configs.isPending && failed === null && (
+        <div className="px-4 py-6 text-sm text-muted">{t("configs.loading")}</div>
+      )}
+      {failed !== null && (
+        <div className={all.length === 0 ? alarmLine : alarmBar}>{t(complaint(failed))}</div>
+      )}
+      {configs.isSuccess && all.length === 0 && (
+        <div className="px-4 py-6 text-sm text-muted">{t("configs.empty")}</div>
+      )}
 
       {all.length > 0 && (
         <Rows
@@ -87,11 +97,14 @@ export function Configs() {
               sort: (one) => one.name,
               lead: true,
               body: "font-semibold text-ink",
-              cell: (one) => (
-                <Link to={`/interfaces/${one.id}/edit`} className="hover:text-brand-ink">
-                  {one.name}
-                </Link>
-              ),
+              cell: (one) =>
+                may ? (
+                  <Link to={`/interfaces/${one.id}/edit`} className="hover:text-brand-ink">
+                    {one.name}
+                  </Link>
+                ) : (
+                  one.name
+                ),
             },
             {
               key: "endpoint",

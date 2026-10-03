@@ -29,7 +29,8 @@ public sealed record PanelResponse(
     PanelPlace Running);
 
 /// <summary>
-/// The settings the panel is changed with.
+/// The settings the panel is changed with; keep leaves the port the panel held open before it moved open in the
+/// firewall of the host, as a rule of the host, instead of closing it.
 /// </summary>
 public sealed record PanelRequest(
     IReadOnlyList<string>? Listen,
@@ -41,7 +42,8 @@ public sealed record PanelRequest(
     string? CertificateKey,
     string? Language,
     bool Prereleases,
-    string? NameTemplate = null);
+    string? NameTemplate = null,
+    bool? Keep = null);
 
 /// <summary>
 /// What the substitutions of the name template stand for with the first client, and the name it takes when nothing is

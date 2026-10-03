@@ -11,6 +11,7 @@ address.
 |---|---|
 | `GET /api/subscription` | `access:write` |
 | `PUT /api/subscription` | `access:write` |
+| `POST /api/subscription/open` | `access:write` |
 | `GET /<path>/<subscription>` | none, the name of the subscription is the secret |
 | `POST`, `DELETE /<path>/<subscription>/hold` | none, the device names itself in `X-Hwid`, see [devices.md](devices.md) |
 
@@ -28,14 +29,15 @@ says why. `Cancel` drops what is not saved yet.
 | Enabled | whether the panel hands the subscriptions out, off by default |
 | Listen addresses | the addresses of the host the subscriptions bind, empty for every address |
 | Listen domains | the names the subscriptions answer to, empty for any; the first one goes into the address a client is handed |
-| Port | 2096 by default; the port of the panel puts the subscriptions next to it, under its certificate; a port the firewall of the host closes is named under the field, see [firewall.md](firewall.md) |
+| Port | 2096 by default; the port of the panel puts the subscriptions next to it, under its certificate; a port the firewall of the host closes is named under the field, with `Open` next to it where the panel may change the firewall, `POST /api/subscription/open`, and `Open on save` for a new port, see [firewall.md](firewall.md) |
 | Base path | what follows the port and goes before the path of a subscription, `/sub/` by default |
 | Certificate | the chain and the key the subscriptions answer under, empty for the certificate of the panel |
 | Update interval | how often a client reads the subscription again, 12 hours by default, 1 to 720 |
 | Profile title | the name a client gives the subscription, empty for the host of its address |
 
 On the port of the panel the listen addresses of the subscriptions do not count, and their path may not be
-`api`, `assets` or the path of the panel. A port of their own has to be let through the firewall of the host.
+`api`, `assets` or the path of the panel. A port of their own has to be let through the firewall of the host: by the
+button next to the field, or item 23 of the menu, see [firewall.md](firewall.md).
 
 With no domain of their own the subscriptions take the domain of the panel, and with neither the host the
 request arrived on. Behind a reverse proxy that host is the inner one until the proxy is named in

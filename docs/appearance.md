@@ -63,9 +63,17 @@ and `Clients` stand on the first level; `Routing` and `Settings` are groups that
 group the page lies in unfolds by itself, and the browser keeps which groups were left open under
 `amneziageo.menu`.
 
+The window scrolls the page as a whole, while the header and the menu stay where they are, so a phone folds its
+address bar away. A page opened anew starts at its top, and the way back finds the page where it was left: the router
+of the panel, `createBrowserRouter` in `src/App.tsx`, keeps the place for every step of the history. The tab of the
+browser is named after the last link of the trail, `Rules · AmneziaGeo`.
+
 A part with several lists of the same things carries them as tabs under its title: `Clients` holds `Configs` and
 `Templates`. A page of one item is titled by its name, and a client carries its own tabs, `Export` and
-`Settings`. The ruleset of nftables is not a page of the panel: the console prints it, see [rules.md](rules.md).
+`Settings`. Every tab is an address of its own, `/clients/templates` for the templates, so the way back leads to the
+tab before, and a reload or a link opens the same tab. An address under `/connections`, where the interfaces, the
+clients and the templates lived before, leads to the same page at its new address. The ruleset of nftables is not a
+page of the panel: the console prints it, see [rules.md](rules.md).
 
 ## Lists
 
@@ -91,8 +99,13 @@ of its own, the corner column takes what is left. A list that chooses rows takes
 bar over the list counts them and carries `choice.actions`, the commands over the chosen rows, and clearing the
 choice. A list that a search leaves empty says so.
 
+A list or a page says that it loads while its first answer is on the way and names the failure when the server does
+not answer, above the rows it showed before when it had them; it says that there is nothing only once the server
+answered so. `useFailure` in `src/api/failure.ts` keeps the failure while a list read every two seconds asks again.
+
 The cell in the corner of a row carries the menu of the row, and the menu carries only the ways into a page:
-the settings of the item, and the export of a client. What the item does, from applying an interface to probing
+the settings of the item, and the export of a client. A name in a row leads to the page of its item only for a
+role that may open that page; a role that only reads the state sees the name as plain text and no menu. What the item does, from applying an interface to probing
 a channel, lives in the form of the item, and so does its removal. A list that holds an order of its own, the
 rules, the geo sources and the channels, carries two arrows next to the menu, and the row is dragged as well.
 
@@ -100,6 +113,9 @@ rules, the geo sources and the channels, carries two arrows next to the menu, an
 
 The bar with the buttons of a form stays at the bottom of the window while the form scrolls. A list box carries its
 arrow inside the field, clear of its edge, in both themes.
+
+A form carries no lines of explanation under its fields: a short note is the question mark next to the caption, and
+the note shows as the pointer rests on it (`Hinted` in `src/components/fields.tsx`).
 
 ## Words
 

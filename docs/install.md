@@ -277,7 +277,7 @@ as well.
 | `/opt/amneziageo-server/current` | the release that runs |
 | `/opt/amneziageo-server/previous` | the release before it, where `--rollback` goes |
 | `/opt/amneziageo-server/wwwroot` | the web interface the server serves |
-| `/var/lib/amneziageo-server/backup` | the database as it was before each of the last five updates |
+| `/var/lib/amneziageo-server/backup` | the last five copies of the database, each taken before an update or a restore |
 | `/usr/local/bin/amneziageo-server` | the menu of the release that runs |
 
 The host keeps the current release and the one before it, each with its web interface, and the web interface
@@ -289,9 +289,10 @@ into a release of their own, `legacy-<date>`, and goes on from there.
 
 ## Moving to another server
 
-**Download backup** on the **Overview** of the panel, for a role with the right to download backups, saves the
-database as it is at that moment: the accounts and tokens, the endpoints with their keys, the clients, the rules
-and the settings of the panel. On the new host, as root:
+The card **Backup** on the **Overview** of the panel downloads a copy of the database and restores the panel from
+one. **Download a copy**, for a role with the right to download backups, `backup:read`, saves the database as it is
+at that moment: the accounts and tokens, the endpoints with their keys, the clients, the rules and the settings of
+the panel. On the new host, as root:
 
 ```
 amneziageo-server install --restore /root/amneziageo-<name>-<time>.db
@@ -302,6 +303,30 @@ panel, puts the panel on as a package or a container, sets the fresh database as
 `/var/lib/amneziageo-server/backup` and starts the panel on the backup. On a host that runs the panel already,
 `amneziageo-server restore <file>` or **Restore a backup file** in item 5 does the same and sets the database it
 replaces aside; a backup of a newer release than the host runs waits until the panel is updated.
+
+**Restore from a file** on the same card puts a backup on the panel that runs, for a role with `access:write`, after a
+question: it replaces the accounts and every setting. The page sends the file, up to 1 GiB, as the body of
+`POST /api/backup/restore`. The panel checks it as the script does, and checks that it would come up on this host
+under the settings of the backup: the addresses it listens on and the certificate with its key. A file it turns down
+comes back with 400 and a code:
+
+| Code | The file |
+|---|---|
+| `backup-empty` | is empty |
+| `backup-not-database` | is not a database |
+| `backup-foreign` | is a database, but not one of the panel |
+| `backup-damaged` | is a database of the panel that is damaged |
+| `backup-newer` | comes from a newer release of the panel than the host runs; the panel is updated first |
+| `backup-elsewhere` | holds settings the panel would not come up under on this host, an address the host does not carry or a certificate it lacks; `amneziageo-server restore <file>` in the console fits such a backup to the host |
+
+A file over 1 GiB is turned down with 413 and `backup-large`.
+
+A file the panel takes waits beside the database as `restore.db`. The panel writes `backup.restore` into the audit
+log of the database it replaces, answers 202 with `{"restarting":true}` and starts over; systemd starts it again, or
+compose in a container. Before anything opens the database, the panel moves the database it replaces, with its
+journal, into `/var/lib/amneziageo-server/backup/<time>-before-restore` and puts the backup in its place, open to its
+owner alone; a backup of an older release is brought up to date as the panel starts. The page waits until the panel
+answers again.
 
 The backup keeps the addresses of the old host. The clients reach the server by the name in their configurations,
 so the name moves to the new host in DNS and the configurations work on as they are. The certificate of the panel,
