@@ -41,7 +41,10 @@ A network, an address or a name written bare takes its prefix as it is added, an
 its host. A name is asked for both families through the name servers of the panel resolver (`upstreams` in
 [dns.md](dns.md)); of a geosite category only the domains and the exact names are asked, keywords and
 expressions have no address of their own. One pass asks at most 4000 names and stops after a minute; a name that
-did not answer in time counts as not found.
+did not answer in time counts as not found. An answer no packet goes to through a tunnel is left out: the machine
+itself (`127.0.0.0/8`, `::1`), no address at all (`0.0.0.0/8`, `::`), a link-local or group address, the block from
+`240.0.0.0` and the broadcast. A name that answers with nothing else counts as not found. A private address stays,
+since a name of an inner resolver may lead to a host behind the server.
 
 What the entries give is folded into the fewest ranges that cover it and kept with the template, together with
 the entries that gave nothing and the time of the pass. This is what goes into `AllowedIPs` of every client of

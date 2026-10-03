@@ -100,6 +100,7 @@ public sealed class TemplateResolver
         {
             found[entry].AddRange(names
                 .SelectMany(name => Answered(answers, name))
+                .Where(Destined)
                 .Select(address => new AwgAllowedIp(address, Width(address))));
         }
 
@@ -168,6 +169,29 @@ public sealed class TemplateResolver
             .Where(domain => domain.Kind is GeoDomainKind.Domain or GeoDomainKind.Full)
             .Select(domain => domain.Value.ToLowerInvariant())
     ];
+
+    // A name may answer with a stub no packet goes to through a tunnel: the machine itself, no address at all, a link
+    // of its own, a group, the reserved block or the broadcast. A private address stays, a name of an inner resolver
+    // may lead to a host behind the server.
+    private static bool Destined(IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6)
+        {
+            return Destined(address.MapToIPv4());
+        }
+
+        if (address.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            return !address.Equals(IPAddress.IPv6Any)
+                && !address.Equals(IPAddress.IPv6Loopback)
+                && !address.IsIPv6LinkLocal
+                && !address.IsIPv6Multicast;
+        }
+
+        var bytes = address.GetAddressBytes();
+
+        return bytes[0] is not (0 or 127) and < 224 && !(bytes[0] == 169 && bytes[1] == 254);
+    }
 
     private static AwgAllowedIp? Range(string cidr) => AwgAllowedIp.TryParse(cidr, out var range) ? range : null;
 
