@@ -6,6 +6,7 @@ using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Route;
+using AmneziaGeo.Server.Routing.Template;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -57,6 +58,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
     public DbSet<PanelEntity> Panel => Set<PanelEntity>();
 
     public DbSet<TemplateEntity> Templates => Set<TemplateEntity>();
+
+    public DbSet<RoutingPresetEntity> RoutingPresets => Set<RoutingPresetEntity>();
 
     public DbSet<SubscriptionEntity> Subscription => Set<SubscriptionEntity>();
 
@@ -152,6 +155,12 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
         {
             entity.Property(template => template.Name).HasMaxLength(TemplateRules.MaxNameLength);
             entity.HasIndex(template => template.Name).IsUnique();
+        });
+
+        builder.Entity<RoutingPresetEntity>(entity =>
+        {
+            entity.Property(preset => preset.Name).HasMaxLength(PresetRules.MaxNameLength);
+            entity.HasIndex(preset => preset.Name).IsUnique();
         });
 
         builder.Entity<GeoSourceEntity>(entity =>

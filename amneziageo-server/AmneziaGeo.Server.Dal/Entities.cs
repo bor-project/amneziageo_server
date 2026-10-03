@@ -728,7 +728,33 @@ public sealed class TemplateEntity
 
     public bool LocksRouting { get; set; }
 
+    public string Presets { get; set; } = string.Empty;
+
     public DateTimeOffset? RefreshedUtc { get; set; }
+
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// One routing preset as the database holds it.
+/// </summary>
+public sealed class RoutingPresetEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Proxy { get; set; } = string.Empty;
+
+    public string Direct { get; set; } = string.Empty;
+
+    public string Block { get; set; } = string.Empty;
+
+    public bool AllUdp { get; set; }
+
+    public bool Full { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; }
 

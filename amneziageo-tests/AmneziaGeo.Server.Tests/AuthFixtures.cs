@@ -107,6 +107,7 @@ public sealed class Bench : IDisposable
         Standings = _scope.ServiceProvider.GetRequiredService<DnsStandingStore>();
         Panel = _scope.ServiceProvider.GetRequiredService<PanelStore>();
         Templates = _scope.ServiceProvider.GetRequiredService<TemplateStore>();
+        Presets = _scope.ServiceProvider.GetRequiredService<PresetStore>();
         GeoFiles = _scope.ServiceProvider.GetRequiredService<IGeoFileStore>();
         RefreshTokens = _scope.ServiceProvider.GetRequiredService<IRefreshTokens>();
         Audit = _scope.ServiceProvider.GetRequiredService<IAuditLog>();
@@ -150,6 +151,8 @@ public sealed class Bench : IDisposable
     public PanelStore Panel { get; }
 
     public TemplateStore Templates { get; }
+
+    public PresetStore Presets { get; }
 
     public string DatabasePath => _path;
 

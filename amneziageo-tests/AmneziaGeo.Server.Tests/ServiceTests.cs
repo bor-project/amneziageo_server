@@ -9,6 +9,8 @@ using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Core.Panel;
+using AmneziaGeo.Server.Geo;
+using AmneziaGeo.Server.Routing.Template;
 using AmneziaGeo.Server.Routing.Proxy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -374,6 +376,54 @@ public class ServiceTests
     }
 
     [Fact]
+    public async Task AClientIsHandedTheGeoSourcesAndTheRoutingListsOfItsTemplate()
+    {
+        using var bench = new Bench();
+        await bench.Geo.AddAsync(
+            new GeoSource { Name = "extra", Kind = GeoKind.Site, Url = "https://geo.example/extra.dat" },
+            CancellationToken.None);
+        var unblock = (await bench.Presets.AddAsync(
+            new RoutingPreset { Name = "Unblock", Proxy = ["geosite:youtube"], Direct = ["geoip:ru"], AllUdp = true },
+            CancellationToken.None)).Record!;
+        var ads = (await bench.Presets.AddAsync(
+            new RoutingPreset { Name = "No ads", Block = ["geosite:category-ads-all"], Full = true },
+            CancellationToken.None)).Record!;
+        var template = (await bench.Templates.AddAsync(
+            new ClientTemplate { Name = "phones", AllowedIps = ["0.0.0.0/0"], Presets = [ads.Id, unblock.Id] },
+            CancellationToken.None)).Record!;
+
+        var features = await FeaturesAsync(bench, template.Id, ClientRouting.Template);
+
+        var sources = features.GetProperty("sources").GetProperty("items").EnumerateArray().ToList();
+        var extra = Assert.Single(sources, item => item.GetProperty("name").GetString() == "extra");
+        Assert.Equal("geosite", extra.GetProperty("kind").GetString());
+        Assert.Equal("https://geo.example/extra.dat", extra.GetProperty("url").GetString());
+        var lists = features.GetProperty("presets").GetProperty("lists").EnumerateArray().ToList();
+        Assert.Equal(["No ads", "Unblock"], lists.Select(list => list.GetProperty("name").GetString()));
+        Assert.Equal(["block|geosite:category-ads-all"], lists[0].GetProperty("rules").EnumerateArray().Select(rule => rule.GetString()));
+        Assert.True(lists[0].GetProperty("full").GetBoolean());
+        Assert.False(lists[0].GetProperty("allUdp").GetBoolean());
+        Assert.Equal(["proxy|geosite:youtube", "direct|geoip:ru"], lists[1].GetProperty("rules").EnumerateArray().Select(rule => rule.GetString()));
+        Assert.True(lists[1].GetProperty("allUdp").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AClientThatDoesNotRouteIsHandedNoRoutingLists()
+    {
+        using var bench = new Bench();
+        var preset = (await bench.Presets.AddAsync(
+            new RoutingPreset { Name = "Unblock", Proxy = ["geosite:youtube"] },
+            CancellationToken.None)).Record!;
+        var template = (await bench.Templates.AddAsync(
+            new ClientTemplate { Name = "phones", AllowedIps = ["0.0.0.0/0"], Presets = [preset.Id] },
+            CancellationToken.None)).Record!;
+
+        var features = await FeaturesAsync(bench, template.Id, ClientRouting.Off);
+
+        Assert.False(features.TryGetProperty("presets", out _));
+    }
+
+    [Fact]
     public async Task AClientLearnsWhereItsSubscriptionIsAndWhatItHandsOutNow()
     {
         using var bench = new Bench();
@@ -538,10 +588,34 @@ public class ServiceTests
                 new InboundOffer(),
                 new SpeedOffer(tickets),
                 new SubscriptionOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
+                new SourcesOffer(bench.Scopes),
+                new PresetsOffer(bench.Scopes),
             ],
             state,
             Options.Create(new JsonOptions()),
             NullLogger<ServiceDesk>.Instance);
+    }
+
+    // Asks the hello as a client of the template and returns the features it was offered.
+    private static async Task<JsonElement> FeaturesAsync(Bench bench, long template, ClientRouting routing)
+    {
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"], TemplateId = template, Routing = routing },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
+
+        var answer = await AskAsync(desk, Point(endpoint), token);
+        var opened = PeerToken.Open(
+            PeerToken.Shared(client.PrivateKey, endpoint.PublicKey),
+            token.Nonce!,
+            JsonSerializer.Deserialize<SealedAnswer>(answer.Body, Web)!);
+        using var document = JsonDocument.Parse(opened!);
+
+        return document.RootElement.GetProperty("features").Clone();
     }
 
     private static ServicePoint Point(ServerConfig endpoint) => ServicePoints.Of([endpoint], string.Empty, string.Empty)[0];

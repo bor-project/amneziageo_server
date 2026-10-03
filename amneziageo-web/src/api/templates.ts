@@ -11,6 +11,7 @@ export interface Template {
   mtu: number | null
   keepalive: number | null
   routing: boolean
+  presets: number[]
   clients: number
   refreshedUtc: string | null
   createdUtc: string
@@ -24,6 +25,7 @@ export interface TemplateDraft {
   mtu: number | null
   keepalive: number | null
   routing: boolean
+  presets: number[]
 }
 
 export interface TemplatePart {
@@ -98,6 +100,7 @@ export function draftOf(template: Template): TemplateDraft {
     mtu: template.mtu,
     keepalive: template.keepalive,
     routing: template.routing,
+    presets: template.presets,
   }
 }
 
@@ -108,6 +111,7 @@ export const freshTemplate: TemplateDraft = {
   mtu: null,
   keepalive: null,
   routing: true,
+  presets: [],
 }
 
 function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) {
@@ -117,6 +121,7 @@ function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) 
     mutationFn: call,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["templates"] })
+      await queryClient.invalidateQueries({ queryKey: ["presets"] })
       await queryClient.invalidateQueries({ queryKey: ["client-config"] })
     },
   })

@@ -71,6 +71,7 @@ public static class ServerDatabase
         services.AddScoped<AccessStore>();
         services.AddScoped<PanelStore>();
         services.AddScoped<TemplateStore>();
+        services.AddScoped<PresetStore>();
         services.AddScoped<SubscriptionStore>();
         services.AddScoped<DatabaseBackup>();
         services.AddScoped<IRefreshTokens, RefreshTokenStore>();

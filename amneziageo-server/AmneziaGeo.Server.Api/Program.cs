@@ -76,6 +76,7 @@ app.MapTokens();
 app.MapConfigs();
 app.MapClients();
 app.MapTemplates();
+app.MapPresets();
 app.MapGeo();
 app.MapGeoEntries();
 app.MapOutbounds();
