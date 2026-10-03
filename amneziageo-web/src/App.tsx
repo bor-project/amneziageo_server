@@ -44,6 +44,9 @@ import { RouteTest } from "@/pages/RouteTest"
 import { RulePage } from "@/pages/RulePage"
 import { RuleRemove } from "@/pages/RuleRemove"
 import { Rules } from "@/pages/Rules"
+import { PresetPage } from "@/pages/PresetPage"
+import { PresetRemove } from "@/pages/PresetRemove"
+import { Presets } from "@/pages/Presets"
 import { PanelCertificates, PanelServer } from "@/pages/Settings"
 import { Subscriptions } from "@/pages/Subscriptions"
 import { TemplatePage } from "@/pages/TemplatePage"
@@ -92,6 +95,8 @@ const router = createBrowserRouter(
               <Route path="templates" element={<Templates />} />
               <Route path="templates/default" element={<DefaultTemplate />} />
               <Route path="templates/:templateId" element={<Navigate to="edit" replace />} />
+              <Route path="presets" element={<Presets />} />
+              <Route path="presets/:presetId" element={<Navigate to="edit" replace />} />
               <Route element={<RequireScope scope={scopes.manageClients} />}>
                 <Route path="new" element={<NewClient />} />
                 <Route path="delete" element={<ClientsRemove />} />
@@ -99,6 +104,9 @@ const router = createBrowserRouter(
                 <Route path="templates/new" element={<TemplatePage />} />
                 <Route path="templates/:templateId/edit" element={<TemplatePage />} />
                 <Route path="templates/:templateId/delete" element={<TemplateRemove />} />
+                <Route path="presets/new" element={<PresetPage />} />
+                <Route path="presets/:presetId/edit" element={<PresetPage />} />
+                <Route path="presets/:presetId/delete" element={<PresetRemove />} />
               </Route>
               <Route path=":clientId" element={<ClientView />}>
                 <Route index element={<Navigate to="export" replace />} />

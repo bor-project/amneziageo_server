@@ -29,7 +29,8 @@ export const interfaces: Item[] = [
   },
 ]
 
-// The tabs of the page of the clients: their configurations and the templates they are made from.
+// The tabs of the page of the clients: their configurations, the templates they are made from and the routing lists
+// the templates hand out.
 export const clients: Item[] = [
   {
     to: "/clients",
@@ -44,6 +45,13 @@ export const clients: Item[] = [
     icon: "layout",
     scope: scopes.readState,
     add: { to: "/clients/templates/new", scope: scopes.manageClients },
+  },
+  {
+    to: "/clients/presets",
+    label: "tab.presets",
+    icon: "fork",
+    scope: scopes.readState,
+    add: { to: "/clients/presets/new", scope: scopes.manageClients },
   },
 ]
 

@@ -71,6 +71,9 @@ and `features` carries what the server offers this client, each under its name:
 | `routing` | `allowed` | always: whether the client may route by its own lists, from the client and its template, see [templates.md](templates.md) |
 | `inbound` | `mode`: `server` or `network` | the client lets connections in from the tunnel, see [clients.md](clients.md) |
 | `speed` | `inside`, `outside` (each `down` and `up`), `limit`, `expires` | always: where to measure and until when |
+| `subscription` | `url`, `revision`, `pin` | the subscriptions are on and the client has one: where it reads it and what it hands out now |
+| `sources` | `items`, each `name`, `kind` (`geoip` or `geosite`) and `url` | the panel has a geo source on: the sources the client adds when it holds none at the address |
+| `presets` | `lists`, each `name`, `rules`, `allUdp` and `full` | the template of the client names routing presets and the client routes by its own lists: the lists the client adds when it holds none under the name, see [templates.md](templates.md) |
 
 A client leaves out a feature it does not know, and takes a feature the answer leaves out as not offered.
 

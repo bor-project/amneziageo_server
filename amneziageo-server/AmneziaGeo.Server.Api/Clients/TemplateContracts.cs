@@ -16,6 +16,7 @@ public sealed record TemplateResponse(
     int? Mtu,
     int? Keepalive,
     bool Routing,
+    IReadOnlyList<long> Presets,
     int Clients,
     DateTimeOffset? RefreshedUtc,
     DateTimeOffset CreatedUtc,
@@ -30,7 +31,8 @@ public sealed record TemplateRequest(
     IReadOnlyList<string>? Dns,
     int? Mtu,
     int? Keepalive,
-    bool? Routing = null);
+    bool? Routing = null,
+    IReadOnlyList<long>? Presets = null);
 
 /// <summary>
 /// The entries the panel asks what they come out as.
@@ -95,6 +97,7 @@ public static class TemplateAnswers
             template.Mtu,
             template.Keepalive,
             template.Routing,
+            template.Presets,
             clients,
             template.RefreshedUtc,
             template.CreatedUtc,
@@ -127,6 +130,7 @@ public static class TemplateAnswers
             Mtu = request.Mtu,
             Keepalive = request.Keepalive,
             Routing = request.Routing ?? TemplateDefaults.Routing,
+            Presets = [.. (request.Presets ?? []).Distinct()],
         };
     }
 

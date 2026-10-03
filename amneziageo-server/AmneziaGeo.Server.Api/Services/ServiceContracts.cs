@@ -77,6 +77,35 @@ public sealed record SpeedFeature(SpeedLeg Inside, SpeedLeg Outside, long Limit,
 public sealed record SubscriptionFeature(string Url, string Revision, string Pin);
 
 /// <summary>
+/// One geo source the client fetches its lists from.
+/// </summary>
+/// <param name="Name">The name the source is known by.</param>
+/// <param name="Kind">Whether the source holds address lists or site lists.</param>
+/// <param name="Url">The address the file of the source is fetched from.</param>
+public sealed record SourceItem(string Name, string Kind, string Url);
+
+/// <summary>
+/// Arguments of the sources feature.
+/// </summary>
+/// <param name="Items">The geo sources the client holds, in the order the server reads them.</param>
+public sealed record SourcesFeature(IReadOnlyList<SourceItem> Items);
+
+/// <summary>
+/// One routing list the client holds.
+/// </summary>
+/// <param name="Name">The name the list takes.</param>
+/// <param name="Rules">The rules of the list, each led by what it does with the traffic.</param>
+/// <param name="AllUdp">Whether every UDP packet goes through the tunnel.</param>
+/// <param name="Full">Whether everything goes through the tunnel but what goes past it.</param>
+public sealed record PresetItem(string Name, IReadOnlyList<string> Rules, bool AllUdp, bool Full);
+
+/// <summary>
+/// Arguments of the presets feature.
+/// </summary>
+/// <param name="Lists">The routing lists the template of the client hands out, in its order.</param>
+public sealed record PresetsFeature(IReadOnlyList<PresetItem> Lists);
+
+/// <summary>
 /// The client that proved its key and the request it asked with.
 /// </summary>
 /// <param name="Client">The client behind the key.</param>
@@ -135,4 +164,14 @@ public static class FeatureNames
     /// The subscription of the client.
     /// </summary>
     public const string Subscription = "subscription";
+
+    /// <summary>
+    /// The geo sources the client holds.
+    /// </summary>
+    public const string Sources = "sources";
+
+    /// <summary>
+    /// The routing lists the client holds.
+    /// </summary>
+    public const string Presets = "presets";
 }

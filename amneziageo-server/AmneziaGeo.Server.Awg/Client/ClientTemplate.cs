@@ -51,6 +51,11 @@ public sealed record ClientTemplate
     public bool Routing { get; init; } = TemplateDefaults.Routing;
 
     /// <summary>
+    /// The numbers of the routing presets the clients of the template are handed, in the order they get them.
+    /// </summary>
+    public IReadOnlyList<long> Presets { get; init; } = [];
+
+    /// <summary>
     /// When the ranges were last worked out.
     /// </summary>
     public DateTimeOffset? RefreshedUtc { get; init; }

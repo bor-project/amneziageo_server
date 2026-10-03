@@ -25,6 +25,9 @@ A template also says whether a client of AmneziaGeo may route by lists of its ow
 takes the word of its template or says `on` or `off` itself, and learns the outcome from the hello of its
 endpoint, see [services.md](services.md).
 
+A template names the routing presets its clients are handed too, in the order they get them, see
+[Routing presets](#routing-presets).
+
 ## Where the ranges come from
 
 The ranges are not written by hand. The template keeps a list of entries, the way the client keeps its lists:
@@ -85,3 +88,41 @@ of them, the ranges of a country or the names of a category, a name written `ful
 it is matched that way. It needs `state:read`.
 
 The same routes answer under `/api/templates/clients`, which is where the panel asks for them.
+
+## Routing presets
+
+A routing preset is a list a client of AmneziaGeo routes by, kept on the panel and handed out by the hello of
+the endpoint. The panel holds them in the tab `Routing` of `Templates`, next to the client templates, and a client
+template picks the presets its clients are handed. A client that does not route by its own lists, by its own word
+or by its template, is handed none.
+
+A preset names what happens to the traffic of its entries, written the way a template writes them:
+
+| Part | Does |
+|---|---|
+| Through the VPN | the entries go through the tunnel |
+| Directly | the entries go past the tunnel |
+| Block | the client drops the entries |
+| All UDP through the tunnel | every UDP packet goes through the tunnel, whatever the entries say |
+| Everything through the VPN | everything goes through the tunnel but what goes directly |
+
+The client adds a preset as a list of its own when it holds no list under the name, and leaves a list it holds
+under the name as it is: an owner who removes the list gets it back at the next hello, an owner who changes it
+keeps the change. The hello hands out the geo sources of the panel next to the presets, and the client adds the
+sources it holds none of at the address, so the keys of a preset name lists the client has.
+
+A preset a template names cannot be removed (`preset-in-use`): take it out of those templates first. A template
+naming a preset the panel does not hold is refused with `unknown-preset`.
+
+| Setting | Holds |
+|---|---|
+| Name | up to 64 characters, one of a kind; the name of the list on the client |
+| Through the VPN, Directly, Block | up to 256 geo keys, networks, addresses and domains each |
+| All UDP through the tunnel | off by default |
+| Everything through the VPN | off by default |
+
+`GET /api/templates/routing` lists the presets with the number of templates that name each, and
+`GET /api/templates/routing/{id}` returns one; both need `state:read`. `POST /api/templates/routing`,
+`PUT /api/templates/routing/{id}` and `DELETE /api/templates/routing/{id}` need `clients:write`. A request writes
+`name`, `proxy`, `direct`, `block`, `allUdp` and `full`; a client template names its presets in `presets`, by number.
+

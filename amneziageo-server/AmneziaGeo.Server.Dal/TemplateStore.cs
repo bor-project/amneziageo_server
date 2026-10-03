@@ -1,3 +1,4 @@
+using System.Globalization;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Routing.Template;
 using Microsoft.EntityFrameworkCore;
@@ -219,7 +220,32 @@ public sealed class TemplateStore
                 $"the panel already carries a template called '{draft.Name}'");
         }
 
+        if (await MissingPresetAsync(draft.Presets, ct).ConfigureAwait(false) is { } missing)
+        {
+            return TemplateResult.No(
+                TemplateOutcome.Invalid,
+                "unknown-preset",
+                $"there is no routing preset under the number {missing}");
+        }
+
         return null;
+    }
+
+    // Returns the first preset number the panel holds nothing under, or null when it holds them all.
+    private async Task<long?> MissingPresetAsync(IReadOnlyList<long> presets, CancellationToken ct)
+    {
+        if (presets.Count == 0)
+        {
+            return null;
+        }
+
+        var named = presets.ToList();
+        var held = await _db.RoutingPresets.Where(preset => named.Contains(preset.Id))
+            .Select(preset => preset.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return named.Where(id => !held.Contains(id)).Select(id => (long?)id).FirstOrDefault();
     }
 
     private static TemplateResult Missing(long id) =>
@@ -236,6 +262,7 @@ public sealed class TemplateStore
         Mtu = entity.Mtu,
         Keepalive = entity.Keepalive,
         Routing = !entity.LocksRouting,
+        Presets = Numbers(entity.Presets),
         RefreshedUtc = entity.RefreshedUtc,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
@@ -251,6 +278,7 @@ public sealed class TemplateStore
         entity.Mtu = template.Mtu;
         entity.Keepalive = template.Keepalive;
         entity.LocksRouting = !template.Routing;
+        entity.Presets = string.Join(", ", template.Presets);
         entity.RefreshedUtc = template.RefreshedUtc;
     }
 
@@ -258,8 +286,12 @@ public sealed class TemplateStore
     {
         Name = draft.Name.Trim(),
         Entries = [.. draft.Entries.Select(one => TemplateList.Entry(one) ?? one.Trim()).Distinct(StringComparer.Ordinal)],
+        Presets = [.. draft.Presets.Distinct()],
     };
 
     private static IReadOnlyList<string> Parts(string text) =>
         [.. text.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+    private static IReadOnlyList<long> Numbers(string text) =>
+        [.. Parts(text).Select(part => long.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : 0).Where(id => id > 0)];
 }

@@ -1,9 +1,10 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
+import { usePresets } from "@/api/presets"
 import { useTemplateDefaults, useTemplatePreview } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
 import { EntryList } from "@/components/EntryList"
-import { Flag, Hinted, Line, Part } from "@/components/fields"
+import { Flag, Hinted, Line, Multi, Part } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
@@ -31,6 +32,7 @@ export function TemplateForm({
 }) {
   const t = useText()
   const defaults = useTemplateDefaults().data
+  const presets = usePresets().data ?? []
   const [draft, setDraft] = useState(start)
   const [servers, setServers] = useState(start.dns.join(", "))
   const [touched, setTouched] = useState(false)
@@ -106,6 +108,23 @@ export function TemplateForm({
             value={draft.routing}
             onChange={(routing) => put({ routing })}
           />
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className={label} htmlFor="template-presets">
+            <Hinted caption={t("templates.presets")} text={t("templates.presetsHint")} />
+          </label>
+          <div className="mt-1">
+            <Multi
+              id="template-presets"
+              value={draft.presets.flatMap((id) => presets.filter((one) => one.id === id).map((one) => one.name))}
+              offers={presets.map((one) => one.name)}
+              placeholder={t(presets.length === 0 ? "templates.noPresets" : "templates.pickPresets")}
+              onChange={(names) =>
+                put({ presets: names.flatMap((name) => presets.filter((one) => one.name === name).map((one) => one.id)) })
+              }
+            />
+          </div>
         </div>
       </Part>
 

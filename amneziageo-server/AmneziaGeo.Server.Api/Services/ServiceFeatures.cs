@@ -7,6 +7,8 @@ using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
+using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Template;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 
 namespace AmneziaGeo.Server.Api.Services;
@@ -189,4 +191,77 @@ public sealed class SubscriptionOffer : IHelloFeature
         context.Features.Get<ISslStreamFeature>()?.SslStream.LocalCertificate is { } certificate
             ? Convert.ToHexStringLower(SHA256.HashData(certificate.GetRawCertData()))
             : string.Empty;
+}
+
+/// <summary>
+/// Hands the client the geo sources the server reads, so the lists it routes by name the same keys.
+/// </summary>
+public sealed class SourcesOffer : IHelloFeature
+{
+    private readonly IServiceScopeFactory _scopes;
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public SourcesOffer(IServiceScopeFactory scopes)
+    {
+        _scopes = scopes;
+    }
+
+    /// <inheritdoc/>
+    public string Name => FeatureNames.Sources;
+
+    /// <inheritdoc/>
+    public async ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+
+        using var scope = _scopes.CreateScope();
+        var sources = await scope.ServiceProvider.GetRequiredService<GeoStore>().ListAsync(ct).ConfigureAwait(false);
+        var items = sources.Where(source => source.IsEnabled)
+            .OrderBy(source => source.Position)
+            .Select(source => new SourceItem(source.Name, source.Kind, source.Url))
+            .ToList();
+
+        return items.Count == 0 ? null : new SourcesFeature(items);
+    }
+}
+
+/// <summary>
+/// Hands the client the routing lists its template names, while the client routes by its own lists.
+/// </summary>
+public sealed class PresetsOffer : IHelloFeature
+{
+    private readonly IServiceScopeFactory _scopes;
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public PresetsOffer(IServiceScopeFactory scopes)
+    {
+        _scopes = scopes;
+    }
+
+    /// <inheritdoc/>
+    public string Name => FeatureNames.Presets;
+
+    /// <inheritdoc/>
+    public async ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+
+        if (peer.Template is not { Presets.Count: > 0 } template || !RoutingName.Taken(peer.Client.Routing, template))
+        {
+            return null;
+        }
+
+        using var scope = _scopes.CreateScope();
+        var presets = await scope.ServiceProvider.GetRequiredService<PresetStore>()
+            .ListAsync(template.Presets, ct)
+            .ConfigureAwait(false);
+        var lists = presets.Select(preset => new PresetItem(preset.Name, PresetRules.Rules(preset), preset.AllUdp, preset.Full))
+            .ToList();
+
+        return lists.Count == 0 ? null : new PresetsFeature(lists);
+    }
 }
