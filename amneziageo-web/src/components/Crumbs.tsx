@@ -1,8 +1,9 @@
 import { useContext, useMemo, useState } from "react"
 import type { ReactNode } from "react"
-import { Link } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import { Held } from "@/components/crumbs"
 import type { Crumb } from "@/components/crumbs"
+import { useText } from "@/i18n"
 import { useAbove, wideQuery } from "@/theme/width"
 
 export function CrumbsHolder({ children }: { children: ReactNode }) {
@@ -14,9 +15,12 @@ export function CrumbsHolder({ children }: { children: ReactNode }) {
 }
 
 export function Crumbs() {
+  const t = useText()
   const { head, tail } = useContext(Held)
+  const { pathname } = useLocation()
   const wide = useAbove(wideQuery)
-  const items = [...head, ...tail]
+  const home: Crumb[] = pathname === "/" ? [] : [{ label: t("nav.overview"), to: "/" }]
+  const items = [...home, ...head, ...tail]
   const shown = wide || items.length < 3 ? items : items.slice(-2)
   const root = items[0]
 

@@ -176,11 +176,16 @@ same import behind `Import` for an account whose role holds `clients:write`.
 turned on, off or removed the same way one at a time is, and every endpoint the clients stand on is put on the
 host once. The answer is `{ done, failed, unsynced }`: the numbers that went through, the ones refused with the
 `code` and `message` of the refusal, and the endpoints that did not take the change with the reason. In the list
-of the panel the first column chooses the clients.
+of the panel the first column chooses the clients, and a bar over the list then counts them and carries turning
+them on, off and their removal.
 
 ## What the panel shows
 
-The section lists the clients of every endpoint or of one, with the addresses they carry, whether they are
+`Clients` carries two tabs: `Configs`, the clients themselves, and `Templates`, see [templates.md](templates.md).
+A client opens on two tabs of its own: `Export`, the QR codes of its file, its link and its subscription with
+copying and downloading, and `Settings`, its form, for a holder of `clients:write`.
+
+The tab `Configs` lists the clients of every endpoint or of one, with the addresses they carry, whether they are
 online, how fast they move bytes now, what they made today and when they last completed a handshake. A client
 the interface does not carry is marked as such, so a panel that lost `CAP_NET_ADMIN` or an interface that is
 down is seen at once. The list reads the host every 2 seconds.

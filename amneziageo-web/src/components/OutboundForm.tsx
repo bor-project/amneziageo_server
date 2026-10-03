@@ -5,7 +5,7 @@ import { useImportOutbound, useOutboundKeys } from "@/api/outbounds"
 import type { OutboundDraft, OutboundKind } from "@/api/outbounds"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { Count, Flag, Line, Part } from "@/components/fields"
-import { card, danger, field, label, primary, secondary } from "@/components/styles"
+import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -251,7 +251,7 @@ export function OutboundForm({
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         {onRemove !== undefined && (
           <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
             {t("outbounds.remove")}

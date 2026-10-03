@@ -2,13 +2,16 @@ import { useState } from "react"
 import { complaint, reason } from "@/api/auth"
 import { useConfigs } from "@/api/configs"
 import { outside, usePortState } from "@/api/firewall"
+import type { Holding } from "@/api/firewall"
 import { usePanel } from "@/api/panel"
 import { scopes } from "@/api/scopes"
 import { draftOf, useSaveSubscription, useSubscription } from "@/api/subscription"
 import type { Subscription, SubscriptionDraft } from "@/api/subscription"
+import { KeepQuestion, PortNote } from "@/components/PortNote"
 import { Count, Flag, Line, Multi, Part, Pick } from "@/components/fields"
+import { manual, useOpening } from "@/components/opening"
 import { socketFault } from "@/components/ports"
-import { card, label, primary, secondary } from "@/components/styles"
+import { footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -34,9 +37,23 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
   const saved = draftOf(settings)
   const draft = kept ?? saved
   const domain = domainOf(draft, settings.certificateRoot)
-  const port = usePortState(draft.port, draft.isEnabled && draft.separate && outside(draft.listen))
+  const { able, reach, ufw } = useOpening(scopes.manageAccess)
+  const [opening, setOpening] = useState(false)
+  const [asking, setAsking] = useState(false)
+  const served = saved.isEnabled && saved.separate
+  const moved = draft.port !== saved.port || !served
+  const ahead = able && settings.opened && moved
+  const port = usePortState(
+    draft.port,
+    draft.isEnabled && draft.separate && outside(draft.listen) && !ahead && !opening,
+  )
   const closed = port.data?.state === "closed"
-  const blocked = closed && (draft.port !== saved.port || !saved.separate || !saved.isEnabled)
+  const blocked = closed && moved && !ahead && !opening
+  const previous =
+    settings.opened && served && draft.isEnabled && draft.separate && draft.port !== saved.port && outside(saved.listen)
+      ? [`${saved.port}/tcp`]
+      : []
+  const portLabel = `${draft.port}/tcp`
   const configs = useConfigs().data ?? []
   const panel = usePanel(may).data
   const where = draft.separate ? draft.port : null
@@ -66,18 +83,30 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
     })
   }
 
-  async function keep() {
+  async function keep(holding: Holding) {
     setFault(null)
     try {
-      await save.mutateAsync(draft)
+      await save.mutateAsync({ ...draft, ...holding })
+      setOpening(false)
       dispatch(subscriptionDrafted(null))
     } catch (error) {
       setFault(complaint(error))
     }
   }
 
+  // Saves, asking first whether the port the panel held open before it moved is closed.
+  function go() {
+    if (previous.length > 0 && able && ufw) {
+      setAsking(true)
+      return
+    }
+
+    void keep(opening ? { opened: true } : {})
+  }
+
   function drop() {
     setFault(null)
+    setOpening(false)
     dispatch(subscriptionDrafted(null))
   }
 
@@ -140,7 +169,21 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
             caption={t("settings.port")}
             value={draft.port}
             onChange={(port) => set({ port })}
-            fault={closed ? t("settings.portClosed", { port: String(draft.port) }) : ""}
+            note={
+              draft.isEnabled &&
+              outside(draft.listen) && (
+                <PortNote
+                  port={portLabel}
+                  state={port.data?.state}
+                  ahead={ahead}
+                  able={able}
+                  manual={manual(t, reach, portLabel, "settings.portClosed")}
+                  owner={moved ? null : { kind: "subscriptions" }}
+                  staged={opening}
+                  onStage={setOpening}
+                />
+              )
+            }
           />
         )}
 
@@ -201,19 +244,35 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
 
       {refused !== null && <div className="text-sm text-alarm">{t(refused)}</div>}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
-        <button type="button" className={secondary} disabled={kept === null || save.isPending} onClick={drop}>
+      <div className={footer}>
+        <button
+          type="button"
+          className={secondary}
+          disabled={(kept === null && !opening) || save.isPending}
+          onClick={drop}
+        >
           {t("settings.cancel")}
         </button>
         <button
           type="button"
           className={primary}
-          disabled={!may || kept === null || save.isPending || blocked || socket.length > 0}
-          onClick={() => void keep()}
+          disabled={!may || (kept === null && !opening) || save.isPending || blocked || socket.length > 0}
+          onClick={go}
         >
           {t("settings.save")}
         </button>
       </div>
+
+      {asking && (
+        <KeepQuestion
+          ports={previous}
+          onCancel={() => setAsking(false)}
+          onAnswer={(keeping) => {
+            setAsking(false)
+            void keep({ keep: keeping })
+          }}
+        />
+      )}
     </div>
   )
 }

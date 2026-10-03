@@ -4,11 +4,11 @@ import { useBalancers } from "@/api/balancers"
 import { useMoveRule, usePlaceRule, useRules, useSwitchRule } from "@/api/rules"
 import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
-import { Knob } from "@/components/fields"
+import { Find, Knob } from "@/components/fields"
 import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { card, fieldBox } from "@/components/styles"
+import { card } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -62,12 +62,7 @@ export function Rules() {
               : undefined
           }
           tools={
-            <input
-              value={find}
-              placeholder={t("action.search")}
-              onChange={(e) => put("find", e.target.value)}
-              className={`w-full wide:w-80 ${fieldBox}`}
-            />
+            <Find value={find} onChange={(value) => put("find", value)} className="w-full wide:w-72" />
           }
           columns={[
             {

@@ -7,9 +7,10 @@ a client hands out the new file at once, because the file is built when it is as
 A fresh database starts with the client template `default`. A template no client takes can be removed, a
 template a client takes is refused with `template-in-use` (409).
 
-The panel holds the templates under `Connections`, `Templates`. The list names the template and how many clients
-take it; the name and the menu of the row lead into the settings, where the template is changed and removed.
-The form of a client carries the choice of its template and a link to it.
+The panel holds the templates in the tab `Templates` of `Clients`, next to the tab `Configs` with the clients
+themselves. The list names the template and how many clients take it; the name and the menu of the row lead into
+the settings, where the template is changed and removed. The settings of a client carry the choice of its template
+and a link to it.
 
 ## What a template names
 

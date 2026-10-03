@@ -4,7 +4,7 @@ import { complaint } from "@/api/auth"
 import { useAddRole, useChangeRole, useRoles } from "@/api/roles"
 import { useTail } from "@/components/crumbs"
 import { Line, Part } from "@/components/fields"
-import { card, danger, label, primary, secondary } from "@/components/styles"
+import { danger, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { same } from "@/store/draftSlice"
@@ -44,7 +44,7 @@ function NewRole() {
 
       {add.error !== null && <div className="text-sm text-alarm">{t(complaint(add.error))}</div>}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         <button type="button" onClick={() => navigate(back)} disabled={!edited || add.isPending} className={secondary}>
           {t("roles.cancel")}
         </button>
@@ -104,7 +104,7 @@ function HeldRole({ name }: { name: string }) {
 
       {change.error !== null && <div className="text-sm text-alarm">{t(complaint(change.error))}</div>}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         {!builtin && (
           <button
             type="button"

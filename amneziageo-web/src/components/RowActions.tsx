@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { MouseEvent } from "react"
-import { card, primary, quiet } from "@/components/styles"
+import { menu, menuItem, primary, quiet } from "@/components/styles"
 
 export interface RowAction {
   label: string
@@ -44,16 +44,13 @@ export function RowActions({ title, actions, trigger }: { title: string; actions
       {spot && (
         <>
           <div className="fixed inset-0 z-30" onMouseDown={() => setSpot(null)} />
-          <div
-            style={{ top: spot.top, left: spot.left, width }}
-            className={`fixed z-40 flex flex-col py-1 shadow-lg ${card}`}
-          >
+          <div style={{ top: spot.top, left: spot.left, width }} className={`fixed z-40 flex flex-col ${menu}`}>
             {actions.map((action) => (
               <button
                 key={action.label}
                 type="button"
                 onClick={() => pick(action)}
-                className={`px-3 py-2 text-left text-sm hover:bg-hover ${action.alarming ? "text-alarm" : "text-muted hover:text-brand-ink"}`}
+                className={`${menuItem} ${action.alarming ? "text-alarm hover:text-alarm" : ""}`}
               >
                 {action.label}
               </button>

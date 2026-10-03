@@ -8,7 +8,7 @@ import { TextBlock } from "@/components/TextBlock"
 import { useTail } from "@/components/crumbs"
 import { Line, Part, Pick } from "@/components/fields"
 import { narrowest, titleOf } from "@/components/roles"
-import { card, note, primary, secondary } from "@/components/styles"
+import { card, footer, note, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
 import { selectText } from "@/select"
@@ -64,7 +64,7 @@ export function TokenPage() {
 
       {mint.error !== null && <div className="text-sm text-alarm">{t(complaint(mint.error))}</div>}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         <button type="button" onClick={() => navigate(back)} disabled={!edited || mint.isPending} className={secondary}>
           {t("apiTokens.cancel")}
         </button>

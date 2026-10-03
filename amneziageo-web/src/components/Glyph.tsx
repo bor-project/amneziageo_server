@@ -10,7 +10,8 @@ export type GlyphName =
   | "route"
   | "globe"
   | "map"
-  | "wall"
+  | "home"
+  | "gear"
   | "server"
   | "lock"
   | "feed"
@@ -64,10 +65,12 @@ const drawings: Record<GlyphName, ReactNode> = {
       <path d="M9 4v13.5M15 6.5V20" />
     </>
   ),
-  wall: (
+  home: <path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1Z" />,
+  gear: (
     <>
-      <rect x="3" y="5" width="18" height="14" rx="1.5" />
-      <path d="M3 9.7h18M3 14.3h18M9 5v4.7M15 5v4.7M6 9.7v4.6M12 9.7v4.6M18 9.7v4.6M9 14.3V19M15 14.3V19" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2 5.5 5.5" />
+      <circle cx="12" cy="12" r="6.6" />
     </>
   ),
   server: (
@@ -115,11 +118,11 @@ export function Caret({ open }: { open: boolean }) {
   )
 }
 
-export function Glyph({ name }: { name: GlyphName }) {
+export function Glyph({ name, className = "size-5" }: { name: GlyphName; className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="size-5"
+      className={className}
       fill="none"
       stroke="currentColor"
       strokeWidth="1.6"

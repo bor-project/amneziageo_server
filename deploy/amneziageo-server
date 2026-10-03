@@ -2871,6 +2871,26 @@ firewall_status() {
   fi
 }
 
+# Prints the nftables tables the panel lays: the routing, the outbounds, the endpoints and the open ports.
+firewall_tables() {
+  local tables one
+  if ! command -v nft > /dev/null 2>&1; then
+    bad "nft is not installed on this host: apt-get install nftables"
+    return 1
+  fi
+
+  mapfile -t tables < <(nft list tables 2> /dev/null | awk '$3 ~ /^amneziageo/ {print $2 " " $3}')
+  if [ ${#tables[@]} -eq 0 ]; then
+    say "the panel holds no nftables tables"
+    return 0
+  fi
+
+  for one in "${tables[@]}"; do
+    # shellcheck disable=SC2086
+    nft list table $one
+  done
+}
+
 # Opens or closes a port in ufw.
 ufw_port() {
   local port
@@ -2935,6 +2955,7 @@ firewall_menu() {
     say "  9. Close a port"
     say " 10. Turn the firewall on"
     say " 11. Turn the firewall off"
+    say " 12. The nftables rules of the panel"
     say "  0. Back"
     choice=$(ask "Choose:") || return 0
     case $choice in
@@ -2949,6 +2970,7 @@ firewall_menu() {
       9) ufw_port delete ;;
       10) ufw_on ;;
       11) host_command "turning ufw off" "ufw disable" && command -v ufw > /dev/null 2>&1 && ufw disable ;;
+      12) firewall_tables ;;
       0 | "") return 0 ;;
       *) bad "there is no item $choice" ;;
     esac

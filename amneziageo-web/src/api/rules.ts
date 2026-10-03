@@ -139,13 +139,6 @@ export function useSaveBasic() {
   return useRefreshing((lists: { direct: string[]; block: string[] }) => client.put("/rules/basic", lists))
 }
 
-export function useRuleset() {
-  return useQuery({
-    queryKey: ["rules", "ruleset"],
-    queryFn: async () => (await client.get<{ text: string }>("/rules/ruleset")).data.text,
-  })
-}
-
 export function useRouteTest() {
   return useMutation({
     mutationFn: async (question: RouteQuestion) => (await client.post<RouteAnswer>("/rules/test", question)).data,

@@ -5,6 +5,7 @@ import { useHealth } from "@/api/health"
 import { usePanel } from "@/api/panel"
 import { queryClient } from "@/api/queryClient"
 import { Crumbs, CrumbsHolder } from "@/components/Crumbs"
+import { Glyph } from "@/components/Glyph"
 import { LanguagePicker } from "@/components/LanguagePicker"
 import { RestartButton } from "@/components/RestartButton"
 import { ThemeToggle } from "@/components/ThemeToggle"
@@ -20,13 +21,15 @@ import { holds, sessionClosed } from "@/store/authSlice"
 import { useSpot } from "@/store/spots"
 import { languageServed, sidebarSet, sidebarToggled } from "@/store/uiSlice"
 
-const item = "rounded-lg px-2.5 py-2 text-sm"
-const leaf = "rounded-lg py-1.5 pr-2.5 text-[13px]"
+const row = "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px]"
+const leaf = "block rounded-lg px-2.5 py-1.5 text-[13px]"
 const active = "bg-active font-medium text-ink"
 const idle = "text-muted hover:bg-nav hover:text-ink"
 const opened = "font-medium text-ink hover:bg-nav"
-const column = "flex w-54 shrink-0 flex-col gap-6 border-r border-line bg-chrome px-3 py-5"
-const drawer = "fixed inset-y-0 left-0 z-50 flex w-64 flex-col gap-6 border-r border-line bg-chrome px-3 py-5 shadow-xl"
+const column = "flex w-56 shrink-0 flex-col gap-5 border-r border-line bg-chrome px-3 py-4"
+const drawer = "fixed inset-y-0 left-0 z-50 flex w-64 flex-col gap-5 border-r border-line bg-chrome px-3 py-4 shadow-xl"
+const glyph = "size-[18px] shrink-0"
+const folded = "amneziageo.menu"
 
 export function Layout() {
   const t = useText()
@@ -74,12 +77,12 @@ export function Layout() {
 
         {open && (
           <aside className={wide ? column : drawer}>
-            <div className="flex items-center gap-2 px-1">
+            <Link to="/" onClick={shut} className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-nav">
               <span className="size-5.5 rounded-md bg-brand" aria-hidden />
               <span className="text-sm font-semibold tracking-[-0.01em] text-ink">{t("app.name")}</span>
-            </div>
+            </Link>
 
-            <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
+            <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
               {sections
                 .filter((one) => holds(user, one.scope))
                 .map((one) => (
@@ -132,28 +135,50 @@ function Group({ section, shut }: { section: Section; shut: () => void }) {
   const user = useAppSelector((s) => s.auth.user)
   const { pathname } = useLocation()
   const items = section.items.filter((one) => holds(user, one.scope))
+  const inside = under(pathname, section.to)
+  const [open, setOpen] = useState(() => inside || unfolded(section.to))
+  const [was, setWas] = useState(inside)
+
+  if (inside !== was) {
+    setWas(inside)
+    if (inside) {
+      setOpen(true)
+    }
+  }
 
   if (items.length === 0) {
     return (
-      <NavLink to={section.to} end onClick={shut} className={({ isActive }) => `${item} ${isActive ? active : idle}`}>
+      <NavLink
+        to={section.to}
+        end={section.to === "/"}
+        onClick={shut}
+        className={({ isActive }) => `${row} ${isActive ? active : idle}`}
+      >
+        <Glyph name={section.icon} className={glyph} />
         {t(section.label)}
       </NavLink>
     )
   }
 
-  const inside = under(pathname, section.to)
+  function flip() {
+    setOpen(!open)
+    unfold(section.to, !open)
+  }
 
   return (
     <div className="flex flex-col gap-0.5">
-      <Link
-        to={section.to}
-        aria-expanded={inside}
-        className={`flex items-center justify-between gap-2 ${item} ${inside ? opened : idle}`}
-      >
-        {t(section.label)}
-        <Caret open={inside} />
-      </Link>
-      {inside && items.map((one) => <Leaf key={one.to} one={one} shut={shut} />)}
+      <button type="button" aria-expanded={open} onClick={flip} className={`${row} ${inside ? opened : idle}`}>
+        <Glyph name={section.icon} className={glyph} />
+        <span className="min-w-0 flex-1 truncate text-left">{t(section.label)}</span>
+        <Caret open={open} />
+      </button>
+      {open && (
+        <div className="ml-[18px] flex flex-col gap-0.5 border-l border-line py-0.5 pl-2.5">
+          {items.map((one) => (
+            <Leaf key={one.to} one={one} shut={shut} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -163,10 +188,30 @@ function Leaf({ one, shut }: { one: Item; shut: () => void }) {
   const to = useSpot(one.to)
 
   return (
-    <NavLink to={to} onClick={shut} className={({ isActive }) => `${leaf} pl-6 ${isActive ? active : idle}`}>
+    <NavLink to={to} onClick={shut} className={({ isActive }) => `${leaf} ${isActive ? active : idle}`}>
       {t(one.label)}
     </NavLink>
   )
+}
+
+// Tells whether a group of the menu was left unfolded.
+function unfolded(to: string): boolean {
+  try {
+    return (JSON.parse(localStorage.getItem(folded) ?? "{}") as Record<string, boolean>)[to] === true
+  } catch {
+    return false
+  }
+}
+
+// Remembers whether a group of the menu is unfolded.
+function unfold(to: string, open: boolean) {
+  try {
+    const kept = JSON.parse(localStorage.getItem(folded) ?? "{}") as Record<string, boolean>
+    kept[to] = open
+    localStorage.setItem(folded, JSON.stringify(kept))
+  } catch {
+    return
+  }
 }
 
 function UserMenu() {

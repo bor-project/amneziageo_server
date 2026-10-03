@@ -5,10 +5,14 @@ import { downedOf, failure, useConfigs, useImportConfig, useKeyPair, usePreshare
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
 import { usePortState } from "@/api/firewall"
+import type { Holding } from "@/api/firewall"
+import { scopes } from "@/api/scopes"
 import { ObfuscationFields } from "@/components/Obfuscation"
+import { KeepQuestion, PortNote } from "@/components/PortNote"
 import { Count, Flag, Help, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
+import { manual, useOpening } from "@/components/opening"
 import { pathFault, portFault, usePathHolders, usePortHolders, useServicesHolders } from "@/components/ports"
-import { card, danger, field, label, primary, secondary } from "@/components/styles"
+import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { parts } from "@/format"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -34,7 +38,7 @@ export function ConfigForm({
   error: unknown
   fault?: string
   faultOf?: string
-  onSave: (draft: ConfigDraft) => void
+  onSave: (draft: ConfigDraft, holding: Holding) => void
   onClose: () => void
   onRemove?: () => void
   importable?: boolean
@@ -44,7 +48,11 @@ export function ConfigForm({
   const shared = usePresharedKey()
   const configs = useConfigs().data ?? []
   const others = configs.filter((one) => one.id !== self)
-  const opened = configs.find((one) => one.id === self)?.opened ?? false
+  const saved = configs.find((one) => one.id === self)
+  const opened = saved?.opened ?? false
+  const { able, reach, ufw } = useOpening(scopes.manageInterfaces)
+  const [opening, setOpening] = useState(false)
+  const [asking, setAsking] = useState(false)
   const held = usePortHolders({ config: self })
   const taken = useServicesHolders()
   const claimed = usePathHolders()
@@ -59,17 +67,27 @@ export function ConfigForm({
   const services = draft.servicesPort === 0 ? "" : portFault(t, draft.servicesPort, taken)
   const servicesAt = draft.servicesPort > 0 ? draft.servicesPort : draft.listenPort
   const servicesWere = start.servicesPort > 0 ? start.servicesPort : start.listenPort
-  const udpAhead = opened && draft.listenPort !== start.listenPort
-  const tcpAhead = opened && servicesAt !== servicesWere
-  const udp = usePortState(draft.listenPort, draft.isEnabled && !udpAhead, "udp")
-  const tcp = usePortState(servicesAt, draft.isEnabled && !tcpAhead)
-  const udpClosed = closedHint(t, draft.isEnabled && !udpAhead && udp.data?.state === "closed", `${draft.listenPort}/udp`)
-  const tcpClosed = closedHint(t, draft.isEnabled && !tcpAhead && tcp.data?.state === "closed", `${servicesAt}/tcp`)
+  const udpMoved = saved === undefined || draft.listenPort !== start.listenPort
+  const tcpMoved = saved === undefined || servicesAt !== servicesWere
+  const udpAhead = able && opened && udpMoved
+  const tcpAhead = able && opened && tcpMoved
+  const udp = usePortState(draft.listenPort, draft.isEnabled && !udpAhead && !opening, "udp")
+  const tcp = usePortState(servicesAt, draft.isEnabled && !tcpAhead && !opening)
+  const running = saved !== undefined && saved.isEnabled ? saved : undefined
+  const udpLabel = `${draft.listenPort}/udp`
+  const tcpLabel = `${servicesAt}/tcp`
+  const previous =
+    opened && saved?.isEnabled === true && draft.isEnabled
+      ? [
+          ...(draft.listenPort !== start.listenPort ? [`${start.listenPort}/udp`] : []),
+          ...(servicesAt !== servicesWere ? [`${servicesWere}/tcp`] : []),
+        ]
+      : []
   const socket = pathFault(t, draft.webSocketPath, draft.webSocket ? servicesAt : null, claimed)
   const name = nameFault(t, draft.name, others.map((one) => one.name))
   const address = addressFault(t, draft.address)
   const host = hostFault(t, draft)
-  const edited = !same(draft, start)
+  const edited = !same(draft, start) || opening
   const ready =
     edited &&
     !pending &&
@@ -79,6 +97,16 @@ export function ConfigForm({
 
   function put(change: Partial<ConfigDraft>) {
     setDraft({ ...draft, ...change })
+  }
+
+  // Saves, asking first whether the ports the panel held open before they moved are closed.
+  function save() {
+    if (previous.length > 0 && able && ufw) {
+      setAsking(true)
+      return
+    }
+
+    onSave(draft, opening ? { opened: true } : {})
   }
 
   function twist(change: Partial<Obfuscation>) {
@@ -142,7 +170,21 @@ export function ConfigForm({
           caption={t("configs.port")}
           value={draft.listenPort}
           onChange={(value) => put({ listenPort: value })}
-          fault={port || udpClosed}
+          fault={port}
+          note={
+            draft.isEnabled && (
+              <PortNote
+                port={udpLabel}
+                state={udp.data?.state}
+                ahead={udpAhead}
+                able={able}
+                manual={manual(t, reach, udpLabel, "configs.portClosed")}
+                owner={running !== undefined && !udpMoved ? { kind: "endpoint", id: running.id } : null}
+                staged={opening}
+                onStage={setOpening}
+              />
+            )
+          }
         />
         <Line
           id="config-address"
@@ -189,7 +231,21 @@ export function ConfigForm({
           value={draft.servicesPort}
           unset={String(draft.listenPort)}
           onChange={(value) => put({ servicesPort: value })}
-          fault={services || tcpClosed}
+          fault={services}
+          note={
+            draft.isEnabled && (
+              <PortNote
+                port={tcpLabel}
+                state={tcp.data?.state}
+                ahead={tcpAhead}
+                able={able}
+                manual={manual(t, reach, tcpLabel, "configs.portClosed")}
+                owner={running !== undefined && !tcpMoved ? { kind: "endpoint", id: running.id } : null}
+                staged={opening}
+                onStage={setOpening}
+              />
+            )
+          }
         />
         <Line
           id="config-websocket-path"
@@ -304,7 +360,7 @@ export function ConfigForm({
 
       {said.length > 0 && proxy.length === 0 && <div className="text-sm text-alarm">{said}</div>}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         {onRemove !== undefined && (
           <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
             {t("configs.remove")}
@@ -313,10 +369,21 @@ export function ConfigForm({
         <button type="button" onClick={onClose} disabled={!edited || pending} className={secondary}>
           {t("configs.cancel")}
         </button>
-        <button type="button" onClick={() => onSave(draft)} disabled={!ready} className={primary}>
+        <button type="button" onClick={save} disabled={!ready} className={primary}>
           {pending ? t("configs.busy") : t("configs.save")}
         </button>
       </div>
+
+      {asking && (
+        <KeepQuestion
+          ports={previous}
+          onCancel={() => setAsking(false)}
+          onAnswer={(keep) => {
+            setAsking(false)
+            onSave(draft, { keep })
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -339,10 +406,6 @@ function hostFault(t: Text, draft: ConfigDraft): string {
   }
 
   return draft.isEnabled && draft.host.trim().length === 0 ? t("error.hostNeeded") : ""
-}
-
-function closedHint(t: Text, closed: boolean, port: string): string {
-  return closed ? t("configs.portClosed", { port }) : ""
 }
 
 function addressFault(t: Text, address: string[]): string {

@@ -55,6 +55,18 @@ from `lg`, and both follow the window as it changes.
 
 The menu over the page closes on a pick, on a press outside it and on Escape.
 
+## Menu
+
+`src/components/menu.ts` names the parts of the panel. `Overview` leads the menu and every page comes under it:
+the trail in the header starts with it, and the name of the panel over the menu leads back to it. `Interfaces`
+and `Clients` stand on the first level; `Routing` and `Settings` are groups that fold and unfold on a press, a
+group the page lies in unfolds by itself, and the browser keeps which groups were left open under
+`amneziageo.menu`.
+
+A part with several lists of the same things carries them as tabs under its title: `Clients` holds `Configs` and
+`Templates`. A page of one item is titled by its name, and a client carries its own tabs, `Export` and
+`Settings`. The ruleset of nftables is not a page of the panel: the console prints it, see [rules.md](rules.md).
+
 ## Lists
 
 `src/components/Rows.tsx` prints a list: a table on a wide screen, a card for every row on a narrow one. A column
@@ -73,10 +85,21 @@ corner, `head` and `body` add classes to the cells of the table. A cell that com
 />
 ```
 
+A column is made wider or narrower by dragging the edge of its caption, and a double press on the edge gives it
+its width back; the browser keeps the widths of every list under `amneziageo.columns`. Once every column has a width
+of its own, the corner column takes what is left. A list that chooses rows takes `choice`: once a row is chosen, a
+bar over the list counts them and carries `choice.actions`, the commands over the chosen rows, and clearing the
+choice. A list that a search leaves empty says so.
+
 The cell in the corner of a row carries the menu of the row, and the menu carries only the ways into a page:
 the settings of the item, and the export of a client. What the item does, from applying an interface to probing
 a channel, lives in the form of the item, and so does its removal. A list that holds an order of its own, the
 rules, the geo sources and the channels, carries two arrows next to the menu, and the row is dragged as well.
+
+## Forms
+
+The bar with the buttons of a form stays at the bottom of the window while the form scrolls. A list box carries its
+arrow inside the field, clear of its edge, in both themes.
 
 ## Words
 

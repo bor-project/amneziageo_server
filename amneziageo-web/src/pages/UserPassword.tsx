@@ -4,7 +4,7 @@ import { complaint } from "@/api/auth"
 import { fresh, useSetPassword } from "@/api/users"
 import { useTail } from "@/components/crumbs"
 import { Flag, Part, Regenerate } from "@/components/fields"
-import { card, field, label, primary, secondary } from "@/components/styles"
+import { field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
 
@@ -50,7 +50,7 @@ export function UserPassword() {
 
       {set.error !== null && <div className="text-sm text-alarm">{t(complaint(set.error))}</div>}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         <button type="button" onClick={() => navigate(back)} disabled={!edited || set.isPending} className={secondary}>
           {t("users.cancel")}
         </button>

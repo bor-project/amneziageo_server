@@ -4,7 +4,7 @@ import { useTemplateDefaults, useTemplatePreview } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
 import { EntryList } from "@/components/EntryList"
 import { Flag, Line, Part } from "@/components/fields"
-import { card, danger, field, label, primary, secondary } from "@/components/styles"
+import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
 import { same } from "@/store/draftSlice"
@@ -139,7 +139,7 @@ export function TemplateForm({
 
       {error !== null && error !== undefined && <div className="text-sm text-alarm">{t(complaint(error))}</div>}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         {onRemove !== undefined && (
           <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
             {t("templates.remove")}
