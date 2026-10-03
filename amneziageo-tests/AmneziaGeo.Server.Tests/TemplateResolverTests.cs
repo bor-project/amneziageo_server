@@ -81,6 +81,30 @@ public class TemplateResolverTests
     }
 
     [Fact]
+    public async Task AStubANameAnswersWithStaysOutAndAPrivateAddressStays()
+    {
+        var book = new NameBook(new()
+        {
+            ["musical.ly"] = ["127.0.0.1", "::1"],
+            ["tlivecdn.com"] = ["0.0.0.1", "::"],
+            ["stub.example"] = ["169.254.1.1", "224.0.0.251", "240.0.0.1", "255.255.255.255", "fe80::1", "ff02::fb"],
+            ["mapped.example"] = ["::ffff:127.0.0.10"],
+            ["tiktok-row.net"] = ["10.8.28.41", "fc00::1"],
+            ["example.com"] = ["93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"],
+        });
+
+        var found = await new TemplateResolver(book).ResolveAsync(
+            ["musical.ly", "tlivecdn.com", "stub.example", "mapped.example", "tiktok-row.net", "example.com"],
+            Index(),
+            CancellationToken.None);
+
+        Assert.Equal(
+            ["10.8.28.41/32", "93.184.216.34/32", "2606:2800:220:1:248:1893:25c8:1946/128", "fc00::1/128"],
+            found.AllowedIps);
+        Assert.Equal(["musical.ly", "tlivecdn.com", "stub.example", "mapped.example"], found.Missed);
+    }
+
+    [Fact]
     public async Task ANameIsAskedForBothFamiliesOnce()
     {
         var book = new NameBook(new() { ["yandex.ru"] = ["77.88.8.8"] });
