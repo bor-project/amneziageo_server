@@ -18,7 +18,6 @@ export function Tabs({ items }: { items: Tab[] }) {
           key={one.to}
           to={one.to}
           end={one.end}
-          replace
           className={({ isActive }) => `${tab} ${isActive ? on : off}`}
         >
           {one.label}

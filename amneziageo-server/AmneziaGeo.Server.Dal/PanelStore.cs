@@ -152,13 +152,14 @@ public sealed class PanelStore
     }
 
     /// <summary>
-    /// Returns the settings the database holds before the server is built, null when it holds none.
+    /// Returns the settings the database holds before the server is built, null when it holds none; the file is let go
+    /// as soon as they are read.
     /// </summary>
     public static PanelSettings? Held(string path)
     {
         try
         {
-            using var connection = new SqliteConnection($"Data Source={path};Mode=ReadOnly");
+            using var connection = new SqliteConnection($"Data Source={path};Mode=ReadOnly;Pooling=False");
             connection.Open();
 
             using var command = connection.CreateCommand();

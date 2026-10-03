@@ -183,6 +183,7 @@ const complaints: Record<string, TextKey> = {
   "backup-damaged": "error.backupDamaged",
   "backup-newer": "error.backupNewer",
   "backup-elsewhere": "error.backupElsewhere",
+  "backup-large": "error.backupLarge",
   "firewall-refused": "error.firewallRefused",
 }
 

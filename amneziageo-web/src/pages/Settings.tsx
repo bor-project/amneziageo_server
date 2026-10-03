@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
 import { useConfigs } from "@/api/configs"
+import { useFailure } from "@/api/failure"
 import { outside, usePortState } from "@/api/firewall"
 import type { Holding } from "@/api/firewall"
 import { draftOf, useNameSample, usePanel, useSavePanel } from "@/api/panel"
@@ -31,11 +32,21 @@ export function PanelCertificates() {
 }
 
 function Settings({ part }: { part: Side }) {
+  const t = useText()
   const user = useAppSelector((s) => s.auth.user)
   const panel = usePanel()
+  const failed = useFailure(panel)
   const may = holds(user, scopes.manageAccess)
 
-  return panel.data ? <Editor settings={panel.data} may={may} part={part} /> : null
+  if (panel.data === undefined) {
+    return failed !== null ? (
+      <div className="mt-4 text-sm text-alarm">{t(complaint(failed))}</div>
+    ) : (
+      <div className="mt-4 text-sm text-muted">{t("page.loading")}</div>
+    )
+  }
+
+  return <Editor settings={panel.data} may={may} part={part} />
 }
 
 function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: Side }) {
@@ -201,7 +212,7 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
             value={draft.nameTemplate}
             placeholder={defaultName}
             onChange={(nameTemplate) => set({ nameTemplate })}
-            hint={sample}
+            preview={sample}
             fault={strange.length > 0 ? t("settings.nameUnknown", { list: strange.join(", ") }) : ""}
           />
 

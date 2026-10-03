@@ -5,7 +5,7 @@ import { useClients } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import { useOutbounds } from "@/api/outbounds"
 import type { RuleAction, RuleDraft, RuleProtocol } from "@/api/rules"
-import { Flag, Line, Multi, Part } from "@/components/fields"
+import { Flag, Line, ListArea, ListLine, Multi, Part } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -107,18 +107,18 @@ export function RuleForm({
           </select>
         </div>
 
-        <Line
+        <ListLine
           id="rule-ports"
           caption={t("rules.ports")}
-          value={draft.ports.join(", ")}
-          onChange={(text) => put({ ports: split(text) })}
+          value={draft.ports}
+          onChange={(ports) => put({ ports })}
         />
 
-        <Line
+        <ListLine
           id="rule-source-ports"
           caption={t("rules.sourcePorts")}
-          value={draft.sourcePorts.join(", ")}
-          onChange={(text) => put({ sourcePorts: split(text) })}
+          value={draft.sourcePorts}
+          onChange={(sourcePorts) => put({ sourcePorts })}
         />
 
         <div className="flex flex-col gap-2 sm:col-span-2">
@@ -140,14 +140,14 @@ export function RuleForm({
       </Part>
 
       <Part title={t("rules.partAddresses")}>
-        <Lines
+        <ListArea
           id="rule-targets"
           caption={t("rules.targets")}
           value={draft.targets}
           onChange={(targets) => put({ targets })}
         />
 
-        <Lines
+        <ListArea
           id="rule-sources"
           caption={t("rules.sources")}
           value={draft.sources}
@@ -209,38 +209,4 @@ export function RuleForm({
       </div>
     </div>
   )
-}
-
-function Lines({
-  id,
-  caption,
-  value,
-  onChange,
-}: {
-  id: string
-  caption: string
-  value: string[]
-  onChange: (value: string[]) => void
-}) {
-  return (
-    <div>
-      <label className={label} htmlFor={id}>
-        {caption}
-      </label>
-      <textarea
-        id={id}
-        rows={6}
-        value={value.join("\n")}
-        onChange={(e) => onChange(split(e.target.value))}
-        className={`mt-1 font-mono text-xs ${field}`}
-      />
-    </div>
-  )
-}
-
-function split(text: string): string[] {
-  return text
-    .split(/[\s,]+/)
-    .map((one) => one.trim())
-    .filter((one) => one.length > 0)
 }

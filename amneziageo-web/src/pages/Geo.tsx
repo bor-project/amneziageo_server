@@ -1,4 +1,6 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
+import { complaint } from "@/api/auth"
+import { useFailure } from "@/api/failure"
 import { useGeoKeys, useGeoSources, useMoveGeoSource, useUpdateGeo } from "@/api/geo"
 import type { GeoSource } from "@/api/geo"
 import { scopes } from "@/api/scopes"
@@ -6,7 +8,7 @@ import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { Box, Find } from "@/components/fields"
-import { card, secondary } from "@/components/styles"
+import { alarmBar, alarmLine, card, secondary } from "@/components/styles"
 import { bytes } from "@/format"
 import { useLanguage, useText } from "@/i18n"
 import type { Text } from "@/i18n"
@@ -20,6 +22,7 @@ export function Geo() {
   const user = useAppSelector((s) => s.auth.user)
   const [params, setParams] = useSearchParams()
   const sources = useGeoSources()
+  const failed = useFailure(sources)
   const keys = useGeoKeys()
   const move = useMoveGeoSource()
   const updateAll = useUpdateGeo()
@@ -53,7 +56,11 @@ export function Geo() {
       </div>
 
       <div className={card}>
-        {all.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("geo.empty")}</div>}
+        {sources.isPending && failed === null && <div className="px-4 py-6 text-sm text-muted">{t("geo.loading")}</div>}
+        {failed !== null && (
+          <div className={all.length === 0 ? alarmLine : alarmBar}>{t(complaint(failed))}</div>
+        )}
+        {sources.isSuccess && all.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("geo.empty")}</div>}
 
         {all.length > 0 && (
           <Rows

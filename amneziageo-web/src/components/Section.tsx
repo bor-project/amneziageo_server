@@ -117,7 +117,9 @@ export function Cards({ items }: { items: Item[] }) {
             </span>
             <span className="min-w-0">
               <span className="block text-[15px] font-medium text-ink">{t(one.label)}</span>
-              <span className="mt-1 block text-[13px] leading-5 text-muted">{t(one.about)}</span>
+              {one.about !== undefined && (
+                <span className="mt-1 block text-[13px] leading-5 text-muted">{t(one.about)}</span>
+              )}
             </span>
           </Link>
         ))}

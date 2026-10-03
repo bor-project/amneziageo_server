@@ -1,9 +1,9 @@
 export const card = "rounded-xl border border-line bg-surface"
 
-// The bar with the buttons of a form, kept in sight at the bottom while the form scrolls; its second shadow covers
-// what passes under it in the padding of the page.
+// The bar with the buttons of a form, kept in sight at the bottom of the window while the page scrolls, as far from
+// it as the page is padded; its second shadow covers what passes under it there.
 export const footer =
-  "sticky bottom-0 z-10 flex justify-end gap-2 rounded-xl border border-line bg-surface px-4 py-3.5 shadow-[0_-10px_24px_-18px_rgba(15,23,42,.35),0_26px_0_6px_var(--canvas)]"
+  "sticky bottom-5 z-10 flex justify-end gap-2 rounded-xl border border-line bg-surface px-4 py-3.5 shadow-[0_-10px_24px_-18px_rgba(15,23,42,.35),0_26px_0_6px_var(--canvas)]"
 
 export const field =
   "w-full rounded-lg border border-line-input bg-input px-3 py-2.25 text-sm text-ink outline-none focus:border-brand disabled:opacity-50"
@@ -39,3 +39,7 @@ export const chip = "rounded-md bg-chip px-2.5 py-1.25 text-[13px] text-chip-ink
 export const menu = "rounded-[10px] border border-line-menu bg-menu p-1.5 shadow-[var(--shade)]"
 
 export const menuItem = "rounded-md px-2.5 py-2 text-left text-[13px] text-ink-soft hover:bg-active hover:text-ink"
+
+// The failure a list names in place of its rows, and the bar it names it in over the rows it still shows.
+export const alarmLine = "px-4 py-6 text-sm text-alarm"
+export const alarmBar = "border-b border-line px-4 py-2.5 text-sm text-alarm"

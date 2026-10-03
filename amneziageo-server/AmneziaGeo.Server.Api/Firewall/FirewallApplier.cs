@@ -36,15 +36,32 @@ public sealed class FirewallApplier
     }
 
     /// <summary>
-    /// Opens the ports the panel keeps open and closes the rest of what it opened before.
+    /// Returns what the panel holds open in the firewall of the host as the endpoints and the settings stand now.
     /// </summary>
-    public async Task<FirewallSync> SettleAsync(CancellationToken ct)
-    {
-        var plan = FirewallPlan.Of(
+    public async Task<FirewallPlan> PlanAsync(CancellationToken ct) =>
+        FirewallPlan.Of(
             await _configs.ListAsync(ct).ConfigureAwait(false),
             await _panel.ReadAsync(ct).ConfigureAwait(false),
             await _subscriptions.ReadAsync(ct).ConfigureAwait(false));
-        var sync = await _host.ApplyAsync(plan, ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// Opens the ports the panel keeps open and closes the rest of what it opened before.
+    /// </summary>
+    public Task<FirewallSync> SettleAsync(CancellationToken ct) => SettleAsync(null, ct);
+
+    /// <summary>
+    /// Opens the ports the panel keeps open and closes the rest of what it opened before, except the ports the plan
+    /// taken before a change held and the panel holds no longer: those are handed over to the host and stay open. A
+    /// port the host did not take over stays open under the panel until the next settle.
+    /// </summary>
+    public async Task<FirewallSync> SettleAsync(FirewallPlan? before, CancellationToken ct)
+    {
+        var plan = await PlanAsync(ct).ConfigureAwait(false);
+        var dropped = before is null ? [] : FirewallPlan.Dropped(before, plan);
+        var kept = await _host.KeepAsync(dropped, ct).ConfigureAwait(false);
+        var applied = await _host.ApplyAsync(kept.IsDone ? plan : plan with { Ports = [.. plan.Ports, .. dropped] }, ct)
+            .ConfigureAwait(false);
+        var sync = kept.IsDone ? applied : kept;
         if (!sync.IsDone)
         {
             _logger.LogWarning("{Engine} refused the ports of the panel: {Reason}", sync.Engine, sync.Message);

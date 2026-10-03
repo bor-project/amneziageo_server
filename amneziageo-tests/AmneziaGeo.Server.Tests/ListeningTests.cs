@@ -117,4 +117,36 @@ public class ListeningTests
     {
         Assert.Throws<InvalidOperationException>(() => Listening.Plan([entry]));
     }
+
+    [Fact]
+    public void APanelOnEveryAddressOrTheLoopbackWithoutACertificateComesUpOnAnyHost()
+    {
+        Assert.Null(Listening.Fault(new WebOptions(), PanelDefaults.Settings with { Listen = [] }));
+        Assert.Null(Listening.Fault(new WebOptions(), PanelDefaults.Settings with { Listen = ["127.0.0.1", "0.0.0.0"] }));
+    }
+
+    [Fact]
+    public void AnAddressTheHostDoesNotCarryKeepsThePanelFromComingUp()
+    {
+        Assert.Equal(
+            "the panel listens on 198.51.100.254, an address this host does not carry",
+            Listening.Fault(new WebOptions(), PanelDefaults.Settings with { Listen = ["127.0.0.1", "198.51.100.254"], Port = 8443 }));
+    }
+
+    [Fact]
+    public void AnInterfaceTheHostDoesNotCarryKeepsThePanelFromComingUp()
+    {
+        Assert.Equal(
+            "the panel listens on no address this host carries: nosuchlink0:8443",
+            Listening.Fault(new WebOptions(), PanelDefaults.Settings with { Listen = ["nosuchlink0"], Port = 8443 }));
+    }
+
+    [Fact]
+    public void ACertificateTheHostDoesNotCarryKeepsThePanelFromComingUp()
+    {
+        var chain = Path.Combine(Path.GetTempPath(), $"amneziageo-{Guid.NewGuid():N}", "fullchain.pem");
+        var settings = PanelDefaults.Settings with { Listen = ["127.0.0.1"], Certificate = chain, CertificateKey = chain + ".key" };
+
+        Assert.Equal("the panel answers under a certificate that is not there: " + chain, Listening.Fault(new WebOptions(), settings));
+    }
 }

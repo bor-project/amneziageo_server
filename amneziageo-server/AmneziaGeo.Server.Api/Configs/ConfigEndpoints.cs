@@ -36,6 +36,7 @@ public static class ConfigEndpoints
         writing.MapPost("/apply", ApplyAllAsync);
         writing.MapPost("/{id:long}/apply", ApplyAsync);
         writing.MapPost("/{id:long}/switch", SwitchAsync);
+        writing.MapPost("/{id:long}/open", OpenAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
@@ -155,6 +156,7 @@ public static class ConfigEndpoints
             return Refuse(StatusCodes.Status400BadRequest, unreached.Code, unreached.Message);
         }
 
+        var previous = request.Keep == true ? await firewall.PlanAsync(ct).ConfigureAwait(false) : null;
         var result = await store.ChangeAsync(id, draft, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -170,9 +172,26 @@ public static class ConfigEndpoints
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
         var proxy = await ServicesAsync(store, services, id, ct).ConfigureAwait(false);
-        await firewall.SettleAsync(ct).ConfigureAwait(false);
+        await firewall.SettleAsync(previous, ct).ConfigureAwait(false);
 
         return Settled(raised, proxy, id, Results.Ok(ConfigAnswers.Config(result.Record!, true)));
+    }
+
+    // Holds the ports of an endpoint open in the firewall of the host at once; nothing but the flag changes, so the
+    // interface stays as it is.
+    private static async Task<IResult> OpenAsync(long id, ConfigStore store, FirewallApplier firewall, CancellationToken ct)
+    {
+        var result = await store.OpenedAsync(id, true, ct).ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
+
+        var sync = await firewall.SettleAsync(ct).ConfigureAwait(false);
+
+        return sync.IsDone
+            ? Results.Ok(ConfigAnswers.Config(result.Record!, true))
+            : Refuse(StatusCodes.Status409Conflict, "firewall-refused", sync.Message);
     }
 
     private static async Task<IResult> SwitchAsync(

@@ -138,6 +138,22 @@ public class ConfigTests
     }
 
     [Fact]
+    public async Task AnEndpointIsHeldOpenWithoutItsOtherSettingsMoving()
+    {
+        using var bench = new Bench();
+        var added = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { ServicesPort = 8446 }, default);
+
+        var opened = await bench.Configs.OpenedAsync(added.Record!.Id, true, default);
+
+        Assert.True(opened.Record!.Opened);
+        Assert.True((await bench.Configs.FindAsync(added.Record.Id, default))!.Opened);
+        Assert.Equal(8446, opened.Record.ServicesPort);
+        Assert.Equal(added.Record.ListenPort, opened.Record.ListenPort);
+        Assert.Equal(added.Record.PrivateKey, opened.Record.PrivateKey);
+        Assert.Equal(ConfigOutcome.Unknown, (await bench.Configs.OpenedAsync(added.Record.Id + 100, true, default)).Outcome);
+    }
+
+    [Fact]
     public async Task AnEndpointTakesTheNameOfAnotherOnlyOnce()
     {
         using var bench = new Bench();

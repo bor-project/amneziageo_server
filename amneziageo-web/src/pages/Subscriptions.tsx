@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { complaint, reason } from "@/api/auth"
 import { useConfigs } from "@/api/configs"
+import { useFailure } from "@/api/failure"
 import { outside, usePortState } from "@/api/firewall"
 import type { Holding } from "@/api/firewall"
 import { usePanel } from "@/api/panel"
@@ -21,11 +22,21 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks"
 const own = "*"
 
 export function Subscriptions() {
+  const t = useText()
   const user = useAppSelector((s) => s.auth.user)
   const subscription = useSubscription()
+  const failed = useFailure(subscription)
   const may = holds(user, scopes.manageAccess)
 
-  return subscription.data ? <Editor settings={subscription.data} may={may} /> : null
+  if (subscription.data === undefined) {
+    return failed !== null ? (
+      <div className="mt-4 text-sm text-alarm">{t(complaint(failed))}</div>
+    ) : (
+      <div className="mt-4 text-sm text-muted">{t("page.loading")}</div>
+    )
+  }
+
+  return <Editor settings={subscription.data} may={may} />
 }
 
 function Editor({ settings, may }: { settings: Subscription; may: boolean }) {

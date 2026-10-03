@@ -79,6 +79,18 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         return new FirewallPlan(ports, interfaces);
     }
 
+    /// <summary>
+    /// Returns the ports the plan before a change held open and the plan after it holds no longer, whatever held them;
+    /// a port that only passed to another owner is still held.
+    /// </summary>
+    public static IReadOnlyList<FirewallPort> Dropped(FirewallPlan before, FirewallPlan after)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+
+        return [.. before.Ports.Where(port => !after.Ports.Any(held => Same(held, port)))];
+    }
+
     // Keeps a port once, under the first thing that asked for it.
     private static void Take(List<FirewallPort> ports, FirewallPort port)
     {
@@ -87,13 +99,17 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
             return;
         }
 
-        if (!ports.Exists(held => held.Port == port.Port
-            && string.Equals(held.Protocol, port.Protocol, StringComparison.Ordinal)
-            && string.Equals(held.Interface, port.Interface, StringComparison.Ordinal)))
+        if (!ports.Exists(held => Same(held, port)))
         {
             ports.Add(port);
         }
     }
+
+    // Tells whether two ports are the same port of the host: the protocol, the number and the interface, whatever asked.
+    private static bool Same(FirewallPort one, FirewallPort other) =>
+        one.Port == other.Port
+        && string.Equals(one.Protocol, other.Protocol, StringComparison.Ordinal)
+        && string.Equals(one.Interface, other.Interface, StringComparison.Ordinal);
 
     /// <summary>
     /// Tells whether what is bound is reached from outside the host.

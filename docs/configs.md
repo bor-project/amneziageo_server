@@ -22,6 +22,7 @@ file of a client takes, see [templates.md](templates.md).
 | `POST /api/configs/import` | `interfaces:write` |
 | `POST /api/configs` | `interfaces:write` |
 | `PUT /api/configs/{id}` | `interfaces:write` |
+| `POST /api/configs/{id}/open` | `interfaces:write` |
 | `POST /api/configs/apply` | `interfaces:write` |
 | `POST /api/configs/{id}/apply` | `interfaces:write` |
 | `DELETE /api/configs/{id}` | `interfaces:write` |
@@ -35,15 +36,15 @@ go only to a caller that holds `interfaces:write`; to anyone else they come back
 |---|---|
 | Name | the name of the interface, up to 15 characters |
 | Host | the address or the host name clients come to, which the files of the clients carry as `Endpoint`; an endpoint that is turned on is not saved or turned on without it, one that stays off may go without |
-| Port | the UDP port the endpoint listens on; the form names it under the field when the firewall of the host closes it, see [firewall.md](firewall.md) |
-| Services port | the TCP port hello, the measurement and the websocket answer on, empty for the number of the UDP port, see [services.md](services.md); named under the field the same way when the firewall closes it |
+| Port | the UDP port the endpoint listens on; the form names it under the field when the firewall of the host closes it, with a button that opens it where the panel may change the firewall, see [firewall.md](firewall.md) |
+| Services port | the TCP port hello, the measurement and the websocket answer on, empty for the number of the UDP port, see [services.md](services.md); named under the field the same way when the firewall closes it, with the same button |
 | WebSocket proxy | whether the endpoint takes the tunnel inside a websocket on the port of its services; when it does not start, the panel turns it off and says why |
 | MTU | the packet size clients take, 0 leaves it to the system |
 | Interface address | the address ranges the interface carries |
 | Closed to clients | the ranges clients of the endpoint are not let into |
 | Raise the interface | whether the panel puts the endpoint on the host |
 | NAT for clients | whether what clients send out is masqueraded behind the address of the host |
-| Open the port in the firewall | whether the panel holds the port of the endpoint open in the firewall of the host, together with both ways through its interface; set it in item 23 of the menu of the server or with `amneziageo-server-cli endpoint open\|close`; the form does not carry it and a save keeps it, see [firewall.md](firewall.md) |
+| Open the port in the firewall | whether the panel holds the port of the endpoint open in the firewall of the host, together with both ways through its interface; set it in item 23 of the menu of the server or with `amneziageo-server-cli endpoint open\|close`, or turn it on by `Open` next to a closed port of the form or of the list, `POST /api/configs/{id}/open`, and `Open on save` for a new port; the form carries no switch for it and a save keeps it; a save that moves a port held open asks whether the old port stays open, `keep`, see [firewall.md](firewall.md) |
 | Access to the clients | what reaches the clients of the endpoint from the tunnel unless a client names it itself: closed, the server alone, or the whole tunnel network, see [clients.md](clients.md) |
 | AllowedIPs | the ranges a client sends through the tunnel |
 | DNS | the name servers a client takes, unless the resolver of the panel answers inside the tunnel |
@@ -118,6 +119,7 @@ the code into a phrase of its own language.
 | `websocket-path-taken` | the websocket comes under the very path the panel or the subscriptions answer under on its TCP port |
 | `unknown-config` | there is no endpoint under this number |
 | `bad-import` | the interface file carries no private key, or nothing at all |
+| `firewall-refused` | the firewall of the host refused to hold the ports open, answered with 409 by `POST /api/configs/{id}/open`; the endpoint keeps the switch on |
 
 `S1 + 56 == S2` is refused because it makes an initiation and a response the same size. Nothing keeps
 two endpoints from carrying the same address range: they meet only on the host, and the ranges of one

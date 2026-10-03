@@ -63,7 +63,8 @@ public sealed record ConfigResponse(
     DateTimeOffset UpdatedUtc);
 
 /// <summary>
-/// An endpoint as the interface sends it.
+/// An endpoint as the interface sends it; keep leaves a port the panel held open and holds no longer open in the
+/// firewall of the host, as a rule of the host, instead of closing it.
 /// </summary>
 public sealed record ConfigRequest(
     string? Name,
@@ -85,7 +86,8 @@ public sealed record ConfigRequest(
     string? Inbound = null,
     bool? WebSocket = null,
     int? ServicesPort = null,
-    string? WebSocketPath = null);
+    string? WebSocketPath = null,
+    bool? Keep = null);
 
 /// <summary>
 /// What a request to turn an endpoint on or off carries.

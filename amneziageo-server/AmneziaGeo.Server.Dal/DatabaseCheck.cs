@@ -5,6 +5,19 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace AmneziaGeo.Server.Dal;
 
 /// <summary>
+/// What looking a file over as a database of the panel found.
+/// </summary>
+/// <param name="Code">The code a refusal of the file goes by, empty for a sound database.</param>
+/// <param name="Message">What is wrong with the file, ok for a sound database.</param>
+public sealed record DatabaseVerdict(string Code, string Message)
+{
+    /// <summary>
+    /// Tells whether the file is a sound database of the panel this release takes.
+    /// </summary>
+    public bool IsSound => Code.Length == 0;
+}
+
+/// <summary>
 /// Tells whether a file is a sound database of the panel this release takes.
 /// </summary>
 public static class DatabaseCheck
@@ -13,6 +26,26 @@ public static class DatabaseCheck
     /// The answer for a sound database of the panel.
     /// </summary>
     public const string Sound = "ok";
+
+    /// <summary>
+    /// The code of a file that is not there or is no database at all.
+    /// </summary>
+    public const string NotDatabase = "backup-not-database";
+
+    /// <summary>
+    /// The code of a database that is not one of the panel.
+    /// </summary>
+    public const string Foreign = "backup-foreign";
+
+    /// <summary>
+    /// The code of a database of the panel that is damaged.
+    /// </summary>
+    public const string Damaged = "backup-damaged";
+
+    /// <summary>
+    /// The code of a database of a newer release of the panel.
+    /// </summary>
+    public const string Newer = "backup-newer";
 
     private static readonly string[] Tables = ["__EFMigrationsHistory", "Panel", "Configs", "AspNetUsers"];
 
@@ -28,19 +61,25 @@ public static class DatabaseCheck
     /// <summary>
     /// Returns ok for a sound database of the panel, or what is wrong with it; a database of a newer release is turned down.
     /// </summary>
-    public static string Inspect(string path, string newest)
+    public static string Inspect(string path, string newest) => Judge(path, newest).Message;
+
+    /// <summary>
+    /// Returns what looking the file over found: a sound database of the panel, or the code and the words of what is
+    /// wrong with it; a database of a newer release is turned down.
+    /// </summary>
+    public static DatabaseVerdict Judge(string path, string newest)
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(newest);
 
         if (!File.Exists(path))
         {
-            return "there is no such file";
+            return new DatabaseVerdict(NotDatabase, "there is no such file");
         }
 
         if (!Headed(path))
         {
-            return "not a database";
+            return new DatabaseVerdict(NotDatabase, "not a database");
         }
 
         try
@@ -59,14 +98,14 @@ public static class DatabaseCheck
             var tables = Column(names);
             if (!Tables.All(tables.Contains))
             {
-                return "not a database of the panel";
+                return new DatabaseVerdict(Foreign, "not a database of the panel");
             }
 
             using var integrity = connection.CreateCommand();
             integrity.CommandText = "pragma integrity_check";
             if (Column(integrity).FirstOrDefault() != "ok")
             {
-                return "the database is damaged";
+                return Broken();
             }
 
             using var migrations = connection.CreateCommand();
@@ -74,14 +113,17 @@ public static class DatabaseCheck
             var mine = Column(migrations).FirstOrDefault() ?? string.Empty;
 
             return string.CompareOrdinal(mine, newest) > 0
-                ? "the backup comes from a newer release of the panel, update the panel first"
-                : Sound;
+                ? new DatabaseVerdict(Newer, "the backup comes from a newer release of the panel, update the panel first")
+                : new DatabaseVerdict(string.Empty, Sound);
         }
         catch (SqliteException)
         {
-            return "the database is damaged";
+            return Broken();
         }
     }
+
+    // The verdict on a database that does not read whole.
+    private static DatabaseVerdict Broken() => new(Damaged, "the database is damaged");
 
     private static bool Headed(string path)
     {

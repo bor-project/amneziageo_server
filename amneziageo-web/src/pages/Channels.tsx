@@ -1,6 +1,8 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
+import { complaint } from "@/api/auth"
 import { useBalancers } from "@/api/balancers"
 import type { Balancer, BalancerMember } from "@/api/balancers"
+import { useFailure } from "@/api/failure"
 import { useMoveOutbound, useOutbounds } from "@/api/outbounds"
 import type { Outbound, OutboundKind, OutboundState } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
@@ -8,7 +10,7 @@ import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { Find } from "@/components/fields"
-import { card, secondary } from "@/components/styles"
+import { alarmBar, alarmLine, card, secondary } from "@/components/styles"
 import { bytes } from "@/format"
 import { useLanguage, useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -37,6 +39,9 @@ export function Channels() {
   ]
   const shown = lines.filter((line) => matches(line, find))
   const loaded = outbounds.data !== undefined && balancers.data !== undefined
+  const lost = useFailure(outbounds)
+  const lostGroups = useFailure(balancers)
+  const failed = lost ?? lostGroups
 
   function put(key: string, value: string) {
     const kept = new URLSearchParams(params)
@@ -52,7 +57,13 @@ export function Channels() {
 
   return (
     <div className={`mt-4 ${card}`}>
-      {loaded && lines.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("outbounds.empty")}</div>}
+      {!loaded && failed === null && <div className="px-4 py-6 text-sm text-muted">{t("outbounds.loading")}</div>}
+      {failed !== null && (
+        <div className={lines.length === 0 ? alarmLine : alarmBar}>{t(complaint(failed))}</div>
+      )}
+      {loaded && failed === null && lines.length === 0 && (
+        <div className="px-4 py-6 text-sm text-muted">{t("outbounds.empty")}</div>
+      )}
 
       {lines.length > 0 && (
         <Rows

@@ -1,4 +1,4 @@
-import { useContext, useMemo, useState } from "react"
+import { useContext, useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { Held } from "@/components/crumbs"
@@ -23,6 +23,20 @@ export function Crumbs() {
   const items = [...home, ...head, ...tail]
   const shown = wide || items.length < 3 ? items : items.slice(-2)
   const root = items[0]
+  const last = items.at(-1)?.label
+
+  useEffect(() => {
+    if (last === undefined) {
+      return
+    }
+
+    const before = document.title
+    document.title = `${last} · ${t("app.name")}`
+
+    return () => {
+      document.title = before
+    }
+  }, [last, t])
 
   return (
     <nav className="flex min-w-0 items-center gap-1.5 text-[13px]">
