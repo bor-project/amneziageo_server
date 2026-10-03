@@ -1,17 +1,16 @@
-import { Navigate, Route, Routes } from "react-router-dom"
+import { Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { scopes } from "@/api/scopes"
 import { Boot } from "@/components/Boot"
 import { Layout } from "@/components/Layout"
 import { RequireAuth, RequireScope } from "@/components/RequireAuth"
 import { Cards, Sectioned } from "@/components/Section"
-import { connections, routing, settings } from "@/components/menu"
+import { clients, interfaces, routing, settings } from "@/components/menu"
 import { Accounts } from "@/pages/Accounts"
 import { BalancerPage } from "@/pages/BalancerPage"
 import { BasicRouting } from "@/pages/BasicRouting"
 import { BalancerRemove } from "@/pages/BalancerRemove"
 import { Channels } from "@/pages/Channels"
-import { ClientExport } from "@/pages/ClientExport"
-import { ClientPage } from "@/pages/ClientPage"
+import { ClientExport, ClientSettings, ClientView, NewClient } from "@/pages/ClientPage"
 import { ClientRemove } from "@/pages/ClientRemove"
 import { ClientsRemove } from "@/pages/ClientsRemove"
 import { Clients } from "@/pages/Clients"
@@ -36,7 +35,6 @@ import { RouteTest } from "@/pages/RouteTest"
 import { RulePage } from "@/pages/RulePage"
 import { RuleRemove } from "@/pages/RuleRemove"
 import { Rules } from "@/pages/Rules"
-import { Ruleset } from "@/pages/Ruleset"
 import { PanelCertificates, PanelServer } from "@/pages/Settings"
 import { Subscriptions } from "@/pages/Subscriptions"
 import { TemplatePage } from "@/pages/TemplatePage"
@@ -50,15 +48,15 @@ import { UserRemove } from "@/pages/UserRemove"
 import { useAppearance } from "@/theme/theme"
 
 const moved: { from: string; to: string }[] = [
-  { from: "configs", to: "/connections" },
-  { from: "clients", to: "/connections/clients" },
-  { from: "proxies", to: "/connections" },
+  { from: "configs", to: "/interfaces" },
+  { from: "proxies", to: "/interfaces" },
   { from: "rules", to: "/routing" },
   { from: "outbounds", to: "/routing/channels" },
   { from: "balancers", to: "/routing/channels" },
   { from: "geo", to: "/routing/geo" },
   { from: "dns", to: "/routing/dns" },
   { from: "access/*", to: "/settings/users" },
+  { from: "routing/ruleset", to: "/routing" },
 ]
 
 export function App() {
@@ -74,36 +72,39 @@ export function App() {
             <Route path="account/password" element={<OwnPassword />} />
             <Route element={<RequireScope scope={scopes.readState} />}>
               <Route index element={<Dashboard />} />
-              <Route path="connections" element={<Sectioned title="nav.connections" items={connections} />}>
-                <Route index element={<Cards items={connections} />} />
-                <Route path="interfaces" element={<Configs />} />
-                <Route path="interfaces/:configId" element={<Navigate to="edit" replace />} />
+              <Route path="interfaces" element={<Sectioned title="nav.interfaces" to="/interfaces" items={interfaces} />}>
+                <Route index element={<Configs />} />
+                <Route path=":configId" element={<Navigate to="edit" replace />} />
                 <Route element={<RequireScope scope={scopes.manageInterfaces} />}>
-                  <Route path="interfaces/new" element={<ConfigPage />} />
-                  <Route path="interfaces/:configId/edit" element={<ConfigPage />} />
-                  <Route path="interfaces/:configId/delete" element={<ConfigRemove />} />
+                  <Route path="new" element={<ConfigPage />} />
+                  <Route path=":configId/edit" element={<ConfigPage />} />
+                  <Route path=":configId/delete" element={<ConfigRemove />} />
                 </Route>
-                <Route path="clients" element={<Clients />} />
-                <Route path="clients/:clientId" element={<Navigate to="export" replace />} />
-                <Route path="clients/:clientId/export" element={<ClientExport />} />
-                <Route element={<RequireScope scope={scopes.manageClients} />}>
-                  <Route path="clients/new" element={<ClientPage />} />
-                  <Route path="clients/:clientId/edit" element={<ClientPage />} />
-                  <Route path="clients/:clientId/delete" element={<ClientRemove />} />
-                  <Route path="clients/delete" element={<ClientsRemove />} />
-                </Route>
+              </Route>
+              <Route path="clients" element={<Sectioned title="nav.clients" to="/clients" items={clients} tabbed />}>
+                <Route index element={<Clients />} />
                 <Route path="templates" element={<Templates />} />
                 <Route path="templates/default" element={<DefaultTemplate />} />
-                <Route path="templates/clients" element={<Navigate to="/connections/templates" replace />} />
-                <Route path="templates/interfaces" element={<Navigate to="/connections/templates" replace />} />
                 <Route path="templates/:templateId" element={<Navigate to="edit" replace />} />
                 <Route element={<RequireScope scope={scopes.manageClients} />}>
+                  <Route path="new" element={<NewClient />} />
+                  <Route path="delete" element={<ClientsRemove />} />
+                  <Route path=":clientId/delete" element={<ClientRemove />} />
                   <Route path="templates/new" element={<TemplatePage />} />
                   <Route path="templates/:templateId/edit" element={<TemplatePage />} />
                   <Route path="templates/:templateId/delete" element={<TemplateRemove />} />
                 </Route>
+                <Route path=":clientId" element={<ClientView />}>
+                  <Route index element={<Navigate to="export" replace />} />
+                  <Route path="export" element={<ClientExport />} />
+                  <Route path="edit" element={<Navigate to="../settings" replace />} />
+                  <Route element={<RequireScope scope={scopes.manageClients} />}>
+                    <Route path="settings" element={<ClientSettings />} />
+                  </Route>
+                </Route>
               </Route>
-              <Route path="routing" element={<Sectioned title="nav.routing" items={routing} />}>
+              <Route path="connections/*" element={<Moved />} />
+              <Route path="routing" element={<Sectioned title="nav.routing" to="/routing" items={routing} />}>
                 <Route index element={<Cards items={routing} />} />
                 <Route path="rules" element={<Rules />} />
                 <Route element={<RequireScope scope={scopes.manageRouting} />}>
@@ -129,16 +130,13 @@ export function App() {
                   <Route path="geo/:sourceId/delete" element={<GeoRemove />} />
                 </Route>
                 <Route path="dns" element={<Dns />} />
-                <Route element={<RequireScope scope={scopes.manageRouting} />}>
-                  <Route path="ruleset" element={<Ruleset />} />
-                </Route>
               </Route>
               {moved.map((one) => (
                 <Route key={one.from} path={one.from} element={<Navigate to={one.to} replace />} />
               ))}
             </Route>
             <Route element={<RequireScope scope={scopes.manageAccess} />}>
-              <Route path="settings" element={<Sectioned title="nav.settings" items={settings} />}>
+              <Route path="settings" element={<Sectioned title="nav.settings" to="/settings" items={settings} />}>
                 <Route index element={<Cards items={settings} />} />
                 <Route path="server" element={<PanelServer />} />
                 <Route path="certificates" element={<PanelCertificates />} />
@@ -162,4 +160,29 @@ export function App() {
       </Routes>
     </Boot>
   )
+}
+
+// Leads an address of the part the interfaces, the clients and the templates shared before to where they are now.
+function Moved() {
+  const { pathname, search } = useLocation()
+
+  return <Navigate to={movedTo(pathname) + search} replace />
+}
+
+function movedTo(path: string): string {
+  const rest = path.replace(/^\/connections/, "")
+
+  if (rest === "/templates/clients" || rest === "/templates/interfaces") {
+    return "/clients/templates"
+  }
+
+  if (rest.startsWith("/templates")) {
+    return `/clients${rest}`
+  }
+
+  if (rest.startsWith("/clients")) {
+    return rest.replace(/^(\/clients\/\d+)\/edit$/, "$1/settings")
+  }
+
+  return rest.startsWith("/interfaces") ? rest : "/interfaces"
 }

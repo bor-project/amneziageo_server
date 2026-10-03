@@ -12,8 +12,8 @@ import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { summary } from "@/components/batch"
 import type { Summary } from "@/components/batch"
-import { Knob } from "@/components/fields"
-import { card, fieldBox, risky, secondary } from "@/components/styles"
+import { Find, Knob } from "@/components/fields"
+import { card, fieldBox, tool, toolRisky } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
@@ -67,8 +67,8 @@ export function Clients() {
 
   function actionsOf(one: Client): RowAction[] {
     return [
-      { label: t("action.export"), onPick: () => navigate(`/connections/clients/${one.id}/export`) },
-      { label: t("action.settings"), onPick: () => navigate(`/connections/clients/${one.id}/edit`) },
+      { label: t("action.export"), onPick: () => navigate(`/clients/${one.id}/export`) },
+      { label: t("action.settings"), onPick: () => navigate(`/clients/${one.id}/settings`) },
     ]
   }
 
@@ -107,6 +107,33 @@ export function Clients() {
                   onChange: (keys) => setChoice({ view, keys }),
                   title: t("clients.choose"),
                   every: t("clients.chooseAll"),
+                  actions: (
+                    <>
+                      <button
+                        type="button"
+                        disabled={turnMany.isPending}
+                        onClick={() => void turnAll(true)}
+                        className={tool}
+                      >
+                        {t("clients.turnOnChosen")}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={turnMany.isPending}
+                        onClick={() => void turnAll(false)}
+                        className={tool}
+                      >
+                        {t("clients.turnOffChosen")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/clients/delete?ids=${ids.join(",")}`)}
+                        className={toolRisky}
+                      >
+                        {t("clients.removeChosen")}
+                      </button>
+                    </>
+                  ),
                 }
               : undefined
           }
@@ -114,9 +141,10 @@ export function Clients() {
             <div className="flex flex-wrap items-center gap-2">
               <select
                 id="client-config"
+                aria-label={t("clients.endpointName")}
                 value={picked}
                 onChange={(e) => put("config", e.target.value === "0" ? "" : e.target.value)}
-                className={`w-full wide:w-60 ${fieldBox}`}
+                className={`w-full wide:w-56 ${fieldBox}`}
               >
                 <option value={0}>{t("clients.everyConfig")}</option>
                 {(configs.data ?? []).map((one) => (
@@ -126,44 +154,7 @@ export function Clients() {
                 ))}
               </select>
 
-              <input
-                value={find}
-                placeholder={t("action.search")}
-                onChange={(e) => put("find", e.target.value)}
-                className={`w-full wide:w-60 ${fieldBox}`}
-              />
-
-              {may && (
-                <>
-                  <button
-                    type="button"
-                    disabled={ids.length === 0 || turnMany.isPending}
-                    onClick={() => void turnAll(true)}
-                    className={secondary}
-                  >
-                    {t("clients.turnOnChosen")}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={ids.length === 0 || turnMany.isPending}
-                    onClick={() => void turnAll(false)}
-                    className={secondary}
-                  >
-                    {t("clients.turnOffChosen")}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={ids.length === 0}
-                    onClick={() => navigate(`/connections/clients/delete?ids=${ids.join(",")}`)}
-                    className={risky}
-                  >
-                    {t("clients.removeChosen")}
-                  </button>
-                  {ids.length > 0 && (
-                    <span className="text-sm text-muted">{t("clients.chosen", { count: ids.length })}</span>
-                  )}
-                </>
-              )}
+              <Find value={find} onChange={(value) => put("find", value)} className="w-full wide:w-64" />
             </div>
           }
           columns={[
@@ -189,7 +180,7 @@ export function Clients() {
               cell: (one) => (
                 <span className="flex min-w-0 items-center gap-2">
                   <Link
-                    to={`/connections/clients/${one.id}/export`}
+                    to={`/clients/${one.id}/export`}
                     title={one.name}
                     className="max-w-full shrink-0 truncate hover:text-brand-ink"
                   >
@@ -216,7 +207,7 @@ export function Clients() {
                 one.templateId === null ? (
                   t("clients.dash")
                 ) : (
-                  <Link to={`/connections/templates/${one.templateId}/edit`} className="text-brand-ink hover:text-brand-lit">
+                  <Link to={`/clients/templates/${one.templateId}/edit`} className="text-brand-ink hover:text-brand-lit">
                     {named(one)}
                   </Link>
                 ),

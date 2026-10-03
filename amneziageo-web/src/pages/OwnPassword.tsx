@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { changePassword, complaint } from "@/api/auth"
 import { useCrumbs } from "@/components/crumbs"
 import { Part } from "@/components/fields"
-import { card, field, label, primary, secondary } from "@/components/styles"
+import { field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { sessionOpened } from "@/store/authSlice"
@@ -56,7 +56,7 @@ export function OwnPassword() {
       {error && <div className="text-sm text-alarm">{t(error)}</div>}
       {done && <div className="text-sm text-good">{t("password.done")}</div>}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         <button type="button" onClick={() => navigate(-1)} className={secondary}>
           {t("password.cancel")}
         </button>

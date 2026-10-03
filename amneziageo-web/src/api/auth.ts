@@ -177,6 +177,13 @@ const complaints: Record<string, TextKey> = {
   "unknown-route": "error.unknownRoute",
   "token-name-taken": "error.tokenNameTaken",
   "role-has-tokens": "error.roleHasTokens",
+  "backup-empty": "error.backupEmpty",
+  "backup-not-database": "error.backupNotDatabase",
+  "backup-foreign": "error.backupForeign",
+  "backup-damaged": "error.backupDamaged",
+  "backup-newer": "error.backupNewer",
+  "backup-elsewhere": "error.backupElsewhere",
+  "firewall-refused": "error.firewallRefused",
 }
 
 export async function signIn(user: string, password: string): Promise<Session> {

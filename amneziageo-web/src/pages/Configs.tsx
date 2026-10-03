@@ -1,14 +1,16 @@
 import { useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
+import { complaint } from "@/api/auth"
 import { useClients } from "@/api/clients"
 import { failure, useConfigs, useSwitchConfig } from "@/api/configs"
 import type { Config } from "@/api/configs"
-import { usePortState } from "@/api/firewall"
+import { useOpenPort, usePortState } from "@/api/firewall"
 import { scopes } from "@/api/scopes"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { Knob } from "@/components/fields"
-import { card, fieldBox } from "@/components/styles"
+import { Find, Knob } from "@/components/fields"
+import { useOpening } from "@/components/opening"
+import { card } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
@@ -60,12 +62,7 @@ export function Configs() {
           items={shown}
           keyOf={(one) => one.id}
           tools={
-            <input
-              value={find}
-              placeholder={t("action.search")}
-              onChange={(e) => put("find", e.target.value)}
-              className={`w-full wide:w-80 ${fieldBox}`}
-            />
+            <Find value={find} onChange={(value) => put("find", value)} className="w-full wide:w-72" />
           }
           columns={[
             {
@@ -91,7 +88,7 @@ export function Configs() {
               lead: true,
               body: "font-semibold text-ink",
               cell: (one) => (
-                <Link to={`/connections/interfaces/${one.id}/edit`} className="hover:text-brand-ink">
+                <Link to={`/interfaces/${one.id}/edit`} className="hover:text-brand-ink">
                   {one.name}
                 </Link>
               ),
@@ -135,7 +132,7 @@ export function Configs() {
                     actions={[
                       {
                         label: t("action.settings"),
-                        onPick: () => navigate(`/connections/interfaces/${one.id}/edit`),
+                        onPick: () => navigate(`/interfaces/${one.id}/edit`),
                       },
                     ]}
                   />
@@ -150,6 +147,8 @@ export function Configs() {
 
 function Closed({ one }: { one: Config }) {
   const t = useText()
+  const { able } = useOpening(scopes.manageInterfaces)
+  const open = useOpenPort()
   const services = one.servicesPort > 0 ? one.servicesPort : one.listenPort
   const udp = usePortState(one.listenPort, one.isEnabled, "udp")
   const tcp = usePortState(services, one.isEnabled)
@@ -163,10 +162,23 @@ function Closed({ one }: { one: Config }) {
   }
 
   return (
-    <span className="text-xs text-alarm">
-      {closed.length === 2
-        ? t("configs.closedBoth", { udp: closed[0], tcp: closed[1] })
-        : t("configs.closedOne", { port: closed[0] })}
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-alarm">
+      <span>
+        {closed.length === 2
+          ? t("configs.closedBoth", { udp: closed[0], tcp: closed[1] })
+          : t("configs.closedOne", { port: closed[0] })}
+      </span>
+      {able && (
+        <button
+          type="button"
+          disabled={open.isPending}
+          onClick={() => open.mutate({ kind: "endpoint", id: one.id })}
+          className="rounded-md border border-line-button bg-surface px-2 py-0.5 text-xs font-medium text-ink-soft hover:bg-hover hover:text-ink disabled:opacity-50"
+        >
+          {open.isPending ? t("ports.opening") : t("ports.open")}
+        </button>
+      )}
+      {open.isError && <span>{t(complaint(open.error))}</span>}
     </span>
   )
 }

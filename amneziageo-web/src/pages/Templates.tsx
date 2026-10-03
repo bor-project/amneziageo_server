@@ -5,7 +5,8 @@ import type { Template } from "@/api/templates"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { card, fieldBox } from "@/components/styles"
+import { Find } from "@/components/fields"
+import { card } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { Text } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -37,7 +38,7 @@ export function Templates() {
   }
 
   function actions(one: Template): RowAction[] {
-    return [{ label: t("action.settings"), onPick: () => navigate(`/connections/templates/${one.id}/edit`) }]
+    return [{ label: t("action.settings"), onPick: () => navigate(`/clients/templates/${one.id}/edit`) }]
   }
 
   function resolved(one: Template) {
@@ -69,12 +70,7 @@ export function Templates() {
             items={list}
             keyOf={(one) => one.id}
             tools={
-              <input
-                value={find}
-                placeholder={t("action.search")}
-                onChange={(e) => put("find", e.target.value)}
-                className={`w-full wide:w-80 ${fieldBox}`}
-              />
+              <Find value={find} onChange={(value) => put("find", value)} className="w-full wide:w-72" />
             }
             columns={[
               {
@@ -85,7 +81,7 @@ export function Templates() {
                 lead: true,
                 body: "font-semibold text-ink",
                 cell: (one) => (
-                  <Link to={`/connections/templates/${one.id}/edit`} className="hover:text-brand-ink">
+                  <Link to={`/clients/templates/${one.id}/edit`} className="hover:text-brand-ink">
                     {one.name}
                   </Link>
                 ),

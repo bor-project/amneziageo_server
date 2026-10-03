@@ -10,6 +10,7 @@ import {
 } from "@/api/outbounds"
 import type { Outbound } from "@/api/outbounds"
 import { OutboundForm } from "@/components/OutboundForm"
+import { HeadActions } from "@/components/Section"
 import { secondary } from "@/components/styles"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
@@ -70,12 +71,12 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
 
   return (
     <div>
-      <div className="mt-4 flex justify-end gap-2">
+      <HeadActions>
         <button
           type="button"
           onClick={() => void probe.mutateAsync(held.id)}
           disabled={probe.isPending}
-          className={secondary}
+          className={`flex h-10 items-center ${secondary}`}
         >
           {t("outbounds.probeNow")}
         </button>
@@ -83,11 +84,11 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
           type="button"
           onClick={() => void apply.mutateAsync(held.id)}
           disabled={apply.isPending}
-          className={secondary}
+          className={`flex h-10 items-center ${secondary}`}
         >
           {t("outbounds.apply")}
         </button>
-      </div>
+      </HeadActions>
 
       <OutboundForm
         start={draftOf(held)}

@@ -4,6 +4,7 @@ import type { Text } from "@/i18n"
 import { complaint } from "./auth"
 import type { Inbound } from "./clients"
 import { client } from "./client"
+import type { Holding } from "./firewall"
 
 export interface Obfuscation {
   jc: number
@@ -115,11 +116,11 @@ export function useFreshConfig(enabled: boolean, name: string) {
 }
 
 export function useAddConfig() {
-  return useRefreshing(async (draft: ConfigDraft) => (await client.post<Config>("/configs", draft)).data)
+  return useRefreshing(async (draft: ConfigDraft & Holding) => (await client.post<Config>("/configs", draft)).data)
 }
 
 export function useChangeConfig() {
-  return useRefreshing(({ id, draft }: { id: number; draft: ConfigDraft }) =>
+  return useRefreshing(({ id, draft }: { id: number; draft: ConfigDraft & Holding }) =>
     client.put(`/configs/${id}`, draft),
   )
 }
@@ -215,6 +216,7 @@ function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) 
     mutationFn: call,
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["configs"] })
+      await queryClient.invalidateQueries({ queryKey: ["firewall", "port"] })
     },
   })
 }

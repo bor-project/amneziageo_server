@@ -98,6 +98,7 @@
   --warn: #B45309;
   --warn-soft: #FFF7E6;
   --shade: 0 16px 40px rgba(15, 23, 42, .18);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");
 }
 
 .dark {
@@ -139,6 +140,7 @@
   --warn: #F0B35A;
   --warn-soft: #36270F;
   --shade: 0 16px 40px rgba(0, 0, 0, .55);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238494AB' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");
 }
 
 html,
@@ -175,4 +177,23 @@ body {
 
 ::-webkit-scrollbar-button {
   display: none;
+}
+
+/* The arrow of a list box keeps clear of its edge; outside the layers, so it holds against the padding utilities. */
+select:not([multiple]):not([size]) {
+  appearance: none;
+  background-image: var(--chevron);
+  background-position: right 0.7rem center;
+  background-repeat: no-repeat;
+  background-size: 1.05rem 1.05rem;
+  padding-right: 2.4rem;
+}
+
+/* A control reached from the keyboard shows where the focus is. */
+a:focus-visible,
+button:focus-visible,
+input[type="checkbox"]:focus-visible,
+[role="separator"]:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }

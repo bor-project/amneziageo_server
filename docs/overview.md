@@ -21,6 +21,9 @@ The head of the page reads `/sys/module/amneziawg`: the version the module repor
 whose `uevent` carries `DEVTYPE=amneziawg`. Beside the version of the panel it shows the release newer than the
 panel, see [updates.md](updates.md).
 
+The card `Backup` beside the uptime downloads a copy of the database for a role with `backup:read` and restores
+the panel from such a file for a role with `access:write`, after a question; see [install.md](install.md).
+
 ## The services
 
 `ServiceWatch` checks the services the server runs for its clients five seconds after the start and then every

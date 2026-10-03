@@ -9,7 +9,7 @@ import { useSpot } from "@/store/spots"
 export function TemplateRemove() {
   const t = useText()
   const navigate = useNavigate()
-  const back = useSpot("/connections/templates")
+  const back = useSpot("/clients/templates")
   const { templateId } = useParams()
   const templates = useTemplates()
   const remove = useRemoveTemplate()
@@ -18,7 +18,7 @@ export function TemplateRemove() {
   useTail(
     held === undefined
       ? []
-      : [{ label: held.name, to: `/connections/templates/${held.id}/edit` }, { label: t("templates.remove") }],
+      : [{ label: held.name, to: `/clients/templates/${held.id}/edit` }, { label: t("templates.remove") }],
   )
 
   if (held === undefined) {

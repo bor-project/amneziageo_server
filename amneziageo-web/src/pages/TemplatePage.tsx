@@ -8,6 +8,7 @@ import {
   useRefreshTemplate,
   useTemplates,
 } from "@/api/templates"
+import { HeadActions } from "@/components/Section"
 import { TemplateForm } from "@/components/TemplateForm"
 import { useTail } from "@/components/crumbs"
 import { secondary } from "@/components/styles"
@@ -23,7 +24,7 @@ export function TemplatePage() {
   const change = useChangeTemplate()
   const refresh = useRefreshTemplate()
   const held = templateId === undefined ? undefined : templates.data?.find((one) => one.id === Number(templateId))
-  const back = useSpot("/connections/templates")
+  const back = useSpot("/clients/templates")
 
   useTail(held === undefined ? [{ label: t("templates.newTitle") }] : [{ label: held.name }])
 
@@ -49,16 +50,16 @@ export function TemplatePage() {
 
   return (
     <div>
-      <div className="mt-4 flex justify-end gap-2">
+      <HeadActions>
         <button
           type="button"
           onClick={() =>
             void add
               .mutateAsync({ ...draftOf(held), name: t("templates.copyName", { name: held.name }) })
-              .then((made) => navigate(`/connections/templates/${made.id}/edit`))
+              .then((made) => navigate(`/clients/templates/${made.id}/edit`))
           }
           disabled={add.isPending}
-          className={secondary}
+          className={`flex h-10 items-center ${secondary}`}
         >
           {t("templates.duplicate")}
         </button>
@@ -67,12 +68,12 @@ export function TemplatePage() {
             type="button"
             onClick={() => refresh.mutate(held.id)}
             disabled={refresh.isPending}
-            className={secondary}
+            className={`flex h-10 items-center ${secondary}`}
           >
             {refresh.isPending ? t("templates.refreshing") : t("templates.refresh")}
           </button>
         )}
-      </div>
+      </HeadActions>
 
       {refresh.error !== null && <div className="mt-2 text-sm text-alarm">{t(complaint(refresh.error))}</div>}
       {add.error !== null && <div className="mt-2 text-sm text-alarm">{t(complaint(add.error))}</div>}
@@ -84,7 +85,7 @@ export function TemplatePage() {
         error={change.error}
         onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}
         onClose={() => navigate(back)}
-        onRemove={() => navigate(`/connections/templates/${held.id}/delete`)}
+        onRemove={() => navigate(`/clients/templates/${held.id}/delete`)}
       />
     </div>
   )

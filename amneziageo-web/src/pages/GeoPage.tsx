@@ -2,6 +2,7 @@ import { Navigate, useNavigate, useParams } from "react-router-dom"
 import { draftOf, useAddGeoSource, useChangeGeoSource, useGeoSources, useUpdateGeoSource } from "@/api/geo"
 import type { GeoSourceDraft } from "@/api/geo"
 import { GeoForm } from "@/components/GeoForm"
+import { HeadActions } from "@/components/Section"
 import { secondary } from "@/components/styles"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
@@ -56,16 +57,16 @@ function HeldSource({ sourceId }: { sourceId: number }) {
 
   return (
     <div>
-      <div className="mt-4 flex justify-end">
+      <HeadActions>
         <button
           type="button"
           onClick={() => void update.mutateAsync(held.id)}
           disabled={update.isPending}
-          className={secondary}
+          className={`flex h-10 items-center ${secondary}`}
         >
           {update.isPending ? t("geo.updating") : t("geo.update")}
         </button>
-      </div>
+      </HeadActions>
 
       <GeoForm
         start={draftOf(held)}

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
+import type { Holding } from "./firewall"
 
 export interface PanelDraft {
   listen: string[]
@@ -51,7 +52,7 @@ export function useNameSample(enabled = true) {
 }
 
 export function useSavePanel() {
-  return useRefreshing((draft: PanelDraft) => client.put("/panel", draft))
+  return useRefreshing((draft: PanelDraft & Holding) => client.put("/panel", draft))
 }
 
 export function useRestartPanel() {
@@ -155,6 +156,7 @@ function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
     mutationFn: call,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["panel"] })
+      await queryClient.invalidateQueries({ queryKey: ["firewall", "port"] })
     },
   })
 }

@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from "react-router-dom"
+import { Navigate, Outlet, useOutletContext } from "react-router-dom"
 import { useText } from "@/i18n"
 import { useAppSelector } from "@/store/hooks"
 import { holds } from "@/store/authSlice"
@@ -16,9 +16,10 @@ export function RequireAuth() {
 export function RequireScope({ scope }: { scope: string }) {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
+  const context = useOutletContext()
 
   return holds(user, scope) ? (
-    <Outlet />
+    <Outlet context={context} />
   ) : (
     <div className="rounded border border-line bg-surface p-6 text-sm text-muted">{t("access.denied")}</div>
   )

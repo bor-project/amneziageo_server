@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
+import type { Holding } from "./firewall"
 
 export interface SubscriptionDraft {
   isEnabled: boolean
@@ -34,10 +35,11 @@ export function useSaveSubscription() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (draft: SubscriptionDraft) => client.put("/subscription", draft),
+    mutationFn: (draft: SubscriptionDraft & Holding) => client.put("/subscription", draft),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["subscription"] })
       await queryClient.invalidateQueries({ queryKey: ["client-config"] })
+      await queryClient.invalidateQueries({ queryKey: ["firewall", "port"] })
     },
   })
 }

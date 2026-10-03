@@ -6,7 +6,7 @@ import { useBalancers } from "@/api/balancers"
 import { useOutbounds } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
 import { Box, Count, Flag, Line, Part, Pick } from "@/components/fields"
-import { card, primary, secondary } from "@/components/styles"
+import { footer, primary, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -184,7 +184,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
       {fault && <div className="text-sm text-alarm">{t(fault)}</div>}
 
       {may && (
-        <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        <div className={footer}>
           <button type="button" onClick={drop} disabled={kept === null || save.isPending} className={secondary}>
             {t("dns.cancel")}
           </button>

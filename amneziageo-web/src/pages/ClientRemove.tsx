@@ -9,7 +9,7 @@ import { useSpot } from "@/store/spots"
 export function ClientRemove() {
   const t = useText()
   const navigate = useNavigate()
-  const back = useSpot("/connections/clients")
+  const back = useSpot("/clients")
   const { clientId } = useParams()
   const clients = useClients()
   const remove = useRemoveClient()
@@ -19,7 +19,7 @@ export function ClientRemove() {
   useTail(
     held === undefined
       ? []
-      : [{ label: held.name, to: `/connections/clients/${held.id}/export` }, { label: t("clients.remove") }],
+      : [{ label: held.name, to: `/clients/${held.id}/export` }, { label: t("clients.remove") }],
   )
 
   if (held === undefined) {

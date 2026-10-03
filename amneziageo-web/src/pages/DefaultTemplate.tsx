@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom"
 import { useTemplateDefaults } from "@/api/templates"
 import { useTail } from "@/components/crumbs"
 import { Part } from "@/components/fields"
-import { card, field, label, secondary } from "@/components/styles"
+import { field, footer, label, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
 
@@ -10,7 +10,7 @@ export function DefaultTemplate() {
   const t = useText()
   const navigate = useNavigate()
   const defaults = useTemplateDefaults().data
-  const back = useSpot("/connections/templates")
+  const back = useSpot("/clients/templates")
 
   useTail([{ label: t("clients.noTemplate") }])
 
@@ -39,7 +39,7 @@ export function DefaultTemplate() {
         <Shown id="template-keepalive" caption={t("templates.keepalive")} value={String(defaults.keepalive)} />
       </Part>
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         <button type="button" onClick={() => navigate(back)} className={secondary}>
           {t("action.backToList")}
         </button>

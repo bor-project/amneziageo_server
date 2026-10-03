@@ -12,7 +12,7 @@ import { useSpot } from "@/store/spots"
 export function ClientsRemove() {
   const t = useText()
   const navigate = useNavigate()
-  const back = useSpot("/connections/clients")
+  const back = useSpot("/clients")
   const [params] = useSearchParams()
   const clients = useClients()
   const remove = useRemoveClients()

@@ -14,34 +14,39 @@ export interface Item {
 export interface Section {
   to: string
   label: TextKey
+  icon: GlyphName
   scope: string
   items: Item[]
 }
 
-export const connections: Item[] = [
+export const interfaces: Item[] = [
   {
-    to: "/connections/interfaces",
+    to: "/interfaces",
     label: "tab.interfaces",
     about: "about.interfaces",
     icon: "shield",
     scope: scopes.readState,
-    add: { to: "/connections/interfaces/new", scope: scopes.manageInterfaces },
+    add: { to: "/interfaces/new", scope: scopes.manageInterfaces },
   },
+]
+
+// The tabs of the page of the clients: their configurations and the templates they are made from.
+export const clients: Item[] = [
   {
-    to: "/connections/clients",
-    label: "tab.clients",
+    to: "/clients",
+    label: "tab.configs",
     about: "about.clients",
     icon: "devices",
     scope: scopes.readState,
-    add: { to: "/connections/clients/new", scope: scopes.manageClients },
+    add: { to: "/clients/new", scope: scopes.manageClients },
   },
   {
-    to: "/connections/templates",
+    to: "/clients/templates",
     label: "tab.templates",
     about: "about.templates",
     icon: "layout",
     scope: scopes.readState,
-    add: { to: "/connections/templates/new", scope: scopes.manageClients },
+    add: { to: "/clients/templates/new", scope: scopes.manageClients },
   },
 ]
 
@@ -73,7 +78,6 @@ export const routing: Item[] = [
     add: { to: "/routing/geo/new", scope: scopes.manageRouting },
   },
   { to: "/routing/dns", label: "tab.dns", about: "about.dns", icon: "globe", scope: scopes.readState },
-  { to: "/routing/ruleset", label: "tab.ruleset", about: "about.ruleset", icon: "wall", scope: scopes.manageRouting },
 ]
 
 export const settings: Item[] = [
@@ -102,15 +106,20 @@ export const settings: Item[] = [
   },
 ]
 
+// The overview leads the menu and every other part of the panel comes under it.
 export const sections: Section[] = [
-  { to: "/", label: "nav.overview", scope: scopes.readState, items: [] },
-  { to: "/connections", label: "nav.connections", scope: scopes.readState, items: connections },
-  { to: "/routing", label: "nav.routing", scope: scopes.readState, items: routing },
-  { to: "/settings", label: "nav.settings", scope: scopes.manageAccess, items: settings },
+  { to: "/", label: "nav.overview", icon: "home", scope: scopes.readState, items: [] },
+  { to: "/interfaces", label: "nav.interfaces", icon: "shield", scope: scopes.readState, items: [] },
+  { to: "/clients", label: "nav.clients", icon: "devices", scope: scopes.readState, items: [] },
+  { to: "/routing", label: "nav.routing", icon: "fork", scope: scopes.readState, items: routing },
+  { to: "/settings", label: "nav.settings", icon: "gear", scope: scopes.manageAccess, items: settings },
 ]
 
+// Finds the item a path belongs to, the one with the longest path when several hold it.
 export function here(items: Item[], pathname: string): Item | undefined {
-  return items.find((one) => under(pathname, one.to))
+  return items
+    .filter((one) => under(pathname, one.to))
+    .reduce<Item | undefined>((best, one) => (best === undefined || one.to.length > best.to.length ? one : best), undefined)
 }
 
 export function under(path: string, to: string): boolean {

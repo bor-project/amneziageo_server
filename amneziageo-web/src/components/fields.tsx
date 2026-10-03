@@ -1,6 +1,7 @@
 import { useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
-import { card, field, label, note } from "@/components/styles"
+import { card, field, label, note as noteText } from "@/components/styles"
+import { useText } from "@/i18n"
 
 export function Part({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
@@ -64,7 +65,7 @@ export function Line({
           {after}
         </div>
       )}
-      {hint.length > 0 && <div className={note}>{hint}</div>}
+      {hint.length > 0 && <div className={noteText}>{hint}</div>}
       {fault.length > 0 && <div className="mt-1 text-xs text-alarm">{fault}</div>}
     </div>
   )
@@ -145,7 +146,7 @@ export function Pick({
       >
         {children}
       </select>
-      {hint.length > 0 && <div className={note}>{hint}</div>}
+      {hint.length > 0 && <div className={noteText}>{hint}</div>}
     </div>
   )
 }
@@ -158,6 +159,7 @@ export function Count({
   hint = "",
   unset = "",
   fault = "",
+  note,
 }: {
   id: string
   caption: ReactNode
@@ -166,6 +168,7 @@ export function Count({
   hint?: string
   unset?: string
   fault?: string
+  note?: ReactNode
 }) {
   return (
     <div>
@@ -180,8 +183,9 @@ export function Count({
         onChange={(e) => onChange(Number(e.target.value))}
         className={`mt-1 ${field}`}
       />
-      {hint.length > 0 && <div className={note}>{hint}</div>}
+      {hint.length > 0 && <div className={noteText}>{hint}</div>}
       {fault.length > 0 && <div className="mt-1 text-xs text-alarm">{fault}</div>}
+      {fault.length === 0 && note}
     </div>
   )
 }
@@ -215,7 +219,7 @@ export function Flag({
   return hint.length > 0 ? (
     <div>
       {box}
-      <div className={note}>{hint}</div>
+      <div className={noteText}>{hint}</div>
     </div>
   ) : (
     box
@@ -374,5 +378,43 @@ export function Multi({
         </>
       )}
     </div>
+  )
+}
+
+// The search field over a list.
+export function Find({
+  value,
+  onChange,
+  className = "",
+}: {
+  value: string
+  onChange: (value: string) => void
+  className?: string
+}) {
+  const t = useText()
+
+  return (
+    <label className={`relative block ${className}`}>
+      <svg
+        viewBox="0 0 24 24"
+        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        aria-hidden
+      >
+        <circle cx="11" cy="11" r="6.5" />
+        <path d="m16 16 4 4" />
+      </svg>
+      <input
+        type="search"
+        value={value}
+        placeholder={t("action.search")}
+        aria-label={t("action.search")}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-line-input bg-input py-2.25 pr-3 pl-9 text-sm text-ink outline-none focus:border-brand"
+      />
+    </label>
   )
 }

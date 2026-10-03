@@ -4,8 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useClientConfig } from "@/api/clients"
 import type { Miss } from "@/api/clients"
 import { scopes } from "@/api/scopes"
-import { Caret } from "@/components/Glyph"
-import { card, chip, quiet } from "@/components/styles"
+import { card, quiet } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -67,11 +66,11 @@ export function ClientConfig({ id, editable }: { id: number; editable: boolean }
       return { says: t(misses[miss]), to: holds(user, scopes.manageAccess) ? "/settings/subscriptions" : null }
     }
 
-    return { says: t(misses[miss]), to: miss === "no-id" && editable ? `/connections/clients/${id}/edit` : null }
+    return { says: t(misses[miss]), to: miss === "no-id" && editable ? `/clients/${id}/settings` : null }
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
       {offered.map((one) => (
         <Sheet
           key={one.kind}
@@ -105,10 +104,8 @@ function Sheet({
   missing: Missing | null
   t: Text
 }) {
-  const [open, setOpen] = useState(true)
   const [taken, setTaken] = useState("")
   const timer = useRef(0)
-  const room = Math.min(440, Math.max(280, 3 * (picture?.modules ?? 0)))
 
   async function put(what: "text" | "image") {
     const done = what === "text" ? await copyText(text) : await copyImage(picture)
@@ -133,30 +130,10 @@ function Sheet({
 
   return (
     <div className={card}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-ink"
-      >
-        <Caret open={open} />
-        <span className="truncate">{caption}</span>
-      </button>
-
-      {open && missing !== null && (
-        <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-4 text-sm text-muted">
-          {missing.says}
-          {missing.to !== null && (
-            <Link to={missing.to} className="text-brand-ink hover:text-brand-lit">
-              {t("action.settings")}
-            </Link>
-          )}
-        </div>
-      )}
-
-      {open && missing === null && (
-        <div className="flex flex-col items-center gap-3 border-t border-line px-4 py-4">
-          <div className="flex min-w-0 items-center gap-2 self-start">
-            <span className={chip}>{caption}</span>
+      <div className="flex min-h-12 items-center gap-2 border-b border-line px-4 py-2">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{caption}</span>
+        {missing === null && (
+          <>
             <button
               type="button"
               title={t("action.copyText")}
@@ -186,22 +163,32 @@ function Sheet({
             >
               <Arrow />
             </button>
-          </div>
+          </>
+        )}
+      </div>
 
+      {missing !== null && (
+        <div className="flex flex-wrap items-center gap-3 px-4 py-6 text-sm text-muted">
+          {missing.says}
+          {missing.to !== null && (
+            <Link to={missing.to} className="text-brand-ink hover:text-brand-lit">
+              {t("action.settings")}
+            </Link>
+          )}
+        </div>
+      )}
+
+      {missing === null && (
+        <div className="flex justify-center p-4">
           {picture === null ? (
-            <div
-              style={{ width: room, height: room }}
-              className="flex items-center justify-center rounded border border-line p-4 text-center text-sm text-muted"
-            >
+            <div className="flex aspect-square w-full max-w-80 items-center justify-center rounded border border-line p-4 text-center text-sm text-muted">
               {t("clients.qrTooBig")}
             </div>
           ) : (
             <img
               src={picture.url}
               alt={t("clients.qr")}
-              className="rounded bg-white p-2 [image-rendering:pixelated]"
-              width={room}
-              height={room}
+              className="aspect-square w-full max-w-80 rounded bg-white p-2 [image-rendering:pixelated]"
             />
           )}
         </div>

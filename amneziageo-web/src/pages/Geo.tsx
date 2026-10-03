@@ -5,8 +5,8 @@ import { scopes } from "@/api/scopes"
 import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { Box } from "@/components/fields"
-import { card, fieldBox, secondary } from "@/components/styles"
+import { Box, Find } from "@/components/fields"
+import { card, secondary } from "@/components/styles"
 import { bytes } from "@/format"
 import { useLanguage, useText } from "@/i18n"
 import type { Text } from "@/i18n"
@@ -62,12 +62,7 @@ export function Geo() {
             keyOf={(one) => one.id}
             tools={
               <div className="flex flex-wrap items-center gap-2">
-                <input
-                  value={find}
-                  placeholder={t("action.search")}
-                  onChange={(e) => put("find", e.target.value)}
-                  className={`w-full wide:w-60 ${fieldBox}`}
-                />
+                <Find value={find} onChange={(value) => put("find", value)} className="w-full wide:w-72" />
                 {may && (
                   <button
                     type="button"

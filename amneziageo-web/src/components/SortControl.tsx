@@ -4,7 +4,7 @@ import { useText } from "@/i18n"
 import type { Order } from "@/components/sort"
 
 const pick =
-  "flex items-center justify-between gap-2 rounded-lg border border-line-input bg-input px-2.5 py-1.75 text-[13px] text-ink hover:border-line-button"
+  "flex items-center justify-between gap-2 rounded-lg border border-line-input bg-input py-1.75 pr-2.5 pl-3 text-[13px] text-ink hover:border-line-button"
 
 const way = "rounded-md px-2.5 py-1.25 text-[13px]"
 
@@ -38,9 +38,18 @@ export function SortControl({
       <div className={`relative ${fill ? "min-w-0 flex-1" : ""}`}>
         <button type="button" onClick={() => setOpen(!open)} className={`${pick} ${fill ? "w-full" : ""}`}>
           <span className="truncate">{held?.caption ?? t("sort.none")}</span>
-          <span className="text-[10px] text-faint" aria-hidden>
-            &#9662;
-          </span>
+          <svg
+            viewBox="0 0 24 24"
+            className={`mr-0.5 size-4 shrink-0 text-muted ${open ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="m7 10 5 5 5-5" />
+          </svg>
         </button>
 
         {open && (

@@ -3,7 +3,7 @@ import { complaint, reason } from "@/api/auth"
 import { useBasic, useSaveBasic } from "@/api/rules"
 import type { BasicLists, RuleState } from "@/api/rules"
 import { scopes } from "@/api/scopes"
-import { card, field, primary, secondary } from "@/components/styles"
+import { card, field, footer, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -71,7 +71,7 @@ function Lists({ held, may }: { held: BasicLists; may: boolean }) {
       {fault && <div className="text-sm text-alarm">{t(fault)}</div>}
 
       {may && (
-        <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+        <div className={footer}>
           <button type="button" onClick={drop} disabled={!changed || save.isPending} className={secondary}>
             {t("rules.cancel")}
           </button>

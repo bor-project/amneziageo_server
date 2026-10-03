@@ -10,7 +10,7 @@ import { useSpot } from "@/store/spots"
 export function ConfigRemove() {
   const t = useText()
   const navigate = useNavigate()
-  const back = useSpot("/connections/interfaces")
+  const back = useSpot("/interfaces")
   const { configId } = useParams()
   const configs = useConfigs()
   const clients = useClients()
@@ -21,7 +21,7 @@ export function ConfigRemove() {
   useTail(
     held === undefined
       ? []
-      : [{ label: held.name, to: `/connections/interfaces/${held.id}/edit` }, { label: t("configs.remove") }],
+      : [{ label: held.name, to: `/interfaces/${held.id}/edit` }, { label: t("configs.remove") }],
   )
 
   if (held === undefined) {

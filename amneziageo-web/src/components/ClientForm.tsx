@@ -9,7 +9,7 @@ import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useTemplates } from "@/api/templates"
 import { Help, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
-import { card, danger, field, label, primary, secondary } from "@/components/styles"
+import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { randomId, randomKey } from "@/keys"
@@ -182,8 +182,8 @@ export function ClientForm({
           <Link
             to={
               draft.templateId === null
-                ? "/connections/templates/default"
-                : `/connections/templates/${draft.templateId}/edit`
+                ? "/clients/templates/default"
+                : `/clients/templates/${draft.templateId}/edit`
             }
             className="text-sm text-brand-ink hover:text-brand-lit"
           >
@@ -247,7 +247,7 @@ export function ClientForm({
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         {onRemove !== undefined && (
           <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
             {t("clients.remove")}

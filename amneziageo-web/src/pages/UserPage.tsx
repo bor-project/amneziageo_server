@@ -3,9 +3,10 @@ import { Navigate, useNavigate, useParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { useRoles } from "@/api/roles"
 import { fresh, useAddUser, useChangeUser, useUsers } from "@/api/users"
+import { HeadActions } from "@/components/Section"
 import { useTail } from "@/components/crumbs"
 import { Flag, Line, Part, Pick, Regenerate } from "@/components/fields"
-import { card, danger, field, label, primary, secondary } from "@/components/styles"
+import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
 
@@ -95,7 +96,7 @@ function NewUser() {
 
       {add.error !== null && <div className="text-sm text-alarm">{t(complaint(add.error))}</div>}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         <button type="button" onClick={() => navigate(back)} disabled={!edited || add.isPending} className={secondary}>
           {t("users.cancel")}
         </button>
@@ -149,15 +150,15 @@ function HeldUser({ name }: { name: string }) {
 
   return (
     <div className="mt-4 flex flex-col gap-4">
-      <div className="flex justify-end">
+      <HeadActions>
         <button
           type="button"
           onClick={() => navigate(`/settings/users/${name}/password`)}
-          className={secondary}
+          className={`flex h-10 items-center ${secondary}`}
         >
           {t("users.password")}
         </button>
-      </div>
+      </HeadActions>
 
       <Part title={t("users.partMain")}>
         <Pick id="edit-role" caption={t("users.role")} value={picked} onChange={setRole}>
@@ -194,7 +195,7 @@ function HeldUser({ name }: { name: string }) {
 
       {change.error !== null && <div className="text-sm text-alarm">{t(complaint(change.error))}</div>}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         <button
           type="button"
           onClick={() => navigate(`/settings/users/${name}/delete`)}

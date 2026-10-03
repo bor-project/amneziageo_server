@@ -22,7 +22,7 @@ function NewConfig() {
   const configs = useConfigs()
   const fresh = useFreshConfig(configs.data !== undefined, nextName(configs.data))
   const add = useAddConfig()
-  const back = useSpot("/connections/interfaces")
+  const back = useSpot("/interfaces")
 
   useTail([{ label: t("configs.newTitle") }])
 
@@ -36,13 +36,13 @@ function NewConfig() {
       publicKey={fresh.data.publicKey}
       pending={add.isPending}
       error={add.error}
-      onSave={(draft) =>
-        void add.mutateAsync(draft).then(
+      onSave={(draft, holding) =>
+        void add.mutateAsync({ ...draft, ...holding }).then(
           () => navigate(back),
           (error: unknown) => {
             const downed = downedOf(error)
             if (downed !== null) {
-              navigate(`/connections/interfaces/${downed.id}/edit`, {
+              navigate(`/interfaces/${downed.id}/edit`, {
                 state: { fault: failure(t, error), of: downed.error },
               })
             }
@@ -68,7 +68,7 @@ function HeldConfig({ configId }: { configId: number }) {
   const arrivedOf = (state as { of?: string } | null)?.of ?? ""
   const all = configs.data ?? []
   const held = all.find((one) => one.id === configId)
-  const back = useSpot("/connections/interfaces")
+  const back = useSpot("/interfaces")
 
   useTail(held === undefined ? [] : [{ label: held.name }])
 
@@ -90,8 +90,8 @@ function HeldConfig({ configId }: { configId: number }) {
       error={change.error}
       fault={change.error === null ? arrived : ""}
       faultOf={change.error === null ? arrivedOf : ""}
-      onSave={(draft) =>
-        void change.mutateAsync({ id: held.id, draft }).then(
+      onSave={(draft, holding) =>
+        void change.mutateAsync({ id: held.id, draft: { ...draft, ...holding } }).then(
           () => navigate(back),
           (error: unknown) => {
             if (downedOf(error) !== null) {
@@ -101,7 +101,7 @@ function HeldConfig({ configId }: { configId: number }) {
         )
       }
       onClose={() => navigate(back)}
-      onRemove={may ? () => navigate(`/connections/interfaces/${held.id}/delete`) : undefined}
+      onRemove={may ? () => navigate(`/interfaces/${held.id}/delete`) : undefined}
     />
   )
 }

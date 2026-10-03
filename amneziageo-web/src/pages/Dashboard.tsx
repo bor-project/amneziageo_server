@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
+import axios from "axios"
 import { complaint } from "@/api/auth"
-import { useBackup } from "@/api/backup"
+import { useBackup, useRestore } from "@/api/backup"
 import { useHealth } from "@/api/health"
 import { useOverview } from "@/api/overview"
 import type { Overview } from "@/api/overview"
@@ -8,8 +9,9 @@ import { scopes } from "@/api/scopes"
 import { busy, useApplyUpdate, useCheckUpdate, useUpdate } from "@/api/update"
 import { Sparkline } from "@/components/Chart"
 import type { Trace } from "@/components/Chart"
+import { Dialog } from "@/components/Dialog"
 import { useCrumbs } from "@/components/crumbs"
-import { card, primary, quiet } from "@/components/styles"
+import { card, danger, quiet, secondary, tool } from "@/components/styles"
 import { average, bytes, peak, percent, rate, share, span } from "@/format"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -21,9 +23,11 @@ const small = "rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white ho
 
 export function Dashboard() {
   const t = useText()
+  const user = useAppSelector((s) => s.auth.user)
   const health = useHealth()
   const overview = useOverview()
   const data = overview.data
+  const keeps = holds(user, scopes.readBackup) || holds(user, scopes.manageAccess)
 
   useCrumbs([{ label: t("nav.overview") }])
 
@@ -38,10 +42,7 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-4">
-        <h1 className="text-2xl leading-10 font-semibold tracking-[-0.02em]">{t("nav.overview")}</h1>
-        <Backup />
-      </div>
+      <h1 className="text-2xl leading-10 font-semibold tracking-[-0.02em]">{t("nav.overview")}</h1>
 
       <Head data={data} version={health.data?.version} />
 
@@ -146,46 +147,151 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className={`grid gap-6 p-4 md:grid-cols-3 ${card}`}>
-        <Group title={t("overview.uptime")}>
-          <Fact title={t("overview.host")} value={span(t, data.hostUptime)} />
-          <Fact title={t("overview.panel")} value={span(t, data.panelUptime)} />
-        </Group>
+      <div className={`grid gap-4 ${keeps ? "xl:grid-cols-3" : ""}`}>
+        <div className={`grid gap-6 p-4 md:grid-cols-3 ${keeps ? "xl:col-span-2" : ""} ${card}`}>
+          <Group title={t("overview.uptime")}>
+            <Fact title={t("overview.host")} value={span(t, data.hostUptime)} />
+            <Fact title={t("overview.panel")} value={span(t, data.panelUptime)} />
+          </Group>
 
-        <Group title={t("overview.process")}>
-          <Fact title={t("overview.ram")} value={bytes(t, data.panelMemory)} />
-          <Fact title={t("overview.threads")} value={String(data.panelThreads)} />
-        </Group>
+          <Group title={t("overview.process")}>
+            <Fact title={t("overview.ram")} value={bytes(t, data.panelMemory)} />
+            <Fact title={t("overview.threads")} value={String(data.panelThreads)} />
+          </Group>
 
-        <Addresses list={data.addresses} />
+          <Addresses list={data.addresses} />
+        </div>
+
+        {keeps && <Backup />}
       </div>
     </div>
   )
 }
 
+// Takes a copy of the database of the panel and puts one back.
 function Backup() {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
   const backup = useBackup()
+  const restore = useRestore()
+  const picker = useRef<HTMLInputElement>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [share, setShare] = useState(0)
+  const take = holds(user, scopes.readBackup)
+  const put = holds(user, scopes.manageAccess)
 
-  if (!holds(user, scopes.readBackup)) {
-    return null
+  async function go(picked: File) {
+    setFile(null)
+    setShare(0)
+    try {
+      await restore.mutateAsync({ file: picked, progress: setShare })
+      window.location.reload()
+    } catch {
+      return
+    }
   }
 
   return (
-    <div className="flex items-center gap-3">
-      {backup.isError && <span className="text-sm text-alarm">{t(complaint(backup.error))}</span>}
-      <button
-        type="button"
-        className={`flex h-10 shrink-0 items-center gap-2 ${primary}`}
-        disabled={backup.isPending}
-        onClick={() => backup.mutate()}
-      >
-        <Down />
-        {t("overview.backup")}
-      </button>
+    <div className={`flex flex-col gap-3 p-4 ${card}`}>
+      <div className="flex items-center gap-2 text-sm font-medium text-ink">
+        <Box />
+        {t("backup.title")}
+      </div>
+      <p className="text-[13px] leading-5 text-muted">{t("backup.about")}</p>
+
+      <div className="mt-auto flex flex-wrap gap-2">
+        {take && (
+          <button
+            type="button"
+            className={tool}
+            disabled={backup.isPending}
+            onClick={() => backup.mutate()}
+          >
+            <Down />
+            {t("backup.download")}
+          </button>
+        )}
+        {put && (
+          <button
+            type="button"
+            className={tool}
+            disabled={restore.isPending}
+            onClick={() => picker.current?.click()}
+          >
+            <Up />
+            {t("backup.restore")}
+          </button>
+        )}
+        <input
+          ref={picker}
+          type="file"
+          accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/octet-stream"
+          className="hidden"
+          onChange={(event) => {
+            const picked = event.target.files?.[0]
+            event.target.value = ""
+            if (picked !== undefined) {
+              restore.reset()
+              setFile(picked)
+            }
+          }}
+        />
+      </div>
+
+      {restore.isPending && (
+        <div className="flex flex-col gap-1.5">
+          <div className="h-1.5 overflow-hidden rounded-full bg-line">
+            <div
+              className={`h-full rounded-full bg-brand ${share >= 1 ? "animate-pulse" : ""}`}
+              style={{ width: `${Math.round(Math.max(share, 0.03) * 100)}%` }}
+            />
+          </div>
+          <div className="text-xs text-muted">
+            {share >= 1 ? t("backup.restarting") : t("backup.sending", { share: Math.round(share * 100) })}
+          </div>
+        </div>
+      )}
+
+      {backup.isError && <div className="text-sm text-alarm">{t(complaint(backup.error))}</div>}
+      {restore.isError && (
+        <div className="text-sm text-alarm">
+          {t(complaint(restore.error))}
+          {told(restore.error).length > 0 && <div className="mt-0.5 text-xs text-muted">{told(restore.error)}</div>}
+        </div>
+      )}
+
+      {file !== null && (
+        <Dialog
+          title={t("backup.confirmTitle")}
+          onClose={() => setFile(null)}
+          actions={
+            <>
+              <button type="button" className={secondary} onClick={() => setFile(null)}>
+                {t("backup.cancel")}
+              </button>
+              <button type="button" className={danger} onClick={() => void go(file)}>
+                {t("backup.confirm")}
+              </button>
+            </>
+          }
+        >
+          <p>{t("backup.confirmFile", { name: file.name, size: bytes(t, file.size) })}</p>
+          <p className="mt-2 text-muted">{t("backup.confirmText")}</p>
+        </Dialog>
+      )}
     </div>
   )
+}
+
+// Returns what the panel said about a refused backup.
+function told(error: unknown): string {
+  if (!axios.isAxiosError(error)) {
+    return ""
+  }
+
+  const said = (error.response?.data as { error?: string; message?: string } | undefined) ?? {}
+
+  return said.error === "backup-elsewhere" ? (said.message ?? "") : ""
 }
 
 function Head({ data, version }: { data: Overview; version?: string }) {
@@ -462,6 +568,23 @@ function Down() {
   return (
     <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
       <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function Up() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 19.5h14" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function Box() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4 text-muted" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <rect x="3.5" y="4" width="17" height="5" rx="1.2" />
+      <path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4" strokeLinecap="round" />
     </svg>
   )
 }

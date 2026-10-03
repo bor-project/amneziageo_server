@@ -3,7 +3,7 @@ import { complaint } from "@/api/auth"
 import type { BalanceStrategy, BalancerDraft } from "@/api/balancers"
 import { useOutbounds } from "@/api/outbounds"
 import { Flag, Line, Part } from "@/components/fields"
-import { card, danger, field, label, primary, quiet, secondary } from "@/components/styles"
+import { danger, field, footer, label, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { same } from "@/store/draftSlice"
@@ -137,7 +137,7 @@ export function BalancerForm({
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
 
-      <div className={`flex justify-end gap-2 px-4 py-3.5 ${card}`}>
+      <div className={footer}>
         {onRemove !== undefined && (
           <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
             {t("balancers.remove")}

@@ -7,7 +7,8 @@ import { scopes } from "@/api/scopes"
 import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
-import { card, fieldBox, secondary } from "@/components/styles"
+import { Find } from "@/components/fields"
+import { card, secondary } from "@/components/styles"
 import { bytes } from "@/format"
 import { useLanguage, useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -60,12 +61,7 @@ export function Channels() {
           keyOf={(line) => (line.kind === "channel" ? `channel-${line.channel.id}` : `group-${line.group.id}`)}
           tools={
             <div className="flex flex-wrap items-center gap-2">
-              <input
-                value={find}
-                placeholder={t("action.search")}
-                onChange={(e) => put("find", e.target.value)}
-                className={`w-full wide:w-60 ${fieldBox}`}
-              />
+              <Find value={find} onChange={(value) => put("find", value)} className="w-full wide:w-72" />
               {may && channels.length > 0 && (
                 <Link to="/routing/channels/groups/new" className={`flex h-10 shrink-0 items-center ${secondary}`}>
                   {t("outbounds.group")}
