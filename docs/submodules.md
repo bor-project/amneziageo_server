@@ -48,7 +48,9 @@ cargo build --release --manifest-path wstunnel/wstunnel/Cargo.toml -p wstunnel-c
 `deploy/publish.sh` builds it static against musl instead, for `x86_64-unknown-linux-musl` or
 `aarch64-unknown-linux-musl` with jemalloc, as upstream builds its releases, so the binary of the package runs on any
 glibc of the host. That build needs the target (`rustup target add x86_64-unknown-linux-musl`) and `musl-gcc`
-(`musl-tools`). The script puts the binary in the package, `deploy/install.sh` keeps it in
+(`musl-tools`). The release pins the Rust it builds with in `.github/workflows/release.yml`, and the image pins its
+own in `deploy/docker/Dockerfile`, so the binary changes only with the submodule or with that version. The script
+puts the binary in the package, `deploy/install.sh` keeps it in
 the release as `/opt/amneziageo-server/current/wstunnel` with a service of its own, one instance per endpoint
 that takes the websocket, and leaves a `/usr/local/bin/wstunnel` of the host alone. The image builds its own
 against the glibc of the image and carries it at `/usr/local/bin/wstunnel`. The
