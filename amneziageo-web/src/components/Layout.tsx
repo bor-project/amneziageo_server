@@ -10,7 +10,7 @@ import { LanguagePicker } from "@/components/LanguagePicker"
 import { RestartButton } from "@/components/RestartButton"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { UpdateWatch } from "@/components/UpdateWatch"
-import { sections, under } from "@/components/menu"
+import { sections, shown, under } from "@/components/menu"
 import type { Item, Section } from "@/components/menu"
 import { menu, menuItem } from "@/components/styles"
 import { isLanguageChoice, useText } from "@/i18n"
@@ -137,7 +137,7 @@ function Group({ section, shut }: { section: Section; shut: () => void }) {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
   const { pathname } = useLocation()
-  const items = section.items.filter((one) => holds(user, one.scope))
+  const items = shown(section.items).filter((one) => holds(user, one.scope))
   const inside = under(pathname, section.to)
   const [open, setOpen] = useState(() => inside || unfolded(section.to))
   const [was, setWas] = useState(inside)

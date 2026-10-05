@@ -6,7 +6,7 @@ import { Glyph } from "@/components/Glyph"
 import { Tabs } from "@/components/Tabs"
 import { Held, useCrumbs } from "@/components/crumbs"
 import type { Crumb } from "@/components/crumbs"
-import { here } from "@/components/menu"
+import { here, shown } from "@/components/menu"
 import type { Item } from "@/components/menu"
 import { card, primary } from "@/components/styles"
 import { useText } from "@/i18n"
@@ -42,6 +42,7 @@ export function Sectioned({
   const { pathname, search } = useLocation()
   const [slot, setSlot] = useState<HTMLDivElement | null>(null)
   const open = items.filter((one) => holds(user, one.scope))
+  const tabs = shown(open)
   const now = here(open, pathname)
   const listed = now !== undefined && pathname === now.to
   const add =
@@ -77,9 +78,9 @@ export function Sectioned({
         </div>
       </div>
 
-      {tabbed && listed && open.length > 1 && (
+      {tabbed && listed && tabs.length > 1 && (
         <Tabs
-          items={open.map((one) => ({ to: spotIn(spots, one.to), label: t(one.label), end: one.to === to }))}
+          items={tabs.map((one) => ({ to: spotIn(spots, one.to), label: t(one.label), end: one.to === to }))}
         />
       )}
 
@@ -104,7 +105,7 @@ export function Cards({ items }: { items: Item[] }) {
 
   return (
     <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {items
+      {shown(items)
         .filter((one) => holds(user, one.scope))
         .map((one) => (
           <Link

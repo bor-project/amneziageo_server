@@ -170,7 +170,8 @@ and whether this rule sends traffic to it (`isPicked`).
 The routing section carries the rules in their order with their number, a switch that turns each one on and
 off, what each one matches and sends the traffic to, how many ranges and names it came out as, and whether it
 is on the host; a rule is moved by dragging its row while the table is neither sorted nor filtered. A balancer
-is marked as a group. The `Basic` tab edits the basic lists and the `Test` tab runs the route tester. The ruleset
+is marked as a group. The `Basic` tab edits the basic lists. The route tester stands outside the menu and
+opens at `/routing/test`. The ruleset
 as the host takes it belongs to the console: item 23 of the menu of the server, `amneziageo-server`, subitem 12
 prints the tables of the panel. The panel lays the ruleset when it starts, after every change and when the live
 outbounds change; `GET /api/rules/ruleset` returns it as it is written.

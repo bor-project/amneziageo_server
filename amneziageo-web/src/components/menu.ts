@@ -9,6 +9,7 @@ export interface Item {
   icon: GlyphName
   scope: string
   add?: { to: string; scope: string }
+  unlisted?: boolean
 }
 
 export interface Section {
@@ -65,7 +66,14 @@ export const routing: Item[] = [
     add: { to: "/routing/rules/new", scope: scopes.manageRouting },
   },
   { to: "/routing/basic", label: "tab.basic", about: "about.basic", icon: "list", scope: scopes.readState },
-  { to: "/routing/test", label: "tab.test", about: "about.test", icon: "flask", scope: scopes.readState },
+  {
+    to: "/routing/test",
+    label: "tab.test",
+    about: "about.test",
+    icon: "flask",
+    scope: scopes.readState,
+    unlisted: true,
+  },
   {
     to: "/routing/channels",
     label: "tab.channels",
@@ -119,6 +127,11 @@ export const sections: Section[] = [
   { to: "/routing", label: "nav.routing", icon: "fork", scope: scopes.readState, items: routing },
   { to: "/settings", label: "nav.settings", icon: "gear", scope: scopes.manageAccess, items: settings },
 ]
+
+// Leaves out the items that keep their page and stand in no list.
+export function shown(items: Item[]): Item[] {
+  return items.filter((one) => one.unlisted !== true)
+}
 
 // Finds the item a path belongs to, the one with the longest path when several hold it.
 export function here(items: Item[], pathname: string): Item | undefined {
