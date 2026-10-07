@@ -27,7 +27,8 @@ public sealed class FrontOptions
 public static class ServiceRegistration
 {
     /// <summary>
-    /// Adds the hello, the measurement, the websocket fronts and the server that answers them.
+    /// Adds the hello, the measurement, the signal to disconnect, the websocket fronts and the server that answers
+    /// them.
     /// </summary>
     public static IServiceCollection AddEndpointServices(this IServiceCollection services, IConfiguration configuration)
     {
@@ -50,10 +51,12 @@ public static class ServiceRegistration
         services.AddSingleton<IHelloFeature, WebSocketOffer>();
         services.AddSingleton<IHelloFeature, RoutingOffer>();
         services.AddSingleton<IHelloFeature, InboundOffer>();
+        services.AddSingleton<IHelloFeature, DisconnectOffer>();
         services.AddSingleton<IHelloFeature, SpeedOffer>();
         services.AddSingleton<IHelloFeature, SubscriptionOffer>();
         services.AddSingleton<IHelloFeature, SourcesOffer>();
         services.AddSingleton<IHelloFeature, PresetsOffer>();
+        services.AddSingleton(new DisconnectSignal());
         services.AddSingleton<ServiceDesk>();
         services.AddSingleton<ServiceShare>();
         services.AddSingleton<ServiceServer>();

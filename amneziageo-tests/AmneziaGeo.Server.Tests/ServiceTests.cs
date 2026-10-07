@@ -373,6 +373,8 @@ public class ServiceTests
         Assert.StartsWith($"https://vpn.example:{endpoint.ListenPort}/api/speed/up?", features.GetProperty("speed").GetProperty("outside").GetProperty("up").GetString(), StringComparison.Ordinal);
         Assert.False(features.TryGetProperty("inbound", out _));
         Assert.False(features.TryGetProperty("routes", out _));
+        Assert.Equal(DisconnectSignal.Port, features.GetProperty("disconnect").GetProperty("port").GetInt32());
+        Assert.Equal(["10.8.0.1"], features.GetProperty("disconnect").GetProperty("from").EnumerateArray().Select(one => one.GetString()));
     }
 
     [Fact]
@@ -586,6 +588,7 @@ public class ServiceTests
                 new WebSocketOffer(),
                 new RoutingOffer(),
                 new InboundOffer(),
+                new DisconnectOffer(),
                 new SpeedOffer(tickets),
                 new SubscriptionOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
                 new SourcesOffer(bench.Scopes),

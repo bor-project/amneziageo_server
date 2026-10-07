@@ -28,6 +28,11 @@ public static class PeerToken
     public const string ReplyContext = "amneziageo-reply";
 
     /// <summary>
+    /// What the key of a signal and of its answer is bound to.
+    /// </summary>
+    public const string SignalContext = "amneziageo-signal";
+
+    /// <summary>
     /// The scheme a token travels under in the header of a websocket.
     /// </summary>
     public const string Scheme = "AmneziaGeo";
@@ -120,22 +125,23 @@ public static class PeerToken
         Math.Abs(now.ToUnixTimeSeconds() - time) <= (long)Window.TotalSeconds;
 
     /// <summary>
-    /// Seals an answer under a key counted from the shared secret and the nonce of the token.
+    /// Seals an answer under a key counted from the shared secret, the nonce of the token and what the key is
+    /// bound to.
     /// </summary>
-    public static SealedAnswer Seal(byte[] shared, string nonce, ReadOnlySpan<byte> body)
+    public static SealedAnswer Seal(byte[] shared, string nonce, ReadOnlySpan<byte> body, string context = ReplyContext)
     {
         var iv = RandomNumberGenerator.GetBytes(IvBytes);
         var output = new byte[body.Length + TagBytes];
-        using var cipher = new AesGcm(ReplyKey(shared, nonce), TagBytes);
+        using var cipher = new AesGcm(SealKey(shared, nonce, context), TagBytes);
         cipher.Encrypt(iv, body, output.AsSpan(0, body.Length), output.AsSpan(body.Length));
 
         return new SealedAnswer(Convert.ToBase64String(iv), Convert.ToBase64String(output));
     }
 
     /// <summary>
-    /// Opens a sealed answer, or returns null when it was not sealed under that secret and nonce.
+    /// Opens a sealed answer, or returns null when it was not sealed under that secret, nonce and binding.
     /// </summary>
-    public static byte[]? Open(byte[] shared, string nonce, SealedAnswer answer)
+    public static byte[]? Open(byte[] shared, string nonce, SealedAnswer answer, string context = ReplyContext)
     {
         ArgumentNullException.ThrowIfNull(answer);
 
@@ -149,7 +155,7 @@ public static class PeerToken
             }
 
             var body = new byte[data.Length - TagBytes];
-            using var cipher = new AesGcm(ReplyKey(shared, nonce), TagBytes);
+            using var cipher = new AesGcm(SealKey(shared, nonce, context), TagBytes);
             cipher.Decrypt(iv, data.AsSpan(0, body.Length), data.AsSpan(body.Length), body);
 
             return body;
@@ -160,8 +166,8 @@ public static class PeerToken
         }
     }
 
-    private static byte[] ReplyKey(byte[] shared, string nonce) =>
-        HKDF.DeriveKey(HashAlgorithmName.SHA256, shared, 32, Convert.FromBase64String(nonce), Encoding.UTF8.GetBytes(ReplyContext));
+    private static byte[] SealKey(byte[] shared, string nonce, string context) =>
+        HKDF.DeriveKey(HashAlgorithmName.SHA256, shared, 32, Convert.FromBase64String(nonce), Encoding.UTF8.GetBytes(context));
 
     private static string Message(string key, long time, string nonce) =>
         string.Create(CultureInfo.InvariantCulture, $"{Context}\n{key}\n{time}\n{nonce}");

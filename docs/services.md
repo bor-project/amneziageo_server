@@ -2,7 +2,8 @@
 
 Every endpoint that is turned on answers on a TCP port besides its UDP one. On that port the panel tells a
 client what the server offers it (hello), measures the speed of the way to the server and, when the endpoint
-says so, takes the tunnel inside a websocket. The services need no settings of their own: they follow the
+says so, takes the tunnel inside a websocket. The other way round the panel tells the application of a client
+that is turned off to take its tunnel down. The services need no settings of their own: they follow the
 endpoint.
 
 ## The port
@@ -70,6 +71,7 @@ and `features` carries what the server offers this client, each under its name:
 | `websocket` | `port`, `path` | the endpoint takes the tunnel inside a websocket on that port under that path |
 | `routing` | `allowed` | always: whether the client may route by its own lists, from the client and its template, see [templates.md](templates.md) |
 | `inbound` | `mode`: `server` or `network` | the client lets connections in from the tunnel, see [clients.md](clients.md) |
+| `disconnect` | `port`, `from` | the endpoint and the client carry an address: the TCP port the application takes the signal to disconnect on and the addresses the signal comes from, see [The signal to disconnect](#the-signal-to-disconnect) |
 | `speed` | `inside`, `outside` (each `down` and `up`), `limit`, `expires` | always: where to measure and until when |
 | `subscription` | `url`, `revision`, `pin` | the subscriptions are on and the client has one: where it reads it and what it hands out now |
 | `sources` | `items`, each `name`, `kind` (`geoip` or `geosite`) and `url` | the panel has a geo source on: the sources the client adds when it holds none at the address |
@@ -102,6 +104,29 @@ endpoint, or at the host the hello came to when the endpoint names none.
 
 A pass measures one leg at a time: a second one while the first runs is refused with `measuring` (429), a pass
 the server does not hold with `unknown-ticket` (403).
+
+## The signal to disconnect
+
+Turning a client off in the panel tells its application to take the tunnel down the way its user would, so a
+machine that was reached through the tunnel comes back on the network it stood in. The hello names where the
+application takes the signal: `port`, 28561, at the address the client carries inside the tunnel, and `from`,
+the addresses of the interface of the endpoint. An application of AmneziaGeo listens there while its tunnel
+stands and lets that port in from those addresses alone, whatever its access from the tunnel says, see
+[clients.md](clients.md).
+
+The panel opens a TCP connection from the host to the first IPv4 address of the client, to its first address
+when it carries none, while the interface still carries the client, and the two sides say three lines of JSON:
+
+| Line of | Says |
+|---|---|
+| the application | `{ "nonce": "<16 random bytes in base64>" }` |
+| the panel | `{ "iv", "data" }`, the body `{ "signal": "disconnect", "taken": false }` sealed the way the answer of the hello is, under the key `HKDF-SHA256(shared, salt = the bytes of that nonce, info = "amneziageo-signal")` |
+| the application | `{ "iv", "data" }`, the body `{ "signal": "disconnect", "taken": true }` sealed under the same key |
+
+The application takes the tunnel down once its answer has left. It takes no signal that opens under another
+key, carries another word or comes from another address, so a neighbour in the tunnel network takes no tunnel
+down. The panel waits three seconds for the connection and for each line. What the signal came to goes to the
+journal, and a signal that was not taken is kept with the client, see [clients.md](clients.md).
 
 ## The websocket
 
@@ -161,5 +186,7 @@ An outbound of the `ws` kind proves its keys to the front of another AmneziaGeo 
 | `AmneziaGeo.Server.Api/Services/ServiceServer.cs` | the ports and the fronts, laid whenever an endpoint changes |
 | `AmneziaGeo.Server.Api/Services/ServiceDesk.cs` | hello, the measurement and the check of a websocket |
 | `AmneziaGeo.Server.Api/Services/ServiceFeatures.cs` | the features |
+| `AmneziaGeo.Server.Api/Services/DisconnectSignal.cs` | the signal to disconnect |
+| `AmneziaGeo.Server.Api/Clients/ClientSignals.cs` | the clients the signal goes to and the ones that did not take it |
 | `AmneziaGeo.Server.Api/Services/FrontRelay.cs` | the websocket handed to the front |
 | `AmneziaGeo.Server.Routing/Proxy/ProxyHost.cs` | the files and the service of a front |

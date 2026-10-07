@@ -53,6 +53,13 @@ public sealed record RoutingFeature(bool Allowed);
 public sealed record InboundFeature(string Mode);
 
 /// <summary>
+/// Arguments of the disconnect feature.
+/// </summary>
+/// <param name="Port">The TCP port the client takes the signal on, at its address inside the tunnel.</param>
+/// <param name="From">The addresses the signal comes from.</param>
+public sealed record DisconnectFeature(int Port, IReadOnlyList<string> From);
+
+/// <summary>
 /// The addresses one leg of a measurement goes to.
 /// </summary>
 /// <param name="Down">The address the client pulls bytes from.</param>
@@ -154,6 +161,11 @@ public static class FeatureNames
     /// What the client takes from the tunnel.
     /// </summary>
     public const string Inbound = "inbound";
+
+    /// <summary>
+    /// The signal that takes the tunnel of the client down.
+    /// </summary>
+    public const string Disconnect = "disconnect";
 
     /// <summary>
     /// The measurement of the speed against the server.

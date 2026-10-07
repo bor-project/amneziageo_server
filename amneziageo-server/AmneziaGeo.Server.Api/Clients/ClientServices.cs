@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Api.Services;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Traffic;
 
@@ -9,7 +10,7 @@ namespace AmneziaGeo.Server.Api.Clients;
 public static class ClientServices
 {
     /// <summary>
-    /// Adds the interface files and the client service.
+    /// Adds the interface files, the client service and the signals to the clients.
     /// </summary>
     public static IServiceCollection AddClients(this IServiceCollection services, IConfiguration configuration)
     {
@@ -22,6 +23,9 @@ public static class ClientServices
         var guard = new GuardOptions();
         configuration.GetSection(GuardOptions.Section).Bind(guard);
 
+        var signal = new SignalOptions();
+        configuration.GetSection(SignalOptions.Section).Bind(signal);
+
         services.AddSingleton(options);
         services.AddSingleton(guard);
         services.AddSingleton<InterfaceFile>();
@@ -32,6 +36,18 @@ public static class ClientServices
         services.AddSingleton<ClientGuard>();
         services.AddHostedService(provider => provider.GetRequiredService<ClientGuard>());
         services.AddHostedService<ClientMeter>();
+        services.AddSingleton(provider =>
+        {
+            var host = provider.GetRequiredService<ClientHost>();
+            var guard = provider.GetRequiredService<ClientGuard>();
+
+            return new ClientSignals(
+                provider.GetRequiredService<DisconnectSignal>(),
+                (endpoint, client) => signal.Always
+                    || (guard.Online(endpoint, client.PublicKey) ?? host.States(endpoint, [client])[0].IsOnline),
+                provider.GetRequiredService<TimeProvider>(),
+                provider.GetRequiredService<ILogger<ClientSignals>>());
+        });
 
         return services;
     }

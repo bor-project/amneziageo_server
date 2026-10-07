@@ -23,6 +23,14 @@ public sealed record ClientStateBody(
     bool IsSpent);
 
 /// <summary>
+/// A signal to disconnect the application of a client did not take.
+/// </summary>
+/// <param name="At">When the signal was sent.</param>
+/// <param name="Error">The code of the failure.</param>
+/// <param name="Message">What went wrong, in words.</param>
+public sealed record ClientSignalBody(DateTimeOffset At, string Error, string Message);
+
+/// <summary>
 /// One client as the panel reads it.
 /// </summary>
 public sealed record ClientResponse(
@@ -43,7 +51,8 @@ public sealed record ClientResponse(
     string Routing,
     ClientStateBody State,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    ClientSignalBody? Signal = null);
 
 /// <summary>
 /// The settings a client is added or changed with.

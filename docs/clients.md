@@ -69,6 +69,35 @@ device, by `Allow incoming connections from the VPN network` in the settings of 
 `amneziageo config inbound <name> host` for the server alone and `network` for the whole tunnel network. The file
 and the `vpn://` link carry none of it.
 
+## Turning a client off
+
+A client that is turned off leaves the interface, and its device is left with a tunnel nothing answers: the
+application of AmneziaGeo holds such a tunnel up, so that nothing leaves the device past it, and a machine that
+was reached through the tunnel stays out of reach. So the panel first tells the application to disconnect, see
+[services.md](services.md), and takes the client off the interface after that. It does so on `POST
+/api/clients/{id}/switch`, on `POST /api/clients/switch` and on a `PUT /api/clients/{id}` that turns the client
+off.
+
+The signal goes to a client that is on, on an endpoint that is on, while the panel sees the client connected; a
+client that is not connected is sent nothing. The application of AmneziaGeo for Windows and for Linux takes the
+signal and disconnects as on the word of its user: nothing raises the tunnel again until the user connects.
+Another application, one of AmneziaGeo older than the signal among them, takes none and stays as it was.
+
+A signal the application did not take is kept until the client is turned on again or removed, or the panel
+starts over, and every answer that carries the client names it under `signal`, null otherwise:
+
+| Field | Holds |
+|---|---|
+| `at` | when the signal was sent |
+| `error` | `no-answer` nothing answered within three seconds, `refused` nothing listens on the port, `unreachable` the address was not reached, `bad-answer` what answered is not the application holding the keys of the client, `no-address` the client carries no address or key to reach it with |
+| `message` | the same in words |
+
+To send the signal again, turn the client on, wait until it is connected and turn it off.
+
+| Setting | Holds |
+|---|---|
+| `Signal:Always` | whether the signal goes to a client the panel does not see connected as well; off by default |
+
 ## What the client is handed
 
 `GET /api/clients/{id}/config` returns the file the client connects with: its private key, its addresses,

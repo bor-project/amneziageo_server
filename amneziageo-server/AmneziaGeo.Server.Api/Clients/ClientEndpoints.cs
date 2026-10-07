@@ -51,6 +51,7 @@ public static class ClientEndpoints
         ClientHost host,
         ClientGuard guard,
         TrafficLedger ledger,
+        ClientSignals signals,
         CancellationToken ct)
     {
         var endpoints = await configs.ListAsync(ct).ConfigureAwait(false);
@@ -70,13 +71,15 @@ public static class ClientEndpoints
             var states = host.States(endpoint, mine);
             for (var index = 0; index < mine.Length; index++)
             {
-                answers.Add(ClientAnswers.Client(
-                    mine[index],
-                    endpoint.Name,
-                    Seen(states[index], endpoint, mine[index], guard),
-                    secrets,
-                    guard.Cut(endpoint.Name, mine[index].PublicKey),
-                    ledger.Of(mine[index])));
+                answers.Add(Told(
+                    ClientAnswers.Client(
+                        mine[index],
+                        endpoint.Name,
+                        Seen(states[index], endpoint, mine[index], guard),
+                        secrets,
+                        guard.Cut(endpoint.Name, mine[index].PublicKey),
+                        ledger.Of(mine[index])),
+                    signals));
             }
         }
 
@@ -91,6 +94,7 @@ public static class ClientEndpoints
         ClientHost host,
         ClientGuard guard,
         TrafficLedger ledger,
+        ClientSignals signals,
         CancellationToken ct)
     {
         var client = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -101,7 +105,7 @@ public static class ClientEndpoints
 
         var endpoint = await configs.FindAsync(client.ConfigId, ct).ConfigureAwait(false);
 
-        return Results.Ok(Answer(client, endpoint, host, guard, ledger, Secrets(context)));
+        return Results.Ok(Told(Answer(client, endpoint, host, guard, ledger, Secrets(context)), signals));
     }
 
     private static async Task<IResult> DraftAsync(
@@ -273,6 +277,7 @@ public static class ClientEndpoints
         ClientGuard guard,
         TrafficLedger ledger,
         RouteApplier routes,
+        ClientSignals signals,
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -281,10 +286,20 @@ public static class ClientEndpoints
             return Refuse(StatusCodes.Status404NotFound, "unknown-client", $"there is no client under the number {id}");
         }
 
+        if (held.IsEnabled && !request.IsEnabled)
+        {
+            await signals.SendAsync([held], await configs.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        }
+
         var result = await store.ChangeAsync(id, ClientAnswers.Draft(request, held), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
+        }
+
+        if (result.Record!.IsEnabled)
+        {
+            signals.Forget(id);
         }
 
         var gone = string.Equals(held.PublicKey, result.Record!.PublicKey, StringComparison.Ordinal)
@@ -295,7 +310,7 @@ public static class ClientEndpoints
 
         await routes.FollowClientsAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(Answer(result.Record, endpoint, host, guard, ledger, true));
+        return Results.Ok(Told(Answer(result.Record, endpoint, host, guard, ledger, true), signals));
     }
 
     private static async Task<IResult> SwitchAsync(
@@ -307,6 +322,7 @@ public static class ClientEndpoints
         EndpointHost endpoints,
         ClientGuard guard,
         TrafficLedger ledger,
+        ClientSignals signals,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -316,16 +332,26 @@ public static class ClientEndpoints
             return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a switch needs the on field");
         }
 
+        if (!on)
+        {
+            await SignalAsync([id], configs, store, signals, ct).ConfigureAwait(false);
+        }
+
         var result = await store.SwitchAsync(id, on, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
+        if (on)
+        {
+            signals.Forget(id);
+        }
+
         var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, endpoints, ct)
             .ConfigureAwait(false);
 
-        return Results.Ok(Answer(result.Record, endpoint, host, guard, ledger, true));
+        return Results.Ok(Told(Answer(result.Record, endpoint, host, guard, ledger, true), signals));
     }
 
     private static async Task<IResult> RemoveAsync(
@@ -335,6 +361,7 @@ public static class ClientEndpoints
         ClientHost host,
         EndpointHost endpoints,
         RouteApplier routes,
+        ClientSignals signals,
         CancellationToken ct)
     {
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
@@ -342,6 +369,8 @@ public static class ClientEndpoints
         {
             return Explain(result);
         }
+
+        signals.Forget(id);
 
         await SettleAsync(result.Record!.ConfigId, [result.Record.PublicKey], configs, store, host, endpoints, ct)
             .ConfigureAwait(false);
@@ -357,6 +386,7 @@ public static class ClientEndpoints
         ClientStore store,
         ClientHost host,
         EndpointHost endpoints,
+        ClientSignals signals,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -366,7 +396,20 @@ public static class ClientEndpoints
             return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a switch of many clients needs the ids and the on field");
         }
 
+        if (!on)
+        {
+            await SignalAsync(ids, configs, store, signals, ct).ConfigureAwait(false);
+        }
+
         var batch = await store.SwitchAllAsync(ids, on, ct).ConfigureAwait(false);
+        if (on)
+        {
+            foreach (var client in batch.Done)
+            {
+                signals.Forget(client.Id);
+            }
+        }
+
         var unsynced = await SettleAllAsync(batch.Done, [], configs, store, host, endpoints, ct).ConfigureAwait(false);
 
         return Results.Ok(new ClientBatchBody([.. batch.Done.Select(client => client.Id)], batch.Failed, unsynced));
@@ -379,6 +422,7 @@ public static class ClientEndpoints
         ClientHost host,
         EndpointHost endpoints,
         RouteApplier routes,
+        ClientSignals signals,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -389,6 +433,11 @@ public static class ClientEndpoints
         }
 
         var batch = await store.RemoveAllAsync(ids, ct).ConfigureAwait(false);
+        foreach (var client in batch.Done)
+        {
+            signals.Forget(client.Id);
+        }
+
         var unsynced = await SettleAllAsync(batch.Done, batch.Done, configs, store, host, endpoints, ct).ConfigureAwait(false);
         if (batch.Done.Count > 0)
         {
@@ -542,6 +591,35 @@ public static class ClientEndpoints
 
         return ClientAnswers.Client(client, endpoint?.Name ?? string.Empty, state, secrets, cut, ledger.Of(client));
     }
+
+    // Tells the applications of the clients that are about to be turned off to take their tunnels down.
+    private static async Task SignalAsync(
+        IReadOnlyList<long> ids,
+        ConfigStore configs,
+        ClientStore store,
+        ClientSignals signals,
+        CancellationToken ct)
+    {
+        var held = new List<TunnelClient>(ids.Count);
+        foreach (var id in ids.Distinct())
+        {
+            if (await store.FindAsync(id, ct).ConfigureAwait(false) is { IsEnabled: true } client)
+            {
+                held.Add(client);
+            }
+        }
+
+        if (held.Count > 0)
+        {
+            await signals.SendAsync(held, await configs.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        }
+    }
+
+    // Names the signal a client that is off did not take.
+    private static ClientResponse Told(ClientResponse client, ClientSignals signals) =>
+        !client.IsEnabled && signals.Missed(client.Id) is { } missed
+            ? client with { Signal = new ClientSignalBody(missed.At, missed.Error, missed.Message) }
+            : client;
 
     private static ClientState Seen(ClientState state, ServerConfig endpoint, TunnelClient client, ClientGuard guard) =>
         guard.Online(endpoint, client.PublicKey) is { } online ? state with { IsOnline = online } : state;

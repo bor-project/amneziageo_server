@@ -70,6 +70,28 @@ public sealed class InboundOffer : IHelloFeature
 }
 
 /// <summary>
+/// Tells the client where it takes the signal to disconnect and where the signal comes from.
+/// </summary>
+public sealed class DisconnectOffer : IHelloFeature
+{
+    /// <inheritdoc/>
+    public string Name => FeatureNames.Disconnect;
+
+    /// <inheritdoc/>
+    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+
+        var from = DisconnectSignal.Sources(peer.Endpoint);
+
+        return ValueTask.FromResult<object?>(
+            from.Count == 0 || DisconnectSignal.Target(peer.Client) is null
+                ? null
+                : new DisconnectFeature(DisconnectSignal.Port, from));
+    }
+}
+
+/// <summary>
 /// Offers the addresses a client measures its speed against, with a fresh pass.
 /// </summary>
 public sealed class SpeedOffer : IHelloFeature
