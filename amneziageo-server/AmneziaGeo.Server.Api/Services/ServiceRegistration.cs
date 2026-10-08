@@ -49,7 +49,6 @@ public static class ServiceRegistration
                 options.Directory));
         services.AddSingleton<SpeedTickets>();
         services.AddSingleton<IHelloFeature, WebSocketOffer>();
-        services.AddSingleton<IHelloFeature, RoutingOffer>();
         services.AddSingleton<IHelloFeature, InboundOffer>();
         services.AddSingleton<IHelloFeature, DisconnectOffer>();
         services.AddSingleton<IHelloFeature, SpeedOffer>();

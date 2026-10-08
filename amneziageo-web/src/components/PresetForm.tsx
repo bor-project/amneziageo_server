@@ -4,11 +4,13 @@ import type { PresetDraft } from "@/api/presets"
 import { EntryList } from "@/components/EntryList"
 import { Flag, Hinted, Line, Part } from "@/components/fields"
 import { danger, footer, label, primary, secondary } from "@/components/styles"
-import { useText } from "@/i18n"
+import { useLanguage, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { same } from "@/store/draftSlice"
 
 type Bucket = "proxy" | "direct" | "block"
+
+const badge = "rounded-md bg-active px-2 py-0.5 text-xs font-normal text-muted"
 
 const buckets: { key: Bucket; caption: TextKey; hint: TextKey }[] = [
   { key: "proxy", caption: "presets.proxy", hint: "presets.proxyHint" },
@@ -18,6 +20,7 @@ const buckets: { key: Bucket; caption: TextKey; hint: TextKey }[] = [
 
 export function PresetForm({
   start,
+  held,
   pending,
   error,
   onSave,
@@ -25,6 +28,7 @@ export function PresetForm({
   onRemove,
 }: {
   start: PresetDraft
+  held?: { uid: string; updatedUtc: string }
   pending: boolean
   error: unknown
   onSave: (draft: PresetDraft) => void
@@ -32,6 +36,7 @@ export function PresetForm({
   onRemove?: () => void
 }) {
   const t = useText()
+  const language = useLanguage()
   const [draft, setDraft] = useState(start)
   const edited = !same(draft, start)
 
@@ -41,7 +46,21 @@ export function PresetForm({
 
   return (
     <div className="mt-4 flex flex-col gap-4">
-      <Part title={t("presets.partMain")}>
+      <Part
+        title={
+          <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+            {t("presets.partMain")}
+            {held !== undefined && (
+              <>
+                <span className={`font-mono ${badge}`}>{held.uid}</span>
+                <span className={badge}>
+                  {t("presets.updated", { time: new Date(held.updatedUtc).toLocaleString(language) })}
+                </span>
+              </>
+            )}
+          </span>
+        }
+      >
         <Line
           id="preset-name"
           caption={t("presets.name")}
@@ -49,6 +68,14 @@ export function PresetForm({
           onChange={(name) => put({ name })}
           wide
         />
+        <div className="sm:col-span-2">
+          <Flag
+            id="preset-default"
+            caption={<Hinted caption={t("presets.isDefault")} text={t("presets.isDefaultHint")} />}
+            value={draft.isDefault}
+            onChange={(isDefault) => put({ isDefault })}
+          />
+        </div>
         <div className="text-xs text-muted sm:col-span-2">{t("presets.about")}</div>
       </Part>
 

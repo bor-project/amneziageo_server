@@ -55,6 +55,7 @@ public sealed class Context : IDisposable
         Clients = scope.ServiceProvider.GetRequiredService<ClientStore>();
         Panel = scope.ServiceProvider.GetRequiredService<PanelStore>();
         Subscriptions = scope.ServiceProvider.GetRequiredService<SubscriptionStore>();
+        Dns = scope.ServiceProvider.GetRequiredService<DnsStore>();
     }
 
     public AuthOptions Options { get; }
@@ -80,6 +81,8 @@ public sealed class Context : IDisposable
     public PanelStore Panel { get; }
 
     public SubscriptionStore Subscriptions { get; }
+
+    public DnsStore Dns { get; }
 
     /// <summary>
     /// Opens the database, brings its schema up to date and reads the signing key.

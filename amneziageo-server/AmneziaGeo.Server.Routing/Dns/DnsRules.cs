@@ -34,6 +34,11 @@ public static class DnsRules
     public const int MaxLifetime = 604800;
 
     /// <summary>
+    /// The longest path a name server may be asked under over HTTPS.
+    /// </summary>
+    public const int MaxPath = 128;
+
+    /// <summary>
     /// Returns what is wrong with the settings, or null when they are good.
     /// </summary>
     public static DnsFault? Check(DnsSettings settings)
@@ -55,9 +60,11 @@ public static class DnsRules
             return new DnsFault("no-upstream", $"the resolver takes at most {MaxUpstreams} name servers");
         }
 
-        if (settings.Upstreams.FirstOrDefault(one => !Upstream(one, out _)) is { } wrong)
+        if (settings.Upstreams.FirstOrDefault(one => !Server(one, out _)) is { } wrong)
         {
-            return new DnsFault("bad-upstream", $"'{wrong}' is not an address of a name server");
+            return new DnsFault(
+                "bad-upstream",
+                $"'{wrong}' is not a name server: an address, tls://address or https://address/path, with a port when it is not the usual one");
         }
 
         if (settings.Listen.Count > MaxListen)
@@ -74,18 +81,71 @@ public static class DnsRules
     }
 
     /// <summary>
+    /// Reads a name server with the way it is asked: a bare address for plain DNS, tls:// for DNS over TLS and
+    /// https:// for DNS over HTTPS.
+    /// </summary>
+    public static bool Server(string text, out DnsUpstreamAddress server)
+    {
+        var read = Read((text ?? string.Empty).Trim());
+        server = read ?? new DnsUpstreamAddress(DnsTransport.Plain, new IPEndPoint(IPAddress.None, DnsDefaults.Port), string.Empty);
+
+        return read is not null;
+    }
+
+    /// <summary>
     /// Reads the address of a name server, with the port when it carries one.
     /// </summary>
-    public static bool Upstream(string text, out IPEndPoint point)
+    public static bool Upstream(string text, out IPEndPoint point) => Point(text, DnsDefaults.Port, out point);
+
+    /// <summary>
+    /// Reads a bare address.
+    /// </summary>
+    public static bool Address(string text, out IPAddress address)
     {
-        point = new IPEndPoint(IPAddress.None, DnsDefaults.Port);
+        address = IPAddress.None;
+        var value = (text ?? string.Empty).Trim();
+
+        return value.Length > 0 && IPAddress.TryParse(value, out address!);
+    }
+
+    private static DnsUpstreamAddress? Read(string value)
+    {
+        if (value.StartsWith(DnsUpstreamAddress.TlsScheme, StringComparison.OrdinalIgnoreCase))
+        {
+            return Point(value[DnsUpstreamAddress.TlsScheme.Length..], DnsUpstreamAddress.TlsPort, out var secure)
+                ? new DnsUpstreamAddress(DnsTransport.Tls, secure, string.Empty)
+                : null;
+        }
+
+        if (value.StartsWith(DnsUpstreamAddress.HttpsScheme, StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = value[DnsUpstreamAddress.HttpsScheme.Length..];
+            var slash = rest.IndexOf('/', StringComparison.Ordinal);
+            var path = slash < 0 || slash == rest.Length - 1 ? DnsUpstreamAddress.HttpsPath : rest[slash..];
+
+            return Point(slash < 0 ? rest : rest[..slash], DnsUpstreamAddress.HttpsPort, out var web) && Path(path)
+                ? new DnsUpstreamAddress(DnsTransport.Https, web, path)
+                : null;
+        }
+
+        return Point(value, DnsDefaults.Port, out var plain)
+            ? new DnsUpstreamAddress(DnsTransport.Plain, plain, string.Empty)
+            : null;
+    }
+
+    private static bool Path(string path) =>
+        path.Length <= MaxPath && path.All(letter => char.IsAsciiLetterOrDigit(letter) || "/-._~%".Contains(letter, StringComparison.Ordinal));
+
+    private static bool Point(string text, int usual, out IPEndPoint point)
+    {
+        point = new IPEndPoint(IPAddress.None, usual);
         var value = (text ?? string.Empty).Trim();
         if (value.Length == 0)
         {
             return false;
         }
 
-        var port = DnsDefaults.Port;
+        var port = usual;
         var host = value;
         if (value[0] == '[')
         {
@@ -116,17 +176,6 @@ public static class DnsRules
         point = new IPEndPoint(address, port);
 
         return true;
-    }
-
-    /// <summary>
-    /// Reads a bare address.
-    /// </summary>
-    public static bool Address(string text, out IPAddress address)
-    {
-        address = IPAddress.None;
-        var value = (text ?? string.Empty).Trim();
-
-        return value.Length > 0 && IPAddress.TryParse(value, out address!);
     }
 
     private static DnsFault? Numbers(DnsSettings settings)

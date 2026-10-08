@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,7 +17,7 @@ public sealed class DatabaseSeedTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        Pools.ClearUnder(_folder.FullName);
         _folder.Delete(recursive: true);
     }
 

@@ -3,12 +3,14 @@ import { client } from "./client"
 
 export interface Preset {
   id: number
+  uid: string
   name: string
   proxy: string[]
   direct: string[]
   block: string[]
   allUdp: boolean
   full: boolean
+  isDefault: boolean
   templates: number
   createdUtc: string
   updatedUtc: string
@@ -21,6 +23,7 @@ export interface PresetDraft {
   block: string[]
   allUdp: boolean
   full: boolean
+  isDefault: boolean
 }
 
 export function usePresets() {
@@ -52,6 +55,7 @@ export function draftOf(preset: Preset): PresetDraft {
     block: preset.block,
     allUdp: preset.allUdp,
     full: preset.full,
+    isDefault: preset.isDefault,
   }
 }
 
@@ -62,6 +66,7 @@ export const freshPreset: PresetDraft = {
   block: [],
   allUdp: false,
   full: false,
+  isDefault: false,
 }
 
 function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) {

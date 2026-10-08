@@ -11,6 +11,11 @@ public sealed record RoutingPreset
     public long Id { get; init; }
 
     /// <summary>
+    /// The identifier the applications of the clients know the list by.
+    /// </summary>
+    public string Uid { get; init; } = string.Empty;
+
+    /// <summary>
     /// The name the list takes in the application of the client.
     /// </summary>
     public required string Name { get; init; }
@@ -41,12 +46,17 @@ public sealed record RoutingPreset
     public bool Full { get; init; }
 
     /// <summary>
+    /// Whether the application turns the list on when it adds it and routes by none.
+    /// </summary>
+    public bool IsDefault { get; init; }
+
+    /// <summary>
     /// When the preset was added.
     /// </summary>
     public DateTimeOffset CreatedUtc { get; init; }
 
     /// <summary>
-    /// When the preset was last changed.
+    /// When the list the preset hands out was last changed.
     /// </summary>
     public DateTimeOffset UpdatedUtc { get; init; }
 }

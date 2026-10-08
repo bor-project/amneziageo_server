@@ -1,9 +1,14 @@
 # The resolver
 
 The panel answers the name questions of the tunnel clients itself. It passes a question on to a name
-server outside, gives the answer back, and puts the addresses it saw into the sets of the routing rules
-that match the name. This is what makes a rule by domain work: the kernel decides by address, and the
-answer of the resolver is where the addresses come from.
+server outside, over HTTPS unless told otherwise, gives the answer back, and puts the addresses it saw into the sets
+of the routing rules that match the name. This is what makes a rule by domain work: the kernel decides by address,
+and the answer of the resolver is where the addresses come from. It also keeps what the clients ask about from
+leaving the server in the open.
+
+A fresh panel holds the resolver off: the clients are handed the name servers of their configuration and ask them
+through the tunnel, and those questions leave the server as plain DNS. [Turning it on](#turning-the-resolver-on)
+takes a question of the installation, an item of the menu or a command.
 
 ## Rights
 
@@ -20,7 +25,7 @@ answer of the resolver is where the addresses come from.
 | Answer the clients | whether the resolver runs |
 | Port | the port questions are taken on, 53 by default |
 | Listen on | the addresses questions are taken on, empty for the addresses of the configurations |
-| Upstream servers | the name servers questions are passed to, `1.1.1.1` or `8.8.8.8:5300` |
+| Upstream servers | the name servers questions are passed to and the way each is asked, see [How the name servers are asked](#how-the-name-servers-are-asked) |
 | Ask through the channel | the outbound or the balancer the questions leave through, empty for the way out of the host |
 | An address lives | how long an answered address stays in the set of a rule, in minutes |
 | Answers held in memory | how many answers are kept back, zero for none |
@@ -32,6 +37,37 @@ answer of the resolver is where the addresses come from.
 A port under 1024 needs `CAP_NET_BIND_SERVICE`: under an ordinary account the resolver reports
 `Permission denied` and takes no address. An address that is not on the host is skipped, and the
 resolver answers on the rest.
+
+## How the name servers are asked
+
+An entry of `Upstream servers` names a name server by its address and tells how it is asked:
+
+| Entry | Asked |
+|---|---|
+| `https://1.1.1.1/dns-query`, `https://9.9.9.9:5053/dns-query` | DNS over HTTPS: a `POST` of `application/dns-message`, port 443 and the path `/dns-query` unless others are written |
+| `tls://1.1.1.1`, `tls://1.1.1.1:853` | DNS over TLS, port 853 unless another is written |
+| `1.1.1.1`, `8.8.8.8:5300`, `[2606:4700:4700::1111]:53` | in the open: UDP, and TCP for a client that came over TCP, port 53 unless another is written |
+
+A fresh panel asks `https://1.1.1.1/dns-query` and `https://8.8.4.4/dns-query`. A panel that saved its name servers
+before keeps them as they are, plain ones included, until they are changed here, in the menu or with
+`amneziageo-server dns set --upstreams default`.
+
+A name server asked over TLS or HTTPS is named by its address, not by a name, so nothing has to be resolved first.
+The certificate it shows is checked against that address under the roots the host trusts, and a server whose
+certificate does not carry the address is not asked; Cloudflare, Google and Quad9 carry theirs. `PUT /api/dns`
+refuses an entry that is none of the three forms with `bad-upstream`.
+
+The connections that answered are kept for the questions that follow. The servers are asked in the order written;
+one that gave no answer is asked after the ones that answer for thirty seconds, and then asked aside, so no client
+waits for it to come back. Nothing falls back to plain DNS on its own: plain DNS is asked only where an entry names
+it. When three questions in a row find no server, the panel says why: `fault` in the state of the resolver and the
+log carry `no name server answers: https://1.1.1.1:443/dns-query: ...`, and the services count the resolver as down,
+until a server answers again.
+
+`Ask through the channel` carries the questions the same way whatever they travel in.
+
+An answer larger than the datagram a client takes, 512 bytes or the size its question names, goes back cut down to
+the question and marked as cut, so the client asks again over TCP and gets it whole.
 
 The resolver also asks about the names of the rules itself, without waiting for a client: every name a rule
 matches by, including the ones a `geosite:` category stands for, is asked about and the answers go into the set
@@ -77,6 +113,24 @@ panel over when its own settings wait too. `Cancel` drops what is not saved yet,
 stays while other pages are opened. `GET /api/dns` carries `pending`, true while the saved settings differ
 from the ones the resolver runs with. A change of the configurations starts the resolver over on their
 addresses with the settings it runs with.
+
+## Turning the resolver on
+
+| Where | How |
+|---|---|
+| the installation | `Answer the DNS of its clients on this server, asking outside over HTTPS?`, asked with the first endpoint, `resolver` in a file of answers, see [install.md](install.md#the-menu) |
+| the menu | item 29, `DNS for Clients`; the status under the menu shows `DNS: on, asks outside encrypted` |
+| the script | `amneziageo-server dns on`, `amneziageo-server dns off`, `amneziageo-server dns` to be asked |
+| the utility | `dns show`, `dns get enabled port upstreams encrypted outbound`, `dns set --enabled on` or `off`, `dns set --upstreams <servers>` or `default` for the ones a fresh panel asks |
+| the panel | `Answer the clients` on the `DNS` page, then `Restart` |
+
+The menu and the commands work the same on a package and in a container: there they go through
+`docker compose exec panel amneziageo-server dns on`. They save the setting and have the running panel start the
+resolver over at once; a panel that is stopped takes it when it starts. Turned off, the resolver does not run, holds
+no port and keeps no connection to a name server. An update leaves the switch where it was.
+
+A panel that has no endpoint yet has no address to answer on: the resolver waits, `the resolver does not run yet:
+there is no address to answer the clients on`, and starts with the first endpoint.
 
 ## What the host gets
 

@@ -1488,6 +1488,8 @@ ask_installation() {
     if [ -n "${given[client]}" ]; then
       answer_yes qr "Show its configuration as a QR code, putting qrencode on?" yes || true
     fi
+
+    answer_yes resolver "Answer the DNS of its clients on this server, asking outside over HTTPS?" yes || true
   fi
 
   opening=$(planned_ports)
@@ -1553,6 +1555,10 @@ plan() {
   fi
 
   if [ "${given[endpoint]}" = yes ]; then
+    if [ "${given[resolver]:-no}" = yes ]; then
+      say "- answer the DNS of the clients on the server, which asks outside over HTTPS"
+    fi
+
     say "- make the interface ${given[endpoint_name]} on UDP ${given[endpoint_port]} for ${given[endpoint_host]}$([ "${given[websocket]}" = yes ] && printf ', with a websocket')"
     if [ -n "${given[client]}" ]; then
       say "- make the client ${given[client]} of it, its configuration in /root"
@@ -1691,6 +1697,7 @@ endpoint_calls() {
     "host=\"${given[endpoint_host]}\"" nat=true opened=true isEnabled=true "webSocket=$websocket" <<< "$draft") || return 1
   config=$(api_call POST /configs <<< "$body" | json_get id) || return 1
   good "the interface ${given[endpoint_name]} runs on UDP ${given[endpoint_port]}"
+  first_resolver
   if [ -z "${given[client]:-}" ]; then
     return 0
   fi
@@ -1735,6 +1742,15 @@ first_endpoint() {
   cli token revoke "$id" --yes > /dev/null
   rm -rf "$api_work"
   return "$rc"
+}
+
+# Turns the resolver of the clients on when the answers ask for it, once the first interface gives it an address.
+first_resolver() {
+  if [ "${given[resolver]:-no}" != yes ]; then
+    return 0
+  fi
+
+  cli dns set --enabled on || bad "the resolver was not turned on: item 29 of the menu turns it on"
 }
 
 # Tells whether ufw already lets a port in, like 8443/tcp.
@@ -2574,6 +2590,8 @@ view_settings() {
   cli panel show
   step "endpoints"
   cli endpoint list
+  step "the resolver"
+  cli dns show
   step "the host"
   say "module        amneziawg $(module_loaded && printf loaded || printf 'not loaded')"
   say "forwarding    $(forwarding && printf on || printf off)"
@@ -3117,6 +3135,57 @@ bbr_item() {
   esac
 }
 
+# Prints whether the resolver of the panel answers the clients and whether it asks outside encrypted.
+resolver_line() {
+  local values
+  mapfile -t values < <(cli dns get enabled encrypted 2> /dev/null | tr -d '\r')
+  case ${values[0]:-} in
+    on)
+      case ${values[1]:-} in
+        all) printf 'on, asks outside encrypted' ;;
+        none) printf 'on, asks outside in the open' ;;
+        *) printf 'on, asks outside partly in the open' ;;
+      esac
+      ;;
+    off) printf 'off' ;;
+  esac
+}
+
+# Item 29: turns the resolver of the clients on or off; turned off it does not run and holds no port.
+resolver_item() {
+  local want=${1:-} state usual=
+  need_panel || return 1
+  cli dns show || return 1
+  state=$(resolver_line)
+  if [ -z "$want" ]; then
+    case $state in
+      on*)
+        if [ "$state" != 'on, asks outside encrypted' ] && agree "Ask the name servers the panel starts with, over HTTPS?"; then
+          want=on
+          usual=1
+        elif confirm "Turn the resolver off?"; then
+          want=off
+        fi
+        ;;
+      *)
+        if agree "Turn the resolver on?"; then
+          want=on
+          if [ "$(cli dns get encrypted 2> /dev/null | tr -d '\r')" != all ] \
+            && agree "Its name servers are asked in the open: ask the ones the panel starts with, over HTTPS?"; then
+            usual=1
+          fi
+        fi
+        ;;
+    esac
+  fi
+
+  case $want in
+    on | off) cli dns set --enabled "$want" ${usual:+--upstreams default} ;;
+    "") ;;
+    *) bad "dns takes on or off" ;;
+  esac
+}
+
 # Writes a line of the menu frame.
 row() {
   printf '│  %-45s│\n' "$1"
@@ -3154,6 +3223,10 @@ status_block() {
   printf 'Kernel:     amneziawg %s, forwarding %s\n' \
     "$(module_loaded && printf loaded || printf 'not loaded')" "$(forwarding && printf on || printf off)"
   printf 'Websocket:  %s front(s), BBR %s\n' "$(fronts_running)" "$(bbr_state)"
+  if [ "$kind" != none ]; then
+    printf 'DNS:        %s\n' "$(resolver_line)"
+  fi
+
   [ "$state" = running ] || return 0
   services=$(services_line)
   case $services in
@@ -3206,9 +3279,10 @@ menu() {
     entry 27 "Enable BBR"
     rule
     entry 28 "Update Geo Files"
+    entry 29 "DNS for Clients"
     printf '%s\n' '╚───────────────────────────────────────────────╝'
     status_block
-    choice=$(ask "Choose [0-28]:") || exit 0
+    choice=$(ask "Choose [0-29]:") || exit 0
     hold=1
     case $choice in
       0) exit 0 ;;
@@ -3240,6 +3314,7 @@ menu() {
       26) fronts_menu && hold= ;;
       27) bbr_item ;;
       28) need_panel && cli geo update ;;
+      29) resolver_item ;;
       "") hold= ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -3267,8 +3342,9 @@ usage:
   amneziageo-server log                follow the log of the panel
   amneziageo-server enable | disable   start the panel with the host or not
   amneziageo-server bbr [on | off]     BBR with the fq queue for TCP
+  amneziageo-server dns [on | off]     the resolver of the clients, which asks outside over HTTPS
   amneziageo-server <command>          a command of the utility: user, role, token, panel, endpoint,
-                                       import, device, family, geo, init, login, whoami, update status
+                                       import, device, family, geo, dns, init, login, whoami, update status
 EOF
 }
 
@@ -3330,6 +3406,12 @@ main() {
     enable) autostart on ;;
     disable) autostart off ;;
     bbr) bbr_item "${2:-}" ;;
+    dns)
+      case ${2:-} in
+        "" | on | off) resolver_item "${2:-}" ;;
+        *) cli_in "$@" ;;
+      esac
+      ;;
     *) cli_in "$@" ;;
   esac
 }

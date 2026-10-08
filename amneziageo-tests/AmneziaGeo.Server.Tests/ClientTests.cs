@@ -669,9 +669,9 @@ public class ClientTests
     [Fact]
     public void TheFileOfAClientCarriesNoLineOfTheServerButTheMovedServices()
     {
-        var client = Client() with { Inbound = ClientInbound.Network, Routing = ClientRouting.Off };
+        var client = Client() with { Inbound = ClientInbound.Network };
 
-        var plain = ClientText.Text(Endpoint(), client, new ClientTemplate { Name = "closed", Routing = false });
+        var plain = ClientText.Text(Endpoint(), client, new ClientTemplate { Name = "closed" });
         var moved = ClientText.Text(Endpoint() with { ServicesPort = 8446 }, Client());
         var same = ClientText.Text(Endpoint() with { ServicesPort = Endpoint().ListenPort }, Client());
 
@@ -689,20 +689,6 @@ public class ClientTests
         using var document = Opened(ClientLink.Link(Endpoint() with { WebSocket = true }, client));
 
         Assert.False(document.RootElement.TryGetProperty("amneziageo", out _));
-    }
-
-    [Fact]
-    public void TheRoutingOfAClientIsReadByName()
-    {
-        Assert.Equal(ClientRouting.Off, RoutingName.Read(" OFF ", ClientRouting.Template));
-        Assert.Equal(ClientRouting.On, RoutingName.Read("on", ClientRouting.Template));
-        Assert.Equal(ClientRouting.Template, RoutingName.Read("template", ClientRouting.Off));
-        Assert.Equal(ClientRouting.Off, RoutingName.Read(null, ClientRouting.Off));
-        Assert.Equal((ClientRouting)(-1), RoutingName.Read("maybe", ClientRouting.Template));
-        Assert.Equal("template", RoutingName.Of(ClientRouting.Template));
-        Assert.Equal("off", RoutingName.Of(ClientRouting.Off));
-        Assert.Equal("bad-client-routing", ClientRules.Check(Client() with { Routing = (ClientRouting)7 })!.Code);
-        Assert.Null(ClientRules.Check(Client() with { Routing = ClientRouting.Off }));
     }
 
     [Fact]

@@ -1,6 +1,5 @@
 using AmneziaGeo.Server.Core.Diagnostics;
 using AmneziaGeo.Server.Dal;
-using Microsoft.Data.Sqlite;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -20,7 +19,7 @@ public sealed class JournalRecordsTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        Pools.Clear(_records.Location);
         Directory.Delete(_folder, true);
     }
 

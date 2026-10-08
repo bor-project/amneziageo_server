@@ -19,8 +19,6 @@ export interface ClientState {
 
 export type Inbound = "off" | "server" | "network" | "endpoint"
 
-export type Routing = "template" | "on" | "off"
-
 export interface Client {
   id: number
   configId: number
@@ -36,7 +34,6 @@ export interface Client {
   subscriptionId: string
   dailyLimit: number
   inbound: Inbound
-  routing: Routing
   state: ClientState
   createdUtc: string
   updatedUtc: string
@@ -55,7 +52,6 @@ export interface ClientDraft {
   subscriptionId: string
   dailyLimit: number
   inbound: Inbound
-  routing: Routing
 }
 
 export type Miss = "off" | "no-id" | "no-key"
@@ -140,7 +136,6 @@ export function draftOf(one: Client): ClientDraft {
     subscriptionId: one.subscriptionId,
     dailyLimit: one.dailyLimit,
     inbound: one.inbound,
-    routing: one.routing,
   }
 }
 

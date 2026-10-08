@@ -46,9 +46,9 @@ public static class DnsDefaults
     public static readonly TimeSpan Landing = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
-    /// The name servers the questions are passed to.
+    /// The name servers the questions are passed to, over HTTPS.
     /// </summary>
-    public static readonly string[] Upstreams = ["1.1.1.1", "8.8.8.8"];
+    public static readonly string[] Upstreams = ["https://1.1.1.1/dns-query", "https://8.8.4.4/dns-query"];
 
     /// <summary>
     /// The IPv4 addresses of the name servers that answer over HTTPS.

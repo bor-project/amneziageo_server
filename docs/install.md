@@ -30,7 +30,8 @@ system, rebooting when a new kernel comes and going on with the same answers whe
 the PPA of Amnezia when the kernel lacks it, turns forwarding and BBR on, checks the release against the key the
 releases are signed with and puts it on as a package or a container, makes the first administrator with a temporary
 password, gets a certificate of Let's Encrypt for the name of the server or takes the one the host holds for it, opens
-the panel on every address, makes the first endpoint and its first client through the API, opens the ports in ufw or
+the panel on every address, makes the first endpoint, turns the resolver of the clients on when asked and makes the
+first client through the API, opens the ports in ufw or
 turns ufw on with ssh and what already listens kept open, and checks the panel, the certificate and the endpoint. The
 configuration of the client goes to `/root`, and to the terminal as a QR code when asked. The package puts the script
 into `/usr/local/bin` with every release it installs. Given a backup a panel downloaded, it starts the panel on that
@@ -56,13 +57,14 @@ every key the installation runs without a question:
 | `endpoint` | `yes` makes the first endpoint of `endpoint_name`, `endpoint_port`, `endpoint_host` and `websocket` |
 | `endpoint_host` | the address clients reach the endpoint at; without it the name of the server, or the address of the host when it is public, and a question when there is neither |
 | `client`, `qr` | the name of the first client, empty for none; `yes` shows its configuration as a QR code |
+| `resolver` | `yes` turns the resolver on with the first endpoint: its clients ask the server about names and the server asks outside over HTTPS, see [dns.md](dns.md#turning-the-resolver-on) |
 | `ufw` | `yes` opens the ports in an active ufw or turns ufw on |
 | `reboot` | `yes` reboots after an upgrade that brings a kernel |
 | `go` | `yes` goes on past the plan |
 
 Without arguments the script opens a menu, over ssh as well: updates and the way back, copies of the database,
 the address, the port and the path of the panel, users and tokens, the service and its log, certificates, the
-firewall, endpoints, websocket fronts and BBR. Its items go as commands too:
+firewall, endpoints, websocket fronts, BBR and the resolver of the clients. Its items go as commands too:
 
 | Command | Does |
 |---|---|
@@ -77,6 +79,7 @@ firewall, endpoints, websocket fronts and BBR. Its items go as commands too:
 | `start`, `stop`, `restart`, `status`, `log` | the service |
 | `enable`, `disable` | whether the panel starts with the host |
 | `bbr on`, `bbr off` | BBR with the `fq` queue for TCP, now and at boot |
+| `dns on`, `dns off` | the resolver of the clients, which asks outside over HTTPS; `dns` alone shows it and asks |
 
 Any other command goes to the console of the panel, as in `amneziageo-server user list` or
 `amneziageo-server panel show`; `amneziageo-server help` lists them.

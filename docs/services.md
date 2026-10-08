@@ -69,15 +69,15 @@ and `features` carries what the server offers this client, each under its name:
 | Feature | Arguments | Offered when |
 |---|---|---|
 | `websocket` | `port`, `path` | the endpoint takes the tunnel inside a websocket on that port under that path |
-| `routing` | `allowed` | always: whether the client may route by its own lists, from the client and its template, see [templates.md](templates.md) |
 | `inbound` | `mode`: `server` or `network` | the client lets connections in from the tunnel, see [clients.md](clients.md) |
 | `disconnect` | `port`, `from` | the endpoint and the client carry an address: the TCP port the application takes the signal to disconnect on and the addresses the signal comes from, see [The signal to disconnect](#the-signal-to-disconnect) |
 | `speed` | `inside`, `outside` (each `down` and `up`), `limit`, `expires` | always: where to measure and until when |
 | `subscription` | `url`, `revision`, `pin` | the subscriptions are on and the client has one: where it reads it and what it hands out now |
-| `sources` | `items`, each `name`, `kind` (`geoip` or `geosite`) and `url` | the panel has a geo source on: the sources the client adds when it holds none at the address |
-| `presets` | `lists`, each `name`, `rules`, `allUdp` and `full` | the template of the client names routing presets and the client routes by its own lists: the lists the client adds when it holds none under the name, see [templates.md](templates.md) |
+| `sources` | `items`, each `name`, `kind` (`geoip` or `geosite`) and `url` | the panel has a geo source on: the sources the client adds when it holds none at the address, and moves to the address when it holds one under the name |
+| `presets` | `lists`, each `name`, `rules`, `allUdp`, `full`, `id`, `updated`, `default` and `source` | the template of the client names routing presets: the lists the client takes by `id`, each with the time it was last changed, whether it is on by default and the name the configuration of the client goes by, see [templates.md](templates.md) |
 
-A client leaves out a feature it does not know, and takes a feature the answer leaves out as not offered.
+A client leaves out a feature or an argument it does not know, and takes a feature the answer leaves out as not
+offered: an application older than `id` reads `name`, `rules`, `allUdp` and `full` of a list and adds it by name.
 
 A token that does not hold is refused with `{ error, message, time }`:
 

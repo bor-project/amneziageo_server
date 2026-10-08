@@ -46,11 +46,6 @@ public sealed record ClientTemplate
     public int? Keepalive { get; init; }
 
     /// <summary>
-    /// Whether the application of the client routes on its own.
-    /// </summary>
-    public bool Routing { get; init; } = TemplateDefaults.Routing;
-
-    /// <summary>
     /// The numbers of the routing presets the clients of the template are handed, in the order they get them.
     /// </summary>
     public IReadOnlyList<long> Presets { get; init; } = [];

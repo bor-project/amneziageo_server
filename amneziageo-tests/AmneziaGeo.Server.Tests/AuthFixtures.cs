@@ -218,7 +218,7 @@ public sealed class Bench : IDisposable
         _scope.Dispose();
         _services.Dispose();
         _key.Dispose();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        Pools.Clear(_path);
 
         if (Directory.Exists(_geo))
         {

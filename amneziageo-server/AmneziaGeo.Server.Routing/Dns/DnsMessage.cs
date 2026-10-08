@@ -45,7 +45,19 @@ public sealed record DnsMessage(
     /// </summary>
     public const int ServerFailure = 2;
 
+    /// <summary>
+    /// The largest answer a datagram carries to an asking side that named no size of its own.
+    /// </summary>
+    public const int DatagramLength = 512;
+
+    /// <summary>
+    /// The largest answer a datagram carries whatever size the asking side named.
+    /// </summary>
+    public const int MaxDatagramLength = 4096;
+
     private const int MaxJumps = 16;
+
+    private const int SizeRecord = 41;
 
     /// <summary>
     /// The shortest time the records of the message stay good, in seconds.
@@ -122,6 +134,74 @@ public sealed record DnsMessage(
         {
             BinaryPrimitives.WriteUInt16BigEndian(packet, id);
         }
+    }
+
+    /// <summary>
+    /// Returns the answer when a datagram to the asking side carries it whole, and otherwise the answer cut down to
+    /// its question and marked as cut, so the asking side comes again over a stream.
+    /// </summary>
+    public static byte[] Fit(ReadOnlySpan<byte> question, byte[] answer)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+
+        if (answer.Length < HeaderLength || answer.Length <= Room(question) || !Asked(answer, out var end))
+        {
+            return answer;
+        }
+
+        var cut = answer[..end];
+        cut[2] |= 0x02;
+        BinaryPrimitives.WriteUInt16BigEndian(cut.AsSpan(6), 0);
+        BinaryPrimitives.WriteUInt16BigEndian(cut.AsSpan(8), 0);
+        BinaryPrimitives.WriteUInt16BigEndian(cut.AsSpan(10), 0);
+
+        return cut;
+    }
+
+    // Returns how many bytes a datagram to the asking side may carry: the size its question names, within the bounds.
+    private static int Room(ReadOnlySpan<byte> question)
+    {
+        if (question.Length < HeaderLength || !Asked(question, out var at))
+        {
+            return DatagramLength;
+        }
+
+        var records = BinaryPrimitives.ReadUInt16BigEndian(question[6..]) + BinaryPrimitives.ReadUInt16BigEndian(question[8..])
+            + BinaryPrimitives.ReadUInt16BigEndian(question[10..]);
+        for (var i = 0; i < records; i++)
+        {
+            if (!Name(question, ref at, out _) || at + 10 > question.Length)
+            {
+                return DatagramLength;
+            }
+
+            if (BinaryPrimitives.ReadUInt16BigEndian(question[at..]) == SizeRecord)
+            {
+                return Math.Clamp((int)BinaryPrimitives.ReadUInt16BigEndian(question[(at + 2)..]), DatagramLength, MaxDatagramLength);
+            }
+
+            at += 10 + BinaryPrimitives.ReadUInt16BigEndian(question[(at + 8)..]);
+        }
+
+        return DatagramLength;
+    }
+
+    // Finds where the questions of a message end.
+    private static bool Asked(ReadOnlySpan<byte> packet, out int end)
+    {
+        end = HeaderLength;
+        var questions = BinaryPrimitives.ReadUInt16BigEndian(packet[4..]);
+        for (var i = 0; i < questions; i++)
+        {
+            if (!Name(packet, ref end, out _) || end + 4 > packet.Length)
+            {
+                return false;
+            }
+
+            end += 4;
+        }
+
+        return true;
     }
 
     private static IReadOnlyList<DnsRecord> Records(ReadOnlySpan<byte> packet, ref int at, int count)

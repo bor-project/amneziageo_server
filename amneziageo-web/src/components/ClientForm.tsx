@@ -4,11 +4,11 @@ import { nth, numberOf, parse, reserved, span, write } from "@/address"
 import type { Span } from "@/address"
 import { complaint } from "@/api/auth"
 import { useClients } from "@/api/clients"
-import type { Client, ClientDraft, Inbound, Routing } from "@/api/clients"
+import type { Client, ClientDraft, Inbound } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useTemplates } from "@/api/templates"
-import { Help, Hinted, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
+import { Help, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -58,7 +58,6 @@ export function ClientForm({
   const clash = others.some((one) => one.name.toLowerCase() === draft.name.trim().toLowerCase())
   const misnamed = !/^[A-Za-z0-9_-]{0,64}$/.test(draft.subscriptionId)
   const allowed = allowanceOf(limit)
-  const inherited = (templates.data ?? []).find((one) => one.id === draft.templateId)?.routing ?? true
   const edited =
     !same(draft, start) ||
     shown !== base ||
@@ -190,19 +189,6 @@ export function ClientForm({
             {t("action.goTo")}
           </Link>
         </div>
-
-        <Pick
-          id="client-routing"
-          caption={<Hinted caption={t("templates.routing")} text={t("templates.routingHint")} />}
-          value={draft.routing}
-          onChange={(value) => put({ routing: value as Routing })}
-        >
-          <option value="template">
-            {t(inherited ? "clients.routingTemplateOn" : "clients.routingTemplateOff")}
-          </option>
-          <option value="on">{t("clients.routingOn")}</option>
-          <option value="off">{t("clients.routingOff")}</option>
-        </Pick>
       </Part>
 
       <Part title={t("clients.partAccess")}>

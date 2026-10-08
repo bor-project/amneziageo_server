@@ -41,12 +41,6 @@ public sealed record FeatureResponse(
 public sealed record WebSocketFeature(int Port, string Path);
 
 /// <summary>
-/// Arguments of the routing feature.
-/// </summary>
-/// <param name="Allowed">Whether the client routes by its own lists.</param>
-public sealed record RoutingFeature(bool Allowed);
-
-/// <summary>
 /// Arguments of the inbound feature.
 /// </summary>
 /// <param name="Mode">What the client takes from the tunnel.</param>
@@ -104,7 +98,19 @@ public sealed record SourcesFeature(IReadOnlyList<SourceItem> Items);
 /// <param name="Rules">The rules of the list, each led by what it does with the traffic.</param>
 /// <param name="AllUdp">Whether every UDP packet goes through the tunnel.</param>
 /// <param name="Full">Whether everything goes through the tunnel but what goes past it.</param>
-public sealed record PresetItem(string Name, IReadOnlyList<string> Rules, bool AllUdp, bool Full);
+/// <param name="Id">The identifier the client knows the list by.</param>
+/// <param name="Updated">When the list was last changed.</param>
+/// <param name="Default">Whether the client turns the list on when it adds it and routes by none.</param>
+/// <param name="Source">The name the configuration of the client goes by.</param>
+public sealed record PresetItem(
+    string Name,
+    IReadOnlyList<string> Rules,
+    bool AllUdp,
+    bool Full,
+    string Id,
+    DateTimeOffset Updated,
+    bool Default,
+    string Source);
 
 /// <summary>
 /// Arguments of the presets feature.
@@ -151,11 +157,6 @@ public static class FeatureNames
     /// The tunnel inside a websocket.
     /// </summary>
     public const string WebSocket = "websocket";
-
-    /// <summary>
-    /// The routing of the client by its own lists.
-    /// </summary>
-    public const string Routing = "routing";
 
     /// <summary>
     /// What the client takes from the tunnel.

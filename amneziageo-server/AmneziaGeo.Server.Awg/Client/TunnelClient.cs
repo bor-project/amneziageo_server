@@ -71,11 +71,6 @@ public sealed record TunnelClient
     public ClientInbound Inbound { get; init; }
 
     /// <summary>
-    /// Whether the application of the client routes on its own.
-    /// </summary>
-    public ClientRouting Routing { get; init; }
-
-    /// <summary>
     /// When the client was added.
     /// </summary>
     public DateTimeOffset CreatedUtc { get; init; }

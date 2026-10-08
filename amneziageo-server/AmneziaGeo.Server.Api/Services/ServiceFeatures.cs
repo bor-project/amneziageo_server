@@ -34,23 +34,6 @@ public sealed class WebSocketOffer : IHelloFeature
 }
 
 /// <summary>
-/// Tells the client whether it routes by its own lists.
-/// </summary>
-public sealed class RoutingOffer : IHelloFeature
-{
-    /// <inheritdoc/>
-    public string Name => FeatureNames.Routing;
-
-    /// <inheritdoc/>
-    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(peer);
-
-        return ValueTask.FromResult<object?>(new RoutingFeature(RoutingName.Taken(peer.Client.Routing, peer.Template)));
-    }
-}
-
-/// <summary>
 /// Tells the client what it takes from the tunnel.
 /// </summary>
 public sealed class InboundOffer : IHelloFeature
@@ -250,17 +233,26 @@ public sealed class SourcesOffer : IHelloFeature
 }
 
 /// <summary>
-/// Hands the client the routing lists its template names, while the client routes by its own lists.
+/// Hands the client the routing lists its template names.
 /// </summary>
 public sealed class PresetsOffer : IHelloFeature
 {
+    private readonly SubscriptionState _state;
+
+    private readonly PanelSettings _panel;
+
+    private readonly WebOptions _options;
+
     private readonly IServiceScopeFactory _scopes;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public PresetsOffer(IServiceScopeFactory scopes)
+    public PresetsOffer(SubscriptionState state, PanelSettings panel, WebOptions options, IServiceScopeFactory scopes)
     {
+        _state = state;
+        _panel = panel;
+        _options = options;
         _scopes = scopes;
     }
 
@@ -272,7 +264,7 @@ public sealed class PresetsOffer : IHelloFeature
     {
         ArgumentNullException.ThrowIfNull(peer);
 
-        if (peer.Template is not { Presets.Count: > 0 } template || !RoutingName.Taken(peer.Client.Routing, template))
+        if (peer.Template is not { Presets.Count: > 0 } template)
         {
             return null;
         }
@@ -281,9 +273,39 @@ public sealed class PresetsOffer : IHelloFeature
         var presets = await scope.ServiceProvider.GetRequiredService<PresetStore>()
             .ListAsync(template.Presets, ct)
             .ConfigureAwait(false);
-        var lists = presets.Select(preset => new PresetItem(preset.Name, PresetRules.Rules(preset), preset.AllUdp, preset.Full))
+        if (presets.Count == 0)
+        {
+            return null;
+        }
+
+        var naming = (await scope.ServiceProvider.GetRequiredService<PanelStore>().ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
+        var source = ClientText.Title(peer.Endpoint, peer.Client, naming, Host(peer));
+        var lists = presets.Select(preset => new PresetItem(
+                preset.Name,
+                PresetRules.Rules(preset),
+                preset.AllUdp,
+                preset.Full,
+                preset.Uid,
+                preset.UpdatedUtc,
+                preset.IsDefault,
+                source))
             .ToList();
 
-        return lists.Count == 0 ? null : new PresetsFeature(lists);
+        return new PresetsFeature(lists);
+    }
+
+    // Returns the host the subscription names the configurations with, the one the client asked at without a subscription.
+    private string Host(HelloPeer peer)
+    {
+        var asked = peer.Context.Request.Host.Host;
+        var url = SubscriptionAnswer.Address(
+            _state.Current,
+            _panel,
+            Listening.Chain(_options, _panel).Length > 0,
+            asked,
+            peer.Endpoint,
+            peer.Client.SubscriptionId);
+
+        return Uri.TryCreate(url, UriKind.Absolute, out var address) ? address.Host : asked;
     }
 }

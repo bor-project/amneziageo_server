@@ -59,9 +59,10 @@ which runs on, so the session goes on and a new port or path takes hold without 
 restart policy of the container on and off, the log is the log of the container read through compose, and a copy of
 the database goes back while the panel is held. An update moves the container onto the new image and ends the
 session. The commands of the console go through the same name: `docker compose exec panel amneziageo-server user
-list`. The items that change the host itself, going back to an older image, taking the panel off and a certificate of
-Let's Encrypt, answer that the container does not reach the host. The rules of ufw, turning ufw on or off, BBR and
-forwarding print the command for the host instead.
+list`, and so does the switch of the resolver, `docker compose exec panel amneziageo-server dns on`, see
+[dns.md](dns.md#turning-the-resolver-on). The items that change the host itself, going back to an older image, taking
+the panel off and a certificate of Let's Encrypt, answer that the container does not reach the host. The rules of
+ufw, turning ufw on or off, BBR and forwarding print the command for the host instead.
 
 `amneziageo-server install`, see [install.md](install.md#the-menu), puts the container on a bare host when asked
 for Docker: Docker itself from the repository of Docker with `"ip-forward-no-drop": true` added to

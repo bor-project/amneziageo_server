@@ -64,7 +64,6 @@ const complaints: Record<string, TextKey> = {
   "bad-client-subscription": "error.badClientSubscription",
   "bad-client-limit": "error.badClientLimit",
   "bad-client-inbound": "error.badClientInbound",
-  "bad-client-routing": "error.badClientRouting",
   "bad-inbound": "error.badInbound",
   "bad-host-key": "error.badHostKey",
   "bad-subscription-path": "error.badSubscriptionPath",

@@ -7,12 +7,14 @@ namespace AmneziaGeo.Server.Api.Clients;
 /// </summary>
 public sealed record PresetResponse(
     long Id,
+    string Uid,
     string Name,
     IReadOnlyList<string> Proxy,
     IReadOnlyList<string> Direct,
     IReadOnlyList<string> Block,
     bool AllUdp,
     bool Full,
+    bool IsDefault,
     int Templates,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc);
@@ -26,7 +28,8 @@ public sealed record PresetRequest(
     IReadOnlyList<string>? Direct,
     IReadOnlyList<string>? Block,
     bool? AllUdp = null,
-    bool? Full = null);
+    bool? Full = null,
+    bool? IsDefault = null);
 
 /// <summary>
 /// Turns routing presets into what the panel reads and back.
@@ -42,21 +45,23 @@ public static class PresetAnswers
 
         return new PresetResponse(
             preset.Id,
+            preset.Uid,
             preset.Name,
             preset.Proxy,
             preset.Direct,
             preset.Block,
             preset.AllUdp,
             preset.Full,
+            preset.IsDefault,
             templates,
             preset.CreatedUtc,
             preset.UpdatedUtc);
     }
 
     /// <summary>
-    /// Returns what a request asks a preset to become.
+    /// Returns what a request asks a preset to become; a request that leaves the default mark out keeps the one held.
     /// </summary>
-    public static RoutingPreset Draft(PresetRequest request)
+    public static RoutingPreset Draft(PresetRequest request, RoutingPreset? held = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -68,6 +73,7 @@ public static class PresetAnswers
             Block = TemplateAnswers.Entries(request.Block),
             AllUdp = request.AllUdp ?? false,
             Full = request.Full ?? false,
+            IsDefault = request.IsDefault ?? held?.IsDefault ?? false,
         };
     }
 }

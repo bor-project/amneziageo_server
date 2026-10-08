@@ -1,7 +1,6 @@
 using AmneziaGeo.Server.Api.Diagnostics;
 using AmneziaGeo.Server.Core.Diagnostics;
 using AmneziaGeo.Server.Dal;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -21,7 +20,7 @@ public sealed class JournalHostTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        Pools.Clear(_records.Location);
         if (Directory.Exists(_folder))
         {
             Directory.Delete(_folder, true);

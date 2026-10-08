@@ -89,7 +89,8 @@ public sealed class TemplateRefresher
         var outbounds = await _outbounds.ListAsync(ct).ConfigureAwait(false);
         var balancers = await _balancers.ListAsync(ct).ConfigureAwait(false);
         var way = DnsExit.Way(settings, new RouteWays(outbounds, balancers, _live.Alive));
-        var resolver = new TemplateResolver(new DnsUpstream(settings.Upstreams, Wait, () => way.Mark));
+        using var upstream = new DnsUpstream(settings.Upstreams, Wait, () => way.Mark);
+        var resolver = new TemplateResolver(upstream);
 
         return await resolver.ResolveAsync(entries, GeoIndex.Load(sources, _files), ct).ConfigureAwait(false);
     }

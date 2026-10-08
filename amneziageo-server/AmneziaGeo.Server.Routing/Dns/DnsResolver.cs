@@ -79,7 +79,7 @@ public sealed class DnsResolver
             Heard(client, kept);
             await LandAsync(kept, ct).ConfigureAwait(false);
 
-            return held;
+            return Carried(question, stream, held);
         }
 
         var answer = await _upstream.AskAsync(question, stream, ct).ConfigureAwait(false);
@@ -98,8 +98,12 @@ public sealed class DnsResolver
             await LandAsync(read, ct).ConfigureAwait(false);
         }
 
-        return answer;
+        return Carried(question, stream, answer);
     }
+
+    // Returns the answer as the asking side takes it: whole over a stream, within the size of a datagram otherwise.
+    private static byte[] Carried(ReadOnlyMemory<byte> question, bool stream, byte[] answer) =>
+        stream ? answer : DnsMessage.Fit(question.Span, answer);
 
     private void Heard(IPAddress? client, DnsMessage? answer)
     {

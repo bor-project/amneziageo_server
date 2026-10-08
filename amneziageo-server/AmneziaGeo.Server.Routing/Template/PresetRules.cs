@@ -13,6 +13,11 @@ public static class PresetRules
     public const int MaxNameLength = 64;
 
     /// <summary>
+    /// How long the identifier of a preset is.
+    /// </summary>
+    public const int UidLength = 36;
+
+    /// <summary>
     /// The word a rule that goes through the tunnel starts with.
     /// </summary>
     public const string Proxy = "proxy";
@@ -53,6 +58,25 @@ public static class PresetRules
         return name.Length > MaxNameLength
             ? new ClientFault("bad-preset-name", $"the name is longer than {MaxNameLength} characters")
             : null;
+    }
+
+    /// <summary>
+    /// Returns an identifier no other preset carries.
+    /// </summary>
+    public static string FreshUid() => Guid.NewGuid().ToString("D");
+
+    /// <summary>
+    /// Tells whether two presets hand out the same list.
+    /// </summary>
+    public static bool SameList(RoutingPreset one, RoutingPreset other)
+    {
+        ArgumentNullException.ThrowIfNull(one);
+        ArgumentNullException.ThrowIfNull(other);
+
+        return string.Equals(one.Name, other.Name, StringComparison.Ordinal)
+            && one.AllUdp == other.AllUdp
+            && one.Full == other.Full
+            && Rules(one).SequenceEqual(Rules(other), StringComparer.Ordinal);
     }
 
     /// <summary>

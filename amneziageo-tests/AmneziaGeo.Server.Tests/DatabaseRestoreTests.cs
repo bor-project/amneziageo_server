@@ -1,6 +1,5 @@
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace AmneziaGeo.Server.Tests;
@@ -13,7 +12,7 @@ public sealed class DatabaseRestoreTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        Pools.ClearUnder(_folder.FullName);
         _folder.Delete(recursive: true);
     }
 
@@ -124,7 +123,7 @@ public sealed class DatabaseRestoreTests : IDisposable
             backup.Stage(received);
         }
 
-        SqliteConnection.ClearAllPools();
+        Pools.ClearUnder(_folder.FullName);
         Assert.DoesNotContain(Names(_folder.FullName), name => name.StartsWith("backup-", StringComparison.Ordinal));
 
         var aside = DatabaseRestore.Swap(database, Now);

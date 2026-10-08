@@ -135,7 +135,7 @@ public sealed class PresetStore
         }
 
         var now = _time.GetUtcNow();
-        var entity = new RoutingPresetEntity { CreatedUtc = now, UpdatedUtc = now };
+        var entity = new RoutingPresetEntity { Uid = PresetRules.FreshUid(), CreatedUtc = now, UpdatedUtc = now };
         Write(entity, wanted);
 
         _db.RoutingPresets.Add(entity);
@@ -145,7 +145,7 @@ public sealed class PresetStore
     }
 
     /// <summary>
-    /// Replaces the lists of a preset.
+    /// Replaces the lists of a preset, moving its time when the list it hands out changes.
     /// </summary>
     public async Task<PresetResult> ChangeAsync(long id, RoutingPreset draft, CancellationToken ct)
     {
@@ -163,8 +163,13 @@ public sealed class PresetStore
             return refusal;
         }
 
+        var held = Read(entity);
         Write(entity, wanted);
-        entity.UpdatedUtc = _time.GetUtcNow();
+        if (!PresetRules.SameList(held, Read(entity)))
+        {
+            entity.UpdatedUtc = _time.GetUtcNow();
+        }
+
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return PresetResult.Done(Read(entity));
@@ -221,12 +226,14 @@ public sealed class PresetStore
     private static RoutingPreset Read(RoutingPresetEntity entity) => new()
     {
         Id = entity.Id,
+        Uid = entity.Uid,
         Name = entity.Name,
         Proxy = Entries(entity.Proxy),
         Direct = Entries(entity.Direct),
         Block = Entries(entity.Block),
         AllUdp = entity.AllUdp,
         Full = entity.Full,
+        IsDefault = entity.IsDefault,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
     };
@@ -239,6 +246,7 @@ public sealed class PresetStore
         entity.Block = string.Join(", ", preset.Block);
         entity.AllUdp = preset.AllUdp;
         entity.Full = preset.Full;
+        entity.IsDefault = preset.IsDefault;
     }
 
     private static RoutingPreset Whole(RoutingPreset draft) => draft with

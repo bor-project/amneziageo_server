@@ -5,8 +5,14 @@ using AmneziaGeo.Server.Dal;
 
 namespace AmneziaGeo.Server.Tests;
 
+[Collection(Utility)]
 public sealed class PanelCommandTests : IDisposable
 {
+    /// <summary>
+    /// The collection of the tests that move the signing key of the utility, so they run one after another.
+    /// </summary>
+    public const string Utility = "the console utility";
+
     private readonly DirectoryInfo _folder = Directory.CreateTempSubdirectory("amneziageo-panel-");
 
     public PanelCommandTests()

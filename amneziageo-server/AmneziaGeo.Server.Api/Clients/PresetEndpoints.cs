@@ -67,7 +67,8 @@ public static class PresetEndpoints
 
     private static async Task<IResult> ChangeAsync(long id, PresetRequest request, PresetStore store, CancellationToken ct)
     {
-        var result = await store.ChangeAsync(id, PresetAnswers.Draft(request), ct).ConfigureAwait(false);
+        var held = request.IsDefault is null ? await store.FindAsync(id, ct).ConfigureAwait(false) : null;
+        var result = await store.ChangeAsync(id, PresetAnswers.Draft(request, held), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);

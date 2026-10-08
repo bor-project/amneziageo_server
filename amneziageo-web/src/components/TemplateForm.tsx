@@ -4,7 +4,7 @@ import { usePresets } from "@/api/presets"
 import { useTemplateDefaults, useTemplatePreview } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
 import { EntryList } from "@/components/EntryList"
-import { Flag, Hinted, Line, Multi, Part } from "@/components/fields"
+import { Hinted, Line, Multi, Part } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
@@ -100,15 +100,6 @@ export function TemplateForm({
         {preview.error !== null && (
           <div className="text-xs text-alarm sm:col-span-2">{t(complaint(preview.error))}</div>
         )}
-
-        <div className="sm:col-span-2">
-          <Flag
-            id="template-routing"
-            caption={<Hinted caption={t("templates.routing")} text={t("templates.routingHint")} />}
-            value={draft.routing}
-            onChange={(routing) => put({ routing })}
-          />
-        </div>
 
         <div className="sm:col-span-2">
           <label className={label} htmlFor="template-presets">

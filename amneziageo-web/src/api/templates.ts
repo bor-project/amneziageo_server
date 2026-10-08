@@ -10,7 +10,6 @@ export interface Template {
   dns: string[]
   mtu: number | null
   keepalive: number | null
-  routing: boolean
   presets: number[]
   clients: number
   refreshedUtc: string | null
@@ -24,7 +23,6 @@ export interface TemplateDraft {
   dns: string[]
   mtu: number | null
   keepalive: number | null
-  routing: boolean
   presets: number[]
 }
 
@@ -46,7 +44,6 @@ export interface TemplateDefaults {
   dns: string[]
   mtu: number
   keepalive: number
-  routing: boolean
 }
 
 const slow = { timeout: 120000 }
@@ -99,7 +96,6 @@ export function draftOf(template: Template): TemplateDraft {
     dns: template.dns,
     mtu: template.mtu,
     keepalive: template.keepalive,
-    routing: template.routing,
     presets: template.presets,
   }
 }
@@ -110,7 +106,6 @@ export const freshTemplate: TemplateDraft = {
   dns: [],
   mtu: null,
   keepalive: null,
-  routing: true,
   presets: [],
 }
 

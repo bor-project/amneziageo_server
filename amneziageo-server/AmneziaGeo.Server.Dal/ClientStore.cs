@@ -480,7 +480,6 @@ public sealed class ClientStore
         SubscriptionId = entity.SubscriptionId,
         DailyLimit = entity.DailyLimit,
         Inbound = (ClientInbound)entity.Inbound,
-        Routing = (ClientRouting)entity.Routing,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
     };
@@ -498,7 +497,6 @@ public sealed class ClientStore
         entity.SubscriptionId = client.SubscriptionId.Trim();
         entity.DailyLimit = client.DailyLimit;
         entity.Inbound = (int)client.Inbound;
-        entity.Routing = (int)client.Routing;
     }
 
     private static TunnelClient Whole(TunnelClient draft) => draft with

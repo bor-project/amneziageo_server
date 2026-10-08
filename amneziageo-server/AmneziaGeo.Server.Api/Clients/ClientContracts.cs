@@ -48,7 +48,6 @@ public sealed record ClientResponse(
     string SubscriptionId,
     long DailyLimit,
     string Inbound,
-    string Routing,
     ClientStateBody State,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc,
@@ -69,8 +68,7 @@ public sealed record ClientRequest(
     long? TemplateId = null,
     string? SubscriptionId = null,
     long? DailyLimit = null,
-    string? Inbound = null,
-    string? Routing = null);
+    string? Inbound = null);
 
 /// <summary>
 /// Whether a client is on.
@@ -151,7 +149,6 @@ public static class ClientAnswers
             secrets ? client.SubscriptionId : string.Empty,
             client.DailyLimit,
             InboundName.Of(client.Inbound),
-            RoutingName.Of(client.Routing),
             new ClientStateBody(
                 state.IsOnline,
                 state.IsPresent,
@@ -191,7 +188,6 @@ public static class ClientAnswers
             SubscriptionId = request.SubscriptionId?.Trim() ?? held?.SubscriptionId ?? ClientDefaults.SubscriptionId(),
             DailyLimit = request.DailyLimit ?? held?.DailyLimit ?? 0,
             Inbound = InboundName.Read(request.Inbound, held?.Inbound ?? ClientInbound.Endpoint),
-            Routing = RoutingName.Read(request.Routing, held?.Routing ?? ClientRouting.Template),
         };
     }
 

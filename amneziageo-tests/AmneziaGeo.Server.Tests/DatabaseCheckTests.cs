@@ -9,7 +9,7 @@ public sealed class DatabaseCheckTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        Pools.ClearUnder(_folder.FullName);
         _folder.Delete(recursive: true);
     }
 

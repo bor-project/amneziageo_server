@@ -242,16 +242,11 @@ public class ClientStoreTests
         var endpoint = await EndpointAsync(bench);
 
         var added = await bench.Clients.AddAsync(
-            Fresh(endpoint, "milena") with
-            {
-                Inbound = ClientInbound.Network,
-                Routing = ClientRouting.Off,
-            },
+            Fresh(endpoint, "milena") with { Inbound = ClientInbound.Network },
             CancellationToken.None);
         var held = await bench.Clients.FindAsync(added.Record!.Id, CancellationToken.None);
 
         Assert.Equal(ClientInbound.Network, held?.Inbound);
-        Assert.Equal(ClientRouting.Off, held?.Routing);
     }
 
     [Fact]

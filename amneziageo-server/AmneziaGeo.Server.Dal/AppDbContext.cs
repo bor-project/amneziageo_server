@@ -160,7 +160,9 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
         builder.Entity<RoutingPresetEntity>(entity =>
         {
             entity.Property(preset => preset.Name).HasMaxLength(PresetRules.MaxNameLength);
+            entity.Property(preset => preset.Uid).HasMaxLength(PresetRules.UidLength);
             entity.HasIndex(preset => preset.Name).IsUnique();
+            entity.HasIndex(preset => preset.Uid).IsUnique();
         });
 
         builder.Entity<GeoSourceEntity>(entity =>

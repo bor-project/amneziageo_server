@@ -348,7 +348,7 @@ public class ServiceTests
             ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"], WebSocket = true },
             CancellationToken.None)).Record!;
         var client = (await bench.Clients.AddAsync(
-            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"], Routing = ClientRouting.Off },
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
             CancellationToken.None)).Record!;
         var desk = Desk(bench, new SpeedTickets(bench.Clock));
         var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
@@ -368,7 +368,7 @@ public class ServiceTests
         Assert.Equal("milena", root.GetProperty("client").GetString());
         Assert.Equal(endpoint.ListenPort, features.GetProperty("websocket").GetProperty("port").GetInt32());
         Assert.Equal(endpoint.WebSocketPath, features.GetProperty("websocket").GetProperty("path").GetString());
-        Assert.False(features.GetProperty("routing").GetProperty("allowed").GetBoolean());
+        Assert.False(features.TryGetProperty("routing", out _));
         Assert.StartsWith($"https://10.8.0.1:{endpoint.ListenPort}/api/speed/down?", features.GetProperty("speed").GetProperty("inside").GetProperty("down").GetString(), StringComparison.Ordinal);
         Assert.StartsWith($"https://vpn.example:{endpoint.ListenPort}/api/speed/up?", features.GetProperty("speed").GetProperty("outside").GetProperty("up").GetString(), StringComparison.Ordinal);
         Assert.False(features.TryGetProperty("inbound", out _));
@@ -394,7 +394,7 @@ public class ServiceTests
             new ClientTemplate { Name = "phones", AllowedIps = ["0.0.0.0/0"], Presets = [ads.Id, unblock.Id] },
             CancellationToken.None)).Record!;
 
-        var features = await FeaturesAsync(bench, template.Id, ClientRouting.Template);
+        var features = await FeaturesAsync(bench, template.Id);
 
         var sources = features.GetProperty("sources").GetProperty("items").EnumerateArray().ToList();
         var extra = Assert.Single(sources, item => item.GetProperty("name").GetString() == "extra");
@@ -410,19 +410,53 @@ public class ServiceTests
     }
 
     [Fact]
-    public async Task AClientThatDoesNotRouteIsHandedNoRoutingLists()
+    public async Task ARoutingListComesWithItsIdentifierItsTimeAndTheNameOfTheConfiguration()
     {
         using var bench = new Bench();
-        var preset = (await bench.Presets.AddAsync(
+        var first = (await bench.Presets.AddAsync(
             new RoutingPreset { Name = "Unblock", Proxy = ["geosite:youtube"] },
             CancellationToken.None)).Record!;
+        bench.Clock.Pass(TimeSpan.FromMinutes(5));
+        var second = (await bench.Presets.AddAsync(
+            new RoutingPreset { Name = "No ads", Block = ["geosite:category-ads-all"] },
+            CancellationToken.None)).Record!;
         var template = (await bench.Templates.AddAsync(
-            new ClientTemplate { Name = "phones", AllowedIps = ["0.0.0.0/0"], Presets = [preset.Id] },
+            new ClientTemplate { Name = "phones", AllowedIps = ["0.0.0.0/0"], Presets = [first.Id, second.Id] },
             CancellationToken.None)).Record!;
 
-        var features = await FeaturesAsync(bench, template.Id, ClientRouting.Off);
+        var features = await FeaturesAsync(bench, template.Id);
 
-        Assert.False(features.TryGetProperty("presets", out _));
+        var lists = features.GetProperty("presets").GetProperty("lists").EnumerateArray().ToList();
+        var ids = lists.Select(list => list.GetProperty("id").GetString()!).ToList();
+        Assert.All(ids, id => Assert.True(Guid.TryParseExact(id, "D", out _), id));
+        Assert.Equal(2, ids.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(first.UpdatedUtc, lists[0].GetProperty("updated").GetDateTimeOffset());
+        Assert.Equal(second.UpdatedUtc, lists[1].GetProperty("updated").GetDateTimeOffset());
+        Assert.All(lists, list => Assert.False(list.GetProperty("default").GetBoolean()));
+        Assert.All(lists, list => Assert.Equal("vpn.example-awg1-milena", list.GetProperty("source").GetString()));
+    }
+
+    [Fact]
+    public async Task ARoutingListMarkedDefaultSaysSoUnderTheNameThePanelGivesTheConfiguration()
+    {
+        using var bench = new Bench();
+        await bench.Panel.SaveAsync(PanelDefaults.Settings with { NameTemplate = "{CLIENT} at {INTERFACE}" }, CancellationToken.None);
+        var plain = (await bench.Presets.AddAsync(
+            new RoutingPreset { Name = "No ads", Block = ["geosite:category-ads-all"] },
+            CancellationToken.None)).Record!;
+        var marked = (await bench.Presets.AddAsync(
+            new RoutingPreset { Name = "Unblock", Proxy = ["geosite:youtube"], IsDefault = true },
+            CancellationToken.None)).Record!;
+        var template = (await bench.Templates.AddAsync(
+            new ClientTemplate { Name = "phones", AllowedIps = ["0.0.0.0/0"], Presets = [plain.Id, marked.Id] },
+            CancellationToken.None)).Record!;
+
+        var features = await FeaturesAsync(bench, template.Id);
+
+        var lists = features.GetProperty("presets").GetProperty("lists").EnumerateArray().ToList();
+        Assert.Equal([plain.Uid, marked.Uid], lists.Select(list => list.GetProperty("id").GetString()));
+        Assert.Equal([false, true], lists.Select(list => list.GetProperty("default").GetBoolean()));
+        Assert.All(lists, list => Assert.Equal("milena at awg1", list.GetProperty("source").GetString()));
     }
 
     [Fact]
@@ -586,13 +620,12 @@ public class ServiceTests
             tickets,
             [
                 new WebSocketOffer(),
-                new RoutingOffer(),
                 new InboundOffer(),
                 new DisconnectOffer(),
                 new SpeedOffer(tickets),
                 new SubscriptionOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
                 new SourcesOffer(bench.Scopes),
-                new PresetsOffer(bench.Scopes),
+                new PresetsOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
             ],
             state,
             Options.Create(new JsonOptions()),
@@ -600,13 +633,13 @@ public class ServiceTests
     }
 
     // Asks the hello as a client of the template and returns the features it was offered.
-    private static async Task<JsonElement> FeaturesAsync(Bench bench, long template, ClientRouting routing)
+    private static async Task<JsonElement> FeaturesAsync(Bench bench, long template)
     {
         var endpoint = (await bench.Configs.AddAsync(
             ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
             CancellationToken.None)).Record!;
         var client = (await bench.Clients.AddAsync(
-            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"], TemplateId = template, Routing = routing },
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"], TemplateId = template },
             CancellationToken.None)).Record!;
         var desk = Desk(bench, new SpeedTickets(bench.Clock));
         var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());

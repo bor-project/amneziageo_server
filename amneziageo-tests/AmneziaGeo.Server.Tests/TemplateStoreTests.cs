@@ -20,7 +20,6 @@ public class TemplateStoreTests
                 Missed = ["geoip:zz"],
                 Mtu = 1280,
                 Keepalive = 0,
-                Routing = false,
                 RefreshedUtc = refreshed,
             },
             CancellationToken.None);
@@ -33,7 +32,6 @@ public class TemplateStoreTests
         Assert.Equal(["9.9.9.9"], read.Dns);
         Assert.Equal(1280, read.Mtu);
         Assert.Equal(0, read.Keepalive);
-        Assert.False(read.Routing);
         Assert.Equal(refreshed, read.RefreshedUtc);
     }
 
@@ -50,7 +48,6 @@ public class TemplateStoreTests
         Assert.Empty(added.Record.Dns);
         Assert.Null(added.Record.Mtu);
         Assert.Null(added.Record.Keepalive);
-        Assert.True(added.Record.Routing);
         Assert.Null(added.Record.RefreshedUtc);
     }
 

@@ -61,6 +61,7 @@ export function PresetPage() {
 
       <PresetForm
         start={draftOf(held)}
+        held={held}
         pending={change.isPending}
         error={change.error}
         onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}

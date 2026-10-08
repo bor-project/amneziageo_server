@@ -271,15 +271,19 @@ public class TrafficTests
     }
 
     [Fact]
-    public void ARequestWithoutRoutingKeepsTheOneTheClientHeld()
+    public void ARequestThatStillNamesRoutingIsReadWithoutIt()
     {
-        var held = ClientDefaults.Fresh(1, "milena") with { Routing = ClientRouting.Off };
-        var request = new ClientRequest(1, "milena", held.PrivateKey, null, null, ["10.8.0.2/32"], true, null);
+        var web = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
 
-        Assert.Equal(ClientRouting.Off, ClientAnswers.Draft(request, held).Routing);
-        Assert.Equal(ClientRouting.Template, ClientAnswers.Draft(request, null).Routing);
-        Assert.Equal(ClientRouting.On, ClientAnswers.Draft(request with { Routing = "on" }, held).Routing);
-        Assert.Equal(ClientRouting.Template, ClientAnswers.Draft(request with { Routing = "template" }, held).Routing);
+        var client = System.Text.Json.JsonSerializer.Deserialize<ClientRequest>(
+            "{\"configId\":1,\"name\":\"milena\",\"isEnabled\":true,\"inbound\":\"server\",\"routing\":\"off\"}", web);
+        var template = System.Text.Json.JsonSerializer.Deserialize<TemplateRequest>(
+            "{\"name\":\"phones\",\"entries\":[\"0.0.0.0/0\"],\"routing\":false,\"presets\":[3]}", web);
+
+        Assert.Equal("milena", client?.Name);
+        Assert.Equal("server", client?.Inbound);
+        Assert.Equal("phones", template?.Name);
+        Assert.Equal([3L], template?.Presets);
     }
 
     [Fact]

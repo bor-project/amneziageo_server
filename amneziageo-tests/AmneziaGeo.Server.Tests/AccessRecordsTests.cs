@@ -1,6 +1,5 @@
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Access;
-using Microsoft.Data.Sqlite;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -20,7 +19,7 @@ public sealed class AccessRecordsTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        Pools.Clear(_records.Location);
         Directory.Delete(_folder, true);
     }
 
@@ -246,8 +245,9 @@ public sealed class AccessRecordsTests : IDisposable
         _records.Write([Made(1, "a.com")]);
 
         _records.Clear();
+        var stock = _records.Stock();
 
-        Assert.Equal(new AccessStock(0, null, null, _records.Stock().Bytes), _records.Stock());
+        Assert.Equal(new AccessStock(0, null, null, stock.Bytes), stock);
     }
 
     private static AccessQuery Span() => new() { From = Noon.AddHours(-1), To = Noon.AddHours(1) };

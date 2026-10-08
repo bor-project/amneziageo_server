@@ -646,8 +646,6 @@ public sealed class ClientEntity
 
     public int Inbound { get; set; }
 
-    public int Routing { get; set; }
-
     public DateTimeOffset CreatedUtc { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }
@@ -726,8 +724,6 @@ public sealed class TemplateEntity
 
     public int? Keepalive { get; set; }
 
-    public bool LocksRouting { get; set; }
-
     public string Presets { get; set; } = string.Empty;
 
     public DateTimeOffset? RefreshedUtc { get; set; }
@@ -744,6 +740,8 @@ public sealed class RoutingPresetEntity
 {
     public long Id { get; set; }
 
+    public string Uid { get; set; } = string.Empty;
+
     public string Name { get; set; } = string.Empty;
 
     public string Proxy { get; set; } = string.Empty;
@@ -755,6 +753,8 @@ public sealed class RoutingPresetEntity
     public bool AllUdp { get; set; }
 
     public bool Full { get; set; }
+
+    public bool IsDefault { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; }
 

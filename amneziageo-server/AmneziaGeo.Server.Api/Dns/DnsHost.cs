@@ -38,7 +38,7 @@ public sealed class DnsHost : BackgroundService
 
     private DnsServer? _server;
 
-    private IDnsUpstream? _upstream;
+    private DnsUpstream? _upstream;
 
     private readonly Dictionary<DnsWarmName, DnsWarmTry> _asked = new();
 
@@ -126,7 +126,7 @@ public sealed class DnsHost : BackgroundService
     {
         _server?.Stop();
         _server = null;
-        _upstream = null;
+        Hush();
         _state.Stopped();
         await base.StopAsync(ct).ConfigureAwait(false);
     }
@@ -158,6 +158,7 @@ public sealed class DnsHost : BackgroundService
         {
             _server?.Stop();
             _server = null;
+            Hush();
             using var scope = _scopes.CreateScope();
             _settings = anew || _state.Settings is null
                 ? await scope.ServiceProvider.GetRequiredService<DnsStore>().ReadAsync(ct).ConfigureAwait(false)
@@ -214,6 +215,7 @@ public sealed class DnsHost : BackgroundService
         }
         catch (SocketException ex)
         {
+            upstream.Dispose();
             _state.Stopped(ex.Message);
             _logger.LogWarning(ex, "the resolver did not take the addresses of the tunnels");
             return;
@@ -224,24 +226,36 @@ public sealed class DnsHost : BackgroundService
         _asked.Clear();
         _state.Started([.. taken.Select(address => address.ToString())], _time.GetUtcNow());
         _logger.LogInformation(
-            "the resolver answers on {Addresses} port {Port} and asks through {Exit}",
+            "the resolver answers on {Addresses} port {Port} and asks {Servers} through {Exit}",
             string.Join(", ", _state.Listening),
             _settings.Port,
-            _settings.Outbound.Length == 0 ? "the host" : _settings.Outbound);
+            string.Join(", ", _settings.Upstreams),
+            Exit());
         Look();
     }
+
+    // Lets the name servers go, with the connections kept to them.
+    private void Hush()
+    {
+        var upstream = _upstream;
+        _upstream = null;
+        upstream?.Dispose();
+    }
+
+    private string Exit() => _settings.Outbound.Length == 0 ? "the host" : _settings.Outbound;
 
     private DnsWay Way(DnsSettings settings, long turn) =>
         DnsExit.Way(settings, _plans.Held?.Ways ?? RouteWays.None, turn);
 
     private void Look()
     {
-        if (_upstream is null)
+        if (_upstream is not { } upstream)
         {
             return;
         }
 
-        var fault = Way(_settings, 0).Fault?.Message;
+        var way = Way(_settings, 0).Fault?.Message;
+        var fault = way ?? upstream.Fault;
         if (fault == _state.Way)
         {
             return;
@@ -250,7 +264,11 @@ public sealed class DnsHost : BackgroundService
         _state.Leaves(fault);
         if (fault is null)
         {
-            _logger.LogInformation("the resolver asks through '{Outbound}' again", _settings.Outbound);
+            _logger.LogInformation("the resolver is answered again through {Exit}", Exit());
+        }
+        else if (way is null)
+        {
+            _logger.LogWarning("the questions of the resolver go unanswered: {Fault}", fault);
         }
         else
         {

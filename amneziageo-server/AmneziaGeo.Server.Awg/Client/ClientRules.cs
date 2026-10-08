@@ -48,8 +48,7 @@ public static partial class ClientRules
             ?? CheckNote(client.Note)
             ?? CheckSubscription(client.SubscriptionId)
             ?? CheckLimit(client.DailyLimit)
-            ?? CheckInbound(client.Inbound)
-            ?? CheckRouting(client.Routing);
+            ?? CheckInbound(client.Inbound);
     }
 
     /// <summary>
@@ -115,16 +114,6 @@ public static partial class ClientRules
             : Fault(
                 "bad-client-inbound",
                 $"the access to the client is '{InboundName.Off}', '{InboundName.Server}', '{InboundName.Network}' or '{InboundName.Endpoint}'");
-
-    /// <summary>
-    /// Returns why what a client says about routing is unusable, or null when it holds.
-    /// </summary>
-    public static ClientFault? CheckRouting(ClientRouting routing) =>
-        routing is ClientRouting.Template or ClientRouting.On or ClientRouting.Off
-            ? null
-            : Fault(
-                "bad-client-routing",
-                $"the routing of the client is '{RoutingName.Template}', '{RoutingName.On}' or '{RoutingName.Off}'");
 
     private static ClientFault? CheckKey(string? privateKey, string? publicKey)
     {
