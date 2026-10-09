@@ -51,6 +51,11 @@ public static class ConfigDefaults
     public const int OfflineAfter = 60;
 
     /// <summary>
+    /// The highest packet type a fresh obfuscation draws.
+    /// </summary>
+    public const int HighestFreshType = int.MaxValue;
+
+    /// <summary>
     /// How many letters and digits the path of the websocket of a new endpoint takes.
     /// </summary>
     public const int PathLength = 16;
@@ -126,7 +131,7 @@ public static class ConfigDefaults
         while (types.Count < 4)
         {
             var span = RandomNumberGenerator.GetInt32(1, 10);
-            var low = RandomNumberGenerator.GetInt32(ConfigRules.LowestType, ConfigRules.HighestType - span);
+            var low = RandomNumberGenerator.GetInt32(ConfigRules.LowestType, HighestFreshType - span);
             var type = new AwgRange((uint)low, (uint)(low + span));
 
             if (types.All(one => one.High < type.Low || one.Low > type.High))

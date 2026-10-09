@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using AmneziaGeo.Server.Api.Services;
 using AmneziaGeo.Server.Api.Status;
 using AmneziaGeo.Server.Api.Subscriptions;
@@ -297,6 +299,7 @@ public class ServiceWatchTests
             new FirewallHost(tools, new Ledger(), "ufw"),
             new DnsState(),
             PanelDefaults.Settings,
+            new WebOptions(),
             new PanelHealth("http://127.0.0.1:8443/api/health", Path.Combine(place.Root, "health")),
             bench.Clock,
             heard);
@@ -333,6 +336,127 @@ public class ServiceWatchTests
         }
     }
 
+    [Fact]
+    public void ACertificateThatDoesNotReadOrRanOutIsDown()
+    {
+        var facts = Fine(Awg1) with
+        {
+            Certificates =
+            [
+                new CertificateFacts("vpn.example.org", null, "Could not find file"),
+                new CertificateFacts("sub.example.org", Now.AddDays(-2), string.Empty),
+            ],
+        };
+
+        var services = ServiceChecks.Of(facts, Now);
+
+        Assert.Equal(["subscription", "endpoint", "dns", "certificate", "certificate"], services.Select(one => one.Kind).ToArray());
+        Assert.Equal([new ServiceFault(ServiceChecks.CertificateUnreadable, "Could not find file")], services[3].Faults);
+        Assert.Equal([new ServiceFault(ServiceChecks.CertificateExpired, "2026-09-26")], services[4].Faults);
+        Assert.Null(services[3].Until);
+        Assert.Equal(Now.AddDays(-2), services[4].Until);
+        Assert.Equal("certificate sub.example.org", ServiceChecks.Label(services[4]));
+        Assert.Equal(
+            "2 of 5 down: certificate vpn.example.org (certificate-unreadable), certificate sub.example.org (certificate-expired)",
+            ServiceChecks.Line(services));
+    }
+
+    [Fact]
+    public void ACertificateThatRunsOutWithinTwoWeeksWorksAndSaysInHowManyDays()
+    {
+        var soon = ServiceChecks.Of(Fine() with { Certificates = [new CertificateFacts("vpn.example.org", Now.AddDays(8).AddHours(3), string.Empty)] }, Now)[^1];
+        var today = ServiceChecks.Of(Fine() with { Certificates = [new CertificateFacts("vpn.example.org", Now.AddHours(5), string.Empty)] }, Now)[^1];
+        var edge = ServiceChecks.Of(Fine() with { Certificates = [new CertificateFacts("vpn.example.org", Now.AddDays(14), string.Empty)] }, Now)[^1];
+        var far = ServiceChecks.Of(Fine() with { Certificates = [new CertificateFacts("vpn.example.org", Now.AddDays(60), string.Empty)] }, Now)[^1];
+
+        Assert.True(soon.Works);
+        Assert.Equal([new ServiceFault(ServiceChecks.CertificateExpiring, "8")], soon.Notes);
+        Assert.Equal([new ServiceFault(ServiceChecks.CertificateExpiring, "0")], today.Notes);
+        Assert.Empty(edge.Notes);
+        Assert.Empty(far.Notes);
+        Assert.Equal(Now.AddDays(60), far.Until);
+        Assert.Equal("all 4 work", ServiceChecks.Line(ServiceChecks.Of(Fine(Awg1) with { Certificates = [new CertificateFacts("vpn.example.org", Now.AddDays(8), string.Empty)] }, Now)));
+    }
+
+    [Fact]
+    public void TheFileOfACertificateTellsItsNameAndItsEnd()
+    {
+        using var place = new Place();
+        var until = new DateTimeOffset(2027, 1, 14, 0, 0, 0, TimeSpan.Zero);
+        var chain = Certificate(place.Root, "vpn.example.org", until);
+        var broken = Path.Combine(place.Root, "vpn.example.org", "broken.pem");
+        File.WriteAllText(broken, "not a certificate");
+
+        var read = ServiceCertificates.Read(chain, NullLogger.Instance);
+        var unread = ServiceCertificates.Read(broken, NullLogger.Instance);
+        var missing = ServiceCertificates.Read(Path.Combine(place.Root, "gone", "fullchain.pem"), NullLogger.Instance);
+
+        Assert.Equal(new CertificateFacts("vpn.example.org", until, string.Empty), read);
+        Assert.Equal("vpn.example.org", unread.Name);
+        Assert.Null(unread.Until);
+        Assert.NotEmpty(unread.Fault);
+        Assert.Equal("gone", missing.Name);
+        Assert.Null(missing.Until);
+        Assert.NotEmpty(missing.Fault);
+    }
+
+    [Fact]
+    public async Task TheWatchSaysOnceThatACertificateRunsOutSoon()
+    {
+        using var bench = new Bench(now: Now);
+        using var place = new Place();
+        var options = new WebOptions { Certificate = Certificate(place.Root, "vpn.example.org", Now.AddDays(5).AddHours(1)) };
+        var fronts = new ProxyHost(new Ledger(), new Runner(), place.Root);
+        var tools = new Tools();
+        tools.Answers["ufw status verbose"] = new CommandResult(0, "Status: inactive\n", string.Empty);
+        var heard = new Heard();
+        var server = new ServiceServer(
+            bench.Scopes,
+            new ServiceDesk(
+                bench.Scopes,
+                new SpeedTickets(bench.Clock),
+                [],
+                new SubscriptionState(),
+                Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Http.Json.JsonOptions()),
+                NullLogger<ServiceDesk>.Instance),
+            fronts,
+            options,
+            PanelDefaults.Settings,
+            new ServiceShare(),
+            NullLogger<ServiceServer>.Instance);
+        using var watch = new ServiceWatch(
+            bench.Scopes,
+            server,
+            fronts,
+            new SubscriptionState(),
+            new FirewallHost(tools, new Ledger(), "ufw"),
+            new DnsState(),
+            PanelDefaults.Settings,
+            options,
+            new PanelHealth("http://127.0.0.1:8443/api/health", Path.Combine(place.Root, "health")),
+            bench.Clock,
+            heard);
+        try
+        {
+            var first = await watch.CheckAsync(CancellationToken.None);
+            bench.Clock.Pass(TimeSpan.FromSeconds(30));
+            var second = await watch.CheckAsync(CancellationToken.None);
+
+            var certificate = first.Services[^1];
+            Assert.Equal(ServiceChecks.Certificate, certificate.Kind);
+            Assert.Equal("vpn.example.org", certificate.Name);
+            Assert.True(certificate.Works);
+            Assert.Equal([new ServiceFault(ServiceChecks.CertificateExpiring, "5")], certificate.Notes);
+            Assert.Equal(Now.AddDays(5).AddHours(1), certificate.Until);
+            Assert.Equal(Now, second.Services[^1].Since);
+            Assert.Single(heard.Lines, one => one == "Warning the certificate vpn.example.org runs out in 5 days");
+        }
+        finally
+        {
+            await server.DisposeAsync();
+        }
+    }
+
     private static ServiceFacts Fine(params ServerConfig[] configs) => new(
         configs,
         PanelDefaults.Port,
@@ -343,7 +467,25 @@ public class ServiceWatchTests
         true,
         configs.Select(one => one.Name).ToHashSet(StringComparer.Ordinal),
         new Dictionary<ServicePort, string>(),
-        new ResolverFacts(true, true, 53, string.Empty, string.Empty));
+        new ResolverFacts(true, true, 53, string.Empty, string.Empty),
+        []);
+
+    // Writes a certificate made up for a name that runs out at the moment given and returns its file.
+    private static string Certificate(string root, string name, DateTimeOffset until)
+    {
+        var folder = Path.Combine(root, name);
+        Directory.CreateDirectory(folder);
+        var chain = Path.Combine(folder, "fullchain.pem");
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest($"CN={name}", key, HashAlgorithmName.SHA256);
+        var names = new SubjectAlternativeNameBuilder();
+        names.AddDnsName(name);
+        request.CertificateExtensions.Add(names.Build());
+        using var made = request.CreateSelfSigned(until.AddDays(-90), until);
+        File.WriteAllText(chain, made.ExportCertificatePem());
+
+        return chain;
+    }
 
     private static Dictionary<string, FrontFacts> Front(FrontFacts front) => new() { ["awg1"] = front };
 

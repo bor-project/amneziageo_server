@@ -8,6 +8,7 @@ import { Crumbs, CrumbsHolder } from "@/components/Crumbs"
 import { Glyph } from "@/components/Glyph"
 import { LanguagePicker } from "@/components/LanguagePicker"
 import { RestartButton } from "@/components/RestartButton"
+import { ServicesAlert } from "@/components/ServicesAlert"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { UpdateWatch } from "@/components/UpdateWatch"
 import { sections, shown, under } from "@/components/menu"
@@ -115,6 +116,7 @@ export function Layout() {
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
+              <ServicesAlert />
               <RestartButton />
               <ThemeToggle />
               <UserMenu />

@@ -46,14 +46,14 @@ public interface IHostNetwork
     Task ClearRouteAsync(int table, CancellationToken ct);
 
     /// <summary>
-    /// Adds or removes the rule that sends a marked packet into a routing table.
+    /// Adds or removes the rule that sends a marked packet into a routing table, telling whether it had to.
     /// </summary>
-    Task RuleAsync(uint mark, int table, int priority, bool present, CancellationToken ct);
+    Task<bool> RuleAsync(uint mark, int table, int priority, bool present, CancellationToken ct);
 
     /// <summary>
-    /// Adds the rule that refuses a marked packet no outbound takes.
+    /// Adds the rule that refuses a marked packet no outbound takes, telling whether it had to.
     /// </summary>
-    Task SealAsync(CancellationToken ct);
+    Task<bool> SealAsync(CancellationToken ct);
 
     /// <summary>
     /// Returns the interface the host reaches the internet through.

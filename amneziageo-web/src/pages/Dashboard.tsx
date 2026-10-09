@@ -4,8 +4,8 @@ import { complaint } from "@/api/auth"
 import { useBackup, useRestore } from "@/api/backup"
 import { useFailure } from "@/api/failure"
 import { useHealth } from "@/api/health"
-import { useOverview } from "@/api/overview"
-import type { Overview } from "@/api/overview"
+import { useOverview, useServices } from "@/api/overview"
+import type { Overview, ServiceFault, ServiceHealth } from "@/api/overview"
 import { scopes } from "@/api/scopes"
 import { busy, useApplyUpdate, useCheckUpdate, useUpdate } from "@/api/update"
 import { Sparkline } from "@/components/Chart"
@@ -15,13 +15,45 @@ import { useCrumbs } from "@/components/crumbs"
 import { Help } from "@/components/fields"
 import { card, danger, quiet, secondary, tool } from "@/components/styles"
 import { average, bytes, peak, percent, rate, share, span } from "@/format"
-import { useText } from "@/i18n"
-import type { TextKey } from "@/i18n"
+import { useLanguage, useText } from "@/i18n"
+import type { Text, TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 import { updateWatched } from "@/store/uiSlice"
 
 const small = "rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-hover disabled:opacity-50"
+
+const serviceTitles: Record<string, TextKey> = {
+  subscription: "services.subscription",
+  endpoint: "services.endpoint",
+  dns: "services.dns",
+  certificate: "services.certificate",
+}
+
+const serviceParts: Record<string, TextKey> = {
+  hello: "services.partHello",
+  speed: "services.partSpeed",
+  websocket: "services.partWebSocket",
+  subscription: "services.partSubscription",
+}
+
+const serviceFaults: Record<string, TextKey> = {
+  "no-host": "services.noHost",
+  "interface-down": "services.interfaceDown",
+  "port-refused": "services.portRefused",
+  "port-closed": "services.portClosed",
+  "front-down": "services.frontDown",
+  "front-fell": "services.frontFell",
+  "front-deaf": "services.frontDeaf",
+  "no-endpoint": "services.noEndpoint",
+  "resolver-down": "services.resolverDown",
+  "resolver-way": "services.resolverWay",
+  "certificate-unreadable": "services.certificateUnreadable",
+}
+
+const serviceRow = "grid grid-cols-[14px_240px_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-1 py-2 text-sm max-sm:grid-cols-[14px_minmax(0,1fr)]"
+
+const serviceLine = "col-start-3 max-sm:col-start-2"
 
 export function Dashboard() {
   const t = useText()
@@ -58,6 +90,8 @@ export function Dashboard() {
       {failed !== null && <div className="text-sm text-alarm">{t(complaint(failed))}</div>}
 
       <Head data={data} version={health.data?.version} />
+
+      <Services />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Meter
@@ -343,6 +377,129 @@ function Head({ data, version }: { data: Overview; version?: string }) {
       <Failed />
     </div>
   )
+}
+
+function Services() {
+  const t = useText()
+  const language = useLanguage()
+  const report = useServices(true).data
+
+  if (!report || report.services.length === 0) {
+    return null
+  }
+
+  return (
+    <div className={`px-4 py-3 ${card}`}>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-ink">{t("services.title")}</span>
+        {report.checked && (
+          <span className="text-xs text-faint">
+            {t("services.checked", { time: new Date(report.checked).toLocaleTimeString(language) })}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-1 divide-y divide-line">
+        {report.services.map((one) => (
+          <Service key={`${one.kind}:${one.name}`} one={one} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Service({ one }: { one: ServiceHealth }) {
+  const t = useText()
+  const language = useLanguage()
+  const down = one.faults.length > 0
+  const tone = down ? "bg-alarm" : one.notes.length > 0 ? "bg-warn" : "bg-good"
+  const named = serviceTitles[one.kind]
+  const title = named ? t(named, { name: one.name }) : one.kind
+  const facts = serviceFacts(one, t, language)
+
+  return (
+    <div className={serviceRow}>
+      <span className={`size-2 self-center rounded-full ${tone}`} />
+      <span className="truncate text-ink" title={title}>
+        {title}
+      </span>
+      {facts !== "" && <span className={`text-muted ${serviceLine}`}>{facts}</span>}
+      {down && <span className={`text-alarm ${serviceLine}`}>{serviceDown(one, t, language)}</span>}
+      {!down &&
+        one.notes.map((note) => (
+          <span key={note.code} className={`text-warn ${serviceLine}`}>
+            {serviceNote(note, t)}
+          </span>
+        ))}
+    </div>
+  )
+}
+
+function serviceFacts(one: ServiceHealth, t: Text, language: string): string {
+  if (one.kind === "certificate") {
+    return one.until !== null && one.faults.length === 0 ? t("services.until", { date: day(one.until, language) }) : ""
+  }
+
+  const ports = one.ports.map((port) => `${port.protocol} ${port.port}`)
+  const place = ports.length > 0 ? ports.join(", ") : one.kind === "subscription" ? t("services.onEndpoints") : ""
+  const parts = one.parts.map((part) => {
+    const word = serviceParts[part]
+
+    return word ? t(word) : part
+  })
+
+  return [place, parts.join(", ")].filter((piece) => piece !== "").join(" · ")
+}
+
+function serviceDown(one: ServiceHealth, t: Text, language: string): string {
+  if (one.kind === "certificate") {
+    return one.faults
+      .map((fault) =>
+        fault.code === "certificate-expired" && one.until !== null
+          ? t("services.certificateExpired", { date: day(one.until, language) })
+          : serviceFault(fault, t),
+      )
+      .join("; ")
+  }
+
+  return t("services.down", {
+    time: moment(one.since, language),
+    why: one.faults.map((fault) => serviceFault(fault, t)).join("; "),
+  })
+}
+
+function serviceFault(fault: ServiceFault, t: Text): string {
+  if (fault.code === "interface-down" && fault.detail === "no-module") {
+    return t("services.noModule")
+  }
+
+  const word = serviceFaults[fault.code]
+  if (!word) {
+    return fault.detail !== "" ? `${fault.code} (${fault.detail})` : fault.code
+  }
+
+  const text = t(word, { detail: fault.detail })
+
+  return fault.detail !== "" && !text.includes(fault.detail) ? `${text} (${fault.detail})` : text
+}
+
+function serviceNote(note: ServiceFault, t: Text): string {
+  if (note.code !== "certificate-expiring") {
+    return note.detail !== "" ? `${note.code} (${note.detail})` : note.code
+  }
+
+  return note.detail === "0" ? t("services.certificateToday") : t("services.certificateExpiring", { days: note.detail })
+}
+
+function day(value: string, language: string): string {
+  return new Date(value).toLocaleDateString(language)
+}
+
+function moment(value: string, language: string): string {
+  const at = new Date(value)
+  const clock = at.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })
+
+  return at.toDateString() === new Date().toDateString() ? clock : `${at.toLocaleDateString(language)} ${clock}`
 }
 
 function Update() {

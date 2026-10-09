@@ -136,13 +136,13 @@ public sealed class IpHostNetwork : IHostNetwork
     }
 
     /// <summary>
-    /// Adds or removes the rule that sends a marked packet into a routing table.
+    /// Adds or removes the rule that sends a marked packet into a routing table, telling whether it had to.
     /// </summary>
-    public async Task RuleAsync(uint mark, int table, int priority, bool present, CancellationToken ct)
+    public async Task<bool> RuleAsync(uint mark, int table, int priority, bool present, CancellationToken ct)
     {
         if (await HasRuleAsync(priority, mark, ct).ConfigureAwait(false) == present)
         {
-            return;
+            return false;
         }
 
         var number = table.ToString();
@@ -161,24 +161,29 @@ public sealed class IpHostNetwork : IHostNetwork
 
         await Quietly([Ip, "-6", "rule", verb, "pref", order, "fwmark", value, "lookup", number], ct)
             .ConfigureAwait(false);
+
+        return true;
     }
 
     /// <summary>
-    /// Adds the rule that refuses a marked packet no outbound takes.
+    /// Adds the rule that refuses a marked packet no outbound takes, telling whether it had to.
     /// </summary>
-    public async Task SealAsync(CancellationToken ct)
+    public async Task<bool> SealAsync(CancellationToken ct)
     {
         var order = OutboundRules.SealPriority.ToString(CultureInfo.InvariantCulture);
         var words = new[] { "rule", "add", "pref", order, "fwmark", OutboundRules.SealMarks, "unreachable" };
+        var laid = false;
         if (!await HasSealAsync(["rule", "show", "pref", order], ct).ConfigureAwait(false))
         {
-            await Quietly([Ip, .. words], ct).ConfigureAwait(false);
+            laid |= await TakenAsync([Ip, .. words], ct).ConfigureAwait(false);
         }
 
         if (!await HasSealAsync(["-6", "rule", "show", "pref", order], ct).ConfigureAwait(false))
         {
-            await Quietly([Ip, "-6", .. words], ct).ConfigureAwait(false);
+            laid |= await TakenAsync([Ip, "-6", .. words], ct).ConfigureAwait(false);
         }
+
+        return laid;
     }
 
     /// <summary>
@@ -346,5 +351,13 @@ public sealed class IpHostNetwork : IHostNetwork
     private async Task Quietly(IReadOnlyList<string> words, CancellationToken ct)
     {
         await _commands.RunAsync(words[0], [.. words.Skip(1)], null, ct).ConfigureAwait(false);
+    }
+
+    // Runs a command and tells whether the host took it.
+    private async Task<bool> TakenAsync(IReadOnlyList<string> words, CancellationToken ct)
+    {
+        var result = await _commands.RunAsync(words[0], [.. words.Skip(1)], null, ct).ConfigureAwait(false);
+
+        return result.IsOk;
     }
 }

@@ -359,6 +359,27 @@ public class ClientTests
     }
 
     [Fact]
+    public void AnInterfaceFileWithPacketTypesAboveTheSignedRangeMakesAnEndpoint()
+    {
+        var file = """
+            [Interface]
+            PrivateKey = kEnCIRhKjNllB2d7J7t5gMAySOXbC9KKrcPwIbkgGUc=
+            Address = 10.0.1.1/24
+            ListenPort = 443
+            H1 = 3000000000-3000065536
+            H2 = 100-200
+            H3 = 300-400
+            H4 = 4294900000-4294967295
+            """;
+
+        var read = ConfigImport.Read(file, "awg1");
+
+        Assert.Null(read.Fault);
+        Assert.Null(ConfigRules.Check(read.Config! with { Host = "example.org" }));
+        Assert.Equal("4294900000-4294967295", read.Config!.Obfuscation.H4);
+    }
+
+    [Fact]
     public void AnInterfaceFileWithoutAPrivateKeyIsRefused()
     {
         var read = ConfigImport.Read("[Interface]\nListenPort = 443\n", "awg1");

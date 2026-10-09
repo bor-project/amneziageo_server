@@ -57,8 +57,8 @@ balancer renamed is written into the rules the same way, see `outbounds.md` and 
 
 A target is read as what it looks like: `geoip:ru` is a country, `geosite:youtube` a category,
 `1.2.3.0/24` and `8.8.8.8` are ranges, and anything else with a dot in it is a domain. A domain is also taken
-as `domain:ifconfig.me`, the form the console client of AmneziaGeo writes its lists in, so one list carries
-over to the other side unchanged. `keyword:ads` matches every name the word occurs in, as in 3x-ui; a keyword
+as `domain:ifconfig.me` and a range as `cidr:10.0.0.0/8`, the forms the console client of AmneziaGeo and the
+routing presets write their lists in, so one list carries over to the other side unchanged. `keyword:ads` matches every name the word occurs in, as in 3x-ui; a keyword
 brings no range of its own, so the addresses of a rule that carries one arrive only from the answers the
 resolver sees. Ranges come from `geoip:` and from the networks written into the targets; `geosite:` gives
 names. A rule with no targets matches every address, a rule with no client

@@ -104,6 +104,11 @@ public static class RouteRules
             return Word(word) ? new GeoRule(GeoRuleKind.Keyword, word.ToLowerInvariant()) : null;
         }
 
+        if (Head(body, "cidr:") is { } block)
+        {
+            return AwgAllowedIp.TryParse(block, out var named) ? new GeoRule(GeoRuleKind.Cidr, named.ToString()) : null;
+        }
+
         if (AwgAllowedIp.TryParse(body, out var range))
         {
             return new GeoRule(GeoRuleKind.Cidr, range.ToString());

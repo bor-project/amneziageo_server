@@ -79,8 +79,8 @@ was reached through the tunnel stays out of reach. So the panel first tells the 
 off.
 
 The signal goes to a client that is on, on an endpoint that is on, while the panel sees the client connected; a
-client that is not connected is sent nothing. The application of AmneziaGeo for Windows and for Linux takes the
-signal and disconnects as on the word of its user: nothing raises the tunnel again until the user connects.
+client that is not connected is sent nothing. The application of AmneziaGeo for Windows, Linux and Android takes
+the signal and disconnects as on the word of its user: nothing raises the tunnel again until the user connects.
 Another application, one of AmneziaGeo older than the signal among them, takes none and stays as it was.
 
 A signal the application did not take is kept until the client is turned on again or removed, or the panel
@@ -91,6 +91,9 @@ starts over, and every answer that carries the client names it under `signal`, n
 | `at` | when the signal was sent |
 | `error` | `no-answer` nothing answered within three seconds, `refused` nothing listens on the port, `unreachable` the address was not reached, `bad-answer` what answered is not the application holding the keys of the client, `no-address` the client carries no address or key to reach it with |
 | `message` | the same in words |
+
+The clients page names such a client in its state column, under the time it was last online: "Signal not
+delivered", with the reason and the time of the signal in the hint.
 
 To send the signal again, turn the client on, wait until it is connected and turn it off.
 

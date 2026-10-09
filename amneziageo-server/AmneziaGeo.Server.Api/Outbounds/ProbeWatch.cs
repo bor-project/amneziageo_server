@@ -62,6 +62,7 @@ public sealed class ProbeWatch : BackgroundService
             var outbounds = await services.GetRequiredService<OutboundStore>().ListAsync(ct).ConfigureAwait(false);
             _live.Hold(outbounds.Select(one => one.Name));
             var moved = await MendAsync(outbounds, ct).ConfigureAwait(false);
+            await KeepRulesAsync(outbounds, ct).ConfigureAwait(false);
             foreach (var outbound in outbounds.Where(_runner.IsDue))
             {
                 moved |= await _runner.RunAsync(outbound, ct).ConfigureAwait(false);
@@ -111,6 +112,30 @@ public sealed class ProbeWatch : BackgroundService
         }
 
         return mended;
+    }
+
+    // Lays again the rules of the outbounds the host lost.
+    private async Task KeepRulesAsync(IReadOnlyList<OutboundConfig> outbounds, CancellationToken ct)
+    {
+        try
+        {
+            if (await _host.KeepSealAsync(ct).ConfigureAwait(false))
+            {
+                _logger.LogWarning("the rule that refuses marked packets no outbound takes was gone and is laid again");
+            }
+
+            foreach (var outbound in outbounds)
+            {
+                if (await _host.KeepRuleAsync(outbound, ct).ConfigureAwait(false))
+                {
+                    _logger.LogWarning("the rule of '{Outbound}' was gone and is laid again", outbound.Name);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is HostNetworkException or NetlinkException or SocketException)
+        {
+            _logger.LogWarning(ex, "the rules of the outbounds were not laid again");
+        }
     }
 
     /// <inheritdoc/>

@@ -19,6 +19,14 @@ export interface ClientState {
 
 export type Inbound = "off" | "server" | "network" | "endpoint"
 
+export type SignalError = "no-address" | "no-answer" | "refused" | "unreachable" | "bad-answer"
+
+export interface ClientSignal {
+  at: string
+  error: string
+  message: string
+}
+
 export interface Client {
   id: number
   configId: number
@@ -35,6 +43,7 @@ export interface Client {
   dailyLimit: number
   inbound: Inbound
   state: ClientState
+  signal: ClientSignal | null
   createdUtc: string
   updatedUtc: string
 }

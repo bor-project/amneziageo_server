@@ -121,6 +121,11 @@ carrying traffic, a rule that holds keeps its traffic and a balancer moves to an
 connection broke this way gets `network unreachable`, and a packet of a connection the host no longer tracks
 is dropped rather than sent on under the address of the client, see [rules.md](rules.md).
 
+A network manager that starts over drops the rules it did not lay itself: systemd-networkd does, under
+`ManageForeignRoutingPolicyRules=yes`, its default, whenever it is restarted. The watch that probes the
+outbounds looks at both rules every five seconds, lays again the ones the panel had laid and the host lost, and
+writes `the rule of '<name>' was gone and is laid again` to the log.
+
 The interface itself is given no mark: the mark is what sends a packet into the tunnel, not what the
 tunnel puts on its own packets, so there is no loop to break. The interface takes each of its addresses
 alone, as `/32` or `/128`, whatever mask the server handed it with, so the network behind the tunnel is

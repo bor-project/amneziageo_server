@@ -21,6 +21,10 @@ The head of the page reads `/sys/module/amneziawg`: the version the module repor
 whose `uevent` carries `DEVTYPE=amneziawg`. Beside the version of the panel it shows the release newer than the
 panel, see [updates.md](updates.md).
 
+The card `Services` under the head lists the services the server runs for its clients, see below: a line for
+the subscriptions, for every endpoint, for the resolver and for every certificate, with what keeps it from
+working and since when. While one of them is down, the header of every page says how many are and leads here.
+
 The card `Backup` beside the uptime downloads a copy of the database for a role with `backup:read` and restores
 the panel from such a file for a role with `access:write`, after a question; see [install.md](install.md).
 
@@ -35,6 +39,7 @@ checks at once; both take `state:read`. The answer lists what should run:
 | `subscription` | the subscriptions are turned on | on a port of their own: the host refused the port (`port-refused`) or the firewall keeps it closed (`port-closed`); on the ports of the endpoints: none of those ports answers (`no-endpoint`) |
 | `endpoint` | the endpoint is turned on | it names no host, so the files of its clients carry no `Endpoint` (`no-host`), its interface is not on the host (`interface-down`, with `no-module` when the module is not loaded), the host refused its TCP port (`port-refused`), its websocket front does not run (`front-down`), fell over since the check before (`front-fell`) or does not listen on its loopback port (`front-deaf`), the firewall keeps its UDP or TCP port closed (`port-closed`) |
 | `dns` | the resolver of the clients is turned on | it does not run (`resolver-down`) or its way out is broken (`resolver-way`) |
+| `certificate` | the panel or the subscriptions on a port of their own answer under a certificate file | the file does not read (`certificate-unreadable`) or the certificate ran out (`certificate-expired`) |
 
 Each service carries its ports, whether it answers on the port of the panel, what the TCP port of an endpoint
 hands out (`hello`, `speed`, `websocket`, `subscription`), the faults with what the host said, and since when it
@@ -44,8 +49,15 @@ otherwise; whether it listens is read off `/proc/net/tcp` and `/proc/net/tcp6`, 
 The firewall is read as [firewall.md](firewall.md) reads it, at most once in five minutes and at once when a port
 is new to it. The panel cannot see a firewall outside the host, the one of the hoster among them.
 
+A certificate is listed once for each chain file: the one of the panel, under which the TCP ports of the
+endpoints and the subscriptions on the port of the panel answer as well, and the one the subscriptions answer
+under on a port of their own. It carries the name it was issued for and `until`, when it runs out. A
+certificate that runs out in less than 14 days works and carries the note `certificate-expiring` with the
+whole days left under `notes`. A port that answers under a certificate made up has none listed.
+
 A service that stops working writes `the service <name> is down: <faults>` to the log of the panel, one that
-works again writes `the service <name> works again`. The line for the menu of the host, like
+works again writes `the service <name> works again`, and a certificate that comes within 14 days of its end
+writes `the certificate <name> runs out in <days> days` once. The line for the menu of the host, like
 `2 of 3 down: subscriptions (port-refused), endpoint awg1 (port-closed udp 443)` or `all 3 work`, where a closed port
 carries its protocol and number, goes to the file
 `services` beside the database whenever it changes; while the panel runs, the status of the menu shows it as
@@ -71,6 +83,8 @@ all instead of a negative one.
 | `AmneziaGeo.Server.Api/Status/OverviewEndpoints.cs` | the routes under `state:read` |
 | `AmneziaGeo.Server.Api/Status/ServiceHealth.cs` | the checks of the services, plain functions over what was read |
 | `AmneziaGeo.Server.Api/Status/ServiceWatch.cs` | the watch: what it reads off the host, the log and the line for the menu |
+| `AmneziaGeo.Server.Api/Status/ServiceCertificates.cs` | what the file of a certificate says |
+| `amneziageo-web/src/components/ServicesAlert.tsx` | the services that are down, in the header of every page |
 | `amneziageo-web/src/pages/Dashboard.tsx` | the page |
 | `amneziageo-web/src/components/Chart.tsx` | the graphs, plain SVG |
 

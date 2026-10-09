@@ -59,7 +59,7 @@ public static partial class ConfigRules
     /// <summary>
     /// The highest packet type the obfuscation takes.
     /// </summary>
-    public const int HighestType = int.MaxValue;
+    public const uint HighestType = uint.MaxValue;
 
     /// <summary>
     /// The longest special junk packet.
@@ -212,7 +212,7 @@ public static partial class ConfigRules
                 return Fault("bad-type", "a packet type is neither a number nor a span of two");
             }
 
-            if (type.Low < LowestType || type.High > HighestType)
+            if (type.Low < LowestType)
             {
                 return Fault("bad-type", $"a packet type is outside {LowestType} to {HighestType}");
             }

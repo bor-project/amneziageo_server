@@ -144,6 +144,47 @@ public class OutboundHostTests
     }
 
     [Fact]
+    public async Task ARuleTheHostLostIsLaidAgainAndSoIsTheSeal()
+    {
+        var ledger = new Ledger();
+        var host = new OutboundHost(ledger, new Kernel(), new Clock(Now));
+        await host.ApplyAsync(Tunnel(), CancellationToken.None);
+        var held = await host.KeepRuleAsync(Tunnel(), CancellationToken.None);
+        var kept = await host.KeepSealAsync(CancellationToken.None);
+        ledger.Rules.Clear();
+        ledger.Sealed = false;
+
+        var ruled = await host.KeepRuleAsync(Tunnel(), CancellationToken.None);
+        var closed = await host.KeepSealAsync(CancellationToken.None);
+        var again = await host.KeepRuleAsync(Tunnel(), CancellationToken.None);
+        var twice = await host.KeepSealAsync(CancellationToken.None);
+
+        Assert.False(held || kept);
+        Assert.True(ruled && closed);
+        Assert.False(again || twice);
+        Assert.Equal(OutboundRules.FirstMark, Assert.Single(ledger.Rules));
+        Assert.True(ledger.Sealed);
+    }
+
+    [Fact]
+    public async Task ARuleThePanelDidNotLayIsLeftToTheOneWhoDoes()
+    {
+        var ledger = new Ledger();
+        var host = new OutboundHost(ledger, new Kernel(), new Clock(Now));
+
+        var early = await host.KeepRuleAsync(Tunnel(), CancellationToken.None);
+        var open = await host.KeepSealAsync(CancellationToken.None);
+        await host.ApplyAsync(Tunnel(), CancellationToken.None);
+        await host.ApplyAsync(Tunnel() with { IsEnabled = false }, CancellationToken.None);
+        ledger.Steps.Clear();
+        var off = await host.KeepRuleAsync(Tunnel(), CancellationToken.None);
+
+        Assert.False(early || open || off);
+        Assert.Empty(ledger.Steps);
+        Assert.Empty(ledger.Rules);
+    }
+
+    [Fact]
     public async Task AnOutboundThroughTheHostItselfIsNotMended()
     {
         var ledger = new Ledger();

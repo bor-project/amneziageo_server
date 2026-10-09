@@ -48,6 +48,8 @@ public sealed class ServiceWatch : BackgroundService
 
     private readonly PanelSettings _panel;
 
+    private readonly WebOptions _options;
+
     private readonly TimeProvider _time;
 
     private readonly ILogger<ServiceWatch> _logger;
@@ -79,6 +81,7 @@ public sealed class ServiceWatch : BackgroundService
         FirewallHost firewall,
         DnsState resolver,
         PanelSettings panel,
+        WebOptions options,
         PanelHealth health,
         TimeProvider time,
         ILogger<ServiceWatch> logger)
@@ -92,6 +95,7 @@ public sealed class ServiceWatch : BackgroundService
         _firewall = firewall;
         _resolver = resolver;
         _panel = panel;
+        _options = options;
         _time = time;
         _logger = logger;
         _file = Path.Combine(Path.GetDirectoryName(health.File) ?? ".", FileName);
@@ -169,6 +173,10 @@ public sealed class ServiceWatch : BackgroundService
     private static bool Same(ServiceHealth one, ServiceHealth other) =>
         one.Kind == other.Kind && string.Equals(one.Name, other.Name, StringComparison.Ordinal);
 
+    // Returns the note of a certificate that runs out soon, null without one.
+    private static ServiceFault? Soon(ServiceHealth service) =>
+        service.Notes.FirstOrDefault(one => one.Code == ServiceChecks.CertificateExpiring);
+
     private static IReadOnlySet<string>? Links()
     {
         try
@@ -217,7 +225,27 @@ public sealed class ServiceWatch : BackgroundService
             _probe.Tunnel().Loaded,
             Links(),
             await WallsAsync(ServiceChecks.Exposed(configs, subscription), now, ct).ConfigureAwait(false),
-            resolver);
+            resolver,
+            Certificates(subscription));
+    }
+
+    // Reads the certificates the panel, the TCP ports of the endpoints and the subscriptions answer under.
+    private IReadOnlyList<CertificateFacts> Certificates(SubscriptionSettings subscription)
+    {
+        var chains = new List<string>();
+        var panel = Listening.Chain(_options, _panel);
+        if (panel.Length > 0)
+        {
+            chains.Add(panel);
+        }
+
+        var apart = subscription.IsEnabled && subscription.Separate && subscription.Port != _panel.Port;
+        if (apart && subscription.Certificate.Length > 0 && !chains.Contains(subscription.Certificate, StringComparer.Ordinal))
+        {
+            chains.Add(subscription.Certificate);
+        }
+
+        return [.. chains.Select(one => ServiceCertificates.Read(one, _logger))];
     }
 
     // Asks the host about the front of every endpoint that takes a websocket and counts its falls since the check before.
@@ -289,6 +317,11 @@ public sealed class ServiceWatch : BackgroundService
             else if (service.Works && old is { Works: false })
             {
                 _logger.LogInformation("the service {Service} works again", ServiceChecks.Label(service));
+            }
+
+            if (Soon(service) is { } soon && (old is null || Soon(old) is null))
+            {
+                _logger.LogWarning("the certificate {Name} runs out in {Days} days", service.Name, soon.Detail);
             }
         }
     }

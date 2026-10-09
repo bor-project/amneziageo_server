@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using AmneziaGeo.Server.Awg.Device;
@@ -22,6 +23,10 @@ public sealed class OutboundHost
     private readonly CarrierHost? _carriers;
 
     private readonly ProbeLive? _probes;
+
+    private readonly ConcurrentDictionary<uint, bool> _ruled = new();
+
+    private volatile bool _sealed;
 
     /// <summary>
     /// ctor
@@ -50,6 +55,7 @@ public sealed class OutboundHost
         try
         {
             await _network.SealAsync(ct).ConfigureAwait(false);
+            _sealed = true;
             if (!outbound.IsEnabled)
             {
                 await TakeOffAsync(outbound, ct).ConfigureAwait(false);
@@ -65,6 +71,7 @@ public sealed class OutboundHost
             await _network
                 .RuleAsync(outbound.Mark, outbound.Table, OutboundRules.PriorityOf(outbound.Mark), true, ct)
                 .ConfigureAwait(false);
+            _ruled[outbound.Mark] = true;
 
             return State(outbound);
         }
@@ -83,8 +90,33 @@ public sealed class OutboundHost
         ArgumentNullException.ThrowIfNull(outbound);
 
         await _network.SealAsync(ct).ConfigureAwait(false);
+        _sealed = true;
         await TakeOffAsync(outbound, ct).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Lays again the rule of an outbound the host lost, telling whether it had to.
+    /// </summary>
+    public async Task<bool> KeepRuleAsync(OutboundConfig outbound, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(outbound);
+
+        if (!outbound.IsEnabled || !_ruled.ContainsKey(outbound.Mark))
+        {
+            return false;
+        }
+
+        return await _network
+            .RuleAsync(outbound.Mark, outbound.Table, OutboundRules.PriorityOf(outbound.Mark), true, ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Lays again the rule that refuses a marked packet no outbound takes when the host lost it, telling whether it
+    /// had to.
+    /// </summary>
+    public async Task<bool> KeepSealAsync(CancellationToken ct) =>
+        _sealed && await _network.SealAsync(ct).ConfigureAwait(false);
 
     /// <summary>
     /// Brings up the interface of an outbound the host holds down or lost, telling whether it had to.
@@ -123,6 +155,7 @@ public sealed class OutboundHost
         await _network
             .RuleAsync(outbound.Mark, outbound.Table, OutboundRules.PriorityOf(outbound.Mark), false, ct)
             .ConfigureAwait(false);
+        _ruled.TryRemove(outbound.Mark, out _);
 
         if (!OutboundKind.HasLink(outbound.Kind))
         {

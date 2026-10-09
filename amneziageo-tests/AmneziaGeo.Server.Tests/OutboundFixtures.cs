@@ -44,6 +44,16 @@ public sealed class Ledger : IHostNetwork
     public Dictionary<string, string> Tables { get; } = [];
 
     /// <summary>
+    /// The marks the host holds a rule for.
+    /// </summary>
+    public HashSet<uint> Rules { get; } = [];
+
+    /// <summary>
+    /// Whether the host holds the rule that refuses a marked packet no outbound takes.
+    /// </summary>
+    public bool Sealed { get; set; }
+
+    /// <summary>
     /// What the host refuses, by the first word of the step.
     /// </summary>
     public string Refuses { get; set; } = string.Empty;
@@ -115,15 +125,26 @@ public sealed class Ledger : IHostNetwork
     public Task ClearRouteAsync(int table, CancellationToken ct) => Step($"clear {table}");
 
     /// <summary>
-    /// Adds or removes the rule that sends a marked packet into a routing table.
+    /// Adds or removes the rule that sends a marked packet into a routing table, telling whether it had to.
     /// </summary>
-    public Task RuleAsync(uint mark, int table, int priority, bool present, CancellationToken ct) =>
-        Step($"rule {mark} {table} {priority} {present}");
+    public async Task<bool> RuleAsync(uint mark, int table, int priority, bool present, CancellationToken ct)
+    {
+        await Step($"rule {mark} {table} {priority} {present}").ConfigureAwait(false);
+
+        return present ? Rules.Add(mark) : Rules.Remove(mark);
+    }
 
     /// <summary>
-    /// Adds the rule that refuses a marked packet no outbound takes.
+    /// Adds the rule that refuses a marked packet no outbound takes, telling whether it had to.
     /// </summary>
-    public Task SealAsync(CancellationToken ct) => Step("seal");
+    public async Task<bool> SealAsync(CancellationToken ct)
+    {
+        await Step("seal").ConfigureAwait(false);
+        var laid = !Sealed;
+        Sealed = true;
+
+        return laid;
+    }
 
     /// <summary>
     /// Returns the interface the host reaches the internet through.

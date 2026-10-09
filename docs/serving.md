@@ -95,6 +95,12 @@ and the image start the panel. The command then changes only what it names, and 
 was written. On a package `amneziageo-server` hands the utility the `Web__` lines of
 `/etc/amneziageo-server/server.env`.
 
+A panel whose address another program holds writes one line, `the panel did not start: Failed to bind to
+address ...: address already in use; free the port or move the panel with 'amneziageo-server panel set --port
+<port>'`, and leaves with the code 1; under systemd it is started again every three seconds until the port is
+free or the panel is moved. The settings of the first start are written before the panel binds, so by then
+`server.env` no longer moves it: the command does.
+
 ## On the port of the services
 
 The panel shares the TCP port of the services of the endpoints, see [services.md](services.md): giving it the

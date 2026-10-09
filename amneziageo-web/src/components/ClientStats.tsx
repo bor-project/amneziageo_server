@@ -1,7 +1,15 @@
-import type { Client } from "@/api/clients"
+import type { Client, ClientSignal, SignalError } from "@/api/clients"
 import { bytes, rate } from "@/format"
 import { useLanguage, useText } from "@/i18n"
-import type { Text } from "@/i18n"
+import type { Text, TextKey } from "@/i18n"
+
+const signalWords: Record<SignalError, TextKey> = {
+  "no-address": "clients.signalNoAddress",
+  "no-answer": "clients.signalNoAnswer",
+  refused: "clients.signalRefused",
+  unreachable: "clients.signalUnreachable",
+  "bad-answer": "clients.signalBadAnswer",
+}
 
 export function Speed({ one }: { one: Client }) {
   const t = useText()
@@ -43,8 +51,22 @@ export function Handshake({ one }: { one: Client }) {
       {one.state.cut.length > 0 && (
         <div className="text-xs text-warn">{t("clients.cut", { list: one.state.cut.join(", ") })}</div>
       )}
+      {one.signal && (
+        <div className="text-xs text-warn" title={missed(one.signal, t, language)}>
+          {t("clients.signalMissed")}
+        </div>
+      )}
     </>
   )
+}
+
+function missed(signal: ClientSignal, t: Text, language: string) {
+  const word = signalWords[signal.error as SignalError]
+
+  return t("clients.signalTold", {
+    why: word ? t(word) : signal.message,
+    time: new Date(signal.at).toLocaleString(language),
+  })
 }
 
 function seen(one: Client, t: Text, language: string) {

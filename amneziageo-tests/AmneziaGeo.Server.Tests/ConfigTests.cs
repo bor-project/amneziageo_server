@@ -29,7 +29,7 @@ public class ConfigTests
         var types = new[] { one.H1, one.H2, one.H3, one.H4 };
         Assert.Equal(4, types.Distinct(StringComparer.Ordinal).Count());
         Assert.All(types, type => Assert.True(AwgRange.TryParse(type, out var span) && !span.IsOne));
-        Assert.All(types, type => { _ = AwgRange.TryParse(type, out var span); Assert.InRange((long)span.Low, (long)ConfigRules.LowestType, (long)ConfigRules.HighestType); });
+        Assert.All(types, type => { _ = AwgRange.TryParse(type, out var span); Assert.InRange((long)span.High, (long)ConfigRules.LowestType, (long)ConfigDefaults.HighestFreshType); });
         Assert.NotEqual(types, [other.H1, other.H2, other.H3, other.H4]);
         Assert.NotEqual(one.S1 + ConfigRules.HandshakeGap, one.S2);
     }
@@ -74,6 +74,13 @@ public class ConfigTests
     {
         Assert.Contains("private key", Check(config => config with { PrivateKey = "short" }));
         Assert.Contains("private key", Check(config => config with { PrivateKey = string.Empty }));
+    }
+
+    [Fact]
+    public void APacketTypeAboveTheSignedRangeIsTaken()
+    {
+        Assert.Equal(string.Empty, Obfuscation(one => one with { H1 = "3000000000-3000065536", H4 = "4294967295" }));
+        Assert.Contains("neither a number nor a span", Obfuscation(one => one with { H1 = "4294967296" }));
     }
 
     [Fact]

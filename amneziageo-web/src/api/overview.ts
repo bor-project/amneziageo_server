@@ -59,6 +59,42 @@ export interface Overview {
   window: StatusWindow
 }
 
+export interface ServicePort {
+  protocol: string
+  port: number
+}
+
+export interface ServiceFault {
+  code: string
+  detail: string
+}
+
+export interface ServiceHealth {
+  kind: string
+  name: string
+  ports: ServicePort[]
+  shared: boolean
+  parts: string[]
+  faults: ServiceFault[]
+  notes: ServiceFault[]
+  until: string | null
+  since: string
+}
+
+export interface ServicesReport {
+  checked: string | null
+  services: ServiceHealth[]
+}
+
+export function useServices(on: boolean) {
+  return useQuery({
+    queryKey: ["services"],
+    queryFn: async () => (await client.get<ServicesReport>("/overview/services")).data,
+    refetchInterval: 30000,
+    enabled: on,
+  })
+}
+
 export function useOverview() {
   return useQuery({
     queryKey: ["overview"],

@@ -30,8 +30,8 @@ public sealed record ServiceFault(string Code, string Detail);
 /// <summary>
 /// Whether one service the server runs for its clients works.
 /// </summary>
-/// <param name="Kind">subscription, endpoint or dns.</param>
-/// <param name="Name">The interface of an endpoint, empty for the others.</param>
+/// <param name="Kind">subscription, endpoint, dns or certificate.</param>
+/// <param name="Name">The interface of an endpoint or the name of a certificate, empty for the others.</param>
 /// <param name="Ports">The ports the service answers on.</param>
 /// <param name="Shared">Whether the service answers on the port of the panel.</param>
 /// <param name="Parts">What the TCP port of an endpoint hands out.</param>
@@ -50,6 +50,16 @@ public sealed record ServiceHealth(
     /// Tells whether the service works.
     /// </summary>
     public bool Works => Faults.Count == 0;
+
+    /// <summary>
+    /// What is worth a look while the service works.
+    /// </summary>
+    public IReadOnlyList<ServiceFault> Notes { get; init; } = [];
+
+    /// <summary>
+    /// When a certificate runs out, null for another service and for a certificate that did not read.
+    /// </summary>
+    public DateTimeOffset? Until { get; init; }
 }
 
 /// <summary>
@@ -85,6 +95,14 @@ public sealed record FrontFacts(bool IsRunning, string Message, long Fell, bool 
 public sealed record ResolverFacts(bool IsEnabled, bool IsRunning, int Port, string Fault, string Way);
 
 /// <summary>
+/// What the file of a certificate says.
+/// </summary>
+/// <param name="Name">The name the certificate was issued for, or the folder of its file when it did not read.</param>
+/// <param name="Until">When the certificate runs out, null when the file did not read.</param>
+/// <param name="Fault">Why the file did not read, empty when it did.</param>
+public sealed record CertificateFacts(string Name, DateTimeOffset? Until, string Fault);
+
+/// <summary>
 /// What the checks of the services read off the panel and the host.
 /// </summary>
 /// <param name="Configs">The endpoints the panel holds.</param>
@@ -97,6 +115,7 @@ public sealed record ResolverFacts(bool IsEnabled, bool IsRunning, int Port, str
 /// <param name="Links">The interfaces the host carries, null when they did not read.</param>
 /// <param name="Walls">What the firewall of the host says about each port.</param>
 /// <param name="Resolver">What the resolver of the clients is doing.</param>
+/// <param name="Certificates">The certificates the panel, the TCP ports of the endpoints and the subscriptions answer under.</param>
 public sealed record ServiceFacts(
     IReadOnlyList<ServerConfig> Configs,
     int PanelPort,
@@ -107,7 +126,8 @@ public sealed record ServiceFacts(
     bool Module,
     IReadOnlySet<string>? Links,
     IReadOnlyDictionary<ServicePort, string> Walls,
-    ResolverFacts Resolver);
+    ResolverFacts Resolver,
+    IReadOnlyList<CertificateFacts> Certificates);
 
 /// <summary>
 /// Tells which services the server runs for its clients and what keeps each from working.
@@ -133,6 +153,11 @@ public static class ServiceChecks
     /// The hello a client asks before it connects.
     /// </summary>
     public const string Hello = "hello";
+
+    /// <summary>
+    /// A certificate the panel, the TCP ports of the endpoints or the subscriptions answer under.
+    /// </summary>
+    public const string Certificate = "certificate";
 
     /// <summary>
     /// The endpoint names no host, so its clients get no address to reach it at.
@@ -190,6 +215,26 @@ public static class ServiceChecks
     public const string ResolverWay = "resolver-way";
 
     /// <summary>
+    /// The file of the certificate does not read.
+    /// </summary>
+    public const string CertificateUnreadable = "certificate-unreadable";
+
+    /// <summary>
+    /// The certificate ran out.
+    /// </summary>
+    public const string CertificateExpired = "certificate-expired";
+
+    /// <summary>
+    /// The certificate runs out soon.
+    /// </summary>
+    public const string CertificateExpiring = "certificate-expiring";
+
+    /// <summary>
+    /// How many days before its end a certificate is named as running out.
+    /// </summary>
+    public const int ExpiringDays = 14;
+
+    /// <summary>
     /// Returns the services the server runs for its clients as the facts show them, each since the moment given.
     /// </summary>
     public static IReadOnlyList<ServiceHealth> Of(ServiceFacts facts, DateTimeOffset now)
@@ -208,6 +253,8 @@ public static class ServiceChecks
         {
             services.Add(OfResolver(facts.Resolver, now));
         }
+
+        services.AddRange(facts.Certificates.Select(one => OfCertificate(one, now)));
 
         return services;
     }
@@ -245,6 +292,7 @@ public static class ServiceChecks
         return service.Kind switch
         {
             Endpoint => $"endpoint {service.Name}",
+            Certificate => $"certificate {service.Name}",
             Subscription => "subscriptions",
             _ => service.Kind,
         };
@@ -352,6 +400,26 @@ public static class ServiceChecks
         }
 
         return new ServiceHealth(Resolver, string.Empty, [new ServicePort(FirewallPlan.Udp, resolver.Port)], false, [], faults, now);
+    }
+
+    private static ServiceHealth OfCertificate(CertificateFacts certificate, DateTimeOffset now)
+    {
+        var faults = new List<ServiceFault>();
+        var notes = new List<ServiceFault>();
+        if (certificate.Until is not { } until)
+        {
+            faults.Add(new ServiceFault(CertificateUnreadable, certificate.Fault));
+        }
+        else if (until <= now)
+        {
+            faults.Add(new ServiceFault(CertificateExpired, until.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+        }
+        else if (until - now < TimeSpan.FromDays(ExpiringDays))
+        {
+            notes.Add(new ServiceFault(CertificateExpiring, ((int)(until - now).TotalDays).ToString(CultureInfo.InvariantCulture)));
+        }
+
+        return new ServiceHealth(Certificate, certificate.Name, [], false, [], faults, now) { Notes = notes, Until = certificate.Until };
     }
 
     // Tells whether the TCP port of an endpoint answers: the panel serves it or the host took it.

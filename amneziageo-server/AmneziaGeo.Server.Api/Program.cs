@@ -94,6 +94,20 @@ app.MapApiDescription();
 app.MapControllers();
 app.MapPanelPage();
 
-app.Run();
+try
+{
+    await app.StartAsync().ConfigureAwait(false);
+}
+catch (IOException ex) when (StartFailure.IsPortTaken(ex))
+{
+    app.Logger.LogDebug(ex, "the panel did not bind its address");
+    app.Logger.LogCritical("{Reason}", StartFailure.Line(ex));
+    await app.DisposeAsync().ConfigureAwait(false);
+
+    return StartFailure.PortTaken;
+}
+
+await app.WaitForShutdownAsync().ConfigureAwait(false);
+await app.DisposeAsync().ConfigureAwait(false);
 
 return 0;
