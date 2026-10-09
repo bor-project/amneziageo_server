@@ -11,7 +11,7 @@ import { ObfuscationFields } from "@/components/Obfuscation"
 import { KeepQuestion, PortNote } from "@/components/PortNote"
 import { Count, Flag, Help, Hinted, Line, ListLine, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { manual, useOpening } from "@/components/opening"
-import { pathFault, portFault, usePathHolders, usePortHolders, useServicesHolders } from "@/components/ports"
+import { pathFault, portFault, usePathHolders, usePortHolders, useServicesHolders, useSocketHolders } from "@/components/ports"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -54,7 +54,7 @@ export function ConfigForm({
   const [asking, setAsking] = useState(false)
   const held = usePortHolders({ config: self })
   const taken = useServicesHolders()
-  const claimed = usePathHolders()
+  const claimed = [...usePathHolders(), ...useSocketHolders({ config: self })]
   const [draft, setDraft] = useState(start)
   const [shown, setShown] = useState(publicKey)
   const read = useImportConfig()

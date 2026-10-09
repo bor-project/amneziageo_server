@@ -28,11 +28,6 @@ public sealed class ServiceDesk
     /// </summary>
     public const string SpeedPath = "/api/speed";
 
-    /// <summary>
-    /// The scheme the token travels under in the header of a websocket.
-    /// </summary>
-    public const string TokenScheme = PeerToken.Scheme;
-
     private const int Chunk = 64 * 1024;
 
     private readonly IServiceScopeFactory _scopes;
@@ -110,30 +105,6 @@ public sealed class ServiceDesk
         return Route(context, point) != Wanted.None;
     }
 
-    /// <summary>
-    /// Reads the token a websocket carries in its header, or null when it carries none.
-    /// </summary>
-    public static HelloRequest? Token(string? header, JsonSerializerOptions json)
-    {
-        var prefix = TokenScheme + " ";
-        if (header is null || !header.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        try
-        {
-            var text = header[prefix.Length..].Trim().Replace('-', '+').Replace('_', '/');
-            var padded = text.PadRight(text.Length + ((4 - (text.Length % 4)) % 4), '=');
-
-            return JsonSerializer.Deserialize<HelloRequest>(Convert.FromBase64String(padded), json);
-        }
-        catch (Exception ex) when (ex is FormatException or JsonException)
-        {
-            return null;
-        }
-    }
-
     private async Task HelloAsync(HttpContext context, ServicePoint point)
     {
         var ct = context.RequestAborted;
@@ -146,7 +117,7 @@ public sealed class ServiceDesk
             return;
         }
 
-        var proven = await ProveAsync(request, point, true, ct).ConfigureAwait(false);
+        var proven = await ProveAsync(request, point, ct).ConfigureAwait(false);
         if (proven.Failure is { } failure)
         {
             await RefuseAsync(context, StatusCodes.Status403Forbidden, failure).ConfigureAwait(false);
@@ -172,35 +143,18 @@ public sealed class ServiceDesk
             .ConfigureAwait(false);
     }
 
+    // Hands a websocket to the front of the endpoint its path names; a path two endpoints share lets nothing in.
     private async Task PassAsync(HttpContext context, ServicePoint point)
     {
-        var token = Token(context.Request.Headers.Authorization, _json);
-        var proven = token is null
-            ? Proven.No(new HelloFailure("no-token", "the websocket carries no token"))
-            : await ProveAsync(token, point, false, context.RequestAborted).ConfigureAwait(false);
-        if (proven.Failure is { } failure)
+        var named = point.Endpoints.Where(one => one.WebSocket && Under(context.Request.Path, one.Path)).ToList();
+        if (named.Count != 1)
         {
-            Refuse(context, point.Names, failure.Error);
+            Refuse(context, string.Join(", ", named.Select(one => one.Name)), "shared-path");
 
             return;
         }
 
-        var endpoint = point.Of(proven.Client!.ConfigId);
-        if (endpoint is null || !endpoint.WebSocket)
-        {
-            Refuse(context, point.Names, "websocket-off");
-
-            return;
-        }
-
-        if (!Under(context.Request.Path, endpoint.Path))
-        {
-            Refuse(context, point.Names, "wrong-path");
-
-            return;
-        }
-
-        await FrontRelay.PassAsync(context, endpoint.Front, _logger).ConfigureAwait(false);
+        await FrontRelay.PassAsync(context, named[0].Front, _logger).ConfigureAwait(false);
     }
 
     // Tells what the services of a port make of a request.
@@ -248,8 +202,8 @@ public sealed class ServiceDesk
         context.Response.StatusCode = StatusCodes.Status404NotFound;
     }
 
-    // Proves a token; a hello takes its nonce once, a websocket may come again with it within the window.
-    private async Task<Proven> ProveAsync(HelloRequest request, ServicePoint point, bool once, CancellationToken ct)
+    // Proves the token of a hello and takes its nonce, which holds once.
+    private async Task<Proven> ProveAsync(HelloRequest request, ServicePoint point, CancellationToken ct)
     {
         var key = Trim(request.Key);
         var nonce = Trim(request.Nonce);
@@ -288,7 +242,7 @@ public sealed class ServiceDesk
             return Proven.No(new HelloFailure("bad-proof", "the token does not come from the key of that peer"));
         }
 
-        if (once && !_tickets.Takes(nonce))
+        if (!_tickets.Takes(nonce))
         {
             return Proven.No(new HelloFailure("replayed", "that token was already taken"));
         }

@@ -775,7 +775,7 @@ export const ru: Dictionary = {
   "error.portBusy": "Порт занят: {name}",
   "error.pathTaken": "Путь занят: {name}",
   "error.badWebSocketPath": "В пути только буквы, цифры, - и _, одной частью",
-  "error.webSocketPathTaken": "Путь на этом порту занят панелью или подписками",
+  "error.webSocketPathTaken": "Путь на этом порту занят",
   "error.panelPathTaken": "Путь на этом порту занят WebSocket интерфейса",
   "ports.webSocketOf": "WebSocket {name}",
   "ports.panel": "панель",

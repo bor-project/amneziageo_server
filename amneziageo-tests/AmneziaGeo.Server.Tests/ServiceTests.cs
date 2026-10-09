@@ -200,11 +200,12 @@ public class ServiceTests
         var context = new DefaultHttpContext();
         context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpUpgradeFeature>(new Upgradable());
         context.Request.Method = "GET";
-        context.Request.Path = $"/{first.WebSocketPath}/events";
+        context.Request.Path = $"/{other.WebSocketPath}/events";
         context.Request.Headers.Authorization = PeerToken.Header(mine.PrivateKey, other.PublicKey, bench.Clock.GetUtcNow());
 
         await desk.AnswerAsync(context, point);
 
+        Assert.NotEqual(first.WebSocketPath, other.WebSocketPath);
         Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
     }
 
@@ -236,7 +237,7 @@ public class ServiceTests
     }
 
     [Fact]
-    public async Task AWebSocketUnderThePathOfAnotherEndpointIsRefused()
+    public async Task ThePathOfAWebSocketSaysWhoseFrontItGoesTo()
     {
         using var bench = new Bench();
         var first = (await bench.Configs.AddAsync(
@@ -249,15 +250,38 @@ public class ServiceTests
             ClientDefaults.Fresh(other.Id, "milena") with { Address = ["10.9.0.2/32"] },
             CancellationToken.None)).Record!;
         var desk = Desk(bench, new SpeedTickets(bench.Clock));
-        var point = ServicePoints.Of([first, other], string.Empty, string.Empty)[0];
+        using var front = new Front();
+        var point = Fronted(Fronted(ServicePoints.Of([first, other], string.Empty, string.Empty)[0], first.Id, front.Port), other.Id, Free());
         var context = Upgrading($"/{first.WebSocketPath}/events");
         context.Request.Headers.Authorization = PeerToken.Header(mine.PrivateKey, other.PublicKey, bench.Clock.GetUtcNow());
 
         await desk.AnswerAsync(context, point);
+        var head = await front.Head.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.NotEqual(first.WebSocketPath, other.WebSocketPath);
         Assert.Equal(other.WebSocketPath, point.Of(other.Id)!.Path);
-        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+        Assert.StartsWith($"GET /{first.WebSocketPath}/events HTTP/1.1\r\n", head, StringComparison.Ordinal);
+        Assert.DoesNotContain("Authorization", head, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AWebSocketFindsNothingUnderAPathTwoEndpointsOfItsPortShare()
+    {
+        using var bench = new Bench();
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var first = Endpoint(1, "awg0", 51820) with { WebSocket = true };
+        var other = Endpoint(2, "awg1", 51821) with { WebSocket = true, ServicesPort = 51820 };
+        var point = ServicePoints.Of([first, other], string.Empty, string.Empty)[0];
+        var bare = Upgrading("/v1/events");
+        var signed = Upgrading("/v1/events");
+        signed.Request.Headers.Authorization = PeerToken.Header(Curve25519.Create().PrivateKey, Curve25519.Create().PublicKey, bench.Clock.GetUtcNow());
+
+        await desk.AnswerAsync(bare, point);
+        await desk.AnswerAsync(signed, point);
+
+        Assert.Equal(["v1", "v1"], point.Endpoints.Select(one => one.Path).ToArray());
+        Assert.Equal(StatusCodes.Status404NotFound, bare.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status404NotFound, signed.Response.StatusCode);
     }
 
     [Fact]
@@ -281,27 +305,18 @@ public class ServiceTests
     }
 
     [Fact]
-    public void TheTokenOfAWebSocketIsReadOutOfItsHeader()
-    {
-        var token = new HelloRequest("key", 1000, "nonce", "proof");
-        var text = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(token, Web)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-
-        Assert.Equal(token, ServiceDesk.Token("AmneziaGeo " + text, Web));
-        Assert.Null(ServiceDesk.Token("Bearer " + text, Web));
-        Assert.Null(ServiceDesk.Token("AmneziaGeo not a token", Web));
-        Assert.Null(ServiceDesk.Token(null, Web));
-    }
-
-    [Fact]
-    public void TheHeaderOfAWebSocketCarriesATokenTheServerHolds()
+    public void TheHeaderOfAWebSocketCarriesATokenAServerOfTheReleasesBeforeHolds()
     {
         var server = Curve25519.Create();
         var client = Curve25519.Create();
         var now = new DateTimeOffset(2026, 9, 21, 12, 0, 0, TimeSpan.Zero);
 
-        var token = ServiceDesk.Token(PeerToken.Header(client.PrivateKey, server.PublicKey, now), Web);
+        var header = PeerToken.Header(client.PrivateKey, server.PublicKey, now);
+        var text = header[(PeerToken.Scheme.Length + 1)..].Replace('-', '+').Replace('_', '/');
+        var body = Convert.FromBase64String(text.PadRight(text.Length + ((4 - (text.Length % 4)) % 4), '='));
+        var token = JsonSerializer.Deserialize<HelloRequest>(body, Web)!;
 
-        Assert.NotNull(token);
+        Assert.StartsWith(PeerToken.Scheme + " ", header, StringComparison.Ordinal);
         Assert.Equal(client.PublicKey, token.Key);
         Assert.Equal(now.ToUnixTimeSeconds(), token.Time);
         Assert.True(PeerToken.IsNonce(token.Nonce));
@@ -548,21 +563,25 @@ public class ServiceTests
     }
 
     [Fact]
-    public async Task AWebSocketWithoutATokenFindsNothing()
+    public async Task AWebSocketWithoutATokenReachesTheFrontOfTheEndpointItsPathNames()
     {
         using var bench = new Bench();
         var endpoint = (await bench.Configs.AddAsync(
-            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true },
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true, WebSocketPath = ConfigServices.OldPath },
             CancellationToken.None)).Record!;
         var desk = Desk(bench, new SpeedTickets(bench.Clock));
-        var context = new DefaultHttpContext();
-        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpUpgradeFeature>(new Upgradable());
-        context.Request.Method = "GET";
-        context.Request.Path = $"/{endpoint.WebSocketPath}/events";
+        using var front = new Front();
+        var bare = Upgrading("/v1/events");
+        bare.Request.Headers["Sec-WebSocket-Protocol"] = "v1, authorization.bearer.jwt";
+        var elsewhere = Upgrading("/v2/events");
 
-        await desk.AnswerAsync(context, Point(endpoint));
+        await desk.AnswerAsync(bare, Fronted(Point(endpoint), endpoint.Id, front.Port));
+        var head = await front.Head.WaitAsync(TimeSpan.FromSeconds(5));
+        await desk.AnswerAsync(elsewhere, Point(endpoint));
 
-        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+        Assert.StartsWith("GET /v1/events HTTP/1.1\r\n", head, StringComparison.Ordinal);
+        Assert.Contains("Sec-WebSocket-Protocol: v1, authorization.bearer.jwt\r\n", head, StringComparison.Ordinal);
+        Assert.Equal(StatusCodes.Status404NotFound, elsewhere.Response.StatusCode);
     }
 
     [Fact]
@@ -656,6 +675,10 @@ public class ServiceTests
 
     private static ServicePoint Point(ServerConfig endpoint) => ServicePoints.Of([endpoint], string.Empty, string.Empty)[0];
 
+    // Returns the port with the front of one of its endpoints moved to another loopback port.
+    private static ServicePoint Fronted(ServicePoint point, long id, int port) =>
+        point with { Endpoints = [.. point.Endpoints.Select(one => one.ConfigId == id ? one with { Front = port } : one)] };
+
     private static DefaultHttpContext Upgrading(string path)
     {
         var context = new DefaultHttpContext();
@@ -743,6 +766,39 @@ public class ServiceTests
         public bool IsUpgradableRequest => true;
 
         public Task<Stream> UpgradeAsync() => Task.FromResult<Stream>(new MemoryStream());
+    }
+
+    // Stands in for the front of an endpoint on the loopback: takes one upgrade, says it switches and keeps the head.
+    private sealed class Front : IDisposable
+    {
+        private readonly TcpListener _listener = new(System.Net.IPAddress.Loopback, 0);
+
+        /// <summary>
+        /// ctor
+        /// </summary>
+        public Front()
+        {
+            _listener.Start();
+            Port = ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
+            Head = TakeAsync();
+        }
+
+        public int Port { get; }
+
+        public Task<string> Head { get; }
+
+        public void Dispose() => _listener.Dispose();
+
+        private async Task<string> TakeAsync()
+        {
+            using var peer = await _listener.AcceptTcpClientAsync();
+            var stream = peer.GetStream();
+            var buffer = new byte[4096];
+            var read = await stream.ReadAsync(buffer);
+            await stream.WriteAsync("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n\r\n"u8.ToArray());
+
+            return Encoding.ASCII.GetString(buffer, 0, read);
+        }
     }
 
     // Runs every front but the one named, which falls over.

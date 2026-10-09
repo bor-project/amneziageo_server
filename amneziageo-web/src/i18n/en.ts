@@ -773,7 +773,7 @@ export const en = {
   "error.portBusy": "The port is taken by {name}",
   "error.pathTaken": "The path is taken by {name}",
   "error.badWebSocketPath": "The path takes letters, digits, - and _ in one part",
-  "error.webSocketPathTaken": "The path is taken on this port by the panel or the subscriptions",
+  "error.webSocketPathTaken": "The path is taken on this port",
   "error.panelPathTaken": "The path is taken on this port by the WebSocket of an interface",
   "ports.webSocketOf": "the WebSocket of {name}",
   "ports.panel": "the panel",

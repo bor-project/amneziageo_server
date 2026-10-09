@@ -57,6 +57,15 @@ export function usePathHolders(): PathHolder[] {
   return held
 }
 
+export function useSocketHolders(mine: { config?: number } = {}): PathHolder[] {
+  const t = useText()
+  const configs = useConfigs().data ?? []
+
+  return configs
+    .filter((one) => one.id !== mine.config && one.webSocket)
+    .map((one) => ({ port: servicesPort(one), path: one.webSocketPath, name: t("ports.webSocketOf", { name: one.name }) }))
+}
+
 export function usePortHolders(mine: { config?: number } = {}): PortHolder[] {
   const configs = useConfigs().data ?? []
 

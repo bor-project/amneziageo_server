@@ -308,6 +308,32 @@ public class ConfigTests
     }
 
     [Fact]
+    public async Task AWebSocketUnderThePathOfAnotherEndpointIsRefusedOnItsPortAlone()
+    {
+        using var bench = new Bench();
+        var first = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { ServicesPort = 8443, WebSocket = true, WebSocketPath = "front1" },
+            default)).Record!;
+        var draft = ConfigDefaults.Fresh("awg2") with { ListenPort = 51821, ServicesPort = 8443, WebSocket = true, WebSocketPath = "FRONT1" };
+
+        var taken = await bench.Configs.AddAsync(draft, default);
+        var elsewhere = await bench.Configs.AddAsync(draft with { ServicesPort = 9443 }, default);
+        var moved = await bench.Configs.ChangeAsync(elsewhere.Record!.Id, elsewhere.Record with { ServicesPort = 8443 }, default);
+        var apart = await bench.Configs.ChangeAsync(elsewhere.Record.Id, elsewhere.Record with { ServicesPort = 8443, WebSocketPath = "front2" }, default);
+        var off = await bench.Configs.AddAsync(draft with { Name = "awg3", ListenPort = 51822, WebSocket = false }, default);
+        var kept = await bench.Configs.ChangeAsync(first.Id, first, default);
+
+        Assert.Equal(ConfigOutcome.PortTaken, taken.Outcome);
+        Assert.Equal("websocket-path-taken", taken.Code);
+        Assert.Contains("the websocket of awg1", taken.Message, StringComparison.Ordinal);
+        Assert.True(elsewhere.IsOk);
+        Assert.Equal("websocket-path-taken", moved.Code);
+        Assert.True(apart.IsOk);
+        Assert.True(off.IsOk);
+        Assert.True(kept.IsOk);
+    }
+
+    [Fact]
     public async Task AnEndpointTakesAPathOfItsOwnForItsWebSocket()
     {
         using var bench = new Bench();
