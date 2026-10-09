@@ -19,7 +19,7 @@ it; a request that names `opened` changes it.
 
 | Toggle | What it opens |
 |---|---|
-| An endpoint, item 23 of the menu or the button by its port, see [configs.md](configs.md) | its UDP port, the TCP port of its services, see [services.md](services.md), and both ways through its interface, so what its clients send and what comes back to them passes |
+| An endpoint, item 23 of the menu or the button by its port, see [configs.md](configs.md) | its UDP port, the TCP port of its services, see [services.md](services.md), both ways through its interface, so what its clients send and what comes back to them passes, and the port of the resolver on that interface while the resolver answers on an address of the endpoint, see [dns.md](dns.md) |
 | The panel, item 23 of the menu or the button by its port, see [serving.md](serving.md) | the port the panel binds, unless it binds the loopback alone |
 | The subscriptions, item 23 of the menu or the button by their port, see [subscriptions.md](subscriptions.md) | the port they are served on, while they are handed out on a port of their own |
 
@@ -34,6 +34,8 @@ ufw allow 51820/udp comment 'amneziageo awg0'
 ufw allow 51820/tcp comment 'amneziageo awg0'
 ufw route allow in on awg0 comment 'amneziageo awg0'
 ufw route allow out on awg0 comment 'amneziageo awg0'
+ufw allow in on awg0 to any port 53 proto udp comment 'amneziageo awg0'
+ufw allow in on awg0 to any port 53 proto tcp comment 'amneziageo awg0'
 ufw allow 8443/tcp comment 'amneziageo panel'
 ```
 
@@ -142,5 +144,5 @@ tells nothing, and nothing is named.
 ## When it happens
 
 The ports are settled whenever an endpoint, the settings of the panel or the subscriptions are
-saved, applied, opened or removed, and once more when the server starts. A host whose firewall was reset carries the
-rules again as soon as the panel comes up.
+saved, applied, opened or removed, whenever the resolver is started over, and once more when the server starts. A
+host whose firewall was reset carries the rules again as soon as the panel comes up.

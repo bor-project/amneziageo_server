@@ -178,11 +178,11 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
     public Task StartAsync(CancellationToken cancellationToken) => SettleAsync(cancellationToken);
 
     /// <summary>
-    /// Stops serving the services.
+    /// Stops serving the services, though the time to stop ran out.
     /// </summary>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
             foreach (var port in _served.Keys.ToList())

@@ -78,14 +78,16 @@ public static class FrontRelay
     }
 
     /// <summary>
-    /// Opens the websocket of a request on the front at a loopback port and carries its bytes until either side ends.
+    /// Opens the websocket of a request on the front at a loopback port and carries its bytes until either side ends
+    /// or the panel stops.
     /// </summary>
-    public static async Task PassAsync(HttpContext context, int port, ILogger logger)
+    public static async Task PassAsync(HttpContext context, int port, CancellationToken stopping, ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(logger);
 
-        var ct = context.RequestAborted;
+        using var ended = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stopping);
+        var ct = ended.Token;
         using var backend = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
         try
         {

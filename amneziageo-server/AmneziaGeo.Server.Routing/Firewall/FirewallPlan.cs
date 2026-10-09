@@ -1,6 +1,7 @@
 using System.Net;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
+using AmneziaGeo.Server.Routing.Dns;
 
 namespace AmneziaGeo.Server.Routing.Firewall;
 
@@ -46,12 +47,14 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
     public static readonly FirewallPlan None = new([], []);
 
     /// <summary>
-    /// Returns what the panel holds open for the endpoints with their services, itself and the subscriptions.
+    /// Returns what the panel holds open for the endpoints with their services and the resolver their clients ask,
+    /// itself and the subscriptions.
     /// </summary>
     public static FirewallPlan Of(
         IReadOnlyList<ServerConfig> configs,
         PanelSettings panel,
-        SubscriptionSettings subscriptions)
+        SubscriptionSettings subscriptions,
+        DnsSettings? resolver = null)
     {
         ArgumentNullException.ThrowIfNull(configs);
         ArgumentNullException.ThrowIfNull(panel);
@@ -63,6 +66,12 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         {
             Take(ports, new FirewallPort(Udp, config.ListenPort, config.Name));
             Take(ports, new FirewallPort(Tcp, ConfigServices.Port(config), config.Name));
+            if (resolver is not null && Answers(resolver, config))
+            {
+                Take(ports, new FirewallPort(Udp, resolver.Port, config.Name, config.Name));
+                Take(ports, new FirewallPort(Tcp, resolver.Port, config.Name, config.Name));
+            }
+
             interfaces.Add(config.Name);
         }
 
@@ -110,6 +119,32 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         one.Port == other.Port
         && string.Equals(one.Protocol, other.Protocol, StringComparison.Ordinal)
         && string.Equals(one.Interface, other.Interface, StringComparison.Ordinal);
+
+    // Tells whether the resolver answers on an address of an endpoint.
+    private static bool Answers(DnsSettings resolver, ServerConfig config)
+    {
+        if (!resolver.IsEnabled)
+        {
+            return false;
+        }
+
+        if (resolver.Listen.Count == 0)
+        {
+            return true;
+        }
+
+        var own = config.Address.Select(Bare).OfType<IPAddress>().ToArray();
+
+        return resolver.Listen.Any(one => DnsRules.Address(one, out var address) && own.Contains(address));
+    }
+
+    // Returns the address a range is written with.
+    private static IPAddress? Bare(string range)
+    {
+        var slash = range.IndexOf('/', StringComparison.Ordinal);
+
+        return IPAddress.TryParse((slash < 0 ? range : range[..slash]).Trim(), out var address) ? address : null;
+    }
 
     /// <summary>
     /// Tells whether what is bound is reached from outside the host.

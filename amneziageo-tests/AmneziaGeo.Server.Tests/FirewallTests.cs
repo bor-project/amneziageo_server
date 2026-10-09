@@ -1,5 +1,6 @@
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
+using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Firewall;
 using AmneziaGeo.Server.Routing.Host;
 
@@ -423,6 +424,91 @@ public class FirewallTests
         Assert.Empty(FirewallPlan.Dropped(before, after));
         Assert.Equal([new FirewallPort("tcp", 8447, "awg0")], FirewallPlan.Dropped(after, before));
     }
+
+    [Fact]
+    public void AnEndpointHeldOpenLetsItsClientsReachTheResolver()
+    {
+        ServerConfig[] endpoints =
+        [
+            Endpoint(),
+            Endpoint() with { Name = "awg1", ListenPort = 51821, Address = ["10.0.1.1/24"], Opened = false },
+            Endpoint() with { Name = "awg2", ListenPort = 51822, Address = ["10.0.2.1/24"], IsEnabled = false },
+        ];
+
+        var running = Plan(endpoints, new DnsSettings { IsEnabled = true });
+        var moved = Plan(endpoints, new DnsSettings { IsEnabled = true, Port = 5353 });
+        var off = Plan(endpoints, new DnsSettings());
+
+        Assert.Equal([("udp", 53, "awg0"), ("tcp", 53, "awg0")], OnInterfaces(running));
+        Assert.Equal([("udp", 5353, "awg0"), ("tcp", 5353, "awg0")], OnInterfaces(moved));
+        Assert.Empty(OnInterfaces(off));
+    }
+
+    [Fact]
+    public void AResolverOnAddressesOfItsOwnIsLetInWhereAnEndpointCarriesOne()
+    {
+        ServerConfig[] endpoints =
+        [
+            Endpoint(),
+            Endpoint() with { Name = "awg1", ListenPort = 51821, Address = ["10.0.1.1/24", "fd00:1::1/64"] },
+        ];
+
+        var one = Plan(endpoints, new DnsSettings { IsEnabled = true, Listen = ["fd00:1::1"] });
+        var none = Plan(endpoints, new DnsSettings { IsEnabled = true, Listen = ["192.0.2.1"] });
+
+        Assert.Equal([("udp", 53, "awg1"), ("tcp", 53, "awg1")], OnInterfaces(one));
+        Assert.Empty(OnInterfaces(none));
+    }
+
+    [Fact]
+    public void ThePortOfTheResolverIsOpenedOnTheInterfaceOfItsEndpoint()
+    {
+        var plan = Plan([Endpoint()], new DnsSettings { IsEnabled = true });
+
+        var rules = UfwRules.Wanted(plan);
+        var table = OpenRuleset.Text(plan);
+
+        Assert.Equal(
+            ["allow in on awg0 to any port 53 proto udp", "allow in on awg0 to any port 53 proto tcp"],
+            rules.Where(rule => rule.Arguments.Contains("port")).Select(rule => string.Join(" ", rule.Arguments)).ToArray());
+        Assert.Equal(["amneziageo awg0"], rules.Select(rule => rule.Note).Distinct().ToArray());
+        Assert.Contains("\t\tiifname \"awg0\" udp dport 53 accept\n", table, StringComparison.Ordinal);
+        Assert.Contains("\t\tiifname \"awg0\" tcp dport 53 accept\n", table, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AResolverTurnedOffTakesItsPortOutOfUfw()
+    {
+        var tools = new Tools();
+        tools.Answers["ufw show added"] = new CommandResult(
+            0,
+            "ufw allow 51820/udp comment 'amneziageo awg0'\n"
+            + "ufw allow 51820/tcp comment 'amneziageo awg0'\n"
+            + "ufw allow in on awg0 to any port 53 proto udp comment 'amneziageo awg0'\n"
+            + "ufw allow in on awg0 to any port 53 proto tcp comment 'amneziageo awg0'\n"
+            + "ufw route allow in on awg0 comment 'amneziageo awg0'\n"
+            + "ufw route allow out on awg0 comment 'amneziageo awg0'\n",
+            string.Empty);
+        var host = new FirewallHost(tools, new Ledger(), "ufw");
+
+        var kept = await host.ApplyAsync(Plan([Endpoint()], new DnsSettings { IsEnabled = true }), CancellationToken.None);
+        var calls = tools.Calls.Count;
+        var dropped = await host.ApplyAsync(Plan([Endpoint()], new DnsSettings()), CancellationToken.None);
+
+        Assert.True(kept.IsDone);
+        Assert.Equal(1, calls);
+        Assert.True(dropped.IsDone);
+        Assert.True(tools.Called("ufw delete allow in on awg0 to any port 53 proto udp"));
+        Assert.True(tools.Called("ufw delete allow in on awg0 to any port 53 proto tcp"));
+        Assert.DoesNotContain(tools.Calls, line => line.StartsWith("ufw delete allow 51820", StringComparison.Ordinal));
+    }
+
+    private static FirewallPlan Plan(IReadOnlyList<ServerConfig> endpoints, DnsSettings resolver) =>
+        FirewallPlan.Of(endpoints, new PanelSettings(), new SubscriptionSettings(), resolver);
+
+    // Returns the ports a plan opens on an interface alone.
+    private static (string Protocol, int Port, string Interface)[] OnInterfaces(FirewallPlan plan) =>
+        [.. plan.Ports.Where(port => port.Interface.Length > 0).Select(port => (port.Protocol, port.Port, port.Interface))];
 
     private static ServerConfig Endpoint() => new()
     {

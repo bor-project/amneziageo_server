@@ -68,11 +68,11 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
     }
 
     /// <summary>
-    /// Stops serving the subscriptions.
+    /// Stops serving the subscriptions, though the time to stop ran out.
     /// </summary>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
             await HaltAsync().ConfigureAwait(false);

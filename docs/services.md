@@ -175,6 +175,9 @@ container among them, the panel runs `wstunnel` itself with the same arguments a
 seconds after it falls over. Turning `WebSocket proxy` off takes the front down and removes its files; the panel
 starting over leaves a front whose files did not change alone.
 
+A websocket the panel carries ends as the panel stops, so a stop does not wait for the tunnels inside it. The
+client dials again and comes through once the panel answers.
+
 When the front does not come up or another service holds the port of the services, adding, changing or turning on
 the endpoint turns its `WebSocket proxy` off and answers `websocket-down` (409) with the reason and the number of
 the endpoint; the form shows the reason under the flag. A front that falls over later, a port of the services the

@@ -88,6 +88,12 @@ tunnel of that configuration, the client takes what the configuration or the tem
 questions of the clients stays useful for the clients that ask elsewhere anyway, but the chain no longer rests
 on it.
 
+Where the panel holds the ports of an endpoint open in the firewall of the host, it lets the clients of that
+endpoint reach the resolver as well: the port of the resolver is opened on the interface of the endpoint, for UDP
+and TCP, while the resolver answers on one of its addresses, see [firewall.md](firewall.md). An endpoint whose
+ports the panel does not hold open is left to the host: its clients get no answer until that port is let in on
+its interface by hand.
+
 The questions leave through the way out of the host until a channel is picked. Where the local network
 answers about a service differently from the network behind the channel, a rule by name fills its set with
 the wrong addresses or with none at all, and the traffic never reaches the channel the rule sends it to.

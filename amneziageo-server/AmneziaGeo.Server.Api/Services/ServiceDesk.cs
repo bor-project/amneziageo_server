@@ -38,6 +38,8 @@ public sealed class ServiceDesk
 
     private readonly SubscriptionState _subscriptions;
 
+    private readonly CancellationToken _stopping;
+
     private readonly JsonSerializerOptions _json;
 
     private readonly ILogger<ServiceDesk> _logger;
@@ -50,15 +52,18 @@ public sealed class ServiceDesk
         SpeedTickets tickets,
         IEnumerable<IHelloFeature> features,
         SubscriptionState subscriptions,
+        IHostApplicationLifetime life,
         IOptions<JsonOptions> json,
         ILogger<ServiceDesk> logger)
     {
+        ArgumentNullException.ThrowIfNull(life);
         ArgumentNullException.ThrowIfNull(json);
 
         _scopes = scopes;
         _tickets = tickets;
         _features = [.. features];
         _subscriptions = subscriptions;
+        _stopping = life.ApplicationStopping;
         _json = json.Value.SerializerOptions;
         _logger = logger;
     }
@@ -154,7 +159,7 @@ public sealed class ServiceDesk
             return;
         }
 
-        await FrontRelay.PassAsync(context, named[0].Front, _logger).ConfigureAwait(false);
+        await FrontRelay.PassAsync(context, named[0].Front, _stopping, _logger).ConfigureAwait(false);
     }
 
     // Tells what the services of a port make of a request.

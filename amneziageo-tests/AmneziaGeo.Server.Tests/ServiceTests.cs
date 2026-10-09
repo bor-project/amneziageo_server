@@ -13,6 +13,7 @@ using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Template;
 using AmneziaGeo.Server.Routing.Proxy;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting.Internal;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
@@ -630,7 +631,93 @@ public class ServiceTests
         }
     }
 
-    private static ServiceDesk Desk(Bench bench, SpeedTickets tickets, SubscriptionState? subscriptions = null)
+    [Fact]
+    public async Task AWebSocketCarriedToAFrontEndsWhenThePanelStops()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true, WebSocketPath = ConfigServices.OldPath },
+            CancellationToken.None)).Record!;
+        var life = Life();
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), life: life);
+        using var front = new Front(held: true);
+        using var silent = new Silent();
+
+        var carried = desk.AnswerAsync(Upgrading("/v1/events", silent), Fronted(Point(endpoint), endpoint.Id, front.Port));
+        await front.Head.WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        var early = carried.IsCompleted;
+        life.StopApplication();
+        await carried.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(early);
+    }
+
+    [Fact]
+    public async Task TheServicesStopThoughTheTimeToStopRanOut()
+    {
+        using var bench = new Bench();
+        var port = Free();
+        await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], ServicesPort = port },
+            CancellationToken.None);
+        var folder = Path.Combine(Path.GetTempPath(), $"amneziageo-fronts-{Guid.NewGuid():N}");
+        var server = new ServiceServer(
+            bench.Scopes,
+            Desk(bench, new SpeedTickets(bench.Clock)),
+            new ProxyHost(new Ledger(), new Fronts(string.Empty), folder),
+            new WebOptions(),
+            PanelDefaults.Settings,
+            new ServiceShare(),
+            NullLogger<ServiceServer>.Instance);
+        try
+        {
+            await server.SettleAsync(CancellationToken.None);
+            var served = Listens(port);
+            await server.StopAsync(new CancellationToken(true));
+
+            Assert.True(served);
+            Assert.False(Listens(port));
+        }
+        finally
+        {
+            await server.DisposeAsync();
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task TheSubscriptionsStopThoughTheTimeToStopRanOut()
+    {
+        using var bench = new Bench();
+        var server = new SubscriptionServer(
+            bench.Scopes,
+            new SubscriptionState(),
+            PanelDefaults.Settings,
+            new WebOptions(),
+            NullLogger<SubscriptionServer>.Instance);
+        try
+        {
+            await server.StartAsync(CancellationToken.None);
+            var stopped = server.StopAsync(new CancellationToken(true));
+            await stopped;
+
+            Assert.True(stopped.IsCompletedSuccessfully);
+        }
+        finally
+        {
+            await server.DisposeAsync();
+        }
+    }
+
+    private static ServiceDesk Desk(
+        Bench bench,
+        SpeedTickets tickets,
+        SubscriptionState? subscriptions = null,
+        ApplicationLifetime? life = null)
     {
         var state = subscriptions ?? new SubscriptionState();
 
@@ -647,9 +734,13 @@ public class ServiceTests
                 new PresetsOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
             ],
             state,
+            life ?? Life(),
             Options.Create(new JsonOptions()),
             NullLogger<ServiceDesk>.Instance);
     }
+
+    // Returns the lifetime of a panel that runs until a test stops it.
+    private static ApplicationLifetime Life() => new(NullLogger<ApplicationLifetime>.Instance);
 
     // Asks the hello as a client of the template and returns the features it was offered.
     private static async Task<JsonElement> FeaturesAsync(Bench bench, long template)
@@ -679,10 +770,10 @@ public class ServiceTests
     private static ServicePoint Fronted(ServicePoint point, long id, int port) =>
         point with { Endpoints = [.. point.Endpoints.Select(one => one.ConfigId == id ? one with { Front = port } : one)] };
 
-    private static DefaultHttpContext Upgrading(string path)
+    private static DefaultHttpContext Upgrading(string path, Stream? connection = null)
     {
         var context = new DefaultHttpContext();
-        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpUpgradeFeature>(new Upgradable());
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpUpgradeFeature>(new Upgradable(connection));
         context.Request.Method = "GET";
         context.Request.Path = path;
 
@@ -696,6 +787,22 @@ public class ServiceTests
         context.Request.Path = path;
 
         return context;
+    }
+
+    // Tells whether a TCP port of the loopback takes a connection.
+    private static bool Listens(int port)
+    {
+        using var probe = new TcpClient();
+        try
+        {
+            probe.Connect(System.Net.IPAddress.Loopback, port);
+
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
     }
 
     private static int Free()
@@ -760,24 +867,79 @@ public class ServiceTests
         Address = ["10.8.0.1/24"],
     };
 
-    // A request that says it may be upgraded, without a connection behind it.
+    // A request that says it may be upgraded, with the connection given behind it or with none.
     private sealed class Upgradable : Microsoft.AspNetCore.Http.Features.IHttpUpgradeFeature
     {
-        public bool IsUpgradableRequest => true;
-
-        public Task<Stream> UpgradeAsync() => Task.FromResult<Stream>(new MemoryStream());
-    }
-
-    // Stands in for the front of an endpoint on the loopback: takes one upgrade, says it switches and keeps the head.
-    private sealed class Front : IDisposable
-    {
-        private readonly TcpListener _listener = new(System.Net.IPAddress.Loopback, 0);
+        private readonly Stream? _connection;
 
         /// <summary>
         /// ctor
         /// </summary>
-        public Front()
+        public Upgradable(Stream? connection = null)
         {
+            _connection = connection;
+        }
+
+        public bool IsUpgradableRequest => true;
+
+        public Task<Stream> UpgradeAsync() => Task.FromResult(_connection ?? new MemoryStream());
+    }
+
+    // A connection of a client that stays open and says nothing.
+    private sealed class Silent : Stream
+    {
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+
+            return 0;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+        }
+    }
+
+    // Stands in for the front of an endpoint on the loopback: takes one upgrade, says it switches and keeps the head,
+    // and the connection too when held.
+    private sealed class Front : IDisposable
+    {
+        private readonly TcpListener _listener = new(System.Net.IPAddress.Loopback, 0);
+
+        private readonly bool _held;
+
+        private TcpClient? _peer;
+
+        /// <summary>
+        /// ctor
+        /// </summary>
+        public Front(bool held = false)
+        {
+            _held = held;
             _listener.Start();
             Port = ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
             Head = TakeAsync();
@@ -787,15 +949,24 @@ public class ServiceTests
 
         public Task<string> Head { get; }
 
-        public void Dispose() => _listener.Dispose();
+        public void Dispose()
+        {
+            _peer?.Dispose();
+            _listener.Dispose();
+        }
 
         private async Task<string> TakeAsync()
         {
-            using var peer = await _listener.AcceptTcpClientAsync();
+            var peer = await _listener.AcceptTcpClientAsync();
+            _peer = peer;
             var stream = peer.GetStream();
             var buffer = new byte[4096];
             var read = await stream.ReadAsync(buffer);
             await stream.WriteAsync("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n\r\n"u8.ToArray());
+            if (!_held)
+            {
+                peer.Dispose();
+            }
 
             return Encoding.ASCII.GetString(buffer, 0, read);
         }

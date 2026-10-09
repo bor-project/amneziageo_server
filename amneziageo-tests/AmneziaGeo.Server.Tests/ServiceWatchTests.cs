@@ -12,6 +12,7 @@ using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Firewall;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Proxy;
+using Microsoft.Extensions.Hosting.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -284,6 +285,7 @@ public class ServiceWatchTests
                 new SpeedTickets(bench.Clock),
                 [],
                 new SubscriptionState(),
+                new ApplicationLifetime(NullLogger<ApplicationLifetime>.Instance),
                 Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Http.Json.JsonOptions()),
                 NullLogger<ServiceDesk>.Instance),
             fronts,
@@ -417,6 +419,7 @@ public class ServiceWatchTests
                 new SpeedTickets(bench.Clock),
                 [],
                 new SubscriptionState(),
+                new ApplicationLifetime(NullLogger<ApplicationLifetime>.Instance),
                 Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Http.Json.JsonOptions()),
                 NullLogger<ServiceDesk>.Instance),
             fronts,

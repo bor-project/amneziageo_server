@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Dal;
@@ -76,12 +77,14 @@ public static class DnsEndpoints
         DnsStore store,
         DnsHost host,
         RouteApplier applier,
+        FirewallApplier firewall,
         DnsState state,
         DnsSets sets,
         CancellationToken ct)
     {
         await host.RestartAsync(ct).ConfigureAwait(false);
         var plan = await applier.SettleAsync(ct).ConfigureAwait(false);
+        await firewall.SettleAsync(ct).ConfigureAwait(false);
         var settings = await store.ReadAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(DnsAnswers.Resolver(settings, state, sets, plan));

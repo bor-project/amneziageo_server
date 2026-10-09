@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Firewall;
 
 namespace AmneziaGeo.Server.Api.Firewall;
@@ -14,6 +15,10 @@ public sealed class FirewallApplier
 
     private readonly SubscriptionStore _subscriptions;
 
+    private readonly DnsStore _dns;
+
+    private readonly DnsState _resolver;
+
     private readonly FirewallHost _host;
 
     private readonly ILogger<FirewallApplier> _logger;
@@ -25,24 +30,30 @@ public sealed class FirewallApplier
         ConfigStore configs,
         PanelStore panel,
         SubscriptionStore subscriptions,
+        DnsStore dns,
+        DnsState resolver,
         FirewallHost host,
         ILogger<FirewallApplier> logger)
     {
         _configs = configs;
         _panel = panel;
         _subscriptions = subscriptions;
+        _dns = dns;
+        _resolver = resolver;
         _host = host;
         _logger = logger;
     }
 
     /// <summary>
-    /// Returns what the panel holds open in the firewall of the host as the endpoints and the settings stand now.
+    /// Returns what the panel holds open in the firewall of the host as the endpoints and the settings stand now,
+    /// the resolver as it runs.
     /// </summary>
     public async Task<FirewallPlan> PlanAsync(CancellationToken ct) =>
         FirewallPlan.Of(
             await _configs.ListAsync(ct).ConfigureAwait(false),
             await _panel.ReadAsync(ct).ConfigureAwait(false),
-            await _subscriptions.ReadAsync(ct).ConfigureAwait(false));
+            await _subscriptions.ReadAsync(ct).ConfigureAwait(false),
+            _resolver.Settings ?? await _dns.ReadAsync(ct).ConfigureAwait(false));
 
     /// <summary>
     /// Opens the ports the panel keeps open and closes the rest of what it opened before.
