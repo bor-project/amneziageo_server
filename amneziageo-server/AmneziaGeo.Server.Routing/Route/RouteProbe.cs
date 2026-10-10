@@ -124,7 +124,7 @@ public static class RouteProbe
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(inSet);
 
-        if (Guard(plan.Dns, query) is { } guard)
+        if (Guard(plan, query) is { } guard)
         {
             return new RouteVerdict(Guarded, guard, null, []);
         }
@@ -177,9 +177,10 @@ public static class RouteProbe
         && query.Port == 53
         && plan.Inbound.Contains(query.Inbound, StringComparer.Ordinal);
 
-    private static string? Guard(DnsSettings dns, RouteQuery query)
+    private static string? Guard(RoutePlan plan, RouteQuery query)
     {
-        if (!dns.IsEnabled)
+        var dns = plan.Dns;
+        if (!dns.IsEnabled || !plan.HasNames)
         {
             return null;
         }

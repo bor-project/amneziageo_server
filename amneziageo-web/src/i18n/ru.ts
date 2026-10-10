@@ -383,7 +383,7 @@ export const ru: Dictionary = {
   "services.certificateExpiring": "Истекает через {days} дн.",
   "services.certificateToday": "Истекает сегодня",
   "update.available": "доступна {version}",
-  "update.confirm": "Обновить до {version}",
+  "update.confirm": "Обновить",
   "update.running": "обновление до {version}",
   "update.failed": "обновление до {version} не удалось",
   "update.check": "Проверить обновления",

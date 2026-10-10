@@ -150,12 +150,26 @@ public class RouteProbeTests
     public void TheGuardsOfTheResolverGoAheadOfTheRules(int port, string address, string guard)
     {
         var dns = DnsDefaults.Settings with { IsEnabled = true, BlockDot = true, BlockDoh = true };
-        var plan = RoutePlan.Build([Rule(1, "0.0.0.0/0")], Ways, Index(), ["awg1"], dns);
+        var plan = RoutePlan.Build([Rule(1, "geosite:youtube"), Rule(2, "0.0.0.0/0")], Ways, Index(), ["awg1"], dns);
 
         var verdict = Test(plan, new RouteQuery { Addresses = [IPAddress.Parse(address)], Port = port });
 
         Assert.Equal(guard, verdict.Guard);
         Assert.Equal(guard.Length > 0 ? RouteProbe.Guarded : RouteProbe.Out, verdict.Verdict);
+    }
+
+    [Theory]
+    [InlineData(853, "8.8.8.8")]
+    [InlineData(443, "1.1.1.1")]
+    public void TheGuardsStandAsideWhileNoRuleGoesByName(int port, string address)
+    {
+        var dns = DnsDefaults.Settings with { IsEnabled = true, BlockDot = true, BlockDoh = true };
+        var plan = RoutePlan.Build([Rule(1, "0.0.0.0/0")], Ways, Index(), ["awg1"], dns);
+
+        var verdict = Test(plan, new RouteQuery { Addresses = [IPAddress.Parse(address)], Port = port });
+
+        Assert.Equal(string.Empty, verdict.Guard);
+        Assert.Equal(RouteProbe.Out, verdict.Verdict);
     }
 
     [Theory]

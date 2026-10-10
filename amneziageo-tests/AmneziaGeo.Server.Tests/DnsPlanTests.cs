@@ -169,6 +169,48 @@ public class DnsPlanTests
     }
 
     [Fact]
+    public void AServerWhoseRulesGoByRangesAloneLaysNoGuard()
+    {
+        var text = RouteRuleset.Text(Plan(Rule("77.88.8.0/24"), On));
+
+        Assert.DoesNotContain("th dport 853", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("doh4", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("doh6", text, StringComparison.Ordinal);
+        Assert.Contains("chain resolve", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AServerWithNoRulesLaysNoGuard()
+    {
+        var plan = RoutePlan.Build([], Ways, GeoIndex.Load([], new MemoryGeoFiles()), ["awg1"], On);
+        var text = RouteRuleset.Text(plan);
+
+        Assert.DoesNotContain("th dport 853", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("set doh", text, StringComparison.Ordinal);
+        Assert.Contains("chain resolve", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARuleByNameThatIsTurnedOffBringsNoGuard()
+    {
+        var text = RouteRuleset.Text(Plan(Rule("youtube.com") with { IsEnabled = false }, On));
+
+        Assert.DoesNotContain("th dport 853", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("doh4", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ABasicListByNameBringsTheGuards()
+    {
+        var basic = new RouteBasic { Block = ["ads.example.com"] };
+        var plan = RoutePlan.Build([], Ways, GeoIndex.Load([], new MemoryGeoFiles()), ["awg1"], On, basic: basic);
+        var text = RouteRuleset.Text(plan);
+
+        Assert.Contains("meta l4proto { tcp, udp } th dport 853 drop", text, StringComparison.Ordinal);
+        Assert.Contains("set doh4", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheAddressesOfARuleLiveAsLongAsTheSettingsSay()
     {
         var text = RouteRuleset.Text(Plan(Rule("youtube.com"), On with { NameMinutes = 15 }));

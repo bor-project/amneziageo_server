@@ -555,7 +555,7 @@ function Update() {
 
       {latest && may && (
         <button type="button" className={small} disabled={apply.isPending} onClick={() => void go(latest.version)}>
-          {t("update.confirm", { version: latest.version })}
+          {t("update.confirm")}
         </button>
       )}
 

@@ -73,7 +73,7 @@ public static class RouteRuleset
             Sets(text, leg, plan.Dns);
         }
 
-        Https(text, plan.Dns);
+        Https(text, plan);
 
         text.Append("\tchain prerouting {\n");
         text.Append("\t\ttype filter hook prerouting priority mangle; policy accept;\n");
@@ -91,7 +91,7 @@ public static class RouteRuleset
         }
 
         text.Append("\t}\n\n\tchain decide {\n");
-        foreach (var line in Guard(plan.Dns, plan.Journal).Concat(live.SelectMany(leg => Lines(leg, plan.Journal))))
+        foreach (var line in Guard(plan).Concat(live.SelectMany(leg => Lines(leg, plan.Journal))))
         {
             text.Append("\t\t").Append(line).Append('\n');
         }
@@ -107,6 +107,16 @@ public static class RouteRuleset
         text.Append("}\n");
 
         return text.ToString();
+    }
+
+    /// <summary>
+    /// Returns the guard lines of a plan, none while no rule on the host matches by name.
+    /// </summary>
+    public static IReadOnlyList<string> Guard(RoutePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        return plan.HasNames ? Guard(plan.Dns, plan.Journal) : [];
     }
 
     /// <summary>
@@ -225,9 +235,9 @@ public static class RouteRuleset
         Names(text, NameSet(leg.Rule.Id, true), "ipv6_addr", dns);
     }
 
-    private static void Https(StringBuilder text, DnsSettings dns)
+    private static void Https(StringBuilder text, RoutePlan plan)
     {
-        if (!dns.IsEnabled || !dns.BlockDoh)
+        if (!plan.HasNames || !plan.Dns.IsEnabled || !plan.Dns.BlockDoh)
         {
             return;
         }

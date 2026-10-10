@@ -25,7 +25,7 @@ public static class EndpointCommands
     }
 
     /// <summary>
-    /// Names the endpoints and whether their ports are held open in the firewall.
+    /// Names the endpoints and who keeps their ports open, the panel or the host.
     /// </summary>
     public static async Task<int> ListAsync(Context context, CancellationToken ct)
     {
@@ -42,14 +42,14 @@ public static class EndpointCommands
         foreach (var config in held)
         {
             var carried = config.WebSocket ? $", websocket on TCP {ConfigServices.Port(config)}" : string.Empty;
-            Terminal.Say($"{config.Name}: port {config.ListenPort}, {(config.Opened ? "open" : "closed")} in the firewall{carried}");
+            Terminal.Say($"{config.Name}: port {config.ListenPort}, {Keeper(config.Opened)}{carried}");
         }
 
         return 0;
     }
 
     /// <summary>
-    /// Holds the port of an endpoint open in the firewall, or lets it stay closed.
+    /// Holds the port of an endpoint open in the firewall, or leaves it to the host.
     /// </summary>
     public static async Task<int> OpenedAsync(Context context, Arguments args, bool opened, CancellationToken ct)
     {
@@ -74,7 +74,7 @@ public static class EndpointCommands
             return Refuse(result.Message);
         }
 
-        Terminal.Say($"{name}: port {(opened ? "open" : "closed")} in the firewall, it takes hold when the service restarts");
+        Terminal.Say($"{name}: the port is {Keeper(opened)}, it takes hold when the service restarts");
 
         return 0;
     }
@@ -86,6 +86,8 @@ public static class EndpointCommands
         return held.FirstOrDefault(config => string.Equals(config.Name, name, StringComparison.Ordinal));
     }
 
+    private static string Keeper(bool opened) => opened ? "held open by the panel" : "left to the host";
+
     private static int Refuse(string message)
     {
         Terminal.Fail(message);
@@ -95,8 +97,8 @@ public static class EndpointCommands
 
     private static int Usage() => Refuse("""
         usage:
-          endpoint list name the endpoints and their ports in the firewall
+          endpoint list name the endpoints and who keeps their ports open
           endpoint open <name> hold the port of the endpoint open in the firewall
-          endpoint close <name> let the port of the endpoint stay closed
+          endpoint close <name> leave the port of the endpoint to the host
         """);
 }

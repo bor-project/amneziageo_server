@@ -122,6 +122,11 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
     public ushort? Journal { get; init; }
 
     /// <summary>
+    /// Tells whether a rule on the host matches by name.
+    /// </summary>
+    public bool HasNames => Legs.Any(leg => leg.IsOnHost && leg.Domains.Count > 0);
+
+    /// <summary>
     /// Expands the rules over the geo index, the outbounds and the balancers the panel holds.
     /// </summary>
     public static RoutePlan Build(

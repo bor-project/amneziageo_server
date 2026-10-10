@@ -381,7 +381,7 @@ export const en = {
   "services.certificateExpiring": "Runs out in {days} d.",
   "services.certificateToday": "Runs out today",
   "update.available": "{version} available",
-  "update.confirm": "Update to {version}",
+  "update.confirm": "Update",
   "update.running": "updating to {version}",
   "update.failed": "the update to {version} failed",
   "update.check": "Check for updates",
