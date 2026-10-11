@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Api.Diagnostics;
 
@@ -61,7 +62,7 @@ public static class HostVersions
             UseShellExecute = false,
         };
 
-        using var process = Process.Start(start);
+        using var process = Process.Start(ServiceSocket.Withhold(start));
         if (process is null)
         {
             return string.Empty;

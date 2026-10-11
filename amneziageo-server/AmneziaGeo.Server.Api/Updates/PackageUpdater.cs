@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Security.Cryptography;
+using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Api.Updates;
 
@@ -125,7 +126,7 @@ public sealed class PackageUpdater
             start.ArgumentList.Add(word);
         }
 
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("systemd-run did not start");
+        using var process = Process.Start(ServiceSocket.Withhold(start)) ?? throw new InvalidOperationException("systemd-run did not start");
         var said = process.StandardError.ReadToEndAsync(ct);
         await process.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
         await process.WaitForExitAsync(ct).ConfigureAwait(false);

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using AmneziaGeo.Server.Core.Proxy;
+using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Routing.Proxy;
 
@@ -317,7 +318,7 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
 
                 try
                 {
-                    _process = Process.Start(start);
+                    _process = Process.Start(ServiceSocket.Withhold(start));
                     _fault = _process is null ? $"the host did not start {_command.File}" : string.Empty;
                 }
                 catch (Win32Exception ex)

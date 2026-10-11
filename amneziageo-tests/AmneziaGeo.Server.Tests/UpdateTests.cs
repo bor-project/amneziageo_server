@@ -154,6 +154,136 @@ public sealed class UpdateTests : IDisposable
     }
 
     [Fact]
+    public void TheStableChannelAsksForTheLatestReleaseAloneAndTheTestChannelForTheNewestFew()
+    {
+        Assert.Equal(
+            "https://api.github.com/repos/bor-project/amneziageo_server/releases/latest",
+            UpdateFeed.Address("bor-project/amneziageo_server", tests: false).AbsoluteUri);
+        Assert.Equal(
+            "https://api.github.com/repos/bor-project/amneziageo_server/releases?per_page=5",
+            UpdateFeed.Address("bor-project/amneziageo_server", tests: true).AbsoluteUri);
+    }
+
+    [Fact]
+    public void OneReleaseReadOnItsOwnIsPickedTheWayAListIs()
+    {
+        Assert.Equal(new Version(1, 0, 1, 0), UpdateFeed.Pick(One("v1.0.1.0", early: false), tests: false)?.Version);
+        Assert.Null(UpdateFeed.Pick(One("v1.0.1.3", early: true), tests: false));
+        Assert.Equal(new Version(1, 0, 1, 3), UpdateFeed.Pick(One("v1.0.1.3", early: true), tests: true)?.Version);
+        Assert.Throws<InvalidDataException>(() => UpdateFeed.Pick(Encoding.UTF8.GetBytes("\"latest\""), tests: false));
+    }
+
+    [Fact]
+    public async Task TheLatestReleaseIsAskedForPackedAndReadUnpacked()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var github = new GitHub(key, (_, _) => Packed(One("v1.0.1.0", early: false)));
+        using var http = new HttpClient(github);
+        var feed = new UpdateFeed(http, new UpdateOptions(), tests: false, Quick);
+
+        var offer = await feed.NewestAsync(key.ExportSubjectPublicKeyInfoPem(), CancellationToken.None);
+
+        Assert.Equal(new Version(1, 0, 1, 0), offer?.Manifest.Version);
+        Assert.Equal("https://api.github.com/repos/bor-project/amneziageo_server/releases/latest", github.Address);
+        Assert.Equal("gzip", github.Packing);
+        Assert.Equal(1, github.Asked);
+    }
+
+    [Fact]
+    public async Task AnAnswerThatDoesNotComeInTimeIsAskedForAgain()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var github = new GitHub(key, (asked, _) => asked == 1 ? null : Plain(One("v1.0.1.0", early: false)));
+        using var http = new HttpClient(github);
+        var feed = new UpdateFeed(http, new UpdateOptions(), tests: false, Quick);
+
+        var offer = await feed.NewestAsync(key.ExportSubjectPublicKeyInfoPem(), CancellationToken.None);
+
+        Assert.Equal(new Version(1, 0, 1, 0), offer?.Manifest.Version);
+        Assert.Equal(2, github.Asked);
+    }
+
+    [Fact]
+    public async Task AFaultOfTheFarSideIsAskedAboutAgain()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var github = new GitHub(key, (asked, _) =>
+            asked == 1 ? new HttpResponseMessage(HttpStatusCode.BadGateway) : Plain(One("v1.0.1.0", early: false)));
+        using var http = new HttpClient(github);
+        var feed = new UpdateFeed(http, new UpdateOptions(), tests: false, Quick);
+
+        var offer = await feed.NewestAsync(key.ExportSubjectPublicKeyInfoPem(), CancellationToken.None);
+
+        Assert.Equal(new Version(1, 0, 1, 0), offer?.Manifest.Version);
+        Assert.Equal(2, github.Asked);
+    }
+
+    [Fact]
+    public async Task ARefusalIsNotAskedAboutAgain()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var github = new GitHub(key, (_, _) => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        using var http = new HttpClient(github);
+        var feed = new UpdateFeed(http, new UpdateOptions(), tests: false, Quick);
+
+        var failure = await Assert.ThrowsAsync<HttpRequestException>(
+            () => feed.NewestAsync(key.ExportSubjectPublicKeyInfoPem(), CancellationToken.None));
+
+        Assert.EndsWith("answered 403", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(1, github.Asked);
+    }
+
+    [Fact]
+    public async Task WhenNoAnswerComesTheFailureNamesTheHostTheTimeAndTheTries()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var github = new GitHub(key, (_, _) => null);
+        using var http = new HttpClient(github);
+        var patience = new UpdatePatience(TimeSpan.FromMilliseconds(100), TimeSpan.FromSeconds(3), TimeSpan.FromMilliseconds(10), 3);
+        var feed = new UpdateFeed(http, new UpdateOptions(), tests: false, patience);
+
+        var failure = await Assert.ThrowsAsync<TimeoutException>(
+            () => feed.NewestAsync(key.ExportSubjectPublicKeyInfoPem(), CancellationToken.None));
+
+        Assert.StartsWith("api.github.com did not answer in ", failure.Message, StringComparison.Ordinal);
+        Assert.EndsWith(" s, asked 3 time(s)", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(3, github.Asked);
+    }
+
+    [Fact]
+    public async Task TheLookKeepsToItsWholeTimeHoweverManyTriesAreLeft()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var github = new GitHub(key, (_, _) => null);
+        using var http = new HttpClient(github);
+        var patience = new UpdatePatience(TimeSpan.FromMilliseconds(100), TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(10), 500);
+        var feed = new UpdateFeed(http, new UpdateOptions(), tests: false, patience);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        await Assert.ThrowsAsync<TimeoutException>(
+            () => feed.NewestAsync(key.ExportSubjectPublicKeyInfoPem(), CancellationToken.None));
+
+        Assert.InRange(github.Asked, 2, 20);
+        Assert.InRange(clock.Elapsed, TimeSpan.FromMilliseconds(900), TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task TheLookStopsWhenItsCallerDoes()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var github = new GitHub(key, (_, _) => null);
+        using var http = new HttpClient(github);
+        using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var patience = new UpdatePatience(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(60), TimeSpan.FromMilliseconds(10), 3);
+        var feed = new UpdateFeed(http, new UpdateOptions(), tests: false, patience);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => feed.NewestAsync(key.ExportSubjectPublicKeyInfoPem(), stop.Token));
+
+        Assert.Equal(1, github.Asked);
+    }
+
+    [Fact]
     public async Task TheSettingsOfThePanelTakeTheBuildsBeforeARelease()
     {
         using var bench = new Bench();
@@ -510,6 +640,79 @@ public sealed class UpdateTests : IDisposable
             Task.FromResult(_files.TryGetValue(request.RequestUri!.AbsoluteUri, out var body)
                 ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) }
                 : new HttpResponseMessage(HttpStatusCode.NotFound));
+    }
+
+    private static readonly UpdatePatience Quick =
+        new(TimeSpan.FromMilliseconds(300), TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(10), 3);
+
+    private static byte[] One(string tag, bool early) =>
+        Encoding.UTF8.GetBytes(
+            Release(tag, draft: false, prerelease: early, UpdateFeed.ManifestFile, UpdateFeed.SignatureFile).ToJsonString());
+
+    private static HttpResponseMessage Plain(byte[] body) =>
+        new(HttpStatusCode.OK) { Content = new ByteArrayContent(body) };
+
+    private static HttpResponseMessage Packed(byte[] body)
+    {
+        using var buffer = new MemoryStream();
+        using (var gzip = new GZipStream(buffer, CompressionLevel.Fastest, leaveOpen: true))
+        {
+            gzip.Write(body);
+        }
+
+        var content = new ByteArrayContent(buffer.ToArray());
+        content.Headers.ContentEncoding.Add("gzip");
+
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+    }
+
+    // GitHub as the look for a release sees it: the answer about releases is scripted by the count of the asking, a
+    // null answer never comes; the manifests of 1.0.1.0 and 1.0.1.3 lie where a release keeps them.
+    private sealed class GitHub : HttpMessageHandler
+    {
+        private readonly Dictionary<string, byte[]> _files = [];
+
+        private readonly Func<int, HttpRequestMessage, HttpResponseMessage?> _releases;
+
+        public GitHub(ECDsa key, Func<int, HttpRequestMessage, HttpResponseMessage?> releases)
+        {
+            _releases = releases;
+            foreach (var (tag, version, channel) in new[] { ("v1.0.1.0", "1.0.1.0", "stable"), ("v1.0.1.3", "1.0.1.3", "test") })
+            {
+                var manifest = Manifest(version, channel);
+                var folder = $"https://github.com/bor-project/amneziageo_server/releases/download/{tag}/";
+                _files[folder + UpdateFeed.ManifestFile] = manifest;
+                _files[folder + UpdateFeed.SignatureFile] = Sign(key, manifest);
+            }
+        }
+
+        public int Asked { get; private set; }
+
+        public string Address { get; private set; } = string.Empty;
+
+        public string Packing { get; private set; } = string.Empty;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var address = request.RequestUri!;
+            if (address.Host != "api.github.com")
+            {
+                return _files.TryGetValue(address.AbsoluteUri, out var body)
+                    ? Plain(body)
+                    : new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+
+            Asked++;
+            Address = address.AbsoluteUri;
+            Packing = request.Headers.AcceptEncoding.ToString();
+            var answer = _releases(Asked, request);
+            if (answer is null)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+
+            return answer!;
+        }
     }
 
     private sealed class Clients : IHttpClientFactory

@@ -705,17 +705,20 @@ release_arch() {
   esac
 }
 
-# Prints the tag of the newest release of a channel that carries a signed manifest.
+# Prints the tag of the newest release of a channel that carries a signed manifest; fails when GitHub does not answer.
 release_tag() {
-  local tests=0
+  local tests=0 list="https://api.github.com/repos/$repo/releases/latest" found
   if [ "$1" = test ]; then
     tests=1
+    list="https://api.github.com/repos/$repo/releases?per_page=5"
   fi
 
-  curl -fsSL --max-time 30 "https://api.github.com/repos/$repo/releases?per_page=30" 2>/dev/null | python3 -c '
+  found=$(curl -fsSL --compressed --max-time 12 --retry 4 --retry-delay 1 --retry-max-time 60 "$list" 2>/dev/null) || return 1
+  printf '%s' "$found" | python3 -c '
 import json, sys
 tests = sys.argv[1] == "1"
-for release in json.load(sys.stdin):
+found = json.load(sys.stdin)
+for release in found if isinstance(found, list) else [found]:
     if release.get("draft") or (release.get("prerelease") and not tests):
         continue
     names = {asset.get("name") for asset in release.get("assets", [])}
@@ -747,7 +750,11 @@ manifest_version() {
 # Downloads and checks the manifest of the newest release of a channel, printing its version.
 manifest() {
   local channel=$1 work=$2 tag
-  tag=$(release_tag "$channel")
+  if ! tag=$(release_tag "$channel"); then
+    bad "GitHub did not answer about the releases of the $channel channel; try again in a minute"
+    return 1
+  fi
+
   if [ -z "$tag" ]; then
     bad "GitHub names no release on the $channel channel"
     return 1

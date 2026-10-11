@@ -13,10 +13,14 @@ its digest, the digest of every package and of its list.
 `update.json.sig` signs the manifest with the key of the releases. A tag whose fourth number is above zero, or
 that carries a suffix, makes a prerelease.
 
-A minute after it starts and every 12 hours after that, the panel reads the list of releases, takes the newest one
-of its channel that carries `update.json` and `update.json.sig`, checks the signature against the key it carries,
-and offers the release when it is newer than itself. A manifest that does not check out is not offered, and the
-panel names why.
+A minute after it starts and every 12 hours after that, the panel asks GitHub for the latest release, or for the
+newest five when it takes the prereleases as well, takes the newest one of its channel that carries `update.json`
+and `update.json.sig`, checks the signature against the key it carries, and offers the release when it is newer
+than itself. A manifest that does not check out is not offered, and the panel names why.
+
+A request that brings no answer in 12 seconds is sent again, five times at most and for a minute in all. After
+that the look fails and `fault` in the answer of `GET /api/update` says who did not answer, for how long and after
+how many requests; the next look starts over. The console menu asks GitHub the same way when it installs the panel.
 
 | Setting | Default | What it does |
 |---|---|---|

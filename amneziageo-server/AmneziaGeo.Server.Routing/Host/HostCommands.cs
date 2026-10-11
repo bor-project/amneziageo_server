@@ -85,7 +85,7 @@ public sealed class HostCommands : IHostCommands
             start.ArgumentList.Add(argument);
         }
 
-        using var process = Process.Start(start)
+        using var process = Process.Start(ServiceSocket.Withhold(start))
             ?? throw new HostNetworkException($"the host did not start '{file}'");
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
         limit.CancelAfter(Limit);
