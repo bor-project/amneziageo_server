@@ -78,7 +78,7 @@ public static class ServiceRegistration
         app.Use(async (context, next) =>
         {
             var panel = under.HasValue && context.Request.Path.StartsWithSegments(under);
-            if (!panel && share.Point is { } point && desk.Takes(context, point))
+            if (!panel && share.Point is { } point && (desk.Takes(context, point) || desk.Strays(context, point)))
             {
                 await desk.AnswerAsync(context, point).ConfigureAwait(false);
 

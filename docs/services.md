@@ -165,6 +165,13 @@ new path by themselves. A websocket under a path no endpoint with `WebSocket` ho
 does one under a path two endpoints of the port were left sharing by a release before, until their paths
 differ.
 
+The panel counts the websockets it refuses to each address, because `wstunnel` asks again at once after every
+refusal and without end. The first three refusals of an address in a row go out at once; from the fourth on each
+answer waits five seconds, at most four answers of one address at a time. A websocket whose front does not answer
+(502) is held from the first one, up to five seconds, and handed to the front again every half a second, so it goes
+through as soon as the front is back. The journal gets a line when a row starts and a line when the waiting
+begins, not a line a refusal. A row ends once the address has been silent for a minute.
+
 An application of ours and an outbound of the panel still send `Authorization: AmneziaGeo <base64url of the
 JSON of the token>` with the upgrade, for the panels of the releases before, which let no websocket in without
 it. The panel takes the header off and does not read it.

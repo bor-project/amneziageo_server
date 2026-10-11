@@ -44,6 +44,8 @@ public sealed class ServiceDesk
 
     private readonly ILogger<ServiceDesk> _logger;
 
+    private readonly RefusalHold _hold;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -54,7 +56,8 @@ public sealed class ServiceDesk
         SubscriptionState subscriptions,
         IHostApplicationLifetime life,
         IOptions<JsonOptions> json,
-        ILogger<ServiceDesk> logger)
+        ILogger<ServiceDesk> logger,
+        RefusalHold? hold = null)
     {
         ArgumentNullException.ThrowIfNull(life);
         ArgumentNullException.ThrowIfNull(json);
@@ -66,6 +69,7 @@ public sealed class ServiceDesk
         _stopping = life.ApplicationStopping;
         _json = json.Value.SerializerOptions;
         _logger = logger;
+        _hold = hold ?? new RefusalHold();
     }
 
     /// <summary>
@@ -94,6 +98,11 @@ public sealed class ServiceDesk
                 await SubscriptionAnswer.WriteAsync(context, _subscriptions.Current, _scopes).ConfigureAwait(false);
                 break;
             default:
+                if (Upgrades(context))
+                {
+                    await HoldAsync(context, Refuse(context, point.Names, "no websocket comes under that path")).ConfigureAwait(false);
+                }
+
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 break;
         }
@@ -108,6 +117,17 @@ public sealed class ServiceDesk
         ArgumentNullException.ThrowIfNull(point);
 
         return Route(context, point) != Wanted.None;
+    }
+
+    /// <summary>
+    /// Tells whether a request asks a port for a websocket none of its endpoints takes.
+    /// </summary>
+    public bool Strays(HttpContext context, ServicePoint point)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(point);
+
+        return Upgrades(context) && Route(context, point) == Wanted.None;
     }
 
     private async Task HelloAsync(HttpContext context, ServicePoint point)
@@ -154,12 +174,120 @@ public sealed class ServiceDesk
         var named = point.Endpoints.Where(one => one.WebSocket && Under(context.Request.Path, one.Path)).ToList();
         if (named.Count != 1)
         {
-            Refuse(context, string.Join(", ", named.Select(one => one.Name)), "shared-path");
+            await HoldAsync(context, Refuse(context, string.Join(", ", named.Select(one => one.Name)), "shared-path")).ConfigureAwait(false);
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
 
             return;
         }
 
-        await FrontRelay.PassAsync(context, named[0].Front, _stopping, _logger).ConfigureAwait(false);
+        var refused = await FrontRelay.PassAsync(context, named[0].Front, _stopping).ConfigureAwait(false);
+        if (refused is null)
+        {
+            return;
+        }
+
+        var noted = Refuse(context, named[0].Name, refused.Reason, refused.Down);
+        if (refused.Down)
+        {
+            refused = await AgainAsync(context, named[0].Front, refused, noted).ConfigureAwait(false);
+        }
+        else
+        {
+            await HoldAsync(context, noted).ConfigureAwait(false);
+        }
+
+        if (refused is not null)
+        {
+            context.Response.StatusCode = refused.Status;
+        }
+    }
+
+    // Counts a websocket refused to an address and writes down the start of a row and the start of the holding.
+    private RefusalNote Refuse(HttpContext context, string endpoint, string reason, bool down = false)
+    {
+        var address = context.Connection.RemoteIpAddress;
+        var noted = _hold.Note(address, down);
+        if (noted.First)
+        {
+            _logger.LogInformation("the websocket of {Endpoint} was refused to {Address}: {Reason}", endpoint, address, reason);
+        }
+
+        if (noted.Begins)
+        {
+            _logger.LogWarning(
+                "{Address} keeps asking for the websocket of {Endpoint} and is refused ({Reason}), {Count} times in {Seconds} s; each answer to it now waits {Wait} s",
+                address,
+                endpoint,
+                reason,
+                noted.Count,
+                (int)noted.Lasted.TotalSeconds,
+                (int)noted.Wait.TotalSeconds);
+        }
+
+        return noted;
+    }
+
+    // Holds the answer to a refused websocket for the wait it was given.
+    private async Task HoldAsync(HttpContext context, RefusalNote noted)
+    {
+        if (noted.Wait <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            using var ended = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, _stopping);
+            await _hold.WaitAsync(noted.Wait, ended.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            _hold.Left(context.Connection.RemoteIpAddress);
+        }
+    }
+
+    // Holds the answer to a websocket whose front is down and hands it to the front again at every step of the wait.
+    private async Task<FrontRefusal?> AgainAsync(HttpContext context, int front, FrontRefusal refused, RefusalNote noted)
+    {
+        if (noted.Wait <= TimeSpan.Zero)
+        {
+            return refused;
+        }
+
+        var address = context.Connection.RemoteIpAddress;
+        var left = false;
+        void Leave()
+        {
+            if (!left)
+            {
+                left = true;
+                _hold.Left(address);
+            }
+        }
+
+        try
+        {
+            using var ended = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, _stopping);
+            var last = refused;
+            for (var waited = TimeSpan.Zero; waited < noted.Wait && last is { Down: true }; waited += RefusalHold.Step)
+            {
+                await _hold.WaitAsync(RefusalHold.Step, ended.Token).ConfigureAwait(false);
+                last = await FrontRelay.PassAsync(context, front, _stopping, Leave).ConfigureAwait(false);
+            }
+
+            return last;
+        }
+        catch (OperationCanceledException)
+        {
+            return refused;
+        }
+        finally
+        {
+            Leave();
+        }
     }
 
     // Tells what the services of a port make of a request.
@@ -167,8 +295,7 @@ public sealed class ServiceDesk
     {
         var path = context.Request.Path;
         var method = context.Request.Method;
-        if (point.Endpoints.Any(one => one.WebSocket && Under(path, one.Path))
-            && context.Features.Get<IHttpUpgradeFeature>() is { IsUpgradableRequest: true })
+        if (point.Endpoints.Any(one => one.WebSocket && Under(path, one.Path)) && Upgrades(context))
         {
             return Wanted.Front;
         }
@@ -201,11 +328,9 @@ public sealed class ServiceDesk
     private static bool Under(PathString path, string socket) =>
         path.StartsWithSegments("/" + socket, StringComparison.Ordinal);
 
-    private void Refuse(HttpContext context, string endpoint, string reason)
-    {
-        _logger.LogInformation("the websocket of {Endpoint} was refused: {Reason}", endpoint, reason);
-        context.Response.StatusCode = StatusCodes.Status404NotFound;
-    }
+    // Tells whether a request asks for its connection to be switched to another protocol.
+    private static bool Upgrades(HttpContext context) =>
+        context.Features.Get<IHttpUpgradeFeature>() is { IsUpgradableRequest: true };
 
     // Proves the token of a hello and takes its nonce, which holds once.
     private async Task<Proven> ProveAsync(HelloRequest request, ServicePoint point, CancellationToken ct)

@@ -14,6 +14,7 @@ using AmneziaGeo.Server.Routing.Template;
 using AmneziaGeo.Server.Routing.Proxy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting.Internal;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
@@ -586,6 +587,198 @@ public class ServiceTests
     }
 
     [Fact]
+    public async Task AnAddressThatKeepsAskingForAWebSocketNoEndpointTakes_IsAnsweredAfterAWait()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true, WebSocketPath = ConfigServices.OldPath },
+            CancellationToken.None)).Record!;
+        var waits = new List<TimeSpan>();
+        var heard = new Heard();
+        var hold = new RefusalHold(bench.Clock, (wait, _) =>
+        {
+            waits.Add(wait);
+
+            return Task.CompletedTask;
+        });
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), hold: hold, logger: heard);
+        var statuses = new List<int>();
+
+        for (var index = 0; index < 6; index++)
+        {
+            var context = From("203.0.113.9", "/v2/events");
+            await desk.AnswerAsync(context, Point(endpoint));
+            statuses.Add(context.Response.StatusCode);
+            bench.Clock.Pass(TimeSpan.FromMilliseconds(100));
+        }
+
+        var other = From("203.0.113.10", "/v2/events");
+        await desk.AnswerAsync(other, Point(endpoint));
+
+        Assert.All(statuses, status => Assert.Equal(StatusCodes.Status404NotFound, status));
+        Assert.Equal([RefusalHold.Wait, RefusalHold.Wait, RefusalHold.Wait], waits);
+        Assert.Equal(0, hold.Waiting(System.Net.IPAddress.Parse("203.0.113.9")));
+        Assert.Equal(3, heard.Lines.Count);
+        Assert.StartsWith("Information the websocket of awg1 was refused to 203.0.113.9: ", heard.Lines[0], StringComparison.Ordinal);
+        Assert.StartsWith("Warning 203.0.113.9 keeps asking for the websocket of awg1 and is refused", heard.Lines[1], StringComparison.Ordinal);
+        Assert.Contains("4 times in 0 s; each answer to it now waits 5 s", heard.Lines[1], StringComparison.Ordinal);
+        Assert.StartsWith("Information the websocket of awg1 was refused to 203.0.113.10: ", heard.Lines[2], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARequestThatAsksForNoWebSocket_IsNotCounted()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true, WebSocketPath = ConfigServices.OldPath },
+            CancellationToken.None)).Record!;
+        var waits = new List<TimeSpan>();
+        var hold = new RefusalHold(bench.Clock, (wait, _) =>
+        {
+            waits.Add(wait);
+
+            return Task.CompletedTask;
+        });
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), hold: hold);
+
+        for (var index = 0; index < 6; index++)
+        {
+            var context = Asking("GET", "/v2/events");
+            context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.9");
+            await desk.AnswerAsync(context, Point(endpoint));
+            Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+        }
+
+        Assert.Empty(waits);
+        Assert.True(hold.Note(System.Net.IPAddress.Parse("203.0.113.9")).First);
+    }
+
+    [Fact]
+    public async Task AWebSocketNoEndpointTakes_IsAnsweredByTheServicesOfASharedPort()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true, WebSocketPath = ConfigServices.OldPath },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var point = Point(endpoint);
+
+        Assert.True(desk.Strays(Upgrading("/v2/events"), point));
+        Assert.False(desk.Strays(Upgrading("/v1/events"), point));
+        Assert.False(desk.Strays(Asking("GET", "/v2/events"), point));
+        Assert.False(desk.Takes(Upgrading("/v2/events"), point));
+    }
+
+    [Fact]
+    public async Task AWebSocketWhoseFrontIsDown_IsHandedToTheFrontAgainWhileItsAnswerIsHeld()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true, WebSocketPath = ConfigServices.OldPath },
+            CancellationToken.None)).Record!;
+        var port = Free();
+        var point = Fronted(Point(endpoint), endpoint.Id, port);
+        var waits = new List<TimeSpan>();
+        var heard = new Heard();
+        Front? front = null;
+        var hold = new RefusalHold(bench.Clock, (wait, _) =>
+        {
+            waits.Add(wait);
+            if (waits.Count == 3)
+            {
+                front = new Front(port: port);
+            }
+
+            return Task.CompletedTask;
+        });
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), hold: hold, logger: heard);
+
+        try
+        {
+            var held = From("203.0.113.9", "/v1/events");
+            await desk.AnswerAsync(held, point);
+            var head = await front!.Head.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal([RefusalHold.Step, RefusalHold.Step, RefusalHold.Step], waits);
+            Assert.StartsWith("GET /v1/events HTTP/1.1\r\n", head, StringComparison.Ordinal);
+            Assert.NotEqual(StatusCodes.Status502BadGateway, held.Response.StatusCode);
+            Assert.Equal(0, hold.Waiting(System.Net.IPAddress.Parse("203.0.113.9")));
+            Assert.Single(heard.Lines);
+            Assert.StartsWith("Information the websocket of awg1 was refused to 203.0.113.9: ", heard.Lines[0], StringComparison.Ordinal);
+            Assert.Contains("does not answer", heard.Lines[0], StringComparison.Ordinal);
+        }
+        finally
+        {
+            front?.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task AWebSocketWhoseFrontStaysDown_IsAnsweredOnceTheWaitIsOver()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true, WebSocketPath = ConfigServices.OldPath },
+            CancellationToken.None)).Record!;
+        var point = Fronted(Point(endpoint), endpoint.Id, Free());
+        var waits = new List<TimeSpan>();
+        var hold = new RefusalHold(bench.Clock, (wait, _) =>
+        {
+            waits.Add(wait);
+
+            return Task.CompletedTask;
+        });
+        var heard = new Heard();
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), hold: hold, logger: heard);
+        var statuses = new List<int>();
+
+        for (var index = 0; index < RefusalHold.Free + 1; index++)
+        {
+            var context = From("203.0.113.9", "/v1/events");
+            await desk.AnswerAsync(context, point);
+            statuses.Add(context.Response.StatusCode);
+        }
+
+        Assert.All(statuses, status => Assert.Equal(StatusCodes.Status502BadGateway, status));
+        Assert.Equal((RefusalHold.Free + 1) * (int)(RefusalHold.Wait / RefusalHold.Step), waits.Count);
+        Assert.All(waits, wait => Assert.Equal(RefusalHold.Step, wait));
+        Assert.Equal(0, hold.Waiting(System.Net.IPAddress.Parse("203.0.113.9")));
+        Assert.Equal(2, heard.Lines.Count);
+        Assert.StartsWith("Warning 203.0.113.9 keeps asking for the websocket of awg1 and is refused", heard.Lines[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AWebSocketItsFrontRefuses_IsAnsweredWithWhatTheFrontSaid_AndNotHandedOverAgain()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], WebSocket = true, WebSocketPath = ConfigServices.OldPath },
+            CancellationToken.None)).Record!;
+        using var front = new Refuser();
+        var point = Fronted(Point(endpoint), endpoint.Id, front.Port);
+        var waits = new List<TimeSpan>();
+        var hold = new RefusalHold(bench.Clock, (wait, _) =>
+        {
+            waits.Add(wait);
+
+            return Task.CompletedTask;
+        });
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), hold: hold);
+        var statuses = new List<int>();
+
+        for (var index = 0; index < RefusalHold.Free + 2; index++)
+        {
+            var context = From("203.0.113.9", "/v1/events");
+            await desk.AnswerAsync(context, point);
+            statuses.Add(context.Response.StatusCode);
+        }
+
+        Assert.All(statuses, status => Assert.Equal(StatusCodes.Status400BadRequest, status));
+        Assert.Equal([RefusalHold.Wait, RefusalHold.Wait], waits);
+        Assert.Equal(RefusalHold.Free + 2, front.Taken);
+    }
+
+    [Fact]
     public async Task AWebSocketThatStaysDownComesBackWithWhy()
     {
         using var bench = new Bench();
@@ -717,7 +910,9 @@ public class ServiceTests
         Bench bench,
         SpeedTickets tickets,
         SubscriptionState? subscriptions = null,
-        ApplicationLifetime? life = null)
+        ApplicationLifetime? life = null,
+        RefusalHold? hold = null,
+        ILogger<ServiceDesk>? logger = null)
     {
         var state = subscriptions ?? new SubscriptionState();
 
@@ -736,7 +931,17 @@ public class ServiceTests
             state,
             life ?? Life(),
             Options.Create(new JsonOptions()),
-            NullLogger<ServiceDesk>.Instance);
+            logger ?? NullLogger<ServiceDesk>.Instance,
+            hold);
+    }
+
+    // A request for a websocket that comes from the address given.
+    private static DefaultHttpContext From(string address, string path)
+    {
+        var context = Upgrading(path);
+        context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(address);
+
+        return context;
     }
 
     // Returns the lifetime of a panel that runs until a test stops it.
@@ -928,7 +1133,7 @@ public class ServiceTests
     // and the connection too when held.
     private sealed class Front : IDisposable
     {
-        private readonly TcpListener _listener = new(System.Net.IPAddress.Loopback, 0);
+        private readonly TcpListener _listener;
 
         private readonly bool _held;
 
@@ -937,9 +1142,10 @@ public class ServiceTests
         /// <summary>
         /// ctor
         /// </summary>
-        public Front(bool held = false)
+        public Front(bool held = false, int port = 0)
         {
             _held = held;
+            _listener = new TcpListener(System.Net.IPAddress.Loopback, port);
             _listener.Start();
             Port = ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
             Head = TakeAsync();
@@ -970,6 +1176,66 @@ public class ServiceTests
 
             return Encoding.ASCII.GetString(buffer, 0, read);
         }
+    }
+
+    // Stands in for a front that answers every upgrade with a refusal and counts them.
+    private sealed class Refuser : IDisposable
+    {
+        private readonly TcpListener _listener = new(System.Net.IPAddress.Loopback, 0);
+
+        private int _taken;
+
+        /// <summary>
+        /// ctor
+        /// </summary>
+        public Refuser()
+        {
+            _listener.Start();
+            Port = ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
+            _ = ServeAsync();
+        }
+
+        public int Port { get; }
+
+        public int Taken => Volatile.Read(ref _taken);
+
+        public void Dispose()
+        {
+            _listener.Dispose();
+        }
+
+        private async Task ServeAsync()
+        {
+            try
+            {
+                while (true)
+                {
+                    using var peer = await _listener.AcceptTcpClientAsync();
+                    var stream = peer.GetStream();
+                    var buffer = new byte[4096];
+                    _ = await stream.ReadAsync(buffer);
+                    Interlocked.Increment(ref _taken);
+                    await stream.WriteAsync("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n"u8.ToArray());
+                }
+            }
+            catch (Exception ex) when (ex is SocketException or ObjectDisposedException or IOException)
+            {
+            }
+        }
+    }
+
+    // Keeps what the desk writes to its log, one line a record.
+    private sealed class Heard : ILogger<ServiceDesk>
+    {
+        public List<string> Lines { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Lines.Add($"{logLevel} {formatter(state, exception)}");
     }
 
     // Runs every front but the one named, which falls over.

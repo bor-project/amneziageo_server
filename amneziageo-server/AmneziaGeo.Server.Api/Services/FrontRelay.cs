@@ -8,6 +8,14 @@ using Microsoft.Net.Http.Headers;
 namespace AmneziaGeo.Server.Api.Services;
 
 /// <summary>
+/// How the front of an endpoint let the websocket of a request down.
+/// </summary>
+/// <param name="Status">The status the client is answered with.</param>
+/// <param name="Reason">Why nothing was let in.</param>
+/// <param name="Down">Whether the front took no connection at all.</param>
+public sealed record FrontRefusal(int Status, string Reason, bool Down);
+
+/// <summary>
 /// Hands the websocket of a tunnel to the front of its endpoint on the loopback and carries it both ways.
 /// </summary>
 public static class FrontRelay
@@ -79,12 +87,12 @@ public static class FrontRelay
 
     /// <summary>
     /// Opens the websocket of a request on the front at a loopback port and carries its bytes until either side ends
-    /// or the panel stops.
+    /// or the panel stops. Returns how the front let it down, the answer left to the caller, and null once it was
+    /// carried; the caller is told when the front lets it in.
     /// </summary>
-    public static async Task PassAsync(HttpContext context, int port, CancellationToken stopping, ILogger logger)
+    public static async Task<FrontRefusal?> PassAsync(HttpContext context, int port, CancellationToken stopping, Action? admitted = null)
     {
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(logger);
 
         using var ended = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stopping);
         var ct = ended.Token;
@@ -97,10 +105,10 @@ public static class FrontRelay
         }
         catch (Exception ex) when (ex is SocketException or OperationCanceledException)
         {
-            logger.LogWarning("the websocket front on port {Port} does not answer: {Reason}", port, ex.Message);
-            context.Response.StatusCode = StatusCodes.Status502BadGateway;
-
-            return;
+            return new FrontRefusal(
+                StatusCodes.Status502BadGateway,
+                string.Create(CultureInfo.InvariantCulture, $"the front on port {port} does not answer: {ex.Message}"),
+                Down: true);
         }
 
         using var stream = new NetworkStream(backend, ownsSocket: false);
@@ -109,10 +117,12 @@ public static class FrontRelay
         var status = head is null ? 0 : Status(head);
         if (status != Switching)
         {
-            context.Response.StatusCode = status > 0 ? status : StatusCodes.Status502BadGateway;
-
-            return;
+            return status > 0
+                ? new FrontRefusal(status, string.Create(CultureInfo.InvariantCulture, $"the front answered {status}"), Down: false)
+                : new FrontRefusal(StatusCodes.Status502BadGateway, "the front closed the connection without an answer", Down: false);
         }
+
+        admitted?.Invoke();
 
         foreach (var header in Headers(head!))
         {
@@ -136,6 +146,8 @@ public static class FrontRelay
         await done.CancelAsync().ConfigureAwait(false);
         backend.Close();
         await Task.WhenAll(up, down).ConfigureAwait(false);
+
+        return null;
     }
 
     // Copies one direction until it ends, whatever ends it.
