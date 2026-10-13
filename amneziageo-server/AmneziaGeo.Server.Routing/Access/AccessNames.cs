@@ -76,6 +76,30 @@ public sealed class AccessNames
     }
 
     /// <summary>
+    /// Remembers the name a client went to an address by, as its connection told it.
+    /// </summary>
+    public void Learn(IPAddress client, IPAddress target, string name)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (!_isOn || name.Length == 0)
+        {
+            return;
+        }
+
+        var fresh = _fresh;
+        var plain = Plain(target);
+        fresh[(null, plain)] = name;
+        fresh[(Plain(client), plain)] = name;
+        if (fresh.Count > _limit)
+        {
+            Turn(fresh);
+        }
+    }
+
+    /// <summary>
     /// Returns the name a client was last given an address for, or empty when none is known.
     /// </summary>
     public string Name(IPAddress client, IPAddress target)

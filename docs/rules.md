@@ -90,7 +90,13 @@ host swaps one ruleset for the next in a single step. The table carries:
   databases;
 - one timeout set per rule and family, named `n<id>v4` and `n<id>v6`, that the resolver fills with the
   addresses the names of the rule answered with, both from the questions of the clients and from the questions
-  it asks about the names of the rule itself, see [dns.md](dns.md);
+  it asks about the names of the rule itself, and that the names read out of the connections fill as well, see
+  [dns.md](dns.md);
+- while a rule matches by name and the panel reads names out of the connections: the sets `seen4`, `seen6`,
+  `read4`, `read6`, `wait4` and `wait6`, the counter `taken`, after every rule by name the lines that note the
+  first TCP connection to an address not looked at yet or hand it over to the panel, at the head of the chain the
+  lines that take what the panel sent back and show it what a noted connection says first, and at its end the
+  lines that show it the first packets of QUIC, see [dns.md](dns.md#names-read-out-of-the-connections);
 - a `prerouting` chain at mangle priority that leaves alone anything that did not arrive on an endpoint of
   the panel, drops a packet of a client that belongs to no connection the host tracks (`ct state invalid`),
   restores the mark of a connection that already has one from the low 16 bits of the connection mark, and
@@ -153,14 +159,12 @@ the host when the resolver is off. The client is a client of the panel, whose ad
 traffic then carries, or a bare address, whose interface is the configuration its range belongs to. The
 protocol is `tcp` or `udp`, both ports may be left out.
 
-The guards of the resolver come first, while a rule on the host matches by name: with DoT blocked, port 853 is
-dropped, and with DoH blocked, port 443 to a known name server is dropped.
-Next comes the resolver itself: while it intercepts, every question on port
+The resolver comes first: while it intercepts, every question on port
 53 that comes in on a client interface is answered by it, and the rules are not read at all. Then each rule is
 read in order: a rule off the host is passed over with its reason, a rule whose interface, client, protocol,
 port or source port does not fit is missed, and a rule
 whose targets take the traffic matches by a range, by the name or by an address the resolver laid into its
-set. The answer carries the verdict (`out`, `host`, `block`, `held`, `guard` or `dns`), the rule that decided with
+set. The answer carries the verdict (`out`, `host`, `block`, `held` or `dns`), the rule that decided with
 its place, the way out with the members of a balancer and which of them carry, the addresses the name
 resolved to and every rule read before the decision. Each member of the way out says whether it is on
 (`isEnabled`), whether it carries traffic at all (`carries`, the same measure the outbound itself reports)

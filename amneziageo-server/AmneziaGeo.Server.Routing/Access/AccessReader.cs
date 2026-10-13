@@ -55,6 +55,44 @@ public static class AccessReader
     }
 
     /// <summary>
+    /// Returns the record of a connection the panel carried itself.
+    /// </summary>
+    public static AccessRecord Carried(
+        DateTimeOffset at,
+        IPEndPoint source,
+        IPEndPoint target,
+        string inbound,
+        string name,
+        string verdict,
+        RouteLeg? leg,
+        RoutePlan? plan,
+        uint mark)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
+
+        var (way, via, path) = Way(new AccessDecision(verdict, leg?.Rule.Id), leg, plan, mark);
+
+        return new AccessRecord
+        {
+            At = at,
+            Source = source.Address.ToString(),
+            SourcePort = source.Port,
+            Inbound = inbound,
+            Protocol = AccessFlow.Tcp,
+            Target = target.Address.ToString(),
+            Port = target.Port,
+            Name = name,
+            Verdict = verdict,
+            Rule = leg?.Rule.Id,
+            RuleName = leg?.Rule.Name ?? string.Empty,
+            Way = way,
+            Via = via,
+            Path = path,
+        };
+    }
+
+    /// <summary>
     /// Tells whether a record is a question to the resolver of the panel, which the log leaves out.
     /// </summary>
     public static bool IsQuestion(AccessRecord record, RoutePlan? plan)
@@ -74,7 +112,6 @@ public static class AccessReader
 
         return decision.Verdict switch
         {
-            AccessVerdict.Guard => (decision.Guard, string.Empty, string.Empty),
             AccessVerdict.Held => (named, string.Empty, string.Empty),
             AccessVerdict.Host => (string.Empty, string.Empty, AccessPath.Local),
             AccessVerdict.Out => Out(plan, named, mark),

@@ -122,6 +122,11 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
     public ushort? Journal { get; init; }
 
     /// <summary>
+    /// What the firewall hands over so that the panel reads the names of the connections, or null while it reads none.
+    /// </summary>
+    public RouteReading? Reading { get; init; }
+
+    /// <summary>
     /// Tells whether a rule on the host matches by name.
     /// </summary>
     public bool HasNames => Legs.Any(leg => leg.IsOnHost && leg.Domains.Count > 0);

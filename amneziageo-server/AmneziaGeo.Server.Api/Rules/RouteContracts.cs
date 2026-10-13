@@ -98,7 +98,6 @@ public sealed record RouteTestExit(string Name, bool IsGroup, string Strategy, I
 /// </summary>
 public sealed record RouteTestResponse(
     string Verdict,
-    string Guard,
     string Name,
     IReadOnlyList<string> Addresses,
     string Inbound,

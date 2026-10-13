@@ -71,6 +71,16 @@ public sealed record TunnelClient
     public ClientInbound Inbound { get; init; }
 
     /// <summary>
+    /// Whether the server takes the tunnel of the client down by its signal.
+    /// </summary>
+    public bool Disconnect { get; init; } = true;
+
+    /// <summary>
+    /// Whether the application of the client said it takes no signal to disconnect.
+    /// </summary>
+    public bool DisconnectRefused { get; init; }
+
+    /// <summary>
     /// When the client was added.
     /// </summary>
     public DateTimeOffset CreatedUtc { get; init; }

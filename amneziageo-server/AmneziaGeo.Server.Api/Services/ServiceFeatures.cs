@@ -53,7 +53,8 @@ public sealed class InboundOffer : IHelloFeature
 }
 
 /// <summary>
-/// Tells the client where it takes the signal to disconnect and where the signal comes from.
+/// Tells the client where it takes the signal to disconnect and where the signal comes from, unless the panel keeps
+/// the client from the signal.
 /// </summary>
 public sealed class DisconnectOffer : IHelloFeature
 {
@@ -68,9 +69,9 @@ public sealed class DisconnectOffer : IHelloFeature
         var from = DisconnectSignal.Sources(peer.Endpoint);
 
         return ValueTask.FromResult<object?>(
-            from.Count == 0 || DisconnectSignal.Target(peer.Client) is null
+            !peer.Client.Disconnect || from.Count == 0 || DisconnectSignal.Target(peer.Client) is null
                 ? null
-                : new DisconnectFeature(DisconnectSignal.Port, from));
+                : new DisconnectFeature(DisconnectSignal.Port, from, true));
     }
 }
 

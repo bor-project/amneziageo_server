@@ -226,6 +226,15 @@ export function ClientForm({
           <option value="server">{t("clients.inboundServer")}</option>
           <option value="network">{t("clients.inboundNetwork")}</option>
         </Pick>
+
+        <div className="flex items-end sm:pb-2">
+          <Switch
+            id="client-disconnect"
+            caption={t("clients.disconnect")}
+            value={draft.disconnect}
+            onChange={(disconnect) => put({ disconnect })}
+          />
+        </div>
       </Part>
 
       {error !== null && error !== undefined && (

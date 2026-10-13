@@ -201,6 +201,25 @@ public class SignalTests
         Assert.Null(signals.Missed(client.Id));
     }
 
+    [Fact]
+    public async Task AClientEitherSideKeepsFromTheSignalIsSentNone()
+    {
+        var (endpoint, client) = Pair();
+        var kept = client with { Id = 8, Name = "kept", Disconnect = false };
+        var deaf = client with { Id = 9, Name = "deaf", DisconnectRefused = true };
+        await using var application = new Application(client.PrivateKey, endpoint.PublicKey);
+        var signals = Signals(new DisconnectSignal(application.DialAsync), (_, _) => true);
+
+        await signals.SendAsync([kept, deaf], [endpoint], CancellationToken.None);
+        var quiet = application.Calls;
+        await signals.SendAsync([client], [endpoint], CancellationToken.None);
+
+        Assert.Equal(0, quiet);
+        Assert.Equal(1, application.Calls);
+        Assert.Null(signals.Missed(kept.Id));
+        Assert.Null(signals.Missed(deaf.Id));
+    }
+
     private static ClientSignals Signals(DisconnectSignal signal, Func<ServerConfig, TunnelClient, bool> connected, Clock? clock = null) =>
         new(signal, connected, clock ?? new Clock(DateTimeOffset.UnixEpoch), NullLogger<ClientSignals>.Instance);
 

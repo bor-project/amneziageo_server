@@ -5,6 +5,7 @@ using AmneziaGeo.Server.Geo.Files;
 using AmneziaGeo.Server.Routing.Access;
 using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Host;
+using AmneziaGeo.Server.Routing.Names;
 using AmneziaGeo.Server.Routing.Route;
 
 namespace AmneziaGeo.Server.Api.Rules;
@@ -60,6 +61,8 @@ public sealed class RouteApplier
 
     private readonly AccessGate _gate;
 
+    private readonly NameGate _names;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -77,8 +80,10 @@ public sealed class RouteApplier
         DnsSets sets,
         ClientStore clients,
         OutboundHost host,
-        AccessGate gate)
+        AccessGate gate,
+        NameGate names)
     {
+        _names = names;
         _rules = rules;
         _outbounds = outbounds;
         _balancers = balancers;
@@ -118,7 +123,7 @@ public sealed class RouteApplier
             balancers,
             _live.Alive,
             clients,
-            basic) with { Journal = _gate.Group };
+            basic) with { Journal = _gate.Group, Reading = _names.Offer };
 
         _plans.Keep(plan);
 
@@ -177,6 +182,24 @@ public sealed class RouteApplier
             await _sets.LayAsync(RouteRuleset.Text(plan), plan, ct).ConfigureAwait(false);
 
             return plan;
+        }
+        catch (HostNetworkException) when (plan.Reading is { Port: not null, Queue: not null })
+        {
+            _names.ClosePort();
+            var laid = await LayAsync(plan with { Reading = plan.Reading with { Port = null } }, ct).ConfigureAwait(false);
+            _plans.Keep(laid);
+
+            return laid;
+        }
+        catch (HostNetworkException ex) when (plan.Reading is not null)
+        {
+            var plain = plan with { Reading = null };
+            var laid = await LayAsync(plain, ct).ConfigureAwait(false);
+            _names.CloseQueue($"the host did not take the rules that show connections to the panel: {ex.Message}");
+            _names.ClosePort();
+            _plans.Keep(laid);
+
+            return laid;
         }
         catch (HostNetworkException ex) when (plan.Journal is not null)
         {

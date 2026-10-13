@@ -1,5 +1,6 @@
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Firewall;
+using AmneziaGeo.Server.Api.Names;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Dal;
@@ -33,11 +34,12 @@ public static class DnsEndpoints
         DnsState state,
         DnsSets sets,
         RoutePlans plans,
+        NameState names,
         CancellationToken ct)
     {
         var settings = await store.ReadAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(DnsAnswers.Resolver(settings, state, sets, plans.Held));
+        return Results.Ok(DnsAnswers.Resolver(settings, state, sets, plans.Held, names.Fault, names.Counts));
     }
 
     private static async Task<IResult> SaveAsync(
@@ -48,6 +50,7 @@ public static class DnsEndpoints
         DnsState state,
         DnsSets sets,
         RoutePlans plans,
+        NameState names,
         CancellationToken ct)
     {
         var draft = DnsAnswers.Draft(request);
@@ -70,7 +73,7 @@ public static class DnsEndpoints
             return Results.Json(new Failure(result.Code, result.Message), statusCode: StatusCodes.Status400BadRequest);
         }
 
-        return Results.Ok(DnsAnswers.Resolver(result.Record, state, sets, plans.Held));
+        return Results.Ok(DnsAnswers.Resolver(result.Record, state, sets, plans.Held, names.Fault, names.Counts));
     }
 
     private static async Task<IResult> RestartAsync(
@@ -80,6 +83,7 @@ public static class DnsEndpoints
         FirewallApplier firewall,
         DnsState state,
         DnsSets sets,
+        NameState names,
         CancellationToken ct)
     {
         await host.RestartAsync(ct).ConfigureAwait(false);
@@ -87,6 +91,6 @@ public static class DnsEndpoints
         await firewall.SettleAsync(ct).ConfigureAwait(false);
         var settings = await store.ReadAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(DnsAnswers.Resolver(settings, state, sets, plan));
+        return Results.Ok(DnsAnswers.Resolver(settings, state, sets, plan, names.Fault, names.Counts));
     }
 }

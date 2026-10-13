@@ -324,6 +324,14 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<long>("DailyLimit")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("Disconnect")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("DisconnectRefused")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Inbound")
                         .HasColumnType("INTEGER");
 
@@ -561,12 +569,6 @@ namespace AmneziaGeo.Server.Dal.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("BlockDoh")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("BlockDot")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("CacheSize")

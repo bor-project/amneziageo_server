@@ -183,8 +183,6 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
             value={draft.intercept}
             onChange={(v) => set({ intercept: v })}
           />
-          <Flag id="dns-dot" caption={t("dns.blockDot")} value={draft.blockDot} onChange={(v) => set({ blockDot: v })} />
-          <Flag id="dns-doh" caption={t("dns.blockDoh")} value={draft.blockDoh} onChange={(v) => set({ blockDoh: v })} />
         </div>
       </Part>
 

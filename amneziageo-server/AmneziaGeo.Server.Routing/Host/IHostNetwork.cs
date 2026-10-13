@@ -79,4 +79,15 @@ public interface IHostNetwork
     /// Returns an inet table of the firewall in the JSON of nft, empty when the host holds no such table.
     /// </summary>
     Task<string> ReadFirewallAsync(string table, CancellationToken ct);
+
+    /// <summary>
+    /// Has a routing table deliver what it is asked about to the host itself, in both families.
+    /// </summary>
+    Task LocalRouteAsync(int table, CancellationToken ct);
+
+    /// <summary>
+    /// Returns how many packets a counter of an inet table of the firewall has seen, or null when the host holds no
+    /// such counter.
+    /// </summary>
+    Task<long?> CounterAsync(string table, string name, CancellationToken ct);
 }

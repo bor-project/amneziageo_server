@@ -35,6 +35,7 @@ The private key of a client is written out only to a caller that holds `clients:
 | Subscription | the subscription that hands the client out, see [subscriptions.md](subscriptions.md) |
 | Daily limit | how many bytes a day the client moves; empty for no limit, see [Traffic](#traffic) |
 | Access to the client | what reaches the client from the tunnel: as the interface says, closed, the server alone, or the whole tunnel network, see [The way back](#the-way-back) |
+| Allow the server to disconnect the tunnel | whether the panel tells the application to take the tunnel down when the client is turned off; on unless set otherwise, see [Turning a client off](#turning-a-client-off) |
 
 `GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair, a subscription of its own and
 a name no other client carries. It stands on the endpoint `?config=<id>` names; without it, on the endpoint of the
@@ -82,6 +83,13 @@ The signal goes to a client that is on, on an endpoint that is on, while the pan
 client that is not connected is sent nothing. The application of AmneziaGeo for Windows, Linux and Android takes
 the signal and disconnects as on the word of its user: nothing raises the tunnel again until the user connects.
 Another application, one of AmneziaGeo older than the signal among them, takes none and stays as it was.
+
+The signal needs both sides to agree. `Allow the server to disconnect the tunnel` in the settings of a client is
+`disconnect` of the client in the API, true unless a request says otherwise: with it off the hello offers the
+application no signal and the panel sends none. The application carries a switch of the same name in the
+settings of its configuration, shown while the panel leaves it the choice; an application that turned it off
+says so in its hello, the panel keeps that as `disconnectRefused` of the client, which every answer that carries
+the client names, and sends that client no signal. An edit of the client leaves `disconnectRefused` as it is.
 
 A signal the application did not take is kept until the client is turned on again or removed, or the panel
 starts over, and every answer that carries the client names it under `signal`, null otherwise:

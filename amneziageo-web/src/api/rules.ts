@@ -83,11 +83,10 @@ export interface RouteMember {
   isPicked: boolean
 }
 
-export type RouteVerdict = "out" | "host" | "block" | "held" | "guard" | "dns"
+export type RouteVerdict = "out" | "host" | "block" | "held" | "dns"
 
 export interface RouteAnswer {
   verdict: RouteVerdict
-  guard: string
   name: string
   addresses: string[]
   inbound: string

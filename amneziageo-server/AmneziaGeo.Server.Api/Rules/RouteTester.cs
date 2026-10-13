@@ -113,7 +113,6 @@ public sealed class RouteTester
 
         return (null, new RouteTestResponse(
             verdict.Verdict,
-            verdict.Guard,
             query.Name,
             [.. addresses.Select(address => address.ToString())],
             inbound,

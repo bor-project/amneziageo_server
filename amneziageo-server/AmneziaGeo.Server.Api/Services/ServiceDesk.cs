@@ -150,7 +150,8 @@ public sealed class ServiceDesk
             return;
         }
 
-        var peer = new HelloPeer(proven.Client!, proven.Endpoint!, proven.Template, context);
+        var client = await HeardAsync(request, proven, ct).ConfigureAwait(false);
+        var peer = new HelloPeer(client, proven.Endpoint!, proven.Template, context);
         var offered = new SortedDictionary<string, object>(StringComparer.Ordinal);
         foreach (var feature in _features)
         {
@@ -166,6 +167,49 @@ public sealed class ServiceDesk
         context.Response.Headers.CacheControl = "no-store";
         await WriteAsync(context, StatusCodes.Status200OK, PeerToken.Seal(proven.Shared, Trim(request.Nonce), body))
             .ConfigureAwait(false);
+    }
+
+    // Keeps whether the application of a client takes the signal to disconnect, as its hello says.
+    private async Task<TunnelClient> HeardAsync(HelloRequest request, Proven proven, CancellationToken ct)
+    {
+        var client = proven.Client!;
+        var refused = Says(request, proven.Shared) is { Disconnect: false };
+        if (client.DisconnectRefused == refused)
+        {
+            return client;
+        }
+
+        using var scope = _scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ClientStore>().NoteRefusalAsync(client.Id, refused, ct).ConfigureAwait(false);
+        if (refused)
+        {
+            _logger.LogInformation("the application of {Client} says it takes no signal to disconnect", client.Name);
+        }
+        else
+        {
+            _logger.LogInformation("the application of {Client} says it takes the signal to disconnect again", client.Name);
+        }
+
+        return client with { DisconnectRefused = refused };
+    }
+
+    // Opens what a hello says about its application; null when it says nothing the keys of the client hold.
+    private Said? Says(HelloRequest request, byte[] shared)
+    {
+        if (request.Says is not { Iv: not null, Data: not null } words
+            || PeerToken.Open(shared, Trim(request.Nonce), words, PeerToken.SaysContext) is not { } body)
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<Said>(body, _json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     // Hands a websocket to the front of the endpoint its path names; a path two endpoints share lets nothing in.
@@ -522,6 +566,9 @@ public sealed class ServiceDesk
         Up = 4,
         Subscription = 5,
     }
+
+    // What an application says about itself with its hello.
+    private sealed record Said(bool? Disconnect);
 
     // The client behind a token and what it shares with its endpoint, or why the token was refused.
     private sealed record Proven(

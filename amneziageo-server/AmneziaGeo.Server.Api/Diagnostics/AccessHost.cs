@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Awg.Device;
@@ -29,6 +30,8 @@ public sealed class AccessHost : BackgroundService
     private readonly AccessQueue _queue = new();
 
     private readonly AccessWatch _watch = new();
+
+    private readonly ConcurrentQueue<AccessRecord> _carried = new();
 
     private readonly IServiceScopeFactory _scopes;
 
@@ -108,6 +111,19 @@ public sealed class AccessHost : BackgroundService
     /// How many records were lost on the way to the log.
     /// </summary>
     public long Lost => _queue.Dropped + (_socket?.Overruns ?? 0) + Interlocked.Read(ref _failed);
+
+    /// <summary>
+    /// Takes the record of a connection the panel carried itself; the log writes it while it runs.
+    /// </summary>
+    public void Carried(AccessRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        if (IsRunning)
+        {
+            _carried.Enqueue(record);
+        }
+    }
 
     /// <summary>
     /// How many records were written since the panel started.
@@ -318,7 +334,7 @@ public sealed class AccessHost : BackgroundService
 
     private async Task DrainAsync(CancellationToken ct)
     {
-        if (_queue.Reader.TryPeek(out _))
+        if (_queue.Reader.TryPeek(out _) || !_carried.IsEmpty)
         {
             await ClientsAsync(ct).ConfigureAwait(false);
             Drain();
@@ -348,6 +364,14 @@ public sealed class AccessHost : BackgroundService
                 _watch.Take(record);
             }
         }
+
+        var carried = new List<AccessRecord>();
+        while (_carried.TryDequeue(out var record))
+        {
+            carried.Add(record with { Client = IPAddress.TryParse(record.Source, out var source) ? Client(source) : string.Empty });
+        }
+
+        Write(carried);
     }
 
     private void Write(IReadOnlyList<AccessRecord> records)

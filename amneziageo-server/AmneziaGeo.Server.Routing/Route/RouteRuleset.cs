@@ -3,6 +3,7 @@ using System.Text;
 using AmneziaGeo.Server.Routing.Access;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Dns;
+using AmneziaGeo.Server.Routing.Names;
 
 namespace AmneziaGeo.Server.Routing.Route;
 
@@ -16,7 +17,21 @@ public static class RouteRuleset
     /// </summary>
     public const string TableName = "amneziageo_rt";
 
+    /// <summary>
+    /// The counter of the connections of IPv4 the firewall hands over to the panel.
+    /// </summary>
+    public const string TakenCounter = "taken";
+
+    /// <summary>
+    /// The counter of the connections of IPv6 the firewall hands over to the panel.
+    /// </summary>
+    public const string TakenCounter6 = "taken6";
+
     private const uint RouteMarks = 0x0000_FFFF;
+
+    private static readonly string Web = string.Join(", ", NameDefaults.Ports);
+
+    private static readonly string Most = NameDefaults.MostTaken.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Returns the name of the set that holds the ranges of a rule.
@@ -52,9 +67,19 @@ public static class RouteRuleset
     }
 
     /// <summary>
-    /// Returns the name of the set that holds the name servers answering over HTTPS.
+    /// Returns the name of the set that holds the addresses the panel looked at.
     /// </summary>
-    public static string HttpsSet(bool six) => six ? "doh6" : "doh4";
+    public static string SeenSet(bool six) => six ? "seen6" : "seen4";
+
+    /// <summary>
+    /// Returns the name of the set that holds the QUIC connections whose first packets the panel read.
+    /// </summary>
+    public static string ReadSet(bool six) => six ? "read6" : "read4";
+
+    /// <summary>
+    /// Returns the name of the set that holds the TCP connections whose first bytes wait to be read.
+    /// </summary>
+    public static string WaitSet(bool six) => six ? "wait6" : "wait4";
 
     /// <summary>
     /// Returns the ruleset that carries out the rules the panel holds.
@@ -73,14 +98,14 @@ public static class RouteRuleset
             Sets(text, leg, plan.Dns);
         }
 
-        Https(text, plan);
-
+        Handed(text, plan);
         text.Append("\tchain prerouting {\n");
         text.Append("\t\ttype filter hook prerouting priority mangle; policy accept;\n");
         if (plan.Inbound.Count > 0)
         {
             text.Append("\t\tiifname != { ").Append(Quoted(plan.Inbound)).Append(" } accept\n");
             text.Append("\t\tct state invalid drop\n");
+            Back(text, plan);
             text.Append("\t\tct mark and ").Append(Hex8(RouteMarks)).Append(" != 0x00000000 meta mark set ct mark and ");
             text.Append(Hex8(RouteMarks)).Append(" accept\n");
             text.Append("\t\tct state != new accept\n");
@@ -88,10 +113,11 @@ public static class RouteRuleset
             text.Append(plan.Journal is null
                 ? "\t\tmeta mark != 0x00000000 ct mark set meta mark\n"
                 : $"\t\tct mark set meta mark or {Hex8(AccessDefaults.Watching)}\n");
+            Asked(text, plan, live);
         }
 
         text.Append("\t}\n\n\tchain decide {\n");
-        foreach (var line in Guard(plan).Concat(live.SelectMany(leg => Lines(leg, plan.Journal))))
+        foreach (var line in Decide(plan, live))
         {
             text.Append("\t\t").Append(line).Append('\n');
         }
@@ -103,48 +129,11 @@ public static class RouteRuleset
 
         text.Append("\t}\n");
         Redirect(text, plan);
+        Door(text, plan);
         Answers(text, plan);
         text.Append("}\n");
 
         return text.ToString();
-    }
-
-    /// <summary>
-    /// Returns the guard lines of a plan, none while no rule on the host matches by name.
-    /// </summary>
-    public static IReadOnlyList<string> Guard(RoutePlan plan)
-    {
-        ArgumentNullException.ThrowIfNull(plan);
-
-        return plan.HasNames ? Guard(plan.Dns, plan.Journal) : [];
-    }
-
-    /// <summary>
-    /// Returns the lines that keep the clients off the name servers they carry their own way.
-    /// </summary>
-    public static IReadOnlyList<string> Guard(DnsSettings dns, ushort? journal = null)
-    {
-        ArgumentNullException.ThrowIfNull(dns);
-
-        if (!dns.IsEnabled)
-        {
-            return [];
-        }
-
-        var lines = new List<string>();
-        if (dns.BlockDot)
-        {
-            lines.Add("meta l4proto { tcp, udp } th dport 853 " + Log(AccessTag.Dot, journal) + "drop");
-        }
-
-        if (dns.BlockDoh)
-        {
-            var log = Log(AccessTag.Doh, journal);
-            lines.Add($"ip daddr @{HttpsSet(false)} meta l4proto {{ tcp, udp }} th dport 443 {log}drop");
-            lines.Add($"ip6 daddr @{HttpsSet(true)} meta l4proto {{ tcp, udp }} th dport 443 {log}drop");
-        }
-
-        return lines;
     }
 
     /// <summary>
@@ -191,6 +180,209 @@ public static class RouteRuleset
         return lines;
     }
 
+    /// <summary>
+    /// Returns the lines that stand right after a rule by name and deal with the TCP connections it may take: the
+    /// firewall hands the first one to an address over to the panel where the panel takes them, and notes the rest,
+    /// so that what their clients say first is shown to the panel.
+    /// </summary>
+    public static IReadOnlyList<string> Reading(RouteLeg leg, RouteReading? reading)
+    {
+        ArgumentNullException.ThrowIfNull(leg);
+
+        if (reading is null || !leg.IsOnHost || leg.Domains.Count == 0 || leg.Rule.Protocol == RouteProtocol.Udp)
+        {
+            return [];
+        }
+
+        var lines = new List<string>();
+        foreach (var six in new[] { false, true })
+        {
+            if (Head(leg, six) is not { } head)
+            {
+                continue;
+            }
+
+            var family = six ? "ip6" : "ip";
+            var web = $"{head}{family} daddr != @{SeenSet(six)} tcp dport {{ {Web} }} " + Ports(leg.Rule, RouteProtocol.Tcp);
+            if (reading.Port is { } port && (reading.Six || !six))
+            {
+                lines.Add(
+                    web
+                    + $"fib daddr type != local {family} daddr != {{ {string.Join(", ", six ? NameDefaults.Closed6 : NameDefaults.Closed4)} }} "
+                    + $"limit rate {Most}/second burst {Most} packets counter name \"{(six ? TakenCounter6 : TakenCounter)}\" "
+                    + $"tproxy {family} to {(six ? "[::1]" : "127.0.0.1")}:{port.ToString(CultureInfo.InvariantCulture)} "
+                    + $"meta mark set {Hex8(NameDefaults.Taken)} ct mark set {Hex8(NameDefaults.Taken)} accept");
+            }
+
+            if (reading.Queue is not null)
+            {
+                lines.Add(web + $"update @{WaitSet(six)} {{ {family} saddr . tcp sport . {family} daddr }}");
+            }
+        }
+
+        return lines;
+    }
+
+    /// <summary>
+    /// Returns the lines that show the first packets of the QUIC connections a rule by name may take to the panel.
+    /// </summary>
+    public static IReadOnlyList<string> Asking(RouteLeg leg, RouteReading? reading)
+    {
+        ArgumentNullException.ThrowIfNull(leg);
+
+        if (reading?.Queue is not { } queue || !leg.IsOnHost || leg.Domains.Count == 0 || leg.Rule.Protocol == RouteProtocol.Tcp)
+        {
+            return [];
+        }
+
+        var lines = new List<string>();
+        foreach (var six in new[] { false, true })
+        {
+            if (Head(leg, six) is not { } head)
+            {
+                continue;
+            }
+
+            var family = six ? "ip6" : "ip";
+            lines.Add(
+                $"{head}{family} saddr . udp sport . {family} daddr != @{ReadSet(six)} udp dport 443 "
+                + Ports(leg.Rule, RouteProtocol.Udp)
+                + $"@th,64,8 & 0x80 == 0x80 queue num {queue.ToString(CultureInfo.InvariantCulture)} bypass");
+        }
+
+        return lines;
+    }
+
+    // Returns what a line of a rule starts with in one family, or null when the rule names clients of the other only.
+    private static string? Head(RouteLeg leg, bool six)
+    {
+        var sources = six ? leg.Sources6 : leg.Sources4;
+        if (leg.IsBySource && sources.Count == 0)
+        {
+            return null;
+        }
+
+        return Inbound(leg.Rule)
+            + (sources.Count > 0 ? $"{(six ? "ip6" : "ip")} saddr {{ {string.Join(", ", sources)} }} " : string.Empty);
+    }
+
+    // Returns the lines of the decision chain: the rules in order, a rule by name followed by the lines that deal
+    // with the TCP connections it may take.
+    private static IEnumerable<string> Decide(RoutePlan plan, IReadOnlyList<RouteLeg> live)
+    {
+        var reading = Handing(plan);
+        var handed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var leg in live)
+        {
+            foreach (var line in Lines(leg, plan.Journal))
+            {
+                yield return line;
+            }
+
+            foreach (var line in Reading(leg, reading))
+            {
+                if (handed.Add(line))
+                {
+                    yield return line;
+                }
+            }
+        }
+    }
+
+    // Returns what the ruleset hands over to the panel: nothing while no rule on the host matches by name.
+    private static RouteReading? Handing(RoutePlan plan) => plan.HasNames && plan.Inbound.Count > 0 ? plan.Reading : null;
+
+    // Writes the sets the reading goes by: the addresses looked at, the connections read and the ones that wait, and
+    // the counter of what is handed over.
+    private static void Handed(StringBuilder text, RoutePlan plan)
+    {
+        if (Handing(plan) is not { } reading)
+        {
+            return;
+        }
+
+        var seen = $"{NameDefaults.SeenMinutes.ToString(CultureInfo.InvariantCulture)}m";
+        Kept(text, SeenSet(false), "ipv4_addr", "timeout", seen);
+        Kept(text, SeenSet(true), "ipv6_addr", "timeout", seen);
+        if (reading.Port is not null)
+        {
+            text.Append("\tcounter ").Append(TakenCounter).Append(" {\n\t\tpackets 0 bytes 0\n\t}\n\n");
+            if (reading.Six)
+            {
+                text.Append("\tcounter ").Append(TakenCounter6).Append(" {\n\t\tpackets 0 bytes 0\n\t}\n\n");
+            }
+        }
+
+        if (reading.Queue is not null)
+        {
+            var read = $"{NameDefaults.ReadSeconds.ToString(CultureInfo.InvariantCulture)}s";
+            var wait = $"{NameDefaults.WaitSeconds.ToString(CultureInfo.InvariantCulture)}s";
+            Kept(text, ReadSet(false), "ipv4_addr . inet_service . ipv4_addr", "dynamic,timeout", read);
+            Kept(text, ReadSet(true), "ipv6_addr . inet_service . ipv6_addr", "dynamic,timeout", read);
+            Kept(text, WaitSet(false), "ipv4_addr . inet_service . ipv4_addr", "dynamic,timeout", wait);
+            Kept(text, WaitSet(true), "ipv6_addr . inet_service . ipv6_addr", "dynamic,timeout", wait);
+        }
+    }
+
+    private static void Kept(StringBuilder text, string name, string type, string flags, string life)
+    {
+        text.Append("\tset ").Append(name).Append(" {\n");
+        text.Append("\t\ttype ").Append(type).Append('\n');
+        text.Append("\t\tflags ").Append(flags).Append('\n');
+        text.Append("\t\ttimeout ").Append(life).Append('\n');
+        text.Append("\t}\n\n");
+    }
+
+    // Writes the lines that take what the panel sent back and show it what the TCP connections noted say first: a
+    // QUIC connection read is decided anew, a TCP connection read goes on, one a blocking rule takes is reset.
+    private static void Back(StringBuilder text, RoutePlan plan)
+    {
+        if (Handing(plan)?.Queue is not { } queue)
+        {
+            return;
+        }
+
+        var read = Hex8(NameDefaults.Read);
+        var reset = Hex8(NameDefaults.Reset);
+        var number = queue.ToString(CultureInfo.InvariantCulture);
+        foreach (var six in new[] { false, true })
+        {
+            var family = six ? "ip6" : "ip";
+            var layer = six ? "ipv6" : "ipv4";
+            text.Append($"\t\tmeta mark {read} meta nfproto {layer} meta l4proto udp update @{ReadSet(six)} ");
+            text.Append($"{{ {family} saddr . udp sport . {family} daddr }}\n");
+            text.Append($"\t\tmeta mark {{ {read}, {reset} }} meta nfproto {layer} meta l4proto tcp delete @{WaitSet(six)} ");
+            text.Append($"{{ {family} saddr . tcp sport . {family} daddr }}\n");
+        }
+
+        text.Append($"\t\tmeta mark {reset} meta l4proto tcp reject with tcp reset\n");
+        text.Append($"\t\tmeta mark {read} ct state new meta l4proto udp ct mark set ct mark and {Hex8(~RouteMarks)}\n");
+        text.Append($"\t\tmeta mark {read} meta mark set 0x00000000\n");
+        foreach (var six in new[] { false, true })
+        {
+            var family = six ? "ip6" : "ip";
+            text.Append($"\t\t{family} saddr . tcp sport . {family} daddr @{WaitSet(six)} tcp flags & (fin | syn | rst) == 0x0 ");
+            text.Append($"meta mark set ct mark and {Hex8(RouteMarks)} queue num {number} bypass\n");
+        }
+    }
+
+    // Writes the lines that show the first packets of QUIC to the panel once the rules have decided them.
+    private static void Asked(StringBuilder text, RoutePlan plan, IReadOnlyList<RouteLeg> live)
+    {
+        var reading = Handing(plan);
+        foreach (var line in live.SelectMany(leg => Asking(leg, reading)).Distinct(StringComparer.Ordinal))
+        {
+            text.Append("\t\t").Append(line).Append('\n');
+        }
+    }
+
+    // Returns the ports a rule matches by, written for one protocol.
+    private static string Ports(RouteRule rule, string protocol) =>
+        Pair(
+            protocol,
+            string.Join(", ", rule.SourcePorts.Select(port => port.Trim())),
+            string.Join(", ", rule.Ports.Select(port => port.Trim())));
+
     private static IReadOnlyList<string> Plain(RouteLeg leg, ushort? journal)
     {
         var head = Inbound(leg.Rule);
@@ -235,17 +427,6 @@ public static class RouteRuleset
         Names(text, NameSet(leg.Rule.Id, true), "ipv6_addr", dns);
     }
 
-    private static void Https(StringBuilder text, RoutePlan plan)
-    {
-        if (!plan.HasNames || !plan.Dns.IsEnabled || !plan.Dns.BlockDoh)
-        {
-            return;
-        }
-
-        Range(text, HttpsSet(false), "ipv4_addr", DnsDefaults.Https4);
-        Range(text, HttpsSet(true), "ipv6_addr", DnsDefaults.Https6);
-    }
-
     private static void Redirect(StringBuilder text, RoutePlan plan)
     {
         if (!plan.Dns.IsEnabled || !plan.Dns.Intercept || plan.Inbound.Count == 0)
@@ -258,6 +439,22 @@ public static class RouteRuleset
         text.Append("\t\tiifname != { ").Append(Quoted(plan.Inbound)).Append(" } accept\n");
         text.Append("\t\tmeta l4proto { tcp, udp } th dport 53 redirect to :");
         text.Append(plan.Dns.Port.ToString(CultureInfo.InvariantCulture)).Append('\n');
+        text.Append("\t}\n");
+    }
+
+    // Writes the chain that sends the connections handed over in through a port the firewall of the host lets in.
+    private static void Door(StringBuilder text, RoutePlan plan)
+    {
+        if (Handing(plan) is not { Port: not null, Door: { } door })
+        {
+            return;
+        }
+
+        text.Append("\n\tchain door {\n");
+        text.Append("\t\ttype nat hook prerouting priority dstnat; policy accept;\n");
+        text.Append("\t\tiifname != { ").Append(Quoted(plan.Inbound)).Append(" } accept\n");
+        text.Append("\t\tmeta mark ").Append(Hex8(NameDefaults.Taken)).Append(" meta l4proto tcp redirect to :");
+        text.Append(door.ToString(CultureInfo.InvariantCulture)).Append('\n');
         text.Append("\t}\n");
     }
 

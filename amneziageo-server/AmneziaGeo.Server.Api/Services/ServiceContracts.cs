@@ -1,5 +1,6 @@
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
+using AmneziaGeo.Server.Core.Crypto;
 
 namespace AmneziaGeo.Server.Api.Services;
 
@@ -10,7 +11,8 @@ namespace AmneziaGeo.Server.Api.Services;
 /// <param name="Time">When the token was counted, in seconds since 1970.</param>
 /// <param name="Nonce">The random bytes of the token, in base64.</param>
 /// <param name="Proof">The mark counted from the secret the client and the endpoint share, in base64.</param>
-public sealed record HelloRequest(string? Key, long Time, string? Nonce, string? Proof);
+/// <param name="Says">What the application says about itself, sealed under that secret; null when it says nothing.</param>
+public sealed record HelloRequest(string? Key, long Time, string? Nonce, string? Proof, SealedAnswer? Says = null);
 
 /// <summary>
 /// What the services refuse a token with.
@@ -51,7 +53,8 @@ public sealed record InboundFeature(string Mode);
 /// </summary>
 /// <param name="Port">The TCP port the client takes the signal on, at its address inside the tunnel.</param>
 /// <param name="From">The addresses the signal comes from.</param>
-public sealed record DisconnectFeature(int Port, IReadOnlyList<string> From);
+/// <param name="Allowed">Whether the choice to take the signal is left to the application.</param>
+public sealed record DisconnectFeature(int Port, IReadOnlyList<string> From, bool Allowed);
 
 /// <summary>
 /// The addresses one leg of a measurement goes to.

@@ -60,10 +60,9 @@ public sealed record RouteStep(long Rule, string Name, string Outcome, string Re
 /// Where the rules send the traffic.
 /// </summary>
 /// <param name="Verdict">What happens to the traffic.</param>
-/// <param name="Guard">Which guard of the resolver drops the traffic, empty when none.</param>
 /// <param name="Leg">The rule that matched, or null when none did.</param>
 /// <param name="Steps">How each rule read before the decision took the traffic.</param>
-public sealed record RouteVerdict(string Verdict, string Guard, RouteLeg? Leg, IReadOnlyList<RouteStep> Steps);
+public sealed record RouteVerdict(string Verdict, RouteLeg? Leg, IReadOnlyList<RouteStep> Steps);
 
 /// <summary>
 /// Tries the rules the host carries against the traffic, the way the ruleset does.
@@ -106,11 +105,6 @@ public static class RouteProbe
     public const string Held = "held";
 
     /// <summary>
-    /// The traffic is dropped by a guard of the resolver.
-    /// </summary>
-    public const string Guarded = "guard";
-
-    /// <summary>
     /// The question is taken by the resolver of the panel.
     /// </summary>
     public const string Resolver = "dns";
@@ -122,19 +116,30 @@ public static class RouteProbe
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(query);
-        ArgumentNullException.ThrowIfNull(inSet);
 
-        if (Guard(plan, query) is { } guard)
-        {
-            return new RouteVerdict(Guarded, guard, null, []);
-        }
+        return Test(plan, query, inSet, query.Name.Length > 0 ? DnsNames.Build(plan).Match(query.Name) : []);
+    }
+
+    /// <summary>
+    /// Returns where the rules send the traffic, the rules its name falls under given.
+    /// </summary>
+    public static RouteVerdict Test(
+        RoutePlan plan,
+        RouteQuery query,
+        Func<long, IPAddress, bool> inSet,
+        IReadOnlyList<long> matched)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(inSet);
+        ArgumentNullException.ThrowIfNull(matched);
 
         if (Intercepted(plan, query))
         {
-            return new RouteVerdict(Resolver, "intercept", null, []);
+            return new RouteVerdict(Resolver, null, []);
         }
 
-        var named = query.Name.Length > 0 ? DnsNames.Build(plan).Match(query.Name).ToHashSet() : [];
+        var named = matched.ToHashSet();
         var steps = new List<RouteStep>();
         foreach (var leg in plan.Legs)
         {
@@ -142,11 +147,11 @@ public static class RouteProbe
             steps.Add(step);
             if (step.Outcome == Match)
             {
-                return new RouteVerdict(Verdict(leg), string.Empty, leg, steps);
+                return new RouteVerdict(Verdict(leg), leg, steps);
             }
         }
 
-        return new RouteVerdict(Host, string.Empty, null, steps);
+        return new RouteVerdict(Host, null, steps);
     }
 
     /// <summary>
@@ -176,26 +181,6 @@ public static class RouteProbe
         && plan.Dns.Intercept
         && query.Port == 53
         && plan.Inbound.Contains(query.Inbound, StringComparer.Ordinal);
-
-    private static string? Guard(RoutePlan plan, RouteQuery query)
-    {
-        var dns = plan.Dns;
-        if (!dns.IsEnabled || !plan.HasNames)
-        {
-            return null;
-        }
-
-        if (dns.BlockDot && query.Port == 853)
-        {
-            return "dot";
-        }
-
-        var https = DnsDefaults.Https4.Concat(DnsDefaults.Https6).ToArray();
-
-        return dns.BlockDoh && query.Port == 443 && query.Addresses.Any(address => Within(https, address))
-            ? "doh"
-            : null;
-    }
 
     private static RouteStep Try(RouteLeg leg, RouteQuery query, HashSet<long> named, Func<long, IPAddress, bool> inSet)
     {

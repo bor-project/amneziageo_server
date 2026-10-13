@@ -320,6 +320,13 @@ public sealed class ClientStore
     }
 
     /// <summary>
+    /// Keeps whether the application of a client takes the signal to disconnect.
+    /// </summary>
+    public Task NoteRefusalAsync(long id, bool refused, CancellationToken ct) =>
+        _db.Clients.Where(client => client.Id == id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(client => client.DisconnectRefused, refused), ct);
+
+    /// <summary>
     /// Turns clients on or off one by one.
     /// </summary>
     public async Task<ClientBatch> SwitchAllAsync(IReadOnlyList<long> ids, bool on, CancellationToken ct)
@@ -480,6 +487,8 @@ public sealed class ClientStore
         SubscriptionId = entity.SubscriptionId,
         DailyLimit = entity.DailyLimit,
         Inbound = (ClientInbound)entity.Inbound,
+        Disconnect = entity.Disconnect,
+        DisconnectRefused = entity.DisconnectRefused,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
     };
@@ -497,6 +506,7 @@ public sealed class ClientStore
         entity.SubscriptionId = client.SubscriptionId.Trim();
         entity.DailyLimit = client.DailyLimit;
         entity.Inbound = (int)client.Inbound;
+        entity.Disconnect = client.Disconnect;
     }
 
     private static TunnelClient Whole(TunnelClient draft) => draft with

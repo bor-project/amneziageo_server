@@ -572,10 +572,6 @@ public sealed class DnsSettingsEntity
 
     public bool Intercept { get; set; }
 
-    public bool BlockDot { get; set; }
-
-    public bool BlockDoh { get; set; }
-
     public DateTimeOffset UpdatedUtc { get; set; }
 }
 
@@ -645,6 +641,10 @@ public sealed class ClientEntity
     public long DailyLimit { get; set; }
 
     public int Inbound { get; set; }
+
+    public bool Disconnect { get; set; } = true;
+
+    public bool DisconnectRefused { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; }
 

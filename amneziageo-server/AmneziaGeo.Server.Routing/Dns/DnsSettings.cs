@@ -56,16 +56,6 @@ public sealed record DnsSettings
     public bool Intercept { get; init; } = true;
 
     /// <summary>
-    /// Whether the clients are stopped from reaching name servers over TLS.
-    /// </summary>
-    public bool BlockDot { get; init; } = true;
-
-    /// <summary>
-    /// Whether the clients are stopped from reaching the known name servers over HTTPS.
-    /// </summary>
-    public bool BlockDoh { get; init; } = true;
-
-    /// <summary>
     /// How long an answered address stays in the set of a rule.
     /// </summary>
     public TimeSpan NameLifetime => TimeSpan.FromMinutes(NameMinutes);
@@ -86,8 +76,6 @@ public sealed record DnsSettings
             || CacheSize != other.CacheSize
             || MinTtl != other.MinTtl
             || MaxTtl != other.MaxTtl
-            || Intercept != other.Intercept
-            || BlockDot != other.BlockDot
-            || BlockDoh != other.BlockDoh;
+            || Intercept != other.Intercept;
     }
 }

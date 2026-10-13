@@ -250,6 +250,48 @@ public sealed class IpHostNetwork : IHostNetwork
         return result.IsOk ? result.Output : string.Empty;
     }
 
+    /// <summary>
+    /// Has a routing table deliver what it is asked about to the host itself, in both families.
+    /// </summary>
+    public async Task LocalRouteAsync(int table, CancellationToken ct)
+    {
+        var number = table.ToString(CultureInfo.InvariantCulture);
+        await RunAsync([Ip, "route", "replace", "local", "0.0.0.0/0", "dev", "lo", "table", number], ct).ConfigureAwait(false);
+        await Quietly([Ip, "-6", "route", "replace", "local", "::/0", "dev", "lo", "table", number], ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Returns how many packets a counter of an inet table of the firewall has seen, or null when the host holds no
+    /// such counter.
+    /// </summary>
+    public async Task<long?> CounterAsync(string table, string name, CancellationToken ct)
+    {
+        var result = await _commands.RunAsync(Nft, ["-j", "list", "counter", "inet", table, name], null, ct)
+            .ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(result.Output);
+            foreach (var item in document.RootElement.GetProperty("nftables").EnumerateArray())
+            {
+                if (item.TryGetProperty("counter", out var counter) && counter.TryGetProperty("packets", out var packets))
+                {
+                    return packets.GetInt64();
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            return null;
+        }
+    }
+
     private async Task NftAsync(string ruleset, bool dry, CancellationToken ct)
     {
         var arguments = dry ? (string[])["-c", "-f", "-"] : ["-f", "-"];

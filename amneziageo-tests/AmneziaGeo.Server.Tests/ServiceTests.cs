@@ -395,6 +395,69 @@ public class ServiceTests
     }
 
     [Fact]
+    public async Task TheSignalIsOfferedWithTheChoiceLeftToTheApplication()
+    {
+        using var bench = new Bench();
+        var (endpoint, client) = await SignalledAsync(bench, true);
+
+        var features = await OfferedAsync(bench, endpoint, client);
+
+        Assert.Equal(DisconnectSignal.Port, features.GetProperty("disconnect").GetProperty("port").GetInt32());
+        Assert.True(features.GetProperty("disconnect").GetProperty("allowed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AClientThePanelKeepsFromTheSignalIsOfferedNone()
+    {
+        using var bench = new Bench();
+        var (endpoint, client) = await SignalledAsync(bench, false);
+
+        var features = await OfferedAsync(bench, endpoint, client);
+
+        Assert.False(features.TryGetProperty("disconnect", out _));
+        Assert.True(features.TryGetProperty("speed", out _));
+    }
+
+    [Fact]
+    public async Task WhatTheApplicationSaysAboutTheSignalIsKeptWithTheClient()
+    {
+        using var bench = new Bench();
+        var (endpoint, client) = await SignalledAsync(bench, true);
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var point = Point(endpoint);
+
+        var first = await AskAsync(desk, point, Saying(Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow()), client.PrivateKey, endpoint.PublicKey, false));
+        var refused = await bench.Clients.FindAsync(client.Id, CancellationToken.None);
+        await AskAsync(desk, point, Saying(Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow()), client.PrivateKey, endpoint.PublicKey, true));
+        var taken = await bench.Clients.FindAsync(client.Id, CancellationToken.None);
+        await AskAsync(desk, point, Saying(Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow()), client.PrivateKey, endpoint.PublicKey, false));
+        await AskAsync(desk, point, Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow()));
+        var silent = await bench.Clients.FindAsync(client.Id, CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status200OK, first.Status);
+        Assert.True(refused?.DisconnectRefused);
+        Assert.Equal(client.UpdatedUtc, refused?.UpdatedUtc);
+        Assert.False(taken?.DisconnectRefused);
+        Assert.False(silent?.DisconnectRefused);
+    }
+
+    [Fact]
+    public async Task WhatIsSaidUnderOtherKeysIsNotTaken()
+    {
+        using var bench = new Bench();
+        var (endpoint, client) = await SignalledAsync(bench, true);
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var stranger = Curve25519.Create();
+        var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
+
+        var answer = await AskAsync(desk, Point(endpoint), Saying(token, stranger.PrivateKey, endpoint.PublicKey, false));
+        var held = await bench.Clients.FindAsync(client.Id, CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status200OK, answer.Status);
+        Assert.False(held?.DisconnectRefused);
+    }
+
+    [Fact]
     public async Task AClientIsHandedTheGeoSourcesAndTheRoutingListsOfItsTemplate()
     {
         using var bench = new Bench();
@@ -968,6 +1031,45 @@ public class ServiceTests
 
         return document.RootElement.GetProperty("features").Clone();
     }
+
+    // Adds an endpoint and a client of it the panel takes down by the signal or keeps from it.
+    private static async Task<(ServerConfig Endpoint, TunnelClient Client)> SignalledAsync(Bench bench, bool disconnect)
+    {
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"], Disconnect = disconnect },
+            CancellationToken.None)).Record!;
+
+        return (endpoint, client);
+    }
+
+    // Asks the hello as the client and returns the features it was offered.
+    private static async Task<JsonElement> OfferedAsync(Bench bench, ServerConfig endpoint, TunnelClient client)
+    {
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
+        var answer = await AskAsync(desk, Point(endpoint), token);
+        var opened = PeerToken.Open(
+            PeerToken.Shared(client.PrivateKey, endpoint.PublicKey),
+            token.Nonce!,
+            JsonSerializer.Deserialize<SealedAnswer>(answer.Body, Web)!);
+        using var document = JsonDocument.Parse(opened!);
+
+        return document.RootElement.GetProperty("features").Clone();
+    }
+
+    // Returns the token with what the application says about the signal sealed under the keys given.
+    private static HelloRequest Saying(HelloRequest token, string privateKey, string serverKey, bool takes) =>
+        token with
+        {
+            Says = PeerToken.Seal(
+                PeerToken.Shared(privateKey, serverKey),
+                token.Nonce!,
+                JsonSerializer.SerializeToUtf8Bytes(new { disconnect = takes }, Web),
+                PeerToken.SaysContext),
+        };
 
     private static ServicePoint Point(ServerConfig endpoint) => ServicePoints.Of([endpoint], string.Empty, string.Empty)[0];
 

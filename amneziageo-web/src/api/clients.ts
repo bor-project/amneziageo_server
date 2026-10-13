@@ -42,6 +42,8 @@ export interface Client {
   subscriptionId: string
   dailyLimit: number
   inbound: Inbound
+  disconnect: boolean
+  disconnectRefused: boolean
   state: ClientState
   signal: ClientSignal | null
   createdUtc: string
@@ -61,6 +63,7 @@ export interface ClientDraft {
   subscriptionId: string
   dailyLimit: number
   inbound: Inbound
+  disconnect: boolean
 }
 
 export type Miss = "off" | "no-id" | "no-key"
@@ -145,6 +148,7 @@ export function draftOf(one: Client): ClientDraft {
     subscriptionId: one.subscriptionId,
     dailyLimit: one.dailyLimit,
     inbound: one.inbound,
+    disconnect: one.disconnect,
   }
 }
 

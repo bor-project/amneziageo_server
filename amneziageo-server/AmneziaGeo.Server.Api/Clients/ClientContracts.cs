@@ -48,6 +48,8 @@ public sealed record ClientResponse(
     string SubscriptionId,
     long DailyLimit,
     string Inbound,
+    bool Disconnect,
+    bool DisconnectRefused,
     ClientStateBody State,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc,
@@ -68,7 +70,8 @@ public sealed record ClientRequest(
     long? TemplateId = null,
     string? SubscriptionId = null,
     long? DailyLimit = null,
-    string? Inbound = null);
+    string? Inbound = null,
+    bool? Disconnect = null);
 
 /// <summary>
 /// Whether a client is on.
@@ -149,6 +152,8 @@ public static class ClientAnswers
             secrets ? client.SubscriptionId : string.Empty,
             client.DailyLimit,
             InboundName.Of(client.Inbound),
+            client.Disconnect,
+            client.DisconnectRefused,
             new ClientStateBody(
                 state.IsOnline,
                 state.IsPresent,
@@ -188,6 +193,7 @@ public static class ClientAnswers
             SubscriptionId = request.SubscriptionId?.Trim() ?? held?.SubscriptionId ?? ClientDefaults.SubscriptionId(),
             DailyLimit = request.DailyLimit ?? held?.DailyLimit ?? 0,
             Inbound = InboundName.Read(request.Inbound, held?.Inbound ?? ClientInbound.Endpoint),
+            Disconnect = request.Disconnect ?? held?.Disconnect ?? true,
         };
     }
 

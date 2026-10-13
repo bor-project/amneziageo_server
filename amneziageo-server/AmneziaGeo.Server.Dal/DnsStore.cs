@@ -106,8 +106,6 @@ public sealed class DnsStore
         MinTtl = row.MinTtl,
         MaxTtl = row.MaxTtl,
         Intercept = row.Intercept,
-        BlockDot = row.BlockDot,
-        BlockDoh = row.BlockDoh,
     };
 
     private static void Write(DnsSettingsEntity row, DnsSettings settings)
@@ -122,8 +120,6 @@ public sealed class DnsStore
         row.MinTtl = settings.MinTtl;
         row.MaxTtl = settings.MaxTtl;
         row.Intercept = settings.Intercept;
-        row.BlockDot = settings.BlockDot;
-        row.BlockDoh = settings.BlockDoh;
     }
 
     private static string[] Parts(string text) =>

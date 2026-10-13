@@ -144,32 +144,17 @@ public class RouteProbeTests
     }
 
     [Theory]
-    [InlineData(853, "8.8.8.8", "dot")]
-    [InlineData(443, "1.1.1.1", "doh")]
-    [InlineData(443, "77.88.8.8", "")]
-    public void TheGuardsOfTheResolverGoAheadOfTheRules(int port, string address, string guard)
+    [InlineData(853, "8.8.8.8")]
+    [InlineData(443, "1.1.1.1")]
+    public void ANameServerAClientAsksItsOwnWayIsLeftToTheRules(int port, string address)
     {
-        var dns = DnsDefaults.Settings with { IsEnabled = true, BlockDot = true, BlockDoh = true };
+        var dns = DnsDefaults.Settings with { IsEnabled = true };
         var plan = RoutePlan.Build([Rule(1, "geosite:youtube"), Rule(2, "0.0.0.0/0")], Ways, Index(), ["awg1"], dns);
 
         var verdict = Test(plan, new RouteQuery { Addresses = [IPAddress.Parse(address)], Port = port });
 
-        Assert.Equal(guard, verdict.Guard);
-        Assert.Equal(guard.Length > 0 ? RouteProbe.Guarded : RouteProbe.Out, verdict.Verdict);
-    }
-
-    [Theory]
-    [InlineData(853, "8.8.8.8")]
-    [InlineData(443, "1.1.1.1")]
-    public void TheGuardsStandAsideWhileNoRuleGoesByName(int port, string address)
-    {
-        var dns = DnsDefaults.Settings with { IsEnabled = true, BlockDot = true, BlockDoh = true };
-        var plan = RoutePlan.Build([Rule(1, "0.0.0.0/0")], Ways, Index(), ["awg1"], dns);
-
-        var verdict = Test(plan, new RouteQuery { Addresses = [IPAddress.Parse(address)], Port = port });
-
-        Assert.Equal(string.Empty, verdict.Guard);
         Assert.Equal(RouteProbe.Out, verdict.Verdict);
+        Assert.Equal(2L, verdict.Leg?.Rule.Id);
     }
 
     [Theory]

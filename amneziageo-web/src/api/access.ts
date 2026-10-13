@@ -1,7 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
 
-export type Verdict = "out" | "host" | "block" | "held" | "guard"
+export type Verdict = "out" | "host" | "block" | "held"
 
 export type Grouping = "domain" | "name" | "rule" | "way" | "client"
 

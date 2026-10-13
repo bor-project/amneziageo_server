@@ -182,6 +182,23 @@ public sealed class Ledger : IHostNetwork
     }
 
     /// <summary>
+    /// What the counters of the firewall have seen, by name.
+    /// </summary>
+    public Dictionary<string, long> Counters { get; } = [];
+
+    /// <summary>
+    /// Has a routing table deliver what it is asked about to the host itself, in both families.
+    /// </summary>
+    public Task LocalRouteAsync(int table, CancellationToken ct) => Step($"local {table}");
+
+    /// <summary>
+    /// Returns how many packets a counter of an inet table of the firewall has seen, or null when the host holds no
+    /// such counter.
+    /// </summary>
+    public Task<long?> CounterAsync(string table, string name, CancellationToken ct) =>
+        Task.FromResult(Counters.TryGetValue(name, out var seen) ? seen : (long?)null);
+
+    /// <summary>
     /// Tells whether the host was asked to do a step.
     /// </summary>
     public bool Did(string step) => Steps.Any(one => one.StartsWith(step, StringComparison.Ordinal));

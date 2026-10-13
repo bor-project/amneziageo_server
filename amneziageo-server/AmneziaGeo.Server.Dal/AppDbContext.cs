@@ -132,6 +132,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(client => client.Name).HasMaxLength(ClientRules.MaxNameLength);
             entity.Property(client => client.Note).HasMaxLength(ClientRules.MaxNoteLength);
             entity.Property(client => client.SubscriptionId).HasMaxLength(ClientRules.MaxSubscriptionLength);
+            entity.Property(client => client.Disconnect).HasDefaultValue(true);
             entity.HasIndex(client => new { client.ConfigId, client.Name }).IsUnique();
             entity.HasIndex(client => client.PublicKey).IsUnique();
             entity.HasOne<ConfigEntity>()

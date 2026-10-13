@@ -19,6 +19,29 @@ public sealed record DnsStateBody(
     DateTimeOffset? StartedUtc);
 
 /// <summary>
+/// What the reading of names out of the connections themselves has done since the panel started.
+/// </summary>
+/// <param name="Queue">Whether the first packets of the connections are read in the queue of the firewall.</param>
+/// <param name="Port">Whether the first TCP connections are taken over.</param>
+/// <param name="Packets">How many packets the queue showed.</param>
+/// <param name="Named">How many connections gave their name in the queue.</param>
+/// <param name="Reset">How many TCP connections a blocking rule cut.</param>
+/// <param name="Missed">How many TCP connections stayed on a way the rules do not name, the rules taking the next ones.</param>
+/// <param name="Taken">How many TCP connections were taken over.</param>
+/// <param name="Open">How many TCP connections the panel carries right now.</param>
+/// <param name="Learned">How many addresses the names read brought into the sets of the rules.</param>
+public sealed record DnsReadingBody(
+    bool Queue,
+    bool Port,
+    long Packets,
+    long Named,
+    long Reset,
+    long Missed,
+    long Taken,
+    long Open,
+    long Learned);
+
+/// <summary>
 /// The resolver as the panel reads it.
 /// </summary>
 public sealed record DnsResponse(
@@ -32,10 +55,9 @@ public sealed record DnsResponse(
     int MinTtl,
     int MaxTtl,
     bool Intercept,
-    bool BlockDot,
-    bool BlockDoh,
     bool Pending,
-    DnsStateBody State);
+    DnsStateBody State,
+    DnsReadingBody Reading);
 
 /// <summary>
 /// The settings the resolver is changed with.
@@ -50,9 +72,7 @@ public sealed record DnsRequest(
     int CacheSize,
     int MinTtl,
     int MaxTtl,
-    bool Intercept,
-    bool BlockDot,
-    bool BlockDoh);
+    bool Intercept);
 
 /// <summary>
 /// Turns the resolver settings into what the panel reads and back.
@@ -62,9 +82,16 @@ public static class DnsAnswers
     private static readonly char[] Breaks = [',', ' ', '\t', '\n', '\r'];
 
     /// <summary>
-    /// Returns the settings with what the resolver is doing.
+    /// Returns the settings with what the resolver is doing; why the names of the connections are not read stands in
+    /// for a fault when the resolver has none of its own.
     /// </summary>
-    public static DnsResponse Resolver(DnsSettings settings, DnsState state, DnsSets sets, RoutePlan? plan)
+    public static DnsResponse Resolver(
+        DnsSettings settings,
+        DnsState state,
+        DnsSets sets,
+        RoutePlan? plan,
+        string? fault = null,
+        DnsReadingBody? reading = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(state);
@@ -81,20 +108,19 @@ public static class DnsAnswers
             settings.MinTtl,
             settings.MaxTtl,
             settings.Intercept,
-            settings.BlockDot,
-            settings.BlockDoh,
             state.Settings is { } running && settings.Differs(running),
             new DnsStateBody(
                 state.IsRunning,
                 state.Listening,
-                state.Fault ?? state.Way ?? string.Empty,
+                state.Fault ?? state.Way ?? fault ?? string.Empty,
                 state.Questions,
                 state.Cached,
                 state.Failed,
                 sets.Added,
                 sets.Waiting,
                 DnsNames.Build(plan).Count,
-                state.StartedUtc));
+                state.StartedUtc),
+            reading ?? new DnsReadingBody(false, false, 0, 0, 0, 0, 0, 0, 0));
     }
 
     /// <summary>
@@ -116,8 +142,6 @@ public static class DnsAnswers
             MinTtl = request.MinTtl,
             MaxTtl = request.MaxTtl,
             Intercept = request.Intercept,
-            BlockDot = request.BlockDot,
-            BlockDoh = request.BlockDoh,
         };
     }
 

@@ -127,9 +127,7 @@ public class DnsPlanTests
     {
         var text = RouteRuleset.Text(Plan(Rule("youtube.com")));
 
-        Assert.Empty(RouteRuleset.Guard(DnsDefaults.Settings));
         Assert.DoesNotContain("chain resolve", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("doh4", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -151,63 +149,26 @@ public class DnsPlanTests
     }
 
     [Fact]
-    public void TheClientsAreKeptOffTheNameServersOfTheirOwn()
-    {
-        var text = RouteRuleset.Text(Plan(Rule("youtube.com"), On));
-
-        Assert.Contains("meta l4proto { tcp, udp } th dport 853 drop", text, StringComparison.Ordinal);
-        Assert.Contains("ip daddr @doh4 meta l4proto { tcp, udp } th dport 443 drop", text, StringComparison.Ordinal);
-        Assert.Contains("set doh6", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void OnlyWhatIsAskedForIsBlocked()
-    {
-        var lines = RouteRuleset.Guard(On with { BlockDoh = false });
-
-        Assert.Equal(["meta l4proto { tcp, udp } th dport 853 drop"], lines);
-    }
-
-    [Fact]
-    public void AServerWhoseRulesGoByRangesAloneLaysNoGuard()
-    {
-        var text = RouteRuleset.Text(Plan(Rule("77.88.8.0/24"), On));
-
-        Assert.DoesNotContain("th dport 853", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("doh4", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("doh6", text, StringComparison.Ordinal);
-        Assert.Contains("chain resolve", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AServerWithNoRulesLaysNoGuard()
+    public void AServerWithNoRulesTakesTheQuestionsOfTheClientsToo()
     {
         var plan = RoutePlan.Build([], Ways, GeoIndex.Load([], new MemoryGeoFiles()), ["awg1"], On);
-        var text = RouteRuleset.Text(plan);
 
-        Assert.DoesNotContain("th dport 853", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("set doh", text, StringComparison.Ordinal);
-        Assert.Contains("chain resolve", text, StringComparison.Ordinal);
+        Assert.Contains("chain resolve", RouteRuleset.Text(plan), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ARuleByNameThatIsTurnedOffBringsNoGuard()
-    {
-        var text = RouteRuleset.Text(Plan(Rule("youtube.com") with { IsEnabled = false }, On));
-
-        Assert.DoesNotContain("th dport 853", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("doh4", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ABasicListByNameBringsTheGuards()
+    public void NothingIsLaidAgainstTheNameServersAClientAsksItsOwnWay()
     {
         var basic = new RouteBasic { Block = ["ads.example.com"] };
-        var plan = RoutePlan.Build([], Ways, GeoIndex.Load([], new MemoryGeoFiles()), ["awg1"], On, basic: basic);
-        var text = RouteRuleset.Text(plan);
+        var listed = RoutePlan.Build([], Ways, GeoIndex.Load([], new MemoryGeoFiles()), ["awg1"], On, basic: basic);
 
-        Assert.Contains("meta l4proto { tcp, udp } th dport 853 drop", text, StringComparison.Ordinal);
-        Assert.Contains("set doh4", text, StringComparison.Ordinal);
+        foreach (var text in new[] { RouteRuleset.Text(Plan(Rule("youtube.com"), On)), RouteRuleset.Text(listed) })
+        {
+            Assert.Contains("chain resolve", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("dport 853", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("dport 443", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("doh", text, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

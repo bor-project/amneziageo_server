@@ -61,6 +61,8 @@ public sealed class FirewallHost
 
     private const string UserInput = "ufw-user-input";
 
+    private const string NotLocal = "ufw-not-local";
+
     private const string Unreached =
         "the host runs ufw, which the panel does not reach from here, and what ufw drops the table of the panel does not let in";
 
@@ -183,6 +185,26 @@ public sealed class FirewallHost
                 or InvalidOperationException or Win32Exception)
         {
             return new FirewallReach(Engine, false, FirewallReach.NoRights, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Tells whether the host drops what comes in for an address that is not its own, as ufw does.
+    /// </summary>
+    public async Task<bool> DropsForeignAsync(CancellationToken ct)
+    {
+        try
+        {
+            var chain = await _commands.RunAsync(Nft, ["list", "chain", "ip", "filter", NotLocal], null, ct)
+                .ConfigureAwait(false);
+
+            return chain.IsOk && chain.Output.Contains("drop", StringComparison.Ordinal);
+        }
+        catch (Exception ex)
+            when (ex is HostNetworkException or IOException or UnauthorizedAccessException
+                or InvalidOperationException or Win32Exception)
+        {
+            return false;
         }
     }
 

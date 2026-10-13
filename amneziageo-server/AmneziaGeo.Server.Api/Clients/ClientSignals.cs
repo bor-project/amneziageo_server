@@ -70,8 +70,8 @@ public sealed class ClientSignals
     public void Forget(long clientId) => _missed.TryRemove(clientId, out _);
 
     /// <summary>
-    /// Tells the applications of the clients that are on and connected to take their tunnels down, while their
-    /// endpoints still carry them.
+    /// Tells the applications of the clients that are on, connected and take the signal to take their tunnels down,
+    /// while their endpoints still carry them.
     /// </summary>
     public async Task SendAsync(IReadOnlyList<TunnelClient> clients, IReadOnlyList<ServerConfig> endpoints, CancellationToken ct)
     {
@@ -79,7 +79,7 @@ public sealed class ClientSignals
         ArgumentNullException.ThrowIfNull(endpoints);
 
         var due = new List<Task>();
-        foreach (var client in clients.Where(one => one.IsEnabled))
+        foreach (var client in clients.Where(one => one.IsEnabled && one.Disconnect && !one.DisconnectRefused))
         {
             var endpoint = endpoints.FirstOrDefault(one => one.Id == client.ConfigId);
             if (endpoint is { IsEnabled: true } && _connected(endpoint, client))

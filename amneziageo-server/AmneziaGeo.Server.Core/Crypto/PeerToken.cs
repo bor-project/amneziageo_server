@@ -33,6 +33,11 @@ public static class PeerToken
     public const string SignalContext = "amneziageo-signal";
 
     /// <summary>
+    /// What the key of what a hello says about its application is bound to.
+    /// </summary>
+    public const string SaysContext = "amneziageo-says";
+
+    /// <summary>
     /// The scheme a token travels under in the header of a websocket.
     /// </summary>
     public const string Scheme = "AmneziaGeo";

@@ -51,7 +51,12 @@ stands within five minutes of its own clock and takes each nonce once.
 
 ## Hello
 
-`POST /api/hello` with the token as its JSON body. The answer is sealed:
+`POST /api/hello` with the token as its JSON body. Beside the four fields of the token the body may carry `says`,
+what the application says about itself: `{ "iv", "data" }`, the body `{ "disconnect": true }` or
+`{ "disconnect": false }` sealed the way the answer is, under the key `HKDF-SHA256(shared, salt = the bytes of
+the nonce, info = "amneziageo-says")`. An application that says `false` takes no signal to disconnect, see
+[The signal to disconnect](#the-signal-to-disconnect); a body without `says`, or one that does not open, reads
+as an application that takes it. The answer is sealed:
 
 ```
 { "iv": "<12 bytes in base64>", "data": "<sealed bytes and the tag of 16 bytes, in base64>" }
@@ -70,7 +75,7 @@ and `features` carries what the server offers this client, each under its name:
 |---|---|---|
 | `websocket` | `port`, `path` | the endpoint takes the tunnel inside a websocket on that port under that path |
 | `inbound` | `mode`: `server` or `network` | the client lets connections in from the tunnel, see [clients.md](clients.md) |
-| `disconnect` | `port`, `from` | the endpoint and the client carry an address: the TCP port the application takes the signal to disconnect on and the addresses the signal comes from, see [The signal to disconnect](#the-signal-to-disconnect) |
+| `disconnect` | `port`, `from`, `allowed` | the endpoint and the client carry an address and the panel does not keep the client from the signal: the TCP port the application takes the signal to disconnect on, the addresses the signal comes from, and `allowed`, true, which leaves the choice to take the signal to the application, see [The signal to disconnect](#the-signal-to-disconnect) |
 | `speed` | `inside`, `outside` (each `down` and `up`), `limit`, `expires` | always: where to measure and until when |
 | `subscription` | `url`, `revision`, `pin` | the subscriptions are on and the client has one: where it reads it and what it hands out now |
 | `sources` | `items`, each `name`, `kind` (`geoip` or `geosite`) and `url` | the panel has a geo source on: the sources the client adds when it holds none at the address, and moves to the address when it holds one under the name |
@@ -113,6 +118,11 @@ application takes the signal: `port`, 28561, at the address the client carries i
 the addresses of the interface of the endpoint. An application of AmneziaGeo listens there while its tunnel
 stands and lets that port in from those addresses alone, whatever its access from the tunnel says, see
 [clients.md](clients.md).
+
+The signal goes to a client only while both sides agree to it. The panel keeps a switch per client, on by
+default, see [clients.md](clients.md): with it off the hello offers no `disconnect` and the panel sends nothing.
+The application keeps a switch per configuration and shows it where the hello carries `allowed`: with it off
+the application does not listen and says so in `says` of its hello, and the panel sends it nothing either.
 
 The panel opens a TCP connection from the host to the first IPv4 address of the client, to its first address
 when it carries none, while the interface still carries the client, and the two sides say three lines of JSON:
