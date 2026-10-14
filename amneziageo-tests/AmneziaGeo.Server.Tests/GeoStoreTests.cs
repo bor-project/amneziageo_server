@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
+using AmneziaGeo.Server.Api.Geo;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Geo;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -261,12 +263,72 @@ public class GeoStoreTests
         Assert.False(files.Has("geoip"));
     }
 
+    [Fact]
+    public async Task ARoundThatReplacesAFileSaysSo()
+    {
+        using var bench = new Bench();
+        await OnlyAsync(bench, "geoip");
+        var refresher = Refresher(bench, new Answers(Database, "\"one\""));
+
+        var round = await refresher.RoundAsync(TimeSpan.FromHours(24), DateTimeOffset.UtcNow, CancellationToken.None);
+
+        Assert.True(round.Changed);
+        Assert.Equal(1, round.Sources.Single(source => source.Name == "geoip").EntryCount);
+    }
+
+    [Fact]
+    public async Task ARoundThatFindsTheSameFileOrNothingDueSaysNothingWasReplaced()
+    {
+        using var bench = new Bench();
+        await OnlyAsync(bench, "geoip");
+        var answers = new Answers(Database, "\"one\"");
+        var refresher = Refresher(bench, answers);
+        var now = DateTimeOffset.UtcNow;
+        await refresher.RoundAsync(null, now, CancellationToken.None);
+        answers.Status = HttpStatusCode.NotModified;
+
+        var same = await refresher.RoundAsync(null, now, CancellationToken.None);
+        var early = await refresher.RoundAsync(TimeSpan.FromHours(24), now.AddMinutes(30), CancellationToken.None);
+
+        Assert.False(same.Changed);
+        Assert.False(early.Changed);
+        Assert.Equal(1, same.Sources.Single(source => source.Name == "geoip").EntryCount);
+    }
+
+    [Fact]
+    public async Task ARoundWhoseDownloadFailsSaysNothingWasReplaced()
+    {
+        using var bench = new Bench();
+        await OnlyAsync(bench, "geoip");
+        var refresher = Refresher(bench, new Answers("<html>not a database</html>"u8.ToArray(), string.Empty));
+
+        var round = await refresher.RoundAsync(null, DateTimeOffset.UtcNow, CancellationToken.None);
+
+        Assert.False(round.Changed);
+        Assert.NotNull(round.Sources.Single(source => source.Name == "geoip").LastError);
+    }
+
     private static GeoSource Draft(string name, string url) => new()
     {
         Name = name,
         Kind = GeoKind.Ip,
         Url = url,
     };
+
+    // Leaves one source of the panel of a bench on, every source at an address of the examples.
+    private static async Task OnlyAsync(Bench bench, string name)
+    {
+        foreach (var source in await bench.Db.GeoSources.ToListAsync())
+        {
+            source.IsEnabled = source.Name == name;
+            source.Url = "https://example.org/" + source.Name + ".dat";
+        }
+
+        await bench.Db.SaveChangesAsync();
+    }
+
+    private static GeoRefresher Refresher(Bench bench, Answers answers) =>
+        new(bench.Geo, new GeoDownloader(new HttpClient(answers), new MemoryGeoFiles()), NullLogger<GeoRefresher>.Instance);
 
     // Turns the fresh panel of a bench into one seeded by the first set: no source that joined later, no mark of the set.
     private static async Task SeededBeforeAsync(Bench bench, params string[] removed)

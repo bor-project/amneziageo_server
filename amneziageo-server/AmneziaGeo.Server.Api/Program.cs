@@ -103,11 +103,7 @@ try
 }
 catch (IOException ex) when (StartFailure.IsPortTaken(ex))
 {
-    app.Logger.LogDebug(ex, "the panel did not bind its address");
-    app.Logger.LogCritical("{Reason}", StartFailure.Line(ex));
-    await app.DisposeAsync().ConfigureAwait(false);
-
-    return StartFailure.PortTaken;
+    return await StartFailure.LeaveAsync(app, app.Logger, ex).ConfigureAwait(false);
 }
 
 await app.WaitForShutdownAsync().ConfigureAwait(false);

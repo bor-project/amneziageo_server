@@ -62,7 +62,13 @@ public sealed class GeoSchedule : BackgroundService
         {
             using var scope = _scopes.CreateScope();
             var refresher = scope.ServiceProvider.GetRequiredService<GeoRefresher>();
-            await refresher.RefreshAllAsync(age, _time.GetUtcNow(), ct).ConfigureAwait(false);
+            var round = await refresher.RoundAsync(age, _time.GetUtcNow(), ct).ConfigureAwait(false);
+            if (!round.Changed)
+            {
+                return;
+            }
+
+            _logger.LogDebug("the rules are laid anew over the geo files the round replaced");
             await scope.ServiceProvider.GetRequiredService<RouteApplier>().SettleAsync(ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

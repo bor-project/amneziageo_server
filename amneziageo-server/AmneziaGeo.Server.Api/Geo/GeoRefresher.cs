@@ -4,6 +4,13 @@ using AmneziaGeo.Server.Geo;
 namespace AmneziaGeo.Server.Api.Geo;
 
 /// <summary>
+/// The sources a round of downloads leaves and whether it replaced a file.
+/// </summary>
+/// <param name="Sources">Every source as it now stands.</param>
+/// <param name="Changed">Whether a file on disk was replaced.</param>
+public sealed record GeoRound(IReadOnlyList<GeoSource> Sources, bool Changed);
+
+/// <summary>
 /// Downloads a geo source and writes down what the download left.
 /// </summary>
 public sealed class GeoRefresher
@@ -27,7 +34,42 @@ public sealed class GeoRefresher
     /// <summary>
     /// Downloads one source and returns it as it now stands.
     /// </summary>
-    public async Task<GeoSource> RefreshAsync(GeoSource source, CancellationToken ct)
+    public async Task<GeoSource> RefreshAsync(GeoSource source, CancellationToken ct) =>
+        (await DownloadAsync(source, ct).ConfigureAwait(false)).Source;
+
+    /// <summary>
+    /// Downloads every source that is on and due, and returns them all.
+    /// </summary>
+    public async Task<IReadOnlyList<GeoSource>> RefreshAllAsync(TimeSpan? notNewerThan, DateTimeOffset now, CancellationToken ct) =>
+        (await RoundAsync(notNewerThan, now, ct).ConfigureAwait(false)).Sources;
+
+    /// <summary>
+    /// Downloads every source that is on and due, and returns them all with whether a file was replaced.
+    /// </summary>
+    public async Task<GeoRound> RoundAsync(TimeSpan? notNewerThan, DateTimeOffset now, CancellationToken ct)
+    {
+        var held = await _store.ListAsync(ct).ConfigureAwait(false);
+        var answer = new List<GeoSource>(held.Count);
+        var changed = false;
+
+        foreach (var source in held)
+        {
+            if (!Due(source, notNewerThan, now))
+            {
+                answer.Add(source);
+                continue;
+            }
+
+            var (fresh, replaced) = await DownloadAsync(source, ct).ConfigureAwait(false);
+            answer.Add(fresh);
+            changed |= replaced;
+        }
+
+        return new GeoRound(answer, changed);
+    }
+
+    // Downloads one source, writes down what the download left and tells whether the file was replaced.
+    private async Task<(GeoSource Source, bool Changed)> DownloadAsync(GeoSource source, CancellationToken ct)
     {
         try
         {
@@ -39,33 +81,15 @@ public sealed class GeoRefresher
                 download.Changed ? "downloaded" : "unchanged",
                 download.EntryCount);
 
-            return stamped.Record ?? source;
+            return (stamped.Record ?? source, download.Changed);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "geo source {Name} was not downloaded", source.Name);
             var failed = await _store.FailAsync(source.Id, ex.Message, ct).ConfigureAwait(false);
 
-            return failed.Record ?? source;
+            return (failed.Record ?? source, false);
         }
-    }
-
-    /// <summary>
-    /// Downloads every source that is on and due, and returns them all.
-    /// </summary>
-    public async Task<IReadOnlyList<GeoSource>> RefreshAllAsync(TimeSpan? notNewerThan, DateTimeOffset now, CancellationToken ct)
-    {
-        var held = await _store.ListAsync(ct).ConfigureAwait(false);
-        var answer = new List<GeoSource>(held.Count);
-
-        foreach (var source in held)
-        {
-            answer.Add(Due(source, notNewerThan, now)
-                ? await RefreshAsync(source, ct).ConfigureAwait(false)
-                : source);
-        }
-
-        return answer;
     }
 
     private static bool Due(GeoSource source, TimeSpan? notNewerThan, DateTimeOffset now)

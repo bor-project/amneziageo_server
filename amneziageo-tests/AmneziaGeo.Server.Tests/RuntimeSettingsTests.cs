@@ -28,4 +28,12 @@ public class RuntimeSettingsTests
         Assert.Equal("64", least.ToString());
         Assert.True(AnswerSlots.Default * 2 <= int.Parse(least.ToString(), CultureInfo.InvariantCulture));
     }
+
+    [Fact]
+    public void ThePoolOfTheTestsHoldsRoomForTheThreadsTheTestsMayHold()
+    {
+        ThreadPool.GetMinThreads(out var workers, out _);
+
+        Assert.True(workers >= 64, $"the pool of the tests starts {workers} threads without waiting");
+    }
 }

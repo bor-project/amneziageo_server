@@ -68,7 +68,7 @@ step() {
 # Asks for a line and prints the answer, or the default when it is empty; fails when the input ends.
 ask() {
   local answer=
-  if ! read -r -p "$1 " answer; then
+  if ! read -r -e -p "$1 " answer; then
     printf '%s' "${2:-}"
     return 1
   fi
@@ -76,21 +76,31 @@ ask() {
   printf '%s' "${answer:-${2:-}}"
 }
 
+# Asks a yes or no question until it gets one: yes succeeds, no fails, the end of the input fails with 2, an empty
+# answer is the default given.
+yes_no() {
+  local answer=
+  while read -r -e -p "$1 " answer; do
+    case ${answer,,} in
+      '') [ "$2" = yes ]; return ;;
+      y | yes) return 0 ;;
+      n | no) return 1 ;;
+    esac
+
+    bad "answer y or n"
+  done
+
+  return 2
+}
+
 # Asks a question that is no unless answered yes.
 confirm() {
-  local answer=
-  read -r -p "$1 [y/N] " answer || true
-  [[ $answer == [yY]* ]]
+  yes_no "$1 [y/N]" no
 }
 
 # Asks a question that is yes unless answered no, and no when the input ends.
 agree() {
-  local answer=
-  if ! read -r -p "$1 [Y/n] " answer; then
-    return 1
-  fi
-
-  [[ -z $answer || $answer == [yY]* ]]
+  yes_no "$1 [Y/n]" yes
 }
 
 # Waits for Enter before the menu comes back.
@@ -1006,19 +1016,16 @@ answer() {
 
 # Asks a yes or no question of the installation once and tells the answer.
 answer_yes() {
-  local key=$1 question=$2 default=$3 reply
+  local key=$1 question=$2 default=$3 hint='[y/N]' code=0
   if [ -n "${given[$key]+set}" ]; then
     say "$question ${given[$key]}"
   else
-    if [ "$default" = yes ]; then
-      reply=$(ask "$question [Y/n]" y) || reply=y
-    else
-      reply=$(ask "$question [y/N]" n) || reply=n
-    fi
-
-    case $reply in
-      [yY]*) given[$key]=yes ;;
-      *) given[$key]=no ;;
+    [ "$default" = yes ] && hint='[Y/n]'
+    yes_no "$question $hint" "$default" || code=$?
+    case $code in
+      0) given[$key]=yes ;;
+      1) given[$key]=no ;;
+      *) given[$key]=$default ;;
     esac
 
     if [ ! -t 0 ]; then
