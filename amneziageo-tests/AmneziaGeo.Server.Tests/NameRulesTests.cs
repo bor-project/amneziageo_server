@@ -275,6 +275,26 @@ public class NameRulesTests
     }
 
     [Fact]
+    public async Task AnAddressLookedAtWakesWhoeverSendsThemToTheHost()
+    {
+        var host = new Ledger();
+        var desk = new NameDesk(new DnsSets(host), host);
+
+        var asleep = desk.SeenAsync(CancellationToken.None).AsTask();
+        await Task.Delay(100);
+        var slept = !asleep.IsCompleted;
+        desk.Seen(Site);
+        var woken = await asleep.WaitAsync(TimeSpan.FromSeconds(5));
+        await desk.NoteAsync(CancellationToken.None);
+        var again = desk.SeenAsync(CancellationToken.None).AsTask();
+        await Task.Delay(100);
+
+        Assert.True(slept);
+        Assert.True(woken);
+        Assert.False(again.IsCompleted);
+    }
+
+    [Fact]
     public async Task AnAddressLookedAtGoesToTheHostAtOnceWhenAsked()
     {
         var host = new Ledger();

@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace AmneziaGeo.Server.Awg.Netlink;
 
 /// <summary>
-/// A generic netlink socket to the kernel.
+/// A netlink socket to the kernel, of the generic protocol unless another one is named.
 /// </summary>
 public sealed partial class NetlinkSocket : IDisposable
 {
@@ -13,9 +13,12 @@ public sealed partial class NetlinkSocket : IDisposable
     private const int SockCloexec = 0x80000;
     private const int NetlinkGeneric = 16;
 
+    private const ushort MessageNothing = 1;
     private const ushort MessageError = 2;
     private const ushort MessageDone = 3;
+    private const ushort FlagRequest = 1;
     private const ushort FlagMulti = 2;
+    private const ushort FlagAck = 4;
 
     private const int ReceiveBufferLength = 1 << 17;
 
@@ -27,8 +30,16 @@ public sealed partial class NetlinkSocket : IDisposable
     /// ctor
     /// </summary>
     public NetlinkSocket()
+        : this(NetlinkGeneric)
     {
-        _handle = OpenSocket(AfNetlink, SockRaw | SockCloexec, NetlinkGeneric);
+    }
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public NetlinkSocket(int protocol)
+    {
+        _handle = OpenSocket(AfNetlink, SockRaw | SockCloexec, protocol);
         if (_handle < 0)
         {
             throw new NetlinkException("the netlink socket could not be opened", Marshal.GetLastPInvokeError());
@@ -47,6 +58,19 @@ public sealed partial class NetlinkSocket : IDisposable
     /// Hands out the next sequence number.
     /// </summary>
     public uint NextSequence() => ++_sequence;
+
+    /// <summary>
+    /// Returns a message the kernel answers with an acknowledgment alone.
+    /// </summary>
+    public static byte[] Knock()
+    {
+        var message = new byte[16];
+        BinaryPrimitives.WriteUInt32LittleEndian(message, (uint)message.Length);
+        BinaryPrimitives.WriteUInt16LittleEndian(message.AsSpan(4), MessageNothing);
+        BinaryPrimitives.WriteUInt16LittleEndian(message.AsSpan(6), FlagRequest | FlagAck);
+
+        return message;
+    }
 
     /// <summary>
     /// Sends a request and gathers every message of the answer.

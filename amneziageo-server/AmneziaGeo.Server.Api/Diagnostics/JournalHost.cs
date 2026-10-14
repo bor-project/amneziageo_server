@@ -66,9 +66,9 @@ public sealed class JournalHost : BackgroundService
 
         try
         {
-            using var timer = new PeriodicTimer(JournalDefaults.Gather, _time);
-            while (await timer.WaitForNextTickAsync(stopping).ConfigureAwait(false))
+            while (await _journal.Waiting.WaitToReadAsync(stopping).ConfigureAwait(false))
             {
+                await Task.Delay(JournalDefaults.Gather, _time, stopping).ConfigureAwait(false);
                 Flush();
             }
         }

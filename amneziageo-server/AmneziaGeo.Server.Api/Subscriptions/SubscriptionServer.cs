@@ -24,6 +24,8 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
 
     private readonly ILogger<SubscriptionServer> _logger;
 
+    private readonly AnswerSlots _slots;
+
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private WebApplication? _app;
@@ -36,13 +38,15 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
         SubscriptionState state,
         PanelSettings panel,
         WebOptions options,
-        ILogger<SubscriptionServer> logger)
+        ILogger<SubscriptionServer> logger,
+        AnswerSlots? slots = null)
     {
         _scopes = scopes;
         _state = state;
         _panel = panel;
         _options = options;
         _logger = logger;
+        _slots = slots ?? new AnswerSlots(0);
     }
 
     /// <summary>
@@ -189,7 +193,7 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
         });
 
         var app = builder.Build();
-        app.Run(context => SubscriptionAnswer.WriteAsync(context, _state.Current, _scopes));
+        app.Run(context => _slots.AnswerAsync(() => SubscriptionAnswer.WriteAsync(context, _state.Current, _scopes), context.RequestAborted));
 
         return app;
     }

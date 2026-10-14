@@ -40,6 +40,8 @@ public sealed class DnsHost : BackgroundService
 
     private DnsUpstream? _upstream;
 
+    private PeriodicTimer? _beat;
+
     private readonly Dictionary<DnsWarmName, DnsWarmTry> _asked = new();
 
     private DnsSettings _settings = DnsDefaults.Settings;
@@ -134,11 +136,12 @@ public sealed class DnsHost : BackgroundService
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stopping)
     {
+        var beat = new PeriodicTimer(Between, _time);
+        _beat = beat;
         try
         {
             await RestartAsync(stopping).ConfigureAwait(false);
-            using var timer = new PeriodicTimer(Between, _time);
-            while (await timer.WaitForNextTickAsync(stopping).ConfigureAwait(false))
+            while (await beat.WaitForNextTickAsync(stopping).ConfigureAwait(false))
             {
                 Look();
                 await WarmAsync(stopping).ConfigureAwait(false);
@@ -148,6 +151,13 @@ public sealed class DnsHost : BackgroundService
         }
         catch (OperationCanceledException)
         {
+        }
+        finally
+        {
+            await _turn.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            _beat = null;
+            _turn.Release();
+            beat.Dispose();
         }
     }
 
@@ -187,6 +197,7 @@ public sealed class DnsHost : BackgroundService
         }
         finally
         {
+            Pace();
             _turn.Release();
         }
     }
@@ -241,6 +252,20 @@ public sealed class DnsHost : BackgroundService
         _upstream = null;
         upstream?.Dispose();
     }
+
+    // Wakes the resolver twice a second while it answers, otherwise as often as the sets of the rules need it.
+    private void Pace()
+    {
+        var pace = _upstream is null ? Rest(_settings.NameLifetime) : Between;
+        if (_beat is { } beat && beat.Period != pace)
+        {
+            beat.Period = pace;
+        }
+    }
+
+    // Returns a quarter of the life of an address, from half a second to a minute.
+    private static TimeSpan Rest(TimeSpan lifetime) =>
+        TimeSpan.FromTicks(Math.Clamp(lifetime.Ticks / 4, Between.Ticks, Saving.Ticks));
 
     private string Exit() => _settings.Outbound.Length == 0 ? "the host" : _settings.Outbound;
 

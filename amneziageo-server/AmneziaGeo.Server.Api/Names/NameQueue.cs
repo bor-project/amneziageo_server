@@ -176,10 +176,10 @@ public sealed class NameQueue : BackgroundService
         await SettleAsync(stopping).ConfigureAwait(false);
         try
         {
-            using var timer = new PeriodicTimer(NameDefaults.Noting, _time);
-            while (await timer.WaitForNextTickAsync(stopping).ConfigureAwait(false))
+            while (await _desk.SeenAsync(stopping).ConfigureAwait(false))
             {
                 await NoteAsync().ConfigureAwait(false);
+                await Task.Delay(NameDefaults.Noting, _time, stopping).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -190,6 +190,7 @@ public sealed class NameQueue : BackgroundService
             _gate.CloseQueue();
             await SettleAsync(CancellationToken.None).ConfigureAwait(false);
             _reading = false;
+            _socket.Wake();
             reader.Join(NameDefaults.Wait * 10);
             _socket.Dispose();
         }
@@ -222,6 +223,9 @@ public sealed class NameQueue : BackgroundService
         }
     }
 
+    // Tells whether no packet and no connection waits in the queue for its time.
+    private bool Idle => _held.Count == 0 && _said.Count == 0 && _ended.IsEmpty;
+
     private void Loop(object? state)
     {
         if (state is not NetfilterQueue socket)
@@ -235,6 +239,11 @@ public sealed class NameQueue : BackgroundService
         {
             try
             {
+                if (Idle)
+                {
+                    socket.Wait();
+                }
+
                 var read = socket.Read(buffer);
                 if (read > 0)
                 {

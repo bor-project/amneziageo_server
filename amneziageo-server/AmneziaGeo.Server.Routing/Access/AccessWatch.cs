@@ -24,6 +24,22 @@ public sealed class AccessWatch
     public int Count => _watched.Count;
 
     /// <summary>
+    /// When the first record held is due to be written, null when none is held.
+    /// </summary>
+    public DateTimeOffset? Next
+    {
+        get
+        {
+            if (_done.Count > 0)
+            {
+                return DateTimeOffset.MinValue;
+            }
+
+            return _watched.Count == 0 ? null : _watched.Values.Min(watched => watched.Due);
+        }
+    }
+
+    /// <summary>
     /// Takes a new record, folding a packet that asks again for the same connection into the record it already has.
     /// </summary>
     public void Take(AccessRecord record)

@@ -13,4 +13,13 @@ public static class NameRoom
     {
         return full ? open > most - (most / 4) : open >= most;
     }
+
+    /// <summary>
+    /// Tells whether the panel looks at its room often: while it is full, or while the connections the firewall may
+    /// hand over in both families before the next check could fill it.
+    /// </summary>
+    public static bool Crowded(bool full, long open, int most)
+    {
+        return full || open + (2L * NameDefaults.MostTaken * ((long)NameDefaults.Checking.TotalSeconds + 1)) >= most;
+    }
 }

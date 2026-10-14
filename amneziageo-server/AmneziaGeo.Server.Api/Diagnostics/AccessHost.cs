@@ -1,5 +1,5 @@
-using System.Collections.Concurrent;
 using System.Net;
+using System.Threading.Channels;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Awg.Netlink;
@@ -31,7 +31,7 @@ public sealed class AccessHost : BackgroundService
 
     private readonly AccessWatch _watch = new();
 
-    private readonly ConcurrentQueue<AccessRecord> _carried = new();
+    private readonly Channel<AccessRecord> _carried = Channel.CreateUnbounded<AccessRecord>();
 
     private readonly IServiceScopeFactory _scopes;
 
@@ -121,7 +121,7 @@ public sealed class AccessHost : BackgroundService
 
         if (IsRunning)
         {
-            _carried.Enqueue(record);
+            _carried.Writer.TryWrite(record);
         }
     }
 
@@ -200,9 +200,10 @@ public sealed class AccessHost : BackgroundService
                 }
             }
 
-            using var timer = new PeriodicTimer(AccessDefaults.Gather, _time);
-            while (await timer.WaitForNextTickAsync(stopping).ConfigureAwait(false))
+            while (!stopping.IsCancellationRequested)
             {
+                await RestAsync(stopping).ConfigureAwait(false);
+                await Task.Delay(AccessDefaults.Gather, _time, stopping).ConfigureAwait(false);
                 await DrainAsync(stopping).ConfigureAwait(false);
                 Trim();
             }
@@ -248,7 +249,7 @@ public sealed class AccessHost : BackgroundService
 
         try
         {
-            _socket = new NetfilterLog(AccessDefaults.Group, AccessDefaults.Snap, AccessDefaults.Buffer, AccessDefaults.Wait);
+            _socket = new NetfilterLog(AccessDefaults.Group, AccessDefaults.Snap, AccessDefaults.Buffer);
         }
         catch (Exception ex) when (ex is NetlinkException or DllNotFoundException or EntryPointNotFoundException)
         {
@@ -274,7 +275,8 @@ public sealed class AccessHost : BackgroundService
     private void StopReading()
     {
         _reading = false;
-        _reader?.Join(AccessDefaults.Wait * 4);
+        _socket?.Wake();
+        _reader?.Join(AccessDefaults.Wait);
         _reader = null;
         _socket?.Dispose();
         _socket = null;
@@ -332,9 +334,35 @@ public sealed class AccessHost : BackgroundService
         }
     }
 
+    // Waits until a record comes, a record held is due to be written or the old records are due to go.
+    private async Task RestAsync(CancellationToken stopping)
+    {
+        using var rest = CancellationTokenSource.CreateLinkedTokenSource(stopping);
+        await Task.WhenAny(
+            _queue.Reader.WaitToReadAsync(rest.Token).AsTask(),
+            _carried.Reader.WaitToReadAsync(rest.Token).AsTask(),
+            Task.Delay(Until(), _time, rest.Token)).ConfigureAwait(false);
+        await rest.CancelAsync().ConfigureAwait(false);
+        stopping.ThrowIfCancellationRequested();
+    }
+
+    // Returns how long until a record held is due to be written or the old records are due to go.
+    private TimeSpan Until()
+    {
+        var due = _trimmed + AccessDefaults.Trimming;
+        if (_watch.Next is { } next && next < due)
+        {
+            due = next;
+        }
+
+        var left = due - _time.GetUtcNow();
+
+        return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+    }
+
     private async Task DrainAsync(CancellationToken ct)
     {
-        if (_queue.Reader.TryPeek(out _) || !_carried.IsEmpty)
+        if (_queue.Reader.TryPeek(out _) || _carried.Reader.TryPeek(out _))
         {
             await ClientsAsync(ct).ConfigureAwait(false);
             Drain();
@@ -366,7 +394,7 @@ public sealed class AccessHost : BackgroundService
         }
 
         var carried = new List<AccessRecord>();
-        while (_carried.TryDequeue(out var record))
+        while (_carried.Reader.TryRead(out var record))
         {
             carried.Add(record with { Client = IPAddress.TryParse(record.Source, out var source) ? Client(source) : string.Empty });
         }

@@ -54,6 +54,17 @@ public class NameQueueTests
         Assert.Equal(new byte[] { 0x60 }, packets[1].Payload);
     }
 
+    [Fact]
+    public void TheKnockIsARequestTheKernelAnswersWithAnAcknowledgmentAlone()
+    {
+        var knock = NetlinkSocket.Knock();
+
+        Assert.Equal(16, knock.Length);
+        Assert.Equal(16u, BinaryPrimitives.ReadUInt32LittleEndian(knock));
+        Assert.Equal(1, Short(knock, 4));
+        Assert.Equal(5, Short(knock, 6));
+    }
+
     private static int Short(byte[] message, int at) => BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan(at));
 
     private static uint Big(byte[] message, int at) => BinaryPrimitives.ReadUInt32BigEndian(message.AsSpan(at));

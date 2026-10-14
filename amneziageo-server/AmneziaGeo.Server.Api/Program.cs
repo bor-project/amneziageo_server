@@ -57,6 +57,7 @@ app.StartOverview();
 
 app.UseForwarded();
 app.UseEndpointServices();
+app.UseAnswerSlots();
 app.UseTunnelGate();
 app.UseSubscriptions();
 app.UsePanel();

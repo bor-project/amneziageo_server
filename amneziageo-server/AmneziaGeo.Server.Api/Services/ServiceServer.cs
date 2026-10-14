@@ -344,6 +344,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         builder.Configuration.Sources.Clear();
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton<IHostLifetime, QuietLifetime>();
+        Listening.Inline(builder.WebHost, _options);
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
             kestrel.AddServerHeader = false;

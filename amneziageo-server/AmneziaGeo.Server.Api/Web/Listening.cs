@@ -47,6 +47,17 @@ public sealed class WebOptions
     /// The addresses of the reverse proxies whose forwarded headers the panel takes.
     /// </summary>
     public string[] Proxies { get; set; } = [];
+
+    /// <summary>
+    /// Whether the web servers go on with a connection on the thread that read or wrote it.
+    /// </summary>
+    public bool Inline { get; set; } = true;
+
+    /// <summary>
+    /// How many requests the web servers answer at once besides the websockets of the tunnels and the measurements,
+    /// zero for every one.
+    /// </summary>
+    public int Requests { get; set; } = AnswerSlots.Default;
 }
 
 /// <summary>
@@ -98,6 +109,7 @@ public static class Listening
         var certificate = WebCertificate.Of(Chain(options, settings), Key(options, settings))
             ?? (PanelStore.ServesOn(path, settings.Port) ? WebCertificate.MadeUp() : null);
         builder.Services.AddSingleton(options);
+        builder.Services.AddSingleton(_ => new AnswerSlots(options.Requests));
         builder.Services.AddSingleton(settings);
         builder.Services.AddSingleton(new PanelPlace(settings.Port, settings.Prefix, certificate is not null));
         builder.Services.AddSingleton(plan);
@@ -116,8 +128,20 @@ public static class Listening
                 kestrel.Listen(point, listen => Secure(listen, certificate));
             }
         });
+        Inline(builder.WebHost, options);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Has a web server go on with a connection on the thread that read or wrote it, unless the options say no.
+    /// </summary>
+    public static void Inline(IWebHostBuilder host, WebOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(options);
+
+        host.UseSockets(sockets => sockets.UnsafePreferInlineScheduling = options.Inline);
     }
 
     /// <summary>

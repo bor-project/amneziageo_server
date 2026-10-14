@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Globalization;
 using System.Text.Json;
 using AmneziaGeo.Server.Api.Subscriptions;
+using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
@@ -46,6 +47,8 @@ public sealed class ServiceDesk
 
     private readonly RefusalHold _hold;
 
+    private readonly AnswerSlots _slots;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -57,7 +60,8 @@ public sealed class ServiceDesk
         IHostApplicationLifetime life,
         IOptions<JsonOptions> json,
         ILogger<ServiceDesk> logger,
-        RefusalHold? hold = null)
+        RefusalHold? hold = null,
+        AnswerSlots? slots = null)
     {
         ArgumentNullException.ThrowIfNull(life);
         ArgumentNullException.ThrowIfNull(json);
@@ -70,6 +74,7 @@ public sealed class ServiceDesk
         _json = json.Value.SerializerOptions;
         _logger = logger;
         _hold = hold ?? new RefusalHold();
+        _slots = slots ?? new AnswerSlots(0);
     }
 
     /// <summary>
@@ -86,7 +91,7 @@ public sealed class ServiceDesk
                 await PassAsync(context, point).ConfigureAwait(false);
                 break;
             case Wanted.Hello:
-                await HelloAsync(context, point).ConfigureAwait(false);
+                await _slots.AnswerAsync(() => HelloAsync(context, point), context.RequestAborted).ConfigureAwait(false);
                 break;
             case Wanted.Down:
                 await DownAsync(context).ConfigureAwait(false);
@@ -95,7 +100,8 @@ public sealed class ServiceDesk
                 await UpAsync(context).ConfigureAwait(false);
                 break;
             case Wanted.Subscription:
-                await SubscriptionAnswer.WriteAsync(context, _subscriptions.Current, _scopes).ConfigureAwait(false);
+                await _slots.AnswerAsync(() => SubscriptionAnswer.WriteAsync(context, _subscriptions.Current, _scopes), context.RequestAborted)
+                    .ConfigureAwait(false);
                 break;
             default:
                 if (Upgrades(context))

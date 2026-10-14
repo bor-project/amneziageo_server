@@ -628,6 +628,35 @@ public class ServiceTests
     }
 
     [Fact]
+    public async Task AHelloWaitsForAFreeSlotWhileAWebSocketGoesThrough()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"], WebSocket = true },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        using var slots = new AnswerSlots(1);
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var holding = slots.AnswerAsync(() => held.Task, CancellationToken.None);
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), slots: slots);
+        using var front = new Front();
+
+        var hello = AskAsync(desk, Point(endpoint), Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow()));
+        await desk.AnswerAsync(Upgrading($"/{endpoint.WebSocketPath}/events"), Fronted(Point(endpoint), endpoint.Id, front.Port));
+        var head = await front.Head.WaitAsync(TimeSpan.FromSeconds(5));
+        var early = hello.IsCompleted;
+        held.SetResult();
+        var answer = await hello.WaitAsync(TimeSpan.FromSeconds(5));
+        await holding;
+
+        Assert.StartsWith($"GET /{endpoint.WebSocketPath}/events HTTP/1.1\r\n", head, StringComparison.Ordinal);
+        Assert.False(early);
+        Assert.Equal(StatusCodes.Status200OK, answer.Status);
+    }
+
+    [Fact]
     public async Task AWebSocketWithoutATokenReachesTheFrontOfTheEndpointItsPathNames()
     {
         using var bench = new Bench();
@@ -975,7 +1004,8 @@ public class ServiceTests
         SubscriptionState? subscriptions = null,
         ApplicationLifetime? life = null,
         RefusalHold? hold = null,
-        ILogger<ServiceDesk>? logger = null)
+        ILogger<ServiceDesk>? logger = null,
+        AnswerSlots? slots = null)
     {
         var state = subscriptions ?? new SubscriptionState();
 
@@ -995,7 +1025,8 @@ public class ServiceTests
             life ?? Life(),
             Options.Create(new JsonOptions()),
             logger ?? NullLogger<ServiceDesk>.Instance,
-            hold);
+            hold,
+            slots);
     }
 
     // A request for a websocket that comes from the address given.

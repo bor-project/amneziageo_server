@@ -126,9 +126,14 @@ public static class NameDefaults
     public static readonly TimeSpan Dial = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// How often the addresses looked at go to the host.
+    /// How long the panel waits after it sent the addresses looked at to the host before it sends the next ones.
     /// </summary>
     public static readonly TimeSpan Noting = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// How often the panel looks at its room while it is full or nearly so.
+    /// </summary>
+    public static readonly TimeSpan Crowding = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
     /// How often the panel checks that the connections handed over reach it.

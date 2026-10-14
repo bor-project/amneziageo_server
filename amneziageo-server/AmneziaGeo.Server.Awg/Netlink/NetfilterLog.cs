@@ -36,7 +36,6 @@ public sealed partial class NetfilterLog : IDisposable
     private const int SocketLevel = 1;
     private const int ReceiveBuffer = 8;
     private const int ReceiveBufferForce = 33;
-    private const int ReceiveTimeout = 20;
 
     private const int Again = 11;
     private const int Interrupted = 4;
@@ -75,7 +74,7 @@ public sealed partial class NetfilterLog : IDisposable
     /// <summary>
     /// ctor
     /// </summary>
-    public NetfilterLog(ushort group, int snap, int buffer, TimeSpan wait)
+    public NetfilterLog(ushort group, int snap, int buffer)
     {
         _handle = OpenSocket(AfNetlink, SockRaw | SockCloexec, NetlinkNetfilter);
         if (_handle < 0)
@@ -92,7 +91,6 @@ public sealed partial class NetfilterLog : IDisposable
             }
 
             Room(buffer);
-            Patience(wait);
             Take(group, snap);
         }
         catch
@@ -109,7 +107,8 @@ public sealed partial class NetfilterLog : IDisposable
     public long Overruns => Interlocked.Read(ref _overruns);
 
     /// <summary>
-    /// Reads one batch of records into the buffer, returning its length or 0 when nothing came in time.
+    /// Waits for one batch of records and reads it into the buffer, returning its length or 0 when the read was cut
+    /// short.
     /// </summary>
     public int Read(byte[] buffer)
     {
@@ -135,6 +134,20 @@ public sealed partial class NetfilterLog : IDisposable
         }
 
         throw new NetlinkException("the netfilter records could not be read", error);
+    }
+
+    /// <summary>
+    /// Has the kernel answer the socket, which ends a read that waits.
+    /// </summary>
+    public void Wake()
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        var knock = NetlinkSocket.Knock();
+        _ = SendBytes(_handle, knock, (nuint)knock.Length, 0);
     }
 
     /// <summary>
@@ -231,17 +244,6 @@ public sealed partial class NetfilterLog : IDisposable
         if (SetOption(_handle, SocketLevel, ReceiveBufferForce, size, (uint)size.Length) < 0)
         {
             _ = SetOption(_handle, SocketLevel, ReceiveBuffer, size, (uint)size.Length);
-        }
-    }
-
-    private void Patience(TimeSpan wait)
-    {
-        var time = new byte[16];
-        BinaryPrimitives.WriteInt64LittleEndian(time, (long)wait.TotalSeconds);
-        BinaryPrimitives.WriteInt64LittleEndian(time.AsSpan(8), wait.Microseconds + (wait.Milliseconds * 1000L));
-        if (SetOption(_handle, SocketLevel, ReceiveTimeout, time, (uint)time.Length) < 0)
-        {
-            throw new NetlinkException("the netfilter socket could not be given a timeout", Marshal.GetLastPInvokeError());
         }
     }
 

@@ -41,6 +41,7 @@ public sealed partial class NetfilterQueue : IDisposable
     private const int ReceiveBuffer = 8;
     private const int ReceiveBufferForce = 33;
     private const int ReceiveTimeout = 20;
+    private const short PollIn = 1;
 
     private const int Again = 11;
     private const int Interrupted = 4;
@@ -155,6 +156,40 @@ public sealed partial class NetfilterQueue : IDisposable
         {
             throw new NetlinkException("the verdict could not be sent", Marshal.GetLastPInvokeError());
         }
+    }
+
+    /// <summary>
+    /// Waits as long as it takes for a packet or an answer of the kernel to read.
+    /// </summary>
+    public void Wait()
+    {
+        ObjectDisposedException.ThrowIf(_closed, this);
+
+        var watched = new Watched { Handle = _handle, Events = PollIn };
+        if (PollSockets(ref watched, 1, -1) >= 0)
+        {
+            return;
+        }
+
+        var error = Marshal.GetLastPInvokeError();
+        if (error != Interrupted)
+        {
+            throw new NetlinkException("the queued packets could not be waited for", error);
+        }
+    }
+
+    /// <summary>
+    /// Has the kernel answer the socket, which ends a wait for something to read.
+    /// </summary>
+    public void Wake()
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        var knock = NetlinkSocket.Knock();
+        _ = SendBytes(_handle, knock, (nuint)knock.Length, 0);
     }
 
     /// <summary>
@@ -365,6 +400,14 @@ public sealed partial class NetfilterQueue : IDisposable
         public uint Groups;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Watched
+    {
+        public int Handle;
+        public short Events;
+        public short Returned;
+    }
+
     [LibraryImport("libc", EntryPoint = "socket", SetLastError = true)]
     private static partial int OpenSocket(int domain, int type, int protocol);
 
@@ -379,6 +422,9 @@ public sealed partial class NetfilterQueue : IDisposable
 
     [LibraryImport("libc", EntryPoint = "recv", SetLastError = true)]
     private static partial nint ReceiveBytes(int handle, byte[] buffer, nuint length, int flags);
+
+    [LibraryImport("libc", EntryPoint = "poll", SetLastError = true)]
+    private static partial int PollSockets(ref Watched watched, nuint count, int timeout);
 
     [LibraryImport("libc", EntryPoint = "close", SetLastError = true)]
     private static partial int CloseSocket(int handle);

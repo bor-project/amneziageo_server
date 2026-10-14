@@ -13,7 +13,7 @@ The versions of the panel and of the AmneziaWG module come from `/api/health` an
 The journal keeps what passes the `Logging` levels of `appsettings.json`: `Information` by default,
 `Warning` for ASP.NET Core and Entity Framework. The page gets the latest 500 records the panel holds in
 memory. Every record also goes to `journal.db` beside the database of the panel: the code that logs only puts
-it in line, and the line goes to the file once a second in one transaction. After a restart the panel reads
+it in line, and the line goes to the file within a second, in one transaction. After a restart the panel reads
 the latest 500 records back from the file, so the page shows what happened before it.
 
 The file keeps at most a hundred thousand records and 32 MB together with its write-ahead log. Past either
@@ -107,7 +107,7 @@ keeps its one record for 3 minutes.
 Nothing waits on the log. NFLOG does not hold a packet: the kernel copies its head to the socket and lets it go
 on, and when the socket is full it drops the copy. The panel reads the socket on a thread of its own and hands
 the records to the writer through a bounded queue that never blocks: what does not fit is dropped and counted
-in `lost`. The writer puts the names on the records and writes them in one step a second. At most 65536
+in `lost`. The writer puts the names on the records and writes what came within a second in one step. At most 65536
 connections wait for their outcome; past that a record is written at once without one. The resolver keeps
 the names it answered with in memory while the log runs, and forgets them when it stops.
 

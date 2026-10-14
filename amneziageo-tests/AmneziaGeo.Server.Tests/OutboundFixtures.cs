@@ -227,6 +227,11 @@ public sealed class Kernel : IAwgDevices
     public List<AwgUpdate> Updates { get; } = [];
 
     /// <summary>
+    /// The interfaces the kernel was asked to read, in order.
+    /// </summary>
+    public List<string> Asked { get; } = [];
+
+    /// <summary>
     /// Puts an interface in place as though the kernel carried it.
     /// </summary>
     public void Hold(AwgDevice device) => _devices[device.Name] = device;
@@ -239,7 +244,12 @@ public sealed class Kernel : IAwgDevices
     /// <summary>
     /// Reads one interface, returning null when the host does not carry it.
     /// </summary>
-    public AwgDevice? Find(string name) => _devices.GetValueOrDefault(name);
+    public AwgDevice? Find(string name)
+    {
+        Asked.Add(name);
+
+        return _devices.GetValueOrDefault(name);
+    }
 
     /// <summary>
     /// Reads every interface the host carries.

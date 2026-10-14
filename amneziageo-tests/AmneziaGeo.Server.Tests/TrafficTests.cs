@@ -322,6 +322,31 @@ public class TrafficTests
             Assert.Single(written));
     }
 
+    [Fact]
+    public async Task TheMeterReadsAnInterfaceOnlyOnceItHoldsClients()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var kernel = new Kernel();
+        kernel.Hold(new AwgDevice { Name = "awg1" });
+        var ledger = new TrafficLedger(bench.Clock);
+        var host = new ClientHost(new Ledger(), kernel, new InterfaceFile(new InterfaceFileOptions { KeepFile = false }), bench.Clock, ledger);
+        var meter = new ClientMeter(bench.Scopes, kernel, host, ledger, bench.Clock, NullLogger<ClientMeter>.Instance);
+
+        await meter.MeasureAsync(CancellationToken.None);
+        var empty = kernel.Asked.Count;
+        await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None);
+        bench.Clock.Pass(TimeSpan.FromSeconds(2));
+        await meter.MeasureAsync(CancellationToken.None);
+
+        Assert.Equal(0, empty);
+        Assert.Equal(["awg1"], kernel.Asked);
+    }
+
     private static TunnelClient Client(long id, long limit) =>
         ClientDefaults.Fresh(1, $"client{id}") with
         {

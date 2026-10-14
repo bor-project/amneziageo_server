@@ -1,7 +1,7 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Channels;
 using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Route;
@@ -39,7 +39,7 @@ public sealed record NameDecision(string Verdict, RouteLeg? Leg, uint Mark)
 /// </summary>
 public sealed class NameDesk
 {
-    private readonly ConcurrentQueue<IPAddress> _seen = new();
+    private readonly Channel<IPAddress> _seen = Channel.CreateUnbounded<IPAddress>();
 
     private readonly Lock _turn = new();
 
@@ -144,8 +144,13 @@ public sealed class NameDesk
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        _seen.Enqueue(address);
+        _seen.Writer.TryWrite(address);
     }
+
+    /// <summary>
+    /// Waits until an address looked at waits to go to the host.
+    /// </summary>
+    public ValueTask<bool> SeenAsync(CancellationToken ct) => _seen.Reader.WaitToReadAsync(ct);
 
     /// <summary>
     /// Sends the addresses looked at to the host, returning how many went.
@@ -154,7 +159,7 @@ public sealed class NameDesk
     {
         var four = new HashSet<string>(StringComparer.Ordinal);
         var six = new HashSet<string>(StringComparer.Ordinal);
-        while (four.Count + six.Count < DnsSets.MaxBatch && _seen.TryDequeue(out var address))
+        while (four.Count + six.Count < DnsSets.MaxBatch && _seen.Reader.TryRead(out var address))
         {
             (address.AddressFamily == AddressFamily.InterNetworkV6 ? six : four).Add(address.ToString());
         }

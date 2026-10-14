@@ -51,7 +51,7 @@ public static class JournalDefaults
     public const int Batch = 2_000;
 
     /// <summary>
-    /// How often the waiting records go to the file.
+    /// How long the records gather before they go to the file.
     /// </summary>
     public static readonly TimeSpan Gather = TimeSpan.FromSeconds(1);
 

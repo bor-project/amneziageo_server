@@ -174,6 +174,7 @@ public sealed class NameRelay : BackgroundService
         try
         {
             var tasks = listeners.Select(listener => AcceptAsync(listener, stopping)).ToList();
+            tasks.Add(NoteAsync(stopping));
             tasks.Add(TendAsync(six, door, doors, stopping));
             await Task.WhenAll(tasks).ConfigureAwait(false);
         }
@@ -349,20 +350,10 @@ public sealed class NameRelay : BackgroundService
         }
     }
 
-    // Sends the addresses looked at to the host, has the firewall hand nothing over while the panel is full, and
-    // watches that what is handed over reaches the panel: where it does not, the connections are sent in through a
-    // port of the host, and where that does not help either the panel takes none.
-    private async Task TendAsync(bool six, int? door, IReadOnlyList<int> doors, CancellationToken ct)
+    // Sends the addresses looked at to the host as they come.
+    private async Task NoteAsync(CancellationToken ct)
     {
-        var checkedAt = _time.GetUtcNow();
-        var four = new NameWatch();
-        var sixth = new NameWatch();
-        four.Start(Taken - Taken6);
-        sixth.Start(Taken6);
-        var full = false;
-        var shut = false;
-        using var timer = new PeriodicTimer(NameDefaults.Noting, _time);
-        while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+        while (await _desk.SeenAsync(ct).ConfigureAwait(false))
         {
             try
             {
@@ -373,11 +364,25 @@ public sealed class NameRelay : BackgroundService
                 _logger.LogDebug(ex, "the addresses looked at did not reach the host");
             }
 
-            if (shut)
-            {
-                continue;
-            }
+            await Task.Delay(NameDefaults.Noting, _time, ct).ConfigureAwait(false);
+        }
+    }
 
+    // Has the firewall hand nothing over while the panel is full, and watches that what is handed over reaches the
+    // panel: where it does not, the connections are sent in through a port of the host, and where that does not help
+    // either the panel takes none.
+    private async Task TendAsync(bool six, int? door, IReadOnlyList<int> doors, CancellationToken ct)
+    {
+        var checkedAt = _time.GetUtcNow();
+        var four = new NameWatch();
+        var sixth = new NameWatch();
+        four.Start(Taken - Taken6);
+        sixth.Start(Taken6);
+        var full = false;
+        using var timer = new PeriodicTimer(NameDefaults.Checking, _time);
+        Pace(timer, full);
+        while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+        {
             var now = _time.GetUtcNow();
             if (NameRoom.Full(full, Open, _options.Most) != full)
             {
@@ -400,11 +405,13 @@ public sealed class NameRelay : BackgroundService
                 four.Start(Taken - Taken6);
                 sixth.Start(Taken6);
                 checkedAt = now;
+                Pace(timer, full);
 
                 continue;
             }
 
-            if (full || now - checkedAt < NameDefaults.Checking)
+            Pace(timer, full);
+            if (full || now - checkedAt < NameDefaults.Checking - NameDefaults.Crowding)
             {
                 continue;
             }
@@ -424,12 +431,14 @@ public sealed class NameRelay : BackgroundService
             }
             else if (lost)
             {
-                shut = true;
                 _gate.ClosePort();
                 _logger.LogWarning(
                     "{Count} packets were handed over and no connection reached the panel, the host drops them on the way in: "
                     + "the panel takes no more TCP connections over and reads their names in the queue",
                     four.Unreached);
+                await SettleAsync(ct).ConfigureAwait(false);
+
+                return;
             }
             else if (lost6)
             {
@@ -448,6 +457,17 @@ public sealed class NameRelay : BackgroundService
             await SettleAsync(ct).ConfigureAwait(false);
             four.Start(Taken - Taken6);
             sixth.Start(Taken6);
+        }
+    }
+
+    // Looks at the room of the panel often while it is full or nearly so, otherwise as often as what is handed over
+    // is checked.
+    private void Pace(PeriodicTimer timer, bool full)
+    {
+        var pace = NameRoom.Crowded(full, Open, _options.Most) ? NameDefaults.Crowding : NameDefaults.Checking;
+        if (timer.Period != pace)
+        {
+            timer.Period = pace;
         }
     }
 

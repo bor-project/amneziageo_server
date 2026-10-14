@@ -506,6 +506,27 @@ public class AccessTests
     }
 
     [Fact]
+    public void TheWatchTellsWhenItsFirstRecordIsDue()
+    {
+        var watch = new AccessWatch();
+        var first = Went(AccessVerdict.Out);
+
+        var none = watch.Next;
+        watch.Take(first with { SourcePort = 40000, At = first.At.AddSeconds(4) });
+        watch.Take(first);
+        var waiting = watch.Next;
+        watch.Take(Went(AccessVerdict.Block) with { SourcePort = 50000 });
+        var blocked = watch.Next;
+        watch.Due(first.At);
+        var written = watch.Next;
+
+        Assert.Null(none);
+        Assert.Equal(first.At.AddSeconds(10), waiting);
+        Assert.Equal(DateTimeOffset.MinValue, blocked);
+        Assert.Equal(first.At.AddSeconds(10), written);
+    }
+
+    [Fact]
     public void TheNameBookTakesNothingWhileTheLogIsOff()
     {
         var names = new AccessNames();

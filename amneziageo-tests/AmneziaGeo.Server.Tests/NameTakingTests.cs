@@ -95,6 +95,16 @@ public class NameTakingTests
     }
 
     [Fact]
+    public void ThePanelLooksAtItsRoomOftenOnlyWhileItIsFullOrAFewSecondsOfConnectionsCouldFillIt()
+    {
+        Assert.False(NameRoom.Crowded(false, 0, 4096));
+        Assert.False(NameRoom.Crowded(false, 1695, 4096));
+        Assert.True(NameRoom.Crowded(false, 1696, 4096));
+        Assert.True(NameRoom.Crowded(true, 0, 4096));
+        Assert.True(NameRoom.Crowded(false, 0, 8));
+    }
+
+    [Fact]
     public void TheGateTellsTheRulesThePortTheConnectionsComeInThrough()
     {
         var gate = new NameGate();

@@ -21,9 +21,9 @@ public static class AccessDefaults
     public const int Buffer = 4 << 20;
 
     /// <summary>
-    /// How long one read of the socket waits before it looks whether the log goes on.
+    /// How long the panel waits for the reader of the socket to stop.
     /// </summary>
-    public static readonly TimeSpan Wait = TimeSpan.FromMilliseconds(500);
+    public static readonly TimeSpan Wait = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// The most records that wait for the database.

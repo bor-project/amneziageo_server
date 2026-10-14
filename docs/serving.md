@@ -169,6 +169,42 @@ file: `certificate-` for the chain, `certificate-key-` for the key.
 | `certificate-key-encrypted` | the private key is locked by a password |
 | `certificate-key-mismatch` | the private key belongs to another certificate |
 
+## The processor
+
+The websocket of a tunnel passes the panel on its way to the `wstunnel` of its endpoint, so every packet of such a
+client crosses the threads of the panel. Two settings keep that cheap, and neither changes what the panel answers.
+
+The threads of the pool wait for work without spinning first: `AmneziaGeo.Server.Api.runtimeconfig.json`, which
+lies beside the panel, sets `System.Threading.ThreadPool.UnfairSemaphoreSpinLimit` to `0`. A thread that spins
+burns the processor for a while after every packet, which on a slow host costs more than the packet itself. The
+variable `DOTNET_ThreadPool_UnfairSemaphoreSpinLimit` outweighs the file and takes a hexadecimal number: `46`
+gives the spinning of the runtime back.
+
+The web servers of the panel and of the services go on with a connection on the thread that read or wrote it,
+instead of handing every read and every write over to another thread of the pool. `Web:Inline` set to `false`
+(the variable `Web__Inline`) turns that off.
+
+A request the panel answers may hold its thread for a while: a slow read of the database, a wait for its lock.
+Every packet of a websocket needs a free thread of the pool, and once all of them are held the pool adds threads
+slowly, one or two a second, so a few such requests at once kept the packets of every tunnel waiting for seconds.
+The same file sets `System.Threading.ThreadPool.MinThreads` to `64`: the pool starts up to that many threads at
+once when work waits for them. The web servers of the panel, the services and the subscriptions answer at most
+32 requests at once, and the others wait for a free slot without holding a thread, so the requests never take the
+threads the websockets need. The websockets of the tunnels, the measurements of speed and the host asking whether
+the panel runs do not wait. `Web:Requests` (the variable `Web__Requests`) says how many requests are answered at
+once, `0` answers every one at once. The variable `DOTNET_ThreadPool_ForceMinWorkerThreads` outweighs the file
+and takes a hexadecimal number.
+
+As variables of the panel, the ones that give the behaviour of the releases before back read as follows, the last
+one set to the number of processors of the host in hexadecimal (`4` on four):
+
+```
+Web__Inline=false
+Web__Requests=0
+DOTNET_ThreadPool_UnfairSemaphoreSpinLimit=46
+DOTNET_ThreadPool_ForceMinWorkerThreads=4
+```
+
 ## Running it
 
 ```

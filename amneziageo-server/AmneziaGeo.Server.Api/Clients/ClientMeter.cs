@@ -140,15 +140,15 @@ public sealed class ClientMeter : BackgroundService
         var readings = new List<TrafficReading>();
         foreach (var endpoint in endpoints.Where(one => one.IsEnabled))
         {
-            if (Find(endpoint.Name) is not { } device)
-            {
-                continue;
-            }
-
             var mine = new Dictionary<string, TunnelClient>(StringComparer.Ordinal);
             foreach (var client in clients.Where(one => one.ConfigId == endpoint.Id))
             {
                 mine.TryAdd(client.PublicKey, client);
+            }
+
+            if (mine.Count == 0 || Find(endpoint.Name) is not { } device)
+            {
+                continue;
             }
 
             foreach (var peer in device.Peers)

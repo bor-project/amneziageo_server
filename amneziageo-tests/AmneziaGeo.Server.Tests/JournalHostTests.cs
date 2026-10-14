@@ -95,6 +95,25 @@ public sealed class JournalHostTests : IDisposable
     }
 
     [Fact]
+    public async Task AJournalWithNothingToWriteKeepsNoTimer()
+    {
+        var time = new CountedTime();
+        var journal = new PanelJournal(10, TimeProvider.System);
+        using var host = new JournalHost(journal, _records, JournalLimits.Default, time, NullLogger<JournalHost>.Instance);
+
+        await host.StartAsync(CancellationToken.None);
+        await Until(() => File.Exists(_records.Location));
+        await Task.Delay(200);
+        var idle = time.Timers;
+        journal.CreateLogger("panel").LogInformation("one record");
+        await Until(() => _records.Count() == 1);
+        await host.StopAsync(CancellationToken.None);
+
+        Assert.Equal(0, idle);
+        Assert.Equal(1, time.Timers);
+    }
+
+    [Fact]
     public void TheLimitsComeFromTheSettingsAndNeverFallBelowTheLeast()
     {
         Assert.Equal(new JournalLimits(100_000, 32L << 20), JournalLimits.From(Settings()));
@@ -129,4 +148,19 @@ public sealed class JournalHostTests : IDisposable
         new ConfigurationBuilder()
             .AddInMemoryCollection(pairs.Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value)))
             .Build();
+
+    // Counts the timers made through it.
+    private sealed class CountedTime : TimeProvider
+    {
+        private int _timers;
+
+        public int Timers => Volatile.Read(ref _timers);
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            Interlocked.Increment(ref _timers);
+
+            return base.CreateTimer(callback, state, dueTime, period);
+        }
+    }
 }

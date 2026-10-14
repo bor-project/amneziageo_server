@@ -1,6 +1,10 @@
 using System.Net;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Core.Panel;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -148,5 +152,21 @@ public class ListeningTests
         var settings = PanelDefaults.Settings with { Listen = ["127.0.0.1"], Certificate = chain, CertificateKey = chain + ".key" };
 
         Assert.Equal("the panel answers under a certificate that is not there: " + chain, Listening.Fault(new WebOptions(), settings));
+    }
+
+    [Fact]
+    public void AWebServerGoesOnWithAConnectionOnTheThreadThatReadItUnlessToldNotTo()
+    {
+        Assert.True(Sockets(new WebOptions()).UnsafePreferInlineScheduling);
+        Assert.False(Sockets(new WebOptions { Inline = false }).UnsafePreferInlineScheduling);
+    }
+
+    private static SocketTransportOptions Sockets(WebOptions options)
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        Listening.Inline(builder.WebHost, options);
+        using var services = builder.Services.BuildServiceProvider();
+
+        return services.GetRequiredService<IOptions<SocketTransportOptions>>().Value;
     }
 }

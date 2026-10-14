@@ -2,12 +2,14 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using AmneziaGeo.Server.Awg.Netlink;
 using AmneziaGeo.Server.Routing.Outbound;
 
 namespace AmneziaGeo.Server.Routing.Host;
 
 /// <summary>
-/// Puts interfaces, addresses, routes and firewall rules on the host through the ip and nft tools.
+/// Puts interfaces, addresses, routes and firewall rules on the host through the ip and nft tools, and reads the
+/// counters of the firewall and the rules of the routing policy over netlink.
 /// </summary>
 public sealed class IpHostNetwork : IHostNetwork
 {
@@ -28,12 +30,38 @@ public sealed class IpHostNetwork : IHostNetwork
 
     private readonly IHostCommands _commands;
 
+    private readonly Func<string, string, long?> _counter;
+
+    private volatile bool _counterRefused;
+
+    private readonly Func<IReadOnlyList<PolicyRule>> _rules;
+
+    private volatile bool _rulesRefused;
+
     /// <summary>
     /// ctor
     /// </summary>
     public IpHostNetwork(IHostCommands commands)
+        : this(commands, NetfilterCounter.Read, PolicyRules.Read)
+    {
+    }
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public IpHostNetwork(IHostCommands commands, Func<string, string, long?> counter)
+        : this(commands, counter, PolicyRules.Read)
+    {
+    }
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public IpHostNetwork(IHostCommands commands, Func<string, string, long?> counter, Func<IReadOnlyList<PolicyRule>> rules)
     {
         _commands = commands;
+        _counter = counter;
+        _rules = rules;
     }
 
     /// <summary>
@@ -172,13 +200,14 @@ public sealed class IpHostNetwork : IHostNetwork
     {
         var order = OutboundRules.SealPriority.ToString(CultureInfo.InvariantCulture);
         var words = new[] { "rule", "add", "pref", order, "fwmark", OutboundRules.SealMarks, "unreachable" };
+        var rules = Rules();
         var laid = false;
-        if (!await HasSealAsync(["rule", "show", "pref", order], ct).ConfigureAwait(false))
+        if (!await HasSealAsync(rules, PolicyRules.Inet, ["rule", "show", "pref", order], ct).ConfigureAwait(false))
         {
             laid |= await TakenAsync([Ip, .. words], ct).ConfigureAwait(false);
         }
 
-        if (!await HasSealAsync(["-6", "rule", "show", "pref", order], ct).ConfigureAwait(false))
+        if (!await HasSealAsync(rules, PolicyRules.Inet6, ["-6", "rule", "show", "pref", order], ct).ConfigureAwait(false))
         {
             laid |= await TakenAsync([Ip, "-6", .. words], ct).ConfigureAwait(false);
         }
@@ -266,6 +295,18 @@ public sealed class IpHostNetwork : IHostNetwork
     /// </summary>
     public async Task<long?> CounterAsync(string table, string name, CancellationToken ct)
     {
+        if (!_counterRefused)
+        {
+            try
+            {
+                return _counter(table, name);
+            }
+            catch (Exception ex) when (ex is NetlinkException or DllNotFoundException or EntryPointNotFoundException)
+            {
+                _counterRefused = true;
+            }
+        }
+
         var result = await _commands.RunAsync(Nft, ["-j", "list", "counter", "inet", table, name], null, ct)
             .ConfigureAwait(false);
         if (!result.IsOk)
@@ -304,6 +345,11 @@ public sealed class IpHostNetwork : IHostNetwork
 
     private async Task<bool> HasRuleAsync(int priority, uint mark, CancellationToken ct)
     {
+        if (Rules() is { } rules)
+        {
+            return rules.Any(rule => rule.Family == PolicyRules.Inet && rule.Priority == (uint)priority && rule.Mark == mark);
+        }
+
         var result = await _commands
             .RunAsync(Ip, ["rule", "show", "pref", priority.ToString()], null, ct)
             .ConfigureAwait(false);
@@ -311,11 +357,43 @@ public sealed class IpHostNetwork : IHostNetwork
         return result.IsOk && result.Output.Contains($"fwmark 0x{mark:x}", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task<bool> HasSealAsync(IReadOnlyList<string> arguments, CancellationToken ct)
+    private async Task<bool> HasSealAsync(
+        IReadOnlyList<PolicyRule>? rules,
+        byte family,
+        IReadOnlyList<string> arguments,
+        CancellationToken ct)
     {
+        if (rules is not null)
+        {
+            return rules.Any(rule =>
+                rule.Family == family
+                && rule.Priority == (uint)OutboundRules.SealPriority
+                && rule.Action == PolicyRules.Unreachable);
+        }
+
         var result = await _commands.RunAsync(Ip, arguments, null, ct).ConfigureAwait(false);
 
         return result.IsOk && result.Output.Contains("unreachable", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Reads the rules of the host from the kernel, null once the kernel refused them and the tool is asked instead.
+    private IReadOnlyList<PolicyRule>? Rules()
+    {
+        if (_rulesRefused)
+        {
+            return null;
+        }
+
+        try
+        {
+            return _rules();
+        }
+        catch (Exception ex) when (ex is NetlinkException or DllNotFoundException or EntryPointNotFoundException)
+        {
+            _rulesRefused = true;
+
+            return null;
+        }
     }
 
     private async Task<HashSet<string>?> AddressesAsync(string name, CancellationToken ct)
