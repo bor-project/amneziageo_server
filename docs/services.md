@@ -155,8 +155,11 @@ front lets that path alone in.
 The panel, the subscriptions and the services of the endpoints may all answer on one TCP port; they part by path.
 The websocket of an endpoint may not come under the very path the panel, the subscriptions or the websocket of
 another endpoint answer under on its port: adding or changing the endpoint with the websocket on is refused with
-`websocket-path-taken` (409), and the message names which of them holds the path. The UDP ports of the endpoints
-are theirs alone, see [configs.md](configs.md).
+`websocket-path-taken` (409), and the message names which of them holds the path. Endpoints of the releases before
+may still share a path on one port, `v1` above all, and the front lets none of them in under it: the panel parts them
+when it starts. The endpoint with the smallest number keeps the path, every other one takes 16 letters and digits made
+up for it, and the log names each of them in a warning without the path. Their clients take the new path from the
+hello, a new config or the subscription. The UDP ports of the endpoints are theirs alone, see [configs.md](configs.md).
 
 The client opens
 

@@ -84,31 +84,42 @@ public static class ServerDatabase
     }
 
     /// <summary>
-    /// Brings the schema up to date, hides the files of the database from other users and puts the built in role in
-    /// place.
+    /// Brings the schema up to date, hides the files of the database from other users, puts the built in role in place
+    /// and parts the endpoints that share the path of their websocket on one TCP port.
     /// </summary>
     public static async Task PrepareAsync(IServiceProvider services, CancellationToken ct = default)
     {
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var database = db.Database;
+        var loggers = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
         await database.MigrateAsync(ct).ConfigureAwait(false);
-        DatabaseFiles.Hide(
-            database.GetDbConnection().DataSource,
-            scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DatabaseFiles).FullName!));
+        DatabaseFiles.Hide(database.GetDbConnection().DataSource, loggers.CreateLogger(typeof(DatabaseFiles).FullName!));
         var roles = scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();
         var geo = scope.ServiceProvider.GetRequiredService<GeoStore>();
         var outbounds = scope.ServiceProvider.GetRequiredService<OutboundStore>();
         var templates = scope.ServiceProvider.GetRequiredService<TemplateStore>();
-        await db.AloneAsync(
+        var configs = scope.ServiceProvider.GetRequiredService<ConfigStore>();
+        var split = await db.AloneAsync(
             async () =>
             {
                 await SeedAsync(roles).ConfigureAwait(false);
                 await geo.SeedAsync(ct).ConfigureAwait(false);
                 await outbounds.SeedAsync(ct).ConfigureAwait(false);
                 await templates.SeedAsync(ct).ConfigureAwait(false);
+
+                return await configs.SplitPathsAsync(ct).ConfigureAwait(false);
             },
             ct).ConfigureAwait(false);
+        var logger = loggers.CreateLogger(typeof(ServerDatabase).FullName!);
+        foreach (var moved in split)
+        {
+            logger.LogWarning(
+                "the websocket of {Endpoint} shared its path with {Keeper} on TCP port {Port}, and the front let neither in; it comes under a path of its own now",
+                moved.Name,
+                moved.Keeper,
+                moved.Port);
+        }
     }
 
     /// <summary>

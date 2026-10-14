@@ -39,6 +39,11 @@ public sealed record ConfigResult(ConfigOutcome Outcome, string Code, string Mes
 }
 
 /// <summary>
+/// An endpoint whose websocket took a path of its own, the endpoint that kept the path they shared and the TCP port.
+/// </summary>
+public sealed record SplitPath(string Name, string Keeper, int Port);
+
+/// <summary>
 /// Adds, changes and removes the endpoints the panel holds.
 /// </summary>
 public sealed class ConfigStore
@@ -112,6 +117,44 @@ public sealed class ConfigStore
             .Select(Read)
             .FirstOrDefault(config => (port is null || ConfigServices.Port(config) == port)
                 && string.Equals(ConfigServices.WebSocketPath(config), wanted, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Gives the websocket of every endpoint that shares its path with an endpoint of a smaller number on one TCP port a
+    /// path of its own, and returns the endpoints that took one.
+    /// </summary>
+    public async Task<IReadOnlyList<SplitPath>> SplitPathsAsync(CancellationToken ct)
+    {
+        var sockets = await _db.Configs
+            .Where(config => config.WebSocket)
+            .OrderBy(config => config.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var kept = new List<ServerConfig>();
+        var split = new List<SplitPath>();
+        foreach (var entity in sockets)
+        {
+            var config = Read(entity);
+            var port = ConfigServices.Port(config);
+            var path = ConfigServices.WebSocketPath(config);
+            var keeper = kept.FirstOrDefault(one => ConfigServices.Port(one) == port && Same(ConfigServices.WebSocketPath(one), path));
+            if (keeper is not null)
+            {
+                entity.WebSocketPath = ConfigDefaults.WebSocketPath();
+                entity.UpdatedUtc = _time.GetUtcNow();
+                split.Add(new SplitPath(entity.Name, keeper.Name, port));
+                config = Read(entity);
+            }
+
+            kept.Add(config);
+        }
+
+        if (split.Count > 0)
+        {
+            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        return split;
     }
 
     /// <summary>
