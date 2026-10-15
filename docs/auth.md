@@ -49,6 +49,11 @@ The last line it writes names the port and the path the panel answers under, see
 database the server never started on there are no settings yet, and it says the log of the first start names
 them.
 
+The installer checks the login of the first administrator at its question. On a package, a login a user of the
+host carries is offered the way item 7 of the menu offers it: agreed, the installation makes the administrator with
+`user add <login> --role admin --host`, an account that stands for that user of the host; refused, it asks for
+another login.
+
 ## Host accounts
 
 A host account signs in with no password: the process runs as that user, and the server reads its name and

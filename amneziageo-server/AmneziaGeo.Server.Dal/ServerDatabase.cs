@@ -37,7 +37,9 @@ public static class ServerDatabase
             Directory.CreateDirectory(directory);
         }
 
-        services.AddDbContext<AppDbContext>(builder => builder.UseSqlite($"Data Source={path}"));
+        services.AddDbContext<AppDbContext>(builder => builder
+            .UseSqlite($"Data Source={path}")
+            .AddInterceptors(DatabaseOpening.Instance));
         services.AddSingleton(_ => new DatabaseVersion(path));
 
         services.AddIdentityCore<AppUser>(identity =>

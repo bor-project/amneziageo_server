@@ -82,6 +82,61 @@ public class MenuQuestionsTests
         Assert.Contains($"utility: user add {me} --role admin --permanent\n", told, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("y", "code 0 login {0} host yes")]
+    [InlineData("n", "code 1 login  host ")]
+    public async Task TheLoginOfAUserOfTheHost_AtTheInstallation_IsTakenForAnAdministratorThatStandsForIt(string answer, string taken)
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+        var me = Environment.UserName;
+
+        var (_, told, _) = await RunAsync(Install, $"{me}\n{answer}\n");
+
+        Assert.Contains(string.Format(System.Globalization.CultureInfo.InvariantCulture, taken, me) + "\n", told, StringComparison.Ordinal);
+        Assert.Contains($"Make {me} an administrator of the panel?", told, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALoginNobodyCarries_AtTheInstallation_IsTakenWithoutAQuestion()
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+
+        var (_, told, _) = await RunAsync(Install, "agtest-nobody\n");
+
+        Assert.Contains("code 0 login agtest-nobody host no\n", told, StringComparison.Ordinal);
+        Assert.DoesNotContain("an administrator of the panel?", told, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheLoginOfAUserOfTheHost_AtTheInstallationOfAContainer_IsTakenWithoutAQuestion()
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+        var me = Environment.UserName;
+
+        var (_, told, _) = await RunAsync(Install.Replace("[kind]=package", "[kind]=docker", StringComparison.Ordinal), $"{me}\n");
+
+        Assert.Contains($"code 0 login {me} host no\n", told, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("yes", "user add {0} --role admin --host --permanent")]
+    [InlineData("no", "init --user {0} --permanent")]
+    public async Task TheFirstAdministrator_StandsForTheUserOfTheHostOnlyWhenAgreed(string host, string made)
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+        var me = Environment.UserName;
+
+        var (exit, told, _) = await RunAsync(Panel + $"given[login]={me}; given[host_admin]={host}; given[generate]=no; first_admin", string.Empty);
+
+        Assert.Equal(0, exit);
+        Assert.Contains("utility: " + string.Format(System.Globalization.CultureInfo.InvariantCulture, made, me) + "\n", told, StringComparison.Ordinal);
+    }
+
+    // The question of the installation about the login of the first administrator, on a package, and what it took.
+    private const string Install =
+        "given[kind]=package; answer_until login 'Login of the first administrator' admin first_login_ok; " +
+        "printf 'code %s login %s host %s\\n' $? \"${given[login]-}\" \"${given[host_admin]-}\"";
+
     // The panel and its utility stood in for: one account of the host, and every call of the utility printed.
     private const string Panel =
         "need_panel() { :; }; kind() { printf package; }; " +

@@ -49,6 +49,7 @@ every key the installation runs without a question:
 | `bbr` | `yes` turns BBR on |
 | `docker_restart` | `yes` restarts Docker with its containers while it drops forwarded packets |
 | `login` | the first administrator |
+| `host_admin` | `yes` makes the first administrator stand for the user of the host its login names (a package alone), `no` asks for another login |
 | `generate` | `yes` makes up a temporary password and prints it once, `no` asks for one |
 | `domain` | the name of the server for a certificate of Let's Encrypt, empty for none |
 | `email`, `terms` | the email for Let's Encrypt, empty for none; `yes` agrees to its terms |

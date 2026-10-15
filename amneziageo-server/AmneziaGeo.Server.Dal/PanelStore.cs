@@ -136,7 +136,7 @@ public sealed class PanelStore
         try
         {
             using var connection = new SqliteConnection($"Data Source={path};Mode=ReadOnly");
-            connection.Open();
+            DatabaseOpening.Open(connection);
 
             using var command = connection.CreateCommand();
             command.CommandText =

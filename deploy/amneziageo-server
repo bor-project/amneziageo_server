@@ -1476,7 +1476,7 @@ ask_installation() {
     return 0
   fi
 
-  answer login "Login of the first administrator" admin
+  answer_until login "Login of the first administrator" admin first_login_ok || return 1
   answer_yes generate "Make up a temporary password for it, replaced at the first sign-in?" yes || true
   ask_certificate || return 1
   answer_until port "Port of the panel" "$(free_port 8443 tcp)" panel_port_ok || return 1
@@ -1557,6 +1557,10 @@ plan() {
     say "- make the administrator ${given[login]}, the password typed then"
   fi
 
+  if [ "${given[host_admin]:-no}" = yes ]; then
+    say "- let the user ${given[login]} of the host into the groups amneziageo and amneziageo-admin"
+  fi
+
   case ${given[certificate]} in
     new) say "- get a certificate of Let's Encrypt for ${given[domain]}, renewed by certbot.timer" ;;
     keep) say "- take the certificate the host holds for ${given[domain]}" ;;
@@ -1613,15 +1617,39 @@ upgrade_system() {
   exit 0
 }
 
+# Takes the login of the first administrator: a user of the host under it becomes the administrator standing for it,
+# once agreed.
+first_login_ok() {
+  if [ "${given[kind]}" != package ] || ! getent passwd "$1" > /dev/null 2>&1; then
+    given[host_admin]=no
+    return 0
+  fi
+
+  say "The host carries a user $1: an administrator of the panel under that name joins the groups amneziageo and"
+  say "amneziageo-admin of the host and signs in to the panel with a password."
+  if answer_yes host_admin "Make $1 an administrator of the panel?" yes; then
+    return 0
+  fi
+
+  unset 'given[host_admin]'
+  bad "$1 stays the user of the host alone: the first administrator needs another login"
+  return 1
+}
+
 # Makes the first administrator of a fresh panel, with a temporary password made up unless one is typed.
 first_admin() {
   local said
+  local -a make=(init --user "${given[login]}")
+  if [ "${given[host_admin]:-no}" = yes ]; then
+    make=(user add "${given[login]}" --role admin --host)
+  fi
+
   if [ "${given[generate]:-no}" != yes ]; then
-    cli_in init --user "${given[login]}" --permanent
+    cli_in "${make[@]}" --permanent
     return
   fi
 
-  said=$(cli init --user "${given[login]}" --generate | tr -d '\r') || { printf '%s\n' "$said"; return 1; }
+  said=$(cli "${make[@]}" --generate | tr -d '\r') || { printf '%s\n' "$said"; return 1; }
   made_password=$(printf '%s\n' "$said" | sed -n 's/^password: //p')
   printf '%s\n' "$said" | grep -v '^password: '
 }

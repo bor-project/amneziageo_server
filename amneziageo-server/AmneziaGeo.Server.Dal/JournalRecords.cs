@@ -193,7 +193,7 @@ public sealed class JournalRecords
     private SqliteConnection Open()
     {
         var connection = new SqliteConnection(_connection);
-        connection.Open();
+        DatabaseOpening.Open(connection);
 
         return connection;
     }

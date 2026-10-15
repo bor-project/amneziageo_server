@@ -28,7 +28,7 @@ public sealed class DatabaseBackup
         try
         {
             using var from = new SqliteConnection(connection);
-            await from.OpenAsync(ct).ConfigureAwait(false);
+            DatabaseOpening.Open(from);
             using var to = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = target, Pooling = false }.ToString());
             await to.OpenAsync(ct).ConfigureAwait(false);
             from.BackupDatabase(to);
