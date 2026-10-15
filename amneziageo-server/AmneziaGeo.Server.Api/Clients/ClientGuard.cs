@@ -51,6 +51,8 @@ public sealed class ClientGuard : BackgroundService
 
     private readonly ILogger<ClientGuard> _logger;
 
+    private readonly DatabaseVersion? _version;
+
     private readonly PeerGuard _guard;
 
     private readonly Lock _sync = new();
@@ -60,6 +62,8 @@ public sealed class ClientGuard : BackgroundService
     private IReadOnlyList<ServerConfig> _configs = [];
 
     private DateTimeOffset _read = DateTimeOffset.MinValue;
+
+    private long? _seen;
 
     private DateTimeOffset _laid = DateTimeOffset.MinValue;
 
@@ -76,11 +80,12 @@ public sealed class ClientGuard : BackgroundService
     /// </summary>
     public ClientGuard(
         IServiceScopeFactory scopes,
-        IAwgDevices devices,
+        [FromKeyedServices(InterfaceReads.Key)] IAwgDevices devices,
         IHostNetwork network,
         GuardOptions options,
         TimeProvider time,
-        ILogger<ClientGuard> logger)
+        ILogger<ClientGuard> logger,
+        DatabaseVersion? version = null)
     {
         _scopes = scopes;
         _devices = devices;
@@ -88,6 +93,7 @@ public sealed class ClientGuard : BackgroundService
         _options = options;
         _time = time;
         _logger = logger;
+        _version = version;
         _guard = new PeerGuard(options.IsEnabled);
     }
 
@@ -125,11 +131,13 @@ public sealed class ClientGuard : BackgroundService
     public async Task LookAsync(CancellationToken ct)
     {
         var now = _time.GetUtcNow();
-        if (now - _read > Reread)
+        var version = _version?.Read();
+        if (version is null ? now - _read > Reread : version != _seen)
         {
             using var scope = _scopes.CreateScope();
             _configs = await scope.ServiceProvider.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false);
             _read = now;
+            _seen = version;
         }
 
         var caught = new List<GuardCut>();

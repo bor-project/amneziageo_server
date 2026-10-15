@@ -149,9 +149,23 @@ says; a client that takes nothing from the tunnel is in no set, so `drop` holds 
 Both families travel the same way, and the host is told to pass packets between interfaces in both of them:
 `net.ipv4.ip_forward` and `net.ipv6.conf.all.forwarding` are set on every raise, so a host that was rebooted
 carries them again as soon as the server starts.
-`POST /api/configs/{id}/apply` puts one endpoint on the host again, `POST /api/configs/apply` all of them.
-Every endpoint is raised once more when the server starts, before the clients are laid on top. An interface
-that is already up keeps its peers and the addresses it carries: only the addresses that differ are changed.
+`POST /api/configs/{id}/apply` puts one endpoint on the host again with its clients, `POST /api/configs/apply`
+all of them. Turning an endpoint on and changing it lay its clients the same way, so an interface the panel
+raises anew, under a new name too, never stands without its peers. Every endpoint is raised once more when the
+server starts, before the clients are laid on top. An interface that is already up keeps its peers and the
+addresses it carries: only the addresses that differ are changed. An interface whose obfuscation differs from
+that of the endpoint is laid anew, as the kernel takes no field of the obfuscation away and refuses some changes
+of it in place; its clients go back on top and shake hands again.
+
+The panel looks at the interfaces of the endpoints that are on in the round that looks at those of the
+outbounds: after the kernel tells of a change of the interfaces of the host, and every five seconds when it does
+not hear the kernel. One that was brought down behind its back is brought up again with what it carries; one
+that is gone altogether is laid again with its keys, its addresses and its clients, and the rules of the
+endpoints and the routing follow. The log says `the interface of the endpoint '<name>' was gone and is laid
+again with <n> clients` or `the interface of the endpoint '<name>' was down and is up again`; a host that keeps
+refusing is named once with its reason, until the reason changes, and the interface it refused is tried again
+once a minute, or at once when the endpoints change. A change of the endpoints through the panel
+and this round take turns, so an endpoint that was just turned off is not raised again behind the change.
 
 ## The keys
 

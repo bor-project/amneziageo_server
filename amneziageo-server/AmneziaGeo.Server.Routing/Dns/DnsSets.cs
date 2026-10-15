@@ -40,7 +40,10 @@ public sealed class DnsSets
     /// </summary>
     public const int MaxBatch = 512;
 
-    private static readonly TimeSpan Sweep = TimeSpan.FromSeconds(5);
+    /// <summary>
+    /// How often the sets look for the addresses whose time to be laid again came.
+    /// </summary>
+    public static readonly TimeSpan Sweep = TimeSpan.FromSeconds(5);
 
     private readonly ConcurrentQueue<DnsEntry> _waiting = new();
 

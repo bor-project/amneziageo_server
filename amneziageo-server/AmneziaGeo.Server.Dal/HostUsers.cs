@@ -1,8 +1,7 @@
 using AmneziaGeo.Server.Auth;
-using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Host;
 
-namespace AmneziaGeo.Server.Api.Auth;
+namespace AmneziaGeo.Server.Dal;
 
 /// <summary>
 /// What carrying an account to the host left.

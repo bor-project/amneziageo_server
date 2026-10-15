@@ -23,9 +23,18 @@ public sealed class RoutePlans
     public RoutePlan? Held => Volatile.Read(ref _held);
 
     /// <summary>
+    /// Raised when a plan is kept.
+    /// </summary>
+    public event Action? Kept;
+
+    /// <summary>
     /// Keeps a plan as the one built last.
     /// </summary>
-    public void Keep(RoutePlan plan) => Volatile.Write(ref _held, plan);
+    public void Keep(RoutePlan plan)
+    {
+        Volatile.Write(ref _held, plan);
+        Kept?.Invoke();
+    }
 }
 
 /// <summary>

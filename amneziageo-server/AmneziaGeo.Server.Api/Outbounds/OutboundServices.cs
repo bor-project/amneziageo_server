@@ -55,6 +55,8 @@ public static class OutboundServices
         services.AddScoped<RouteTester>();
         services.AddHostedService<OutboundBoot>();
         services.AddHostedService<BalanceWatch>();
+        services.AddSingleton<HostChanges>();
+        services.AddHostedService<HostNews>();
         services.AddHostedService<ProbeWatch>();
 
         return services;

@@ -123,8 +123,9 @@ is dropped rather than sent on under the address of the client, see [rules.md](r
 
 A network manager that starts over drops the rules it did not lay itself: systemd-networkd does, under
 `ManageForeignRoutingPolicyRules=yes`, its default, whenever it is restarted. The watch that probes the
-outbounds looks at both rules every five seconds, lays again the ones the panel had laid and the host lost, and
-writes `the rule of '<name>' was gone and is laid again` to the log.
+outbounds looks at both rules whenever the kernel tells of a change of the routing rules or the interfaces of the
+host, and every five seconds when the panel does not hear the kernel, lays again the ones the panel had laid and
+the host lost, and writes `the rule of '<name>' was gone and is laid again` to the log.
 
 The interface itself is given no mark: the mark is what sends a packet into the tunnel, not what the
 tunnel puts on its own packets, so there is no loop to break. The interface takes each of its addresses
@@ -165,13 +166,20 @@ and the refusal of the running one ends with `until it is restarted`.
 `POST /api/outbounds/apply` goes over every outbound, rewrites the firewall table and lays the rules again;
 the panel does the same when it starts, so the outbounds and the rules come back after a reboot. An interface
 that already carries the server of its outbound and no other peer keeps it, with the handshake and the
-counters, so the panel starting over does not break the tunnel. An outbound that is turned off is taken off the
-host: the rule goes, the table is cleared, and the interface is removed.
+counters, so the panel starting over does not break the tunnel. An interface that carries another obfuscation
+is laid anew instead, with the keys, the server and the addresses of the outbound: the kernel takes no field of
+the obfuscation away and refuses some changes of it in place, so moving an outbound to a server with another
+profile would leave the interface half old. An outbound that is turned off is taken off the host: the rule
+goes, the table is cleared, and the interface is removed.
 
-The panel looks at the interfaces of the outbounds that are on every five seconds, and one that was brought
-down behind its back, with `ip link set down` or otherwise, is brought up again with its addresses and its
-route. An interface that is gone altogether is laid again by the same round, with its keys, its addresses, its
-route and, for a `ws` outbound, its carrier; the outbound carries nothing until the round comes.
+The panel looks at the interfaces of the outbounds that are on a quarter of a second after the kernel tells of
+a change of the interfaces of the host, and every five seconds when it does not hear the kernel; one that was
+brought down behind its back, with `ip link set down` or otherwise, is brought up again with its addresses and
+its route. An interface that is gone altogether is laid again by the same round, with its keys, its addresses, its
+route and, for a `ws` outbound, its carrier; the outbound carries nothing until the round comes. An interface
+the host refuses is tried again once a minute, or at once when the outbounds change. A change of
+the outbounds through the panel and this round take turns, so an outbound that was just turned off is not laid
+again behind the change.
 
 Raising an interface, writing keys to it and changing routing rules need `CAP_NET_ADMIN`. A server that
 runs without it answers with the outbound and the reason on it instead of failing the request. Setting

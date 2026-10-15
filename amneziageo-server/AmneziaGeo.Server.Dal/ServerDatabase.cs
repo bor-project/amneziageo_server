@@ -38,6 +38,7 @@ public static class ServerDatabase
         }
 
         services.AddDbContext<AppDbContext>(builder => builder.UseSqlite($"Data Source={path}"));
+        services.AddSingleton(_ => new DatabaseVersion(path));
 
         services.AddIdentityCore<AppUser>(identity =>
             {

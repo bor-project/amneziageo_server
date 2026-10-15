@@ -271,6 +271,59 @@ public class EndpointHostTests
         Assert.DoesNotContain("10.0.0.5", text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AnInterfaceThatCarriesTheObfuscationOfTheEndpointStaysWithItsPeers()
+    {
+        var ledger = new Ledger();
+        ledger.Links.Add("awg0");
+        var kernel = new Kernel();
+        kernel.Hold(new AwgDevice
+        {
+            Name = "awg0",
+            Obfuscation = ConfigDevice.Obfuscation(Endpoint().Obfuscation),
+            Peers = [new AwgPeer { PublicKey = Client().PublicKey }],
+        });
+        var host = new EndpointHost(ledger, kernel);
+
+        var sync = await host.ApplyAsync(Endpoint(), CancellationToken.None);
+
+        Assert.True(sync.IsDone);
+        Assert.False(ledger.Did("remove awg0"));
+        Assert.False(ledger.Did("add awg0"));
+    }
+
+    [Fact]
+    public async Task AnInterfaceThatCarriesAnotherObfuscationIsLaidAnew()
+    {
+        var ledger = new Ledger();
+        ledger.Links.Add("awg0");
+        var kernel = new Kernel();
+        kernel.Hold(new AwgDevice
+        {
+            Name = "awg0",
+            Obfuscation = ConfigDevice.Obfuscation(Endpoint().Obfuscation) with { S3 = 13, S4 = 12 },
+            Peers = [new AwgPeer { PublicKey = Client().PublicKey }],
+        });
+        var host = new EndpointHost(ledger, kernel);
+
+        var sync = await host.ApplyAsync(Endpoint(), CancellationToken.None);
+
+        Assert.True(sync.IsDone);
+        Assert.Equal(["forwarding", "remove awg0", "add awg0"], ledger.Steps.Take(3));
+        Assert.Equal(Key, Assert.Single(kernel.Updates).PrivateKey);
+    }
+
+    [Fact]
+    public void AnEmptyTextOfTheObfuscationCountsAsNone()
+    {
+        var read = new AwgObfuscation { Jc = 4, I1 = null, HeaderProtectionKey = null };
+
+        Assert.True(read.SameAs(new AwgObfuscation { Jc = 4, I1 = string.Empty, HeaderProtectionKey = string.Empty }));
+        Assert.True(new AwgObfuscation().SameAs(null));
+        Assert.False(read.SameAs(read with { I1 = "<r 246>" }));
+        Assert.False(read.SameAs(null));
+    }
+
     private const string Key = "6JqDBRc3ZDx6bTcJKKZS0J1yZbSbUKmzS1eJdWQFRVo=";
 
     private static TunnelClient Client() => new()

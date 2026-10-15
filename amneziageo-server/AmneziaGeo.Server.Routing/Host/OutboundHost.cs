@@ -12,7 +12,7 @@ namespace AmneziaGeo.Server.Routing.Host;
 /// <summary>
 /// Puts the outbounds the panel holds on the host and reads back what the host carries.
 /// </summary>
-public sealed class OutboundHost
+public sealed class OutboundHost : IDisposable
 {
     private readonly IHostNetwork _network;
 
@@ -25,6 +25,8 @@ public sealed class OutboundHost
     private readonly ProbeLive? _probes;
 
     private readonly ConcurrentDictionary<uint, bool> _ruled = new();
+
+    private readonly HostTurn _turn = new();
 
     private volatile bool _sealed;
 
@@ -44,6 +46,16 @@ public sealed class OutboundHost
         _carriers = carriers;
         _probes = probes;
     }
+
+    /// <summary>
+    /// Waits for the change of the outbounds that goes on and holds them until the hold is let go.
+    /// </summary>
+    public Task<IDisposable> HoldAsync(CancellationToken ct) => _turn.HoldAsync(ct);
+
+    /// <summary>
+    /// Lets the gate go.
+    /// </summary>
+    public void Dispose() => _turn.Dispose();
 
     /// <summary>
     /// Puts one outbound on the host, or takes it off when it is turned off.
@@ -262,12 +274,18 @@ public sealed class OutboundHost
     private async Task RaiseAsync(OutboundConfig outbound, CancellationToken ct)
     {
         var server = await ServerAsync(outbound, ct).ConfigureAwait(false);
+        var update = OutboundDevice.Update(outbound, server);
+        if (Differs(outbound.Name, update.Obfuscation))
+        {
+            await _network.RemoveLinkAsync(outbound.Name, ct).ConfigureAwait(false);
+        }
+
         if (!_network.HasLink(outbound.Name))
         {
             await _network.AddLinkAsync(outbound.Name, ct).ConfigureAwait(false);
         }
 
-        _devices.Apply(OutboundDevice.Update(outbound, server, !Holds(outbound)));
+        _devices.Apply(update with { ReplacePeers = !Holds(outbound) });
         await _network.AddressAsync(outbound.Name, OutboundDevice.Hosts(outbound.Address), ct).ConfigureAwait(false);
         await _network.UpAsync(outbound.Name, outbound.Mtu, ct).ConfigureAwait(false);
         await _network.RouteAsync(outbound.Name, outbound.Table, ct).ConfigureAwait(false);
@@ -278,6 +296,10 @@ public sealed class OutboundHost
 
     private bool Holds(OutboundConfig outbound) =>
         _devices.Find(outbound.Name)?.Peers.All(peer => peer.PublicKey == outbound.PeerKey) == true;
+
+    // Tells whether the interface carries another obfuscation.
+    private bool Differs(string name, AwgObfuscation? wanted) =>
+        _network.HasLink(name) && _devices.Find(name) is { } device && !device.Obfuscation.SameAs(wanted);
 
     private async Task<IPEndPoint> ServerAsync(OutboundConfig outbound, CancellationToken ct)
     {

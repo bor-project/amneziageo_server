@@ -1,4 +1,6 @@
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Cli.Commands;
 
@@ -47,14 +49,23 @@ public static class UserCommands
     }
 
     /// <summary>
-    /// Adds an account of the panel and sets its first password.
+    /// Adds an account of the panel and sets its first password; with --host the account stands for the user of the
+    /// host of that name, the way the form of the panel adds one with "User of the system".
     /// </summary>
-    public static async Task<int> AddAsync(Context context, Arguments args, CancellationToken ct)
+    public static async Task<int> AddAsync(Context context, Arguments args, CancellationToken ct, IHostCommands? tools = null)
     {
         var name = args.At(2) ?? Terminal.Ask("login: ");
-        if (await context.Accounts.WhyNotAsync(name, ct).ConfigureAwait(false) is { } refusal)
+        var host = args.Has("host");
+        if (await context.Accounts.WhyNotAsync(name, host, ct).ConfigureAwait(false) is { } refusal)
         {
             return Fail(refusal);
+        }
+
+        if (host && !(HostUsers.IsSupported && context.Options.HostUsers))
+        {
+            Terminal.Fail("the host keeps no users of its own");
+
+            return 1;
         }
 
         var password = args.Has("generate") ? Terminal.Generate() : Terminal.AskNewSecret();
@@ -63,8 +74,10 @@ public static class UserCommands
             return 1;
         }
 
+        var role = args.Value("role");
+        var key = args.Value("key");
         var result = await context.Accounts
-            .AddAsync(name, args.Value("display"), args.Value("role"), password, !args.Has("permanent"), ct)
+            .AddAsync(name, args.Value("display"), role, password, !args.Has("permanent"), host, key, ct)
             .ConfigureAwait(false);
 
         if (!result.IsOk)
@@ -72,12 +85,27 @@ public static class UserCommands
             return Fail(result);
         }
 
+        if (host)
+        {
+            var roles = (await context.Catalog.ListAsync(ct).ConfigureAwait(false)).Select(one => one.Record.Name ?? string.Empty).ToList();
+            var carried = await new HostUsers(tools ?? new HostCommands(), context.Options, context.Path)
+                .CarryAsync(name, role, key, roles, ct)
+                .ConfigureAwait(false);
+            if (!carried.IsDone)
+            {
+                await context.Users.DeleteAsync(result.Record!).ConfigureAwait(false);
+                Terminal.Fail(carried.Message);
+
+                return 1;
+            }
+        }
+
         if (args.Has("generate"))
         {
             Terminal.Say($"password: {password}");
         }
 
-        Terminal.Say($"added {name} as {args.Value("role") ?? "no role"}");
+        Terminal.Say($"added {name} as {role ?? "no role"}{(host ? ", standing for the user of the host" : string.Empty)}");
 
         return 0;
     }
@@ -179,6 +207,10 @@ public static class UserCommands
     private static int Fail(AccountResult result)
     {
         Terminal.Fail(result.Message);
+        if (result.Outcome == AccountOutcome.HostName)
+        {
+            Terminal.Fail("--host makes the account stand for that user of the host");
+        }
 
         return 1;
     }

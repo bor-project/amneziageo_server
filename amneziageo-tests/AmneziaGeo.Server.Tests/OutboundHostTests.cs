@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Outbound;
@@ -369,6 +370,89 @@ public class OutboundHostTests
 
         Assert.True(Assert.Single(kernel.Updates).ReplacePeers);
     }
+
+    [Fact]
+    public async Task AnInterfaceThatCarriesAnotherObfuscationIsLaidAnewWithTheNewServer()
+    {
+        var ledger = new Ledger();
+        ledger.Links.Add("awgbor");
+        var kernel = new Kernel();
+        kernel.Hold(new AwgDevice
+        {
+            Name = "awgbor",
+            Obfuscation = new AwgObfuscation
+            {
+                Jc = 7,
+                S3 = 13,
+                S4 = 12,
+                HeaderProtectionKey = "wHS9TkIlE61wUO3AglOpnvrCIWDQ5vmoa20cbOEW56k=",
+            },
+            Peers = [new AwgPeer { PublicKey = "IVOnjpSCrj9ctUFhwHTlp9GJo0ixYj8f+4KFqzt9n2Q=" }],
+        });
+        var host = new OutboundHost(ledger, kernel, new Clock(Now));
+
+        await host.ApplyAsync(Profiled(), CancellationToken.None);
+
+        var removed = ledger.Steps.IndexOf("remove awgbor");
+        Assert.True(removed >= 0);
+        Assert.True(ledger.Steps.IndexOf("add awgbor") > removed);
+        var update = Assert.Single(kernel.Updates);
+        Assert.Equal(Profiled().PeerKey, Assert.Single(update.Peers).PublicKey);
+        Assert.Equal(4, update.Obfuscation!.Jc);
+        Assert.Null(update.Obfuscation.HeaderProtectionKey);
+    }
+
+    [Fact]
+    public async Task AnInterfaceThatCarriesTheObfuscationAndTheServerStays()
+    {
+        var ledger = new Ledger();
+        ledger.Links.Add("awgbor");
+        var kernel = new Kernel();
+        kernel.Hold(new AwgDevice
+        {
+            Name = "awgbor",
+            Obfuscation = ConfigDevice.Obfuscation(Profiled().Obfuscation),
+            Peers = [new AwgPeer { PublicKey = Profiled().PeerKey }],
+        });
+        var host = new OutboundHost(ledger, kernel, new Clock(Now));
+
+        await host.ApplyAsync(Profiled(), CancellationToken.None);
+
+        Assert.False(ledger.Did("remove awgbor"));
+        Assert.False(ledger.Did("add awgbor"));
+        Assert.False(Assert.Single(kernel.Updates).ReplacePeers);
+    }
+
+    [Fact]
+    public async Task ASecondHoldOfTheOutboundsWaitsUntilTheFirstIsLetGo()
+    {
+        var host = new OutboundHost(new Ledger(), new Kernel(), new Clock(Now));
+
+        var first = await host.HoldAsync(CancellationToken.None);
+        var second = host.HoldAsync(CancellationToken.None);
+        await Task.Delay(50);
+        var waited = !second.IsCompleted;
+        first.Dispose();
+        using var held = await second.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(waited);
+    }
+
+    private static OutboundConfig Profiled() => Tunnel() with
+    {
+        Obfuscation = new ObfuscationSettings
+        {
+            Jc = 4,
+            Jmin = 40,
+            Jmax = 70,
+            S1 = 15,
+            S2 = 20,
+            H1 = "1111",
+            H2 = "2222",
+            H3 = "3333",
+            H4 = "4444",
+        },
+    };
 
     private static OutboundConfig Tunnel() => new()
     {

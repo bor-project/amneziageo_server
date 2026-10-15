@@ -129,4 +129,21 @@ public sealed record AwgObfuscation
     /// Whether cookie replies are turned off.
     /// </summary>
     public bool DisableCookies { get; init; }
+
+    /// <summary>
+    /// Tells whether another obfuscation is the same, an empty text counting as none and no obfuscation as the plain one.
+    /// </summary>
+    public bool SameAs(AwgObfuscation? other) => Bare(this) == Bare(other ?? new AwgObfuscation());
+
+    private static AwgObfuscation Bare(AwgObfuscation shape) => shape with
+    {
+        I1 = Blank(shape.I1),
+        I2 = Blank(shape.I2),
+        I3 = Blank(shape.I3),
+        I4 = Blank(shape.I4),
+        I5 = Blank(shape.I5),
+        HeaderProtectionKey = Blank(shape.HeaderProtectionKey),
+    };
+
+    private static string? Blank(string? text) => string.IsNullOrEmpty(text) ? null : text;
 }

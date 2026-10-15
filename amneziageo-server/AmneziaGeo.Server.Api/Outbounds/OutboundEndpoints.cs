@@ -103,6 +103,7 @@ public static class OutboundEndpoints
         RouteApplier routes,
         CancellationToken ct)
     {
+        using var hold = await host.HoldAsync(ct).ConfigureAwait(false);
         var result = await store.AddAsync(OutboundAnswers.Draft(request), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -151,6 +152,7 @@ public static class OutboundEndpoints
         DnsHost resolver,
         CancellationToken ct)
     {
+        using var hold = await host.HoldAsync(ct).ConfigureAwait(false);
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
         var result = await store.ChangeAsync(id, OutboundAnswers.Draft(request), ct).ConfigureAwait(false);
         if (!result.IsOk)
@@ -186,6 +188,7 @@ public static class OutboundEndpoints
             return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a switch needs the on field");
         }
 
+        using var hold = await host.HoldAsync(ct).ConfigureAwait(false);
         var result = await store.SwitchAsync(id, on, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -220,6 +223,7 @@ public static class OutboundEndpoints
         DnsHost resolver,
         CancellationToken ct)
     {
+        using var hold = await host.HoldAsync(ct).ConfigureAwait(false);
         var result = await store.RemoveAsync(id, resolver.Asking, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -234,6 +238,7 @@ public static class OutboundEndpoints
 
     private static async Task<IResult> ApplyAsync(long id, OutboundStore store, OutboundHost host, RouteApplier routes, CancellationToken ct)
     {
+        using var hold = await host.HoldAsync(ct).ConfigureAwait(false);
         var found = await store.FindAsync(id, ct).ConfigureAwait(false);
         if (found is null)
         {
@@ -248,6 +253,7 @@ public static class OutboundEndpoints
 
     private static async Task<IResult> SyncAsync(OutboundStore store, OutboundHost host, RouteApplier routes, CancellationToken ct)
     {
+        using var hold = await host.HoldAsync(ct).ConfigureAwait(false);
         var found = await store.ListAsync(ct).ConfigureAwait(false);
         try
         {

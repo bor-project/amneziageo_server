@@ -106,6 +106,7 @@ public static class ConfigEndpoints
         ConfigStore store,
         ClientStore clients,
         EndpointHost host,
+        EndpointKeeper keeper,
         RouteApplier routes,
         DnsHost resolver,
         ServiceServer services,
@@ -118,13 +119,14 @@ public static class ConfigEndpoints
             return Refuse(StatusCodes.Status400BadRequest, unreached.Code, unreached.Message);
         }
 
+        using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
         var result = await store.AddAsync(draft, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
-        var raised = await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
+        var raised = await RaiseAsync(store, clients, host, keeper, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
         var proxy = await ServicesAsync(store, services, result.Record!.Id, ct).ConfigureAwait(false);
@@ -143,12 +145,14 @@ public static class ConfigEndpoints
         ConfigStore store,
         ClientStore clients,
         EndpointHost host,
+        EndpointKeeper keeper,
         RouteApplier routes,
         DnsHost resolver,
         ServiceServer services,
         FirewallApplier firewall,
         CancellationToken ct)
     {
+        using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
         var draft = ConfigAnswers.Draft(request, held);
         if (ConfigRules.CheckReach(draft) is { } unreached)
@@ -168,7 +172,7 @@ public static class ConfigEndpoints
             await host.WithdrawAsync(held.Name, ct).ConfigureAwait(false);
         }
 
-        var raised = await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
+        var raised = await RaiseAsync(store, clients, host, keeper, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
         var proxy = await ServicesAsync(store, services, id, ct).ConfigureAwait(false);
@@ -200,6 +204,7 @@ public static class ConfigEndpoints
         ConfigStore store,
         ClientStore clients,
         EndpointHost host,
+        EndpointKeeper keeper,
         RouteApplier routes,
         DnsHost resolver,
         ServiceServer services,
@@ -211,6 +216,7 @@ public static class ConfigEndpoints
             return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a switch needs the on field");
         }
 
+        using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
         if (on
             && await store.FindAsync(id, ct).ConfigureAwait(false) is { } held
             && ConfigRules.CheckReach(held with { IsEnabled = true }) is { } unreached)
@@ -224,7 +230,7 @@ public static class ConfigEndpoints
             return Explain(result);
         }
 
-        var raised = await RaiseAsync(store, clients, host, result.Record!, ct).ConfigureAwait(false);
+        var raised = await RaiseAsync(store, clients, host, keeper, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
         var proxy = await ServicesAsync(store, services, id, ct).ConfigureAwait(false);
@@ -238,12 +244,14 @@ public static class ConfigEndpoints
         ConfigStore store,
         ClientStore clients,
         EndpointHost host,
+        EndpointKeeper keeper,
         RouteApplier routes,
         DnsHost resolver,
         ServiceServer services,
         FirewallApplier firewall,
         CancellationToken ct)
     {
+        using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -265,17 +273,20 @@ public static class ConfigEndpoints
         ConfigStore store,
         ClientStore clients,
         EndpointHost host,
+        EndpointKeeper keeper,
         ServiceServer services,
         FirewallApplier firewall,
         CancellationToken ct)
     {
+        using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
         var found = await store.FindAsync(id, ct).ConfigureAwait(false);
         if (found is null)
         {
             return Refuse(StatusCodes.Status404NotFound, "unknown-config", $"there is no endpoint under the number {id}");
         }
 
-        var sync = await host.ApplyAsync(found, ct).ConfigureAwait(false);
+        var sync = await keeper.RaiseAsync(found, await clients.ListAsync(id, ct).ConfigureAwait(false), ct)
+            .ConfigureAwait(false);
         await FirewallAsync(store, clients, host, ct).ConfigureAwait(false);
         await services.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
@@ -286,13 +297,14 @@ public static class ConfigEndpoints
     private static async Task<IResult> ApplyAllAsync(
         ConfigStore store,
         ClientStore clients,
-        EndpointHost host,
+        EndpointKeeper keeper,
         ServiceServer services,
         FirewallApplier firewall,
         CancellationToken ct)
     {
+        using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
         var found = await store.ListAsync(ct).ConfigureAwait(false);
-        var done = await host.SyncAsync(found, await clients.ListAsync(ct).ConfigureAwait(false), ct)
+        var done = await keeper.SyncAsync(found, await clients.ListAsync(ct).ConfigureAwait(false), ct)
             .ConfigureAwait(false);
         await services.SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(ct).ConfigureAwait(false);
@@ -304,10 +316,12 @@ public static class ConfigEndpoints
         ConfigStore store,
         ClientStore clients,
         EndpointHost host,
+        EndpointKeeper keeper,
         ServerConfig config,
         CancellationToken ct)
     {
-        var sync = await host.ApplyAsync(config, ct).ConfigureAwait(false);
+        var sync = await keeper.RaiseAsync(config, await clients.ListAsync(config.Id, ct).ConfigureAwait(false), ct)
+            .ConfigureAwait(false);
         if (!sync.IsDone && config.IsEnabled)
         {
             await host.WithdrawAsync(config.Name, ct).ConfigureAwait(false);

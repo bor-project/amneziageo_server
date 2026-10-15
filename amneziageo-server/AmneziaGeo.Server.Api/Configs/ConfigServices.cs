@@ -8,13 +8,15 @@ namespace AmneziaGeo.Server.Api.Configs;
 public static class ConfigServices
 {
     /// <summary>
-    /// Adds the endpoint host and the service that raises the interfaces at start.
+    /// Adds the endpoint host, the keeper and the watch of the interfaces, and the service that raises them at start.
     /// </summary>
     public static IServiceCollection AddEndpoints(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<EndpointHost>();
+        services.AddSingleton<EndpointKeeper>();
+        services.AddSingleton<ConfigWatch>();
         services.AddHostedService<ConfigBoot>();
 
         return services;

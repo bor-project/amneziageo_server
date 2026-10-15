@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Dal;
 
 namespace AmneziaGeo.Server.Api.Auth;
 

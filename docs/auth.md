@@ -65,7 +65,9 @@ first group of the list an account belongs to wins.
 - `off` closes host login altogether.
 
 A group sets the role on every login. Names the host carries are left to the host: `user add` refuses one that
-`/etc/passwd` already holds, so a panel account can never collide with a host account of the same name.
+`/etc/passwd` already holds, so a panel account can never collide with a host account of the same name. With
+`--host` it takes such a name and makes the account stand for that user, as described under Privileged accounts;
+item 7 of the menu offers that for a login the host carries.
 
 A host account signs in over HTTP only by a password of the panel, since a request cannot carry the account a
 browser runs as. An administrator sets one with `user passwd <name>`; the account keeps its role and its host
@@ -73,8 +75,8 @@ login as they were.
 
 ## Privileged accounts
 
-An account of the panel is a user of the host as well when it is added with `User of the system`. The panel
-gives the host what it needs and keeps the two together:
+An account of the panel is a user of the host as well when it is added with `User of the system`, or with
+`user add --host` of the utility. The panel gives the host what it needs and keeps the two together:
 
 | Step | What the host takes |
 |---|---|
@@ -185,7 +187,7 @@ amneziageo-server-cli login [--user <login>] [--json] sign in and print the toke
 amneziageo-server-cli refresh <token>                 trade a refresh token for a pair
 amneziageo-server-cli whoami                          what the panel makes of this host account
 amneziageo-server-cli user list
-amneziageo-server-cli user add <login> [--role <role>] [--generate] [--permanent]
+amneziageo-server-cli user add <login> [--role <role>] [--host [--key <public key>]] [--generate] [--permanent]
 amneziageo-server-cli user passwd <login> [--generate] [--permanent]
 amneziageo-server-cli user role <login> <role>
 amneziageo-server-cli user enable | disable | remove <login>

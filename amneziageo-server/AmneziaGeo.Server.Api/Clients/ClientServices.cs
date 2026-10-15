@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Services;
+using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Traffic;
 
@@ -33,6 +34,11 @@ public static class ClientServices
         services.AddSingleton<ClientHost>();
         services.AddScoped<TemplateRefresher>();
         services.AddHostedService<ClientBoot>();
+        services.AddKeyedSingleton<IAwgDevices>(
+            InterfaceReads.Key,
+            (provider, _) => new InterfaceReads(
+                provider.GetRequiredService<IAwgDevices>(),
+                provider.GetRequiredService<TimeProvider>()));
         services.AddSingleton<ClientGuard>();
         services.AddHostedService(provider => provider.GetRequiredService<ClientGuard>());
         services.AddHostedService<ClientMeter>();

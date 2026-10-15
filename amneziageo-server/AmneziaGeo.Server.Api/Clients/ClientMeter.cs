@@ -31,7 +31,15 @@ public sealed class ClientMeter : BackgroundService
 
     private readonly ILogger<ClientMeter> _logger;
 
+    private readonly DatabaseVersion? _version;
+
     private readonly HashSet<long> _spent = [];
+
+    private IReadOnlyList<ServerConfig> _endpoints = [];
+
+    private IReadOnlyList<TunnelClient> _clients = [];
+
+    private long? _seen;
 
     private DateTimeOffset _written;
 
@@ -44,11 +52,12 @@ public sealed class ClientMeter : BackgroundService
     /// </summary>
     public ClientMeter(
         IServiceScopeFactory scopes,
-        IAwgDevices devices,
+        [FromKeyedServices(InterfaceReads.Key)] IAwgDevices devices,
         ClientHost host,
         TrafficLedger ledger,
         TimeProvider time,
-        ILogger<ClientMeter> logger)
+        ILogger<ClientMeter> logger,
+        DatabaseVersion? version = null)
     {
         _scopes = scopes;
         _devices = devices;
@@ -56,6 +65,7 @@ public sealed class ClientMeter : BackgroundService
         _ledger = ledger;
         _time = time;
         _logger = logger;
+        _version = version;
     }
 
     /// <summary>
@@ -80,10 +90,16 @@ public sealed class ClientMeter : BackgroundService
             _ledger.Turn(day);
         }
 
-        var endpoints = await services.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false);
-        var clients = await services.GetRequiredService<ClientStore>().ListAsync(ct).ConfigureAwait(false);
-        _ledger.Observe(clients, Read(endpoints, clients), now);
-        await SettleAsync(endpoints, clients, ct).ConfigureAwait(false);
+        var version = _version?.Read();
+        if (version is null || version != _seen)
+        {
+            _endpoints = await services.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false);
+            _clients = await services.GetRequiredService<ClientStore>().ListAsync(ct).ConfigureAwait(false);
+            _seen = version;
+        }
+
+        _ledger.Observe(_clients, Read(_endpoints, _clients), now);
+        await SettleAsync(_endpoints, _clients, ct).ConfigureAwait(false);
         if (now - _written >= WriteEvery)
         {
             await WriteAsync(services, now, ct).ConfigureAwait(false);

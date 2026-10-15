@@ -2404,6 +2404,11 @@ uninstall_panel() {
   exit 0
 }
 
+# Whether the panel of this host takes the login of a user of the host as the name of an account.
+host_user() {
+  [ "$(kind)" = package ] && getent passwd "$1" > /dev/null 2>&1
+}
+
 # Item 7: sets the password of an administrator, or makes one under a new login.
 reset_login() {
   local login users
@@ -2417,6 +2422,11 @@ reset_login() {
 
   if printf '%s\n' "$users" | awk 'NR > 1 {print $1}' | grep -qx "$login"; then
     cli_in user passwd "$login" --permanent && cli user enable "$login" > /dev/null
+  elif host_user "$login"; then
+    say "The host carries a user $login: an administrator of the panel under that name joins the groups amneziageo and"
+    say "amneziageo-admin of the host and signs in to the panel with a password."
+    agree "Make $login an administrator of the panel?" || return 0
+    cli_in user add "$login" --role admin --host --permanent
   elif ! agree "There is no $login. Make an administrator $login?"; then
     return 0
   elif printf '%s\n' "$users" | grep -q '^no users yet'; then

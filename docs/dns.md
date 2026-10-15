@@ -70,7 +70,8 @@ the question and marked as cut, so the client asks again over TCP and gets it wh
 The resolver also asks about the names of the rules itself, without waiting for a client: every name a rule
 matches by, including the ones a `geosite:` category stands for, is asked about and the answers go into the set
 of that rule. So a rule works from the moment it is saved, even for a service the client resolved earlier and
-holds in its own cache. Names are asked about in batches of sixteen twice a second, at most 256 per rule, and
+holds in its own cache. Names are asked about in batches of sixteen as they fall due, at most twice a second
+and at most 256 per rule, and
 each name that answered is asked again once half of `An address lives` has passed. A name that did not answer
 is asked again in two seconds, and the wait doubles with every miss up to a minute, so the sets fill as soon
 as the channel of the resolver carries again. A name several rules match by is asked about once per rule, so a
@@ -169,7 +170,8 @@ Every rule that matches by name has the sets `n<id>v4` and `n<id>v6` with a time
 resolver reads the answer, takes the name of the question and the name of every record in it, asks the
 rules which of them match, and queues the addresses. An answer that brings an address the sets do not hold
 yet goes back to the client once the address is in the set, so the first connection to it already takes the
-rule; it waits for that half a second at most. The rest of the queue goes to the host twice a second, up to
+rule; it waits for that half a second at most. The rest of the queue goes to the host half a second after an
+answer and every five seconds otherwise, up to
 512 addresses in one command, and an address already there is not sent again until half its life has
 passed. Addresses of a rule that is gone or turned off are dropped instead of sent. The rules go to the host as
 a whole table, and every address whose time has not run out goes in the same step, with the time it has left,

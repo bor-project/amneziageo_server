@@ -1,5 +1,5 @@
-using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Tests;

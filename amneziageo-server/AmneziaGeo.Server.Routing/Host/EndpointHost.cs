@@ -93,12 +93,18 @@ public sealed class EndpointHost
             }
 
             await _network.ForwardingAsync(ct).ConfigureAwait(false);
+            var update = ConfigDevice.Update(config);
+            if (Differs(config.Name, update.Obfuscation))
+            {
+                await _network.RemoveLinkAsync(config.Name, ct).ConfigureAwait(false);
+            }
+
             if (!_network.HasLink(config.Name))
             {
                 await _network.AddLinkAsync(config.Name, ct).ConfigureAwait(false);
             }
 
-            _devices.Apply(ConfigDevice.Update(config));
+            _devices.Apply(update);
             await _network.AddressAsync(config.Name, config.Address, ct).ConfigureAwait(false);
             await _network.UpAsync(config.Name, config.Mtu, ct).ConfigureAwait(false);
 
@@ -189,4 +195,8 @@ public sealed class EndpointHost
 
     private static bool Says(Exception ex, string words) =>
         ex.Message.Contains(words, StringComparison.OrdinalIgnoreCase);
+
+    // Tells whether the interface carries another obfuscation.
+    private bool Differs(string name, AwgObfuscation? wanted) =>
+        _network.HasLink(name) && _devices.Find(name) is { } device && !device.Obfuscation.SameAs(wanted);
 }

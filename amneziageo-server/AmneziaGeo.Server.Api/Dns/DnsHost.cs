@@ -40,7 +40,7 @@ public sealed class DnsHost : BackgroundService
 
     private DnsUpstream? _upstream;
 
-    private PeriodicTimer? _beat;
+    private readonly SemaphoreSlim _poke = new(0, 1);
 
     private readonly Dictionary<DnsWarmName, DnsWarmTry> _asked = new();
 
@@ -51,6 +51,8 @@ public sealed class DnsHost : BackgroundService
     private long _saved;
 
     private DateTimeOffset _saving;
+
+    private DateTimeOffset _warmAt = DateTimeOffset.MaxValue;
 
     private bool _restored;
 
@@ -73,6 +75,7 @@ public sealed class DnsHost : BackgroundService
         _names = names;
         _time = time;
         _logger = logger;
+        _plans.Kept += Poke;
     }
 
     /// <summary>
@@ -133,16 +136,26 @@ public sealed class DnsHost : BackgroundService
         await base.StopAsync(ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Lets the plan go and the gates with it.
+    /// </summary>
+    public override void Dispose()
+    {
+        _plans.Kept -= Poke;
+        _poke.Dispose();
+        _turn.Dispose();
+        base.Dispose();
+    }
+
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stopping)
     {
-        var beat = new PeriodicTimer(Between, _time);
-        _beat = beat;
         try
         {
             await RestartAsync(stopping).ConfigureAwait(false);
-            while (await beat.WaitForNextTickAsync(stopping).ConfigureAwait(false))
+            while (!stopping.IsCancellationRequested)
             {
+                await RestAsync(stopping).ConfigureAwait(false);
                 Look();
                 await WarmAsync(stopping).ConfigureAwait(false);
                 await FlushAsync(stopping).ConfigureAwait(false);
@@ -151,13 +164,6 @@ public sealed class DnsHost : BackgroundService
         }
         catch (OperationCanceledException)
         {
-        }
-        finally
-        {
-            await _turn.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-            _beat = null;
-            _turn.Release();
-            beat.Dispose();
         }
     }
 
@@ -197,8 +203,8 @@ public sealed class DnsHost : BackgroundService
         }
         finally
         {
-            Pace();
             _turn.Release();
+            Poke();
         }
     }
 
@@ -215,7 +221,7 @@ public sealed class DnsHost : BackgroundService
             () => _plans.Held,
             _settings,
             _state,
-            FlushAsync,
+            LandAsync,
             _names.Hear);
 
         var server = new DnsServer(resolver);
@@ -253,14 +259,35 @@ public sealed class DnsHost : BackgroundService
         upstream?.Dispose();
     }
 
-    // Wakes the resolver twice a second while it answers, otherwise as often as the sets of the rules need it.
-    private void Pace()
+    // Rests until the soonest work of the resolver falls due, or the plan or an answer wakes it; a stopped resolver
+    // rests as long as the sets of the rules let it.
+    private async Task RestAsync(CancellationToken ct)
     {
-        var pace = _upstream is null ? Rest(_settings.NameLifetime) : Between;
-        if (_beat is { } beat && beat.Period != pace)
+        var now = _time.GetUtcNow();
+        var rest = _upstream is null
+            ? Rest(_settings.NameLifetime)
+            : DnsPace.Rest(now, _warmAt, _saving, now + DnsSets.Sweep);
+        await Task.Delay(DnsPace.Least, _time, ct).ConfigureAwait(false);
+        await _poke.WaitAsync(rest - DnsPace.Least, ct).ConfigureAwait(false);
+    }
+
+    // Wakes the resolver before its rest runs out.
+    private void Poke()
+    {
+        try
         {
-            beat.Period = pace;
+            _poke.Release();
         }
+        catch (Exception ex) when (ex is SemaphoreFullException or ObjectDisposedException)
+        {
+        }
+    }
+
+    // Carries what an answer brought to the sets and has the resolver look at its way out.
+    private async Task LandAsync(CancellationToken ct)
+    {
+        await FlushAsync(ct).ConfigureAwait(false);
+        Poke();
     }
 
     // Returns a quarter of the life of an address, from half a second to a minute.
@@ -320,6 +347,8 @@ public sealed class DnsHost : BackgroundService
 
         if (wanted.Length == 0)
         {
+            _warmAt = WarmAt(names, asking);
+
             return;
         }
 
@@ -337,6 +366,24 @@ public sealed class DnsHost : BackgroundService
         {
             _sets.Add(name.Rule, address, lifetime);
         }
+
+        _warmAt = WarmAt(names, now);
+    }
+
+    // Returns when the next name falls due to be asked, now for a name never asked.
+    private DateTimeOffset WarmAt(IReadOnlyList<DnsWarmName> names, DateTimeOffset now)
+    {
+        var at = DateTimeOffset.MaxValue;
+        foreach (var name in names)
+        {
+            var again = _asked.TryGetValue(name, out var last) ? last.Again : now;
+            if (again < at)
+            {
+                at = again;
+            }
+        }
+
+        return at;
     }
 
     private DnsWarmTry Missed(DnsWarmName name, DateTimeOffset now, TimeSpan lifetime)

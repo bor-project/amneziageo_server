@@ -27,6 +27,11 @@ public sealed class Context : IDisposable
     /// </summary>
     public const string HostLoginVariable = "Auth__HostLogin";
 
+    /// <summary>
+    /// Environment variable that keeps the panel from the users of the host, as the server reads it.
+    /// </summary>
+    public const string HostUsersVariable = "Auth__HostUsers";
+
     private readonly ServiceProvider _services;
 
     private readonly IServiceScope _scope;
@@ -103,6 +108,11 @@ public sealed class Context : IDisposable
         if (Enum.TryParse<HostLogin>(Environment.GetEnvironmentVariable(HostLoginVariable), true, out var login))
         {
             options.HostLogin = login;
+        }
+
+        if (bool.TryParse(Environment.GetEnvironmentVariable(HostUsersVariable), out var hostUsers))
+        {
+            options.HostUsers = hostUsers;
         }
 
         var path = databasePath ?? ServerDatabase.DefaultPath();

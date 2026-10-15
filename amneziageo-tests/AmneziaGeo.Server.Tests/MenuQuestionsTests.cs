@@ -45,6 +45,49 @@ public class MenuQuestionsTests
         Assert.Equal(again, Count(said, "answer y or n"));
     }
 
+    [Theory]
+    [InlineData("y", true)]
+    [InlineData("n", false)]
+    public async Task ALoginOfAUserOfTheHost_IsMadeAnAdministratorThatStandsForItOnYes(string answer, bool made)
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+        var me = Environment.UserName;
+
+        var (exit, told, _) = await RunAsync(Panel + "reset_login", $"{me}\n{answer}\n");
+
+        Assert.Equal(0, exit);
+        Assert.Equal(made, told.Contains($"utility: user add {me} --role admin --host --permanent\n", StringComparison.Ordinal));
+        Assert.DoesNotContain("utility: init", told, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALoginNobodyCarries_IsMadeAnAdministratorOfThePanelAlone()
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+
+        var (exit, told, _) = await RunAsync(Panel + "reset_login", "agtest-nobody\ny\n");
+
+        Assert.Equal(0, exit);
+        Assert.Contains("utility: user add agtest-nobody --role admin --permanent\n", told, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALoginOfAUserOfTheHost_InAContainerIsMadeAnAdministratorOfThePanelAlone()
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+        var me = Environment.UserName;
+
+        var (_, told, _) = await RunAsync(Panel.Replace("printf package", "printf docker", StringComparison.Ordinal) + "reset_login", $"{me}\ny\n");
+
+        Assert.Contains($"utility: user add {me} --role admin --permanent\n", told, StringComparison.Ordinal);
+    }
+
+    // The panel and its utility stood in for: one account of the host, and every call of the utility printed.
+    private const string Panel =
+        "need_panel() { :; }; kind() { printf package; }; " +
+        "cli() { printf 'name kind role state rights\\nroot host admin enabled x\\n'; }; " +
+        "cli_in() { echo \"utility: $*\"; }; ";
+
     // Runs words of the menu with its functions read in and the lines given on its input.
     private static async Task<(int Exit, string Told, string Said)> RunAsync(string words, string input)
     {
