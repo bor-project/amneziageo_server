@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Web;
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Core.Panel;
 
 namespace AmneziaGeo.Server.Api.Subscriptions;
@@ -40,6 +41,19 @@ public sealed record SubscriptionRequest(
     int UpdateHours,
     string? Title,
     bool? Keep = null);
+
+/// <summary>
+/// What the page of a subscription shows: its title, its name, how often a client reads it again, the traffic its
+/// clients made today against their daily limits added up, and its configurations.
+/// </summary>
+public sealed record SubscriptionView(
+    string Title,
+    string Name,
+    int Hours,
+    ulong Upload,
+    ulong Download,
+    ulong Total,
+    IReadOnlyList<ClientSheet> Configs);
 
 /// <summary>
 /// Turns the settings of the subscriptions into what the panel reads and back.

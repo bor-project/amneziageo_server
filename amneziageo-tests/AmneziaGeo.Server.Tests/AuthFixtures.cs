@@ -71,6 +71,7 @@ public sealed class Bench : IDisposable
     {
         _path = Path.Combine(Path.GetTempPath(), $"amneziageo-{Guid.NewGuid():N}.db");
         _geo = Path.Combine(Path.GetTempPath(), $"amneziageo-geo-{Guid.NewGuid():N}");
+        PagePath = Path.Combine(Path.GetTempPath(), $"amneziageo-page-{Guid.NewGuid():N}.html");
         _key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
         Options = options ?? new AuthOptions();
@@ -86,6 +87,7 @@ public sealed class Bench : IDisposable
         services.AddSingleton(new TrafficLedger(Clock));
         services.AddSingleton<DnsState>();
         services.AddScoped<SubscriptionFeed>();
+        services.AddSingleton(new SubscriptionPage(PagePath));
 
         _services = services.BuildServiceProvider();
         ServerDatabase.PrepareAsync(_services).GetAwaiter().GetResult();
@@ -155,6 +157,8 @@ public sealed class Bench : IDisposable
     public PresetStore Presets { get; }
 
     public string DatabasePath => _path;
+
+    public string PagePath { get; }
 
     public IGeoFileStore GeoFiles { get; }
 
@@ -232,6 +236,11 @@ public sealed class Bench : IDisposable
             {
                 File.Delete(file);
             }
+        }
+
+        if (File.Exists(PagePath))
+        {
+            File.Delete(PagePath);
         }
     }
 }

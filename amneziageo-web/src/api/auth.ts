@@ -99,6 +99,7 @@ const complaints: Record<string, TextKey> = {
   "bad-span": "error.badSpan",
   "bad-blocked": "error.badBlocked",
   "bad-header-key": "error.badHeaderKey",
+  "bad-header-junk": "error.badHeaderJunk",
   "port-taken": "error.portTaken",
   "websocket-path-taken": "error.webSocketPathTaken",
   "panel-path-taken": "error.panelPathTaken",

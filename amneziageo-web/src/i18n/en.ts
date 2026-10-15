@@ -788,6 +788,7 @@ export const en = {
   "error.badSpan": "The value takes one number or a pair separated by a dash",
   "error.badBlocked": "A closed range is not an address range",
   "error.badHeaderKey": "The header protection key is not 32 bytes in base64",
+  "error.badHeaderJunk": "The header protection key needs S1 to S4 of at least 12 bytes",
   "error.portTaken": "The port is already taken by another interface",
   "error.nameTaken": "The name is already taken",
   "error.hostName": "The host carries a user with this name, that name is left to it",

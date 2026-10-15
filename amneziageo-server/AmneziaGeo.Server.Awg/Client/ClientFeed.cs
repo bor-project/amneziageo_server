@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using AmneziaGeo.Server.Awg.Config;
+using AmneziaGeo.Server.Core.Panel;
 
 namespace AmneziaGeo.Server.Awg.Client;
 
@@ -13,6 +14,11 @@ namespace AmneziaGeo.Server.Awg.Client;
 /// <param name="Total">The daily limits of the clients added up, 0 when one of them has none.</param>
 public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong Download, ulong Total)
 {
+    /// <summary>
+    /// The configurations behind the links, as the page of the subscription shows them.
+    /// </summary>
+    public IReadOnlyList<ClientSheet> Sheets { get; init; } = [];
+
     /// <summary>
     /// Returns the body a subscription answers with, the links line by line in base64.
     /// </summary>
@@ -52,13 +58,24 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
         ArgumentNullException.ThrowIfNull(used);
 
         var links = new List<string>();
+        var sheets = new List<ClientSheet>();
         var shares = new List<Share>();
         foreach (var endpoint in endpoints.Where(one => one.IsEnabled))
         {
             foreach (var member in members.Where(one => one.ConfigId == endpoint.Id && one.IsEnabled && one.PrivateKey.Length > 0))
             {
                 var template = member.TemplateId is { } chosen ? templates.GetValueOrDefault(chosen) : null;
-                links.Add(ClientLink.Link(endpoint, member, template, resolver?.Invoke(endpoint), title?.Invoke(endpoint, member)));
+                var names = resolver?.Invoke(endpoint);
+                var name = title?.Invoke(endpoint, member) ?? ClientText.Title(endpoint, member);
+                var link = ClientLink.Link(endpoint, member, template, names, name);
+                links.Add(link);
+                sheets.Add(new ClientSheet(
+                    name,
+                    endpoint.Name,
+                    ClientText.Endpoint(endpoint),
+                    $"{ConfigName.File(name)}.conf",
+                    ClientText.Text(endpoint, member, template, names),
+                    link));
                 shares.Add(new Share(used(member), member.DailyLimit));
             }
         }
@@ -69,7 +86,10 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
             links,
             shares.Aggregate(0UL, (sum, one) => sum + one.Used.Rx),
             shares.Aggregate(0UL, (sum, one) => sum + one.Used.Tx),
-            total);
+            total)
+        {
+            Sheets = sheets,
+        };
     }
 
     private sealed record Share(ClientUsage Used, long Limit);

@@ -59,9 +59,28 @@ off answers an empty body, and the client application marks their configurations
 | `Profile-Update-Interval` | the update interval in hours |
 | `Profile-Title` | the profile title as `base64:`, left out when it is empty |
 | `Cache-Control` | `no-store` |
+| `Vary` | `Accept`: a browser reads the same address as a page, see below |
 
 The traffic is the one the panel counts day by day, see [clients.md](clients.md#traffic): it starts from
 nothing at midnight of the host and does not start over when a peer or the interface is laid anew.
+
+### The page for a browser
+
+A request that names `text/html` in `Accept`, the way a browser does, takes a page instead of the base64. An
+application that does not name it reads the links as before: the AmneziaGeo client asks for `text/plain, */*`,
+and `*/*` alone does not count. The page shows:
+
+- the profile title, or the host the subscription is read at without one; the name of the subscription, how many
+  configurations it holds, the update interval, and the traffic of today against the daily limits added up;
+- the QR code and the address of the subscription, with `Copy link` and `Download QR`;
+- a card a configuration, the same ones the base64 carries: its name, its endpoint, the host and the port, a QR
+  code of the `vpn://` link or of the `.conf` file, `Copy`, and `Download` for the file or the picture of the link.
+
+The page speaks Russian to a browser that asks for it and English otherwise, and follows its light or dark scheme.
+It is built with the panel as `subscription.html` in its web root; a panel built without it answers a browser
+with the base64 too. The page loads nothing from anywhere: its script, its styles and the subscription ride in it,
+under `Content-Security-Policy` that lets nothing else in, with `Referrer-Policy: no-referrer`. It answers on every
+place the subscriptions do: their own port, the port of the panel and the port of the services of an endpoint.
 
 ## The subscription of a client
 

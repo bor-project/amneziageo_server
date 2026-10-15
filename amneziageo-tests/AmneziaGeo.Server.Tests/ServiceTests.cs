@@ -573,6 +573,56 @@ public class ServiceTests
     }
 
     [Fact]
+    public async Task ABrowserReadsTheSubscriptionAsAPageAndAnApplicationAsLinks()
+    {
+        using var bench = new Bench();
+        await File.WriteAllTextAsync(bench.PagePath, "<html>" + SubscriptionPage.Mark + "</html>");
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var path = "/sub/" + client.SubscriptionId;
+
+        var page = await BrowseAsync(desk, Point(endpoint), path, "text/html,application/xhtml+xml,*/*;q=0.8");
+        var links = await BrowseAsync(desk, Point(endpoint), path, "text/plain, */*");
+
+        Assert.Equal(StatusCodes.Status200OK, page.Response.StatusCode);
+        Assert.Equal("text/html; charset=utf-8", page.Response.ContentType);
+        Assert.Equal(SubscriptionPage.Policy, page.Response.Headers.ContentSecurityPolicy.ToString());
+        Assert.Equal("no-store", page.Response.Headers.CacheControl.ToString());
+        Assert.Equal("Accept", page.Response.Headers.Vary.ToString());
+        Assert.Empty(page.Response.Headers.ETag.ToString());
+        Assert.StartsWith("<html>{", page.Body, StringComparison.Ordinal);
+        Assert.Contains(client.SubscriptionId, page.Body, StringComparison.Ordinal);
+        Assert.Contains("vpn.example:" + endpoint.ListenPort.ToString(CultureInfo.InvariantCulture), page.Body, StringComparison.Ordinal);
+        Assert.Equal("text/plain; charset=utf-8", links.Response.ContentType);
+        Assert.Equal("Accept", links.Response.Headers.Vary.ToString());
+        Assert.StartsWith("vpn://", Encoding.UTF8.GetString(Convert.FromBase64String(links.Body)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ABrowserReadsTheLinksWhileThePanelWasBuiltWithoutThePage()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+
+        var answer = await BrowseAsync(desk, Point(endpoint), "/sub/" + client.SubscriptionId, "text/html");
+
+        Assert.Equal(StatusCodes.Status200OK, answer.Response.StatusCode);
+        Assert.Equal("text/plain; charset=utf-8", answer.Response.ContentType);
+        Assert.StartsWith("vpn://", Encoding.UTF8.GetString(Convert.FromBase64String(answer.Body)), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ThePortOfTheServicesLeavesTheSubscriptionsToAPortOfTheirOwn()
     {
         using var bench = new Bench();
@@ -1188,6 +1238,22 @@ public class ServiceTests
         await desk.AnswerAsync(context, point);
 
         return (context.Response.StatusCode, Encoding.UTF8.GetString(body.ToArray()), context.Response.Headers.ETag.ToString());
+    }
+
+    // Reads a subscription the way a client that names what it takes does.
+    private static async Task<(HttpResponse Response, string Body)> BrowseAsync(ServiceDesk desk, ServicePoint point, string path, string accept)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = path;
+        context.Request.Host = new HostString("vpn.example", point.Port);
+        context.Request.Headers.Accept = accept;
+        var body = new MemoryStream();
+        context.Response.Body = body;
+
+        await desk.AnswerAsync(context, point);
+
+        return (context.Response, Encoding.UTF8.GetString(body.ToArray()));
     }
 
     private static string? Error((int Status, byte[] Body) answer)

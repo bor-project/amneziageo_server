@@ -11,6 +11,8 @@ using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
+using Microsoft.Extensions.Primitives;
+using Microsoft.Net.Http.Headers;
 
 namespace AmneziaGeo.Server.Api.Subscriptions;
 
@@ -119,6 +121,21 @@ public static class SubscriptionAnswer
 
         var headers = context.Response.Headers;
         headers.CacheControl = "no-store";
+        headers.Vary = "Accept";
+        var page = WantsPage(context.Request.Headers.Accept)
+            ? scope.ServiceProvider.GetService<SubscriptionPage>()?.Text(View(feed, settings, id, context.Request.Host.Host)) ?? string.Empty
+            : string.Empty;
+        if (page.Length > 0)
+        {
+            headers.ContentSecurityPolicy = SubscriptionPage.Policy;
+            headers.XContentTypeOptions = "nosniff";
+            headers["Referrer-Policy"] = "no-referrer";
+            context.Response.ContentType = "text/html; charset=utf-8";
+            await context.Response.WriteAsync(page, context.RequestAborted).ConfigureAwait(false);
+
+            return;
+        }
+
         headers.ETag = "\"" + Revision(feed.Body) + "\"";
         headers["Subscription-Userinfo"] = feed.Usage;
         headers["Profile-Update-Interval"] = settings.UpdateHours.ToString(CultureInfo.InvariantCulture);
@@ -129,6 +146,37 @@ public static class SubscriptionAnswer
 
         context.Response.ContentType = "text/plain; charset=utf-8";
         await context.Response.WriteAsync(feed.Body, context.RequestAborted).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Returns whether a request takes the page of the subscription: a browser names it among what it takes, an
+    /// application does not.
+    /// </summary>
+    public static bool WantsPage(StringValues accept)
+    {
+        return MediaTypeHeaderValue.TryParseList(accept, out var kinds)
+            && kinds.Any(kind => kind.MediaType.Equals("text/html", StringComparison.OrdinalIgnoreCase) && kind.Quality is null or > 0);
+    }
+
+    /// <summary>
+    /// Returns what the page of a subscription shows, titled by the host it is read at while the subscriptions carry
+    /// no title.
+    /// </summary>
+    public static SubscriptionView View(ClientFeed feed, SubscriptionSettings settings, string id, string host)
+    {
+        ArgumentNullException.ThrowIfNull(feed);
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(host);
+
+        return new SubscriptionView(
+            settings.Title.Length > 0 ? settings.Title : host,
+            id,
+            settings.UpdateHours,
+            feed.Upload,
+            feed.Download,
+            feed.Total,
+            feed.Sheets);
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Client;
@@ -295,6 +296,93 @@ public class SubscriptionTests
         Assert.Equal(0UL, open.Total);
 
         static ClientUsage Used(TunnelClient client) => client.Id == 3 ? new ClientUsage(1, 2) : new ClientUsage(10, 20);
+    }
+
+    [Fact]
+    public void AFeedShowsEveryConfigurationItHandsOut()
+    {
+        var on = Endpoint(1, "awg1") with { ListenPort = 51820 };
+        var milena = Member(1, "milena");
+
+        var feed = ClientFeed.Of(
+            [on],
+            [milena, Member(1, "bogdan") with { IsEnabled = false }],
+            new Dictionary<long, ClientTemplate>(),
+            _ => new ClientUsage(0, 0),
+            title: (endpoint, member) => ClientText.Title(endpoint, member, "{CLIENT}@{INTERFACE}"));
+
+        var sheet = Assert.Single(feed.Sheets);
+        Assert.Equal("milena@awg1", sheet.Name);
+        Assert.Equal("awg1", sheet.Interface);
+        Assert.Equal("vpn.example.org:51820", sheet.Endpoint);
+        Assert.Equal(ClientText.FileName(on, milena, "{CLIENT}@{INTERFACE}"), sheet.FileName);
+        Assert.Equal(ClientText.Text(on, milena), sheet.Text);
+        Assert.Equal(Assert.Single(feed.Links), sheet.Link);
+    }
+
+    [Theory]
+    [InlineData("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", true)]
+    [InlineData("text/html", true)]
+    [InlineData("TEXT/HTML; charset=utf-8", true)]
+    [InlineData("text/plain, */*", false)]
+    [InlineData("*/*", false)]
+    [InlineData("", false)]
+    [InlineData("text/html;q=0, */*", false)]
+    public void OnlyABrowserIsAnsweredWithThePage(string accept, bool page)
+    {
+        Assert.Equal(page, SubscriptionAnswer.WantsPage(accept));
+    }
+
+    [Fact]
+    public void ThePageCarriesTheSubscriptionWhereTheBuildLeftItsMark()
+    {
+        const string Open = "<script id=\"feed\" type=\"application/json\">";
+        const string Close = "</script>";
+        var file = Path.Combine(Path.GetTempPath(), $"amneziageo-page-{Guid.NewGuid():N}.html");
+        File.WriteAllText(file, Open + SubscriptionPage.Mark + Close);
+        try
+        {
+            var sheet = new ClientSheet("</script><b>milena</b>", "awg1", "vpn.example.org:51820", "milena.conf", "[Interface]\n", "vpn://one");
+
+            var page = new SubscriptionPage(file).Text(new SubscriptionView("Дом", "family", 12, 1, 2, 3, [sheet]));
+
+            Assert.StartsWith(Open, page, StringComparison.Ordinal);
+            Assert.EndsWith(Close, page, StringComparison.Ordinal);
+            Assert.Equal(page.IndexOf(Close, StringComparison.Ordinal), page.LastIndexOf(Close, StringComparison.Ordinal));
+            Assert.DoesNotContain("<b>", page, StringComparison.Ordinal);
+
+            using var json = JsonDocument.Parse(page[Open.Length..^Close.Length]);
+            var root = json.RootElement;
+            Assert.Equal("Дом", root.GetProperty("title").GetString());
+            Assert.Equal("family", root.GetProperty("name").GetString());
+            Assert.Equal(12, root.GetProperty("hours").GetInt32());
+            Assert.Equal(3UL, root.GetProperty("total").GetUInt64());
+            var shown = Assert.Single(root.GetProperty("configs").EnumerateArray().ToArray());
+            Assert.Equal(sheet.Name, shown.GetProperty("name").GetString());
+            Assert.Equal(sheet.Text, shown.GetProperty("text").GetString());
+            Assert.Equal(sheet.Link, shown.GetProperty("link").GetString());
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public void APanelBuiltWithoutThePageAnswersWithNone()
+    {
+        var page = new SubscriptionPage(Path.Combine(Path.GetTempPath(), $"amneziageo-page-{Guid.NewGuid():N}.html"));
+
+        Assert.Equal(string.Empty, page.Text(new SubscriptionView("vpn.example.org", "family", 12, 0, 0, 0, [])));
+    }
+
+    [Fact]
+    public void ThePageIsTitledByTheHostWhileTheSubscriptionsCarryNoTitle()
+    {
+        var feed = new ClientFeed(["vpn://one"], 1, 2, 3);
+
+        Assert.Equal("vpn.example.org", SubscriptionAnswer.View(feed, SubscriptionDefaults.Settings, "family", "vpn.example.org").Title);
+        Assert.Equal("Дом", SubscriptionAnswer.View(feed, SubscriptionDefaults.Settings with { Title = "Дом" }, "family", "vpn.example.org").Title);
     }
 
     [Fact]

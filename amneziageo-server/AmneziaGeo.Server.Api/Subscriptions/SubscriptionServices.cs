@@ -8,7 +8,7 @@ namespace AmneziaGeo.Server.Api.Subscriptions;
 public static class SubscriptionServices
 {
     /// <summary>
-    /// Registers the server, the feed and the holds of the subscriptions.
+    /// Registers the server, the feed, the page and the holds of the subscriptions.
     /// </summary>
     public static IServiceCollection AddSubscriptions(this IServiceCollection services)
     {
@@ -19,6 +19,7 @@ public static class SubscriptionServices
         services.AddSingleton<SubscriptionServer>();
         services.AddHostedService(provider => provider.GetRequiredService<SubscriptionServer>());
         services.AddScoped<SubscriptionFeed>();
+        services.AddSingleton(provider => SubscriptionPage.Of(provider.GetRequiredService<IWebHostEnvironment>()));
 
         return services;
     }

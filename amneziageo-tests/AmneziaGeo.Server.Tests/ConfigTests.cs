@@ -98,6 +98,30 @@ public class ConfigTests
     }
 
     [Fact]
+    public void AHeaderKeyWantsTheJunkOfEveryPacketTheKernelDoes()
+    {
+        var key = Curve25519.Create().PrivateKey;
+
+        Assert.Equal("bad-header-junk", ObfuscationCode(one => one with { HeaderProtectionKey = key, S1 = 15, S2 = 30, S3 = 13, S4 = 0 }));
+        Assert.Equal("bad-header-junk", ObfuscationCode(one => one with { HeaderProtectionKey = key, S1 = 11, S2 = 30, S3 = 13, S4 = 12 }));
+        Assert.Null(ObfuscationCode(one => one with { HeaderProtectionKey = key, S1 = 15, S2 = 30, S3 = 13, S4 = ConfigRules.HeaderNonce }));
+        Assert.Null(ObfuscationCode(one => one with { HeaderProtectionKey = string.Empty, S3 = 0, S4 = 0 }));
+    }
+
+    [Fact]
+    public async Task AnEndpointWithAHeaderKeyTheKernelWouldRefuseIsNotTaken()
+    {
+        using var bench = new Bench();
+        var fresh = ConfigDefaults.Fresh("awg1");
+
+        var refused = await bench.Configs.AddAsync(
+            fresh with { Obfuscation = fresh.Obfuscation with { HeaderProtectionKey = Curve25519.Create().PrivateKey } },
+            default);
+
+        Assert.Equal("bad-header-junk", refused.Code);
+    }
+
+    [Fact]
     public async Task AnEndpointIsHeldAndGivenBack()
     {
         using var bench = new Bench();
@@ -426,4 +450,7 @@ public class ConfigTests
 
     private static string Obfuscation(Func<ObfuscationSettings, ObfuscationSettings> change) =>
         ConfigRules.CheckObfuscation(change(ConfigDefaults.Obfuscation()))?.Message ?? string.Empty;
+
+    private static string? ObfuscationCode(Func<ObfuscationSettings, ObfuscationSettings> change) =>
+        ConfigRules.CheckObfuscation(change(ConfigDefaults.Obfuscation()))?.Code;
 }

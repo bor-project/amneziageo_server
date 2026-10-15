@@ -133,6 +133,18 @@ public class OutboundTests
     }
 
     [Fact]
+    public void AnOutboundWithAHeaderKeyTheKernelWouldRefuseIsNotTaken()
+    {
+        var tunnel = Tunnel();
+        var outbound = tunnel with
+        {
+            Obfuscation = tunnel.Obfuscation with { HeaderProtectionKey = Curve25519.Create().PrivateKey, S1 = 15, S2 = 30, S3 = 0, S4 = 0 },
+        };
+
+        Assert.Equal("bad-header-junk", OutboundRules.Check(outbound)!.Code);
+    }
+
+    [Fact]
     public void AnOutboundThroughTheHostItselfCarriesNoServer()
     {
         var outbound = OutboundDefaults.Direct() with { Host = "bor.sytes.net" };

@@ -52,6 +52,11 @@ public static partial class ConfigRules
     public const int HandshakeGap = 56;
 
     /// <summary>
+    /// The least junk prepended to every packet under a header protection key, in bytes.
+    /// </summary>
+    public const int HeaderNonce = 12;
+
+    /// <summary>
     /// The lowest packet type the obfuscation takes, above the four WireGuard holds.
     /// </summary>
     public const int LowestType = 5;
@@ -243,9 +248,26 @@ public static partial class ConfigRules
             }
         }
 
-        return obfuscation.HeaderProtectionKey.Length == 0 || Curve25519.IsKey(obfuscation.HeaderProtectionKey)
+        return CheckHeaderKey(obfuscation);
+    }
+
+    private static ConfigFault? CheckHeaderKey(ObfuscationSettings obfuscation)
+    {
+        if (obfuscation.HeaderProtectionKey.Length == 0)
+        {
+            return null;
+        }
+
+        if (!Curve25519.IsKey(obfuscation.HeaderProtectionKey))
+        {
+            return Fault("bad-header-key", "the header protection key is not 32 bytes in base64");
+        }
+
+        return ((int[])[obfuscation.S1, obfuscation.S2, obfuscation.S3, obfuscation.S4]).All(size => size >= HeaderNonce)
             ? null
-            : Fault("bad-header-key", "the header protection key is not 32 bytes in base64");
+            : Fault(
+                "bad-header-junk",
+                $"the header protection key needs the junk prepended to every packet of at least {HeaderNonce} bytes");
     }
 
     private static bool Apart(IReadOnlyList<AwgRange> types)

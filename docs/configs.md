@@ -112,6 +112,7 @@ the code into a phrase of its own language.
 | `bad-span` | a timing is neither a number nor a span of two |
 | `bad-blocked` | a range closed to clients is not an address range |
 | `bad-header-key` | the header protection key is not 32 bytes in base64 |
+| `bad-header-junk` | a header protection key comes with S1, S2, S3 or S4 below 12, which the kernel refuses |
 | `name-taken` | the panel already carries an endpoint under this name |
 | `port-taken` | another endpoint already listens on this UDP port |
 | `bad-services-port` | the port of the services is outside 1 to 65535 |

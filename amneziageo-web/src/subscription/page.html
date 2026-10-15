@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>AmneziaGeo</title>
+    <style>
+      :root {
+        --canvas: #f8fafc;
+        --surface: #ffffff;
+        --chip: #e8eef9;
+        --chip-ink: #1a50b0;
+        --line: #e2e8f0;
+        --ink: #0f172a;
+        --body: #334155;
+        --muted: #64748b;
+        --mono: #475569;
+        --brand: #1a50b0;
+        --good: #15803d;
+        --bad: #b91c1c;
+        --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --canvas: #080c14;
+          --surface: #0f1623;
+          --chip: #1b2a44;
+          --chip-ink: #cfe0ff;
+          --line: #1a2333;
+          --ink: #e7eef9;
+          --body: #a7b4c8;
+          --muted: #8494ab;
+          --mono: #8fa3bf;
+          --brand: #3b82f6;
+          --good: #4ade80;
+          --bad: #f87171;
+          color-scheme: dark;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--body);
+        font-family: var(--font-ui);
+        font-size: 14px;
+        line-height: 1.5;
+        padding-block: 24px 48px;
+        padding-left: max(16px, env(safe-area-inset-left, 0px));
+        padding-right: max(16px, env(safe-area-inset-right, 0px));
+      }
+      .page {
+        max-width: 760px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 20px;
+      }
+      header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
+      }
+      h1 {
+        margin: 0;
+        color: var(--ink);
+        font-size: 22px;
+        font-weight: 650;
+        overflow-wrap: anywhere;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .meta b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .usage {
+        display: grid;
+        gap: 6px;
+        max-width: 420px;
+      }
+      .bar {
+        height: 6px;
+        border-radius: 3px;
+        background: var(--chip);
+        overflow: hidden;
+      }
+      .bar > span {
+        display: block;
+        height: 100%;
+        background: var(--brand);
+      }
+      .nums {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 4px 12px;
+        font-size: 13px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .block {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 20px;
+        padding: 20px;
+        align-items: start;
+      }
+      h2,
+      h3 {
+        margin: 0;
+        color: var(--ink);
+        font-size: 15px;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .qr {
+        width: 168px;
+        max-width: 100%;
+        aspect-ratio: 1;
+        background: #ffffff;
+        border-radius: 6px;
+        padding: 8px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line);
+      }
+      .qr img {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        height: 100%;
+        image-rendering: pixelated;
+      }
+      .qr.big {
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 13px;
+        text-align: center;
+      }
+      .side {
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+        align-content: start;
+      }
+      .addr {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--mono);
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px 10px;
+        overflow-wrap: anywhere;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      button {
+        font: inherit;
+        font-size: 13px;
+        border-radius: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--ink);
+      }
+      button:disabled {
+        cursor: default;
+        opacity: 0.5;
+      }
+      button.primary {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: #ffffff;
+      }
+      button:focus-visible {
+        outline: 2px solid var(--brand);
+        outline-offset: 2px;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
+        min-width: 0;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        background: var(--chip);
+        color: var(--chip-ink);
+        border-radius: 999px;
+        padding: 1px 8px;
+        font-size: 12px;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        overflow: hidden;
+        width: max-content;
+        max-width: 100%;
+      }
+      .seg button {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: var(--muted);
+      }
+      .seg button[aria-pressed="true"] {
+        background: var(--chip);
+        color: var(--chip-ink);
+      }
+      .card .qr {
+        width: 100%;
+        max-width: 240px;
+        justify-self: center;
+      }
+      .host {
+        color: var(--muted);
+        font-size: 13px;
+        font-family: var(--font-mono);
+        overflow-wrap: anywhere;
+      }
+      .toast {
+        color: var(--good);
+        font-size: 13px;
+        min-height: 1.5em;
+      }
+      .toast.bad {
+        color: var(--bad);
+      }
+      .empty {
+        color: var(--muted);
+      }
+      @media (max-width: 560px) {
+        .block {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .block .qr {
+          justify-self: center;
+          width: 100%;
+          max-width: 240px;
+        }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        button {
+          transition:
+            background 0.15s,
+            color 0.15s;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="page" class="page"></main>
+    <script id="feed" type="application/json">"%SUBSCRIPTION%"</script>
+    <script>/*page*/</script>
+  </body>
+</html>
