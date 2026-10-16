@@ -72,11 +72,12 @@ and `*/*` alone does not count. The page shows:
 
 - the profile title, or the host the subscription is read at without one; the name of the subscription, how many
   configurations it holds, the update interval, and the traffic of today against the daily limits added up;
-- the QR code and the address of the subscription, with `Copy link` and `Download QR`;
-- a card a configuration, the same ones the base64 carries: its name, its endpoint, the host and the port, a QR
-  code of the `vpn://` link or of the `.conf` file, `Copy`, and `Download` for the file or the picture of the link.
+- the cards of the export of a client in the panel: one with the QR code of the address of the subscription, and
+  two a configuration, the same ones the base64 carries, under its name, its endpoint, the host and the port: the
+  `.conf` file and the `vpn://` link. Each card copies its text or its picture and saves it.
 
-The page speaks Russian to a browser that asks for it and English otherwise, and follows its light or dark scheme.
+The page speaks Russian to a browser that asks for it and English otherwise, and follows its light or dark scheme
+with the colors of the panel.
 It is built with the panel as `subscription.html` in its web root; a panel built without it answers a browser
 with the base64 too. The page loads nothing from anywhere: its script, its styles and the subscription ride in it,
 under `Content-Security-Policy` that lets nothing else in, with `Referrer-Policy: no-referrer`. It answers on every

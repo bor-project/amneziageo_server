@@ -65,13 +65,22 @@ export async function copyImage(picture: Picture | null): Promise<boolean> {
   }
 
   try {
-    const blob = await (await fetch(picture.url)).blob()
+    const blob = blobOf(picture.url)
     await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
 
     return true
   } catch {
     return false
   }
+}
+
+// Turns a data URL into its file without a request, which the policy of the page of a subscription forbids.
+function blobOf(url: string): Blob {
+  const comma = url.indexOf(",")
+  const type = url.slice("data:".length, comma).split(";")[0]
+  const bytes = Uint8Array.from(atob(url.slice(comma + 1)), (one) => one.charCodeAt(0))
+
+  return new Blob([bytes], { type })
 }
 
 export function save(name: string, url: string) {

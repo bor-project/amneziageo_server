@@ -1,14 +1,12 @@
-import { useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { useClientConfig } from "@/api/clients"
 import type { Miss } from "@/api/clients"
 import { scopes } from "@/api/scopes"
-import { card, quiet } from "@/components/styles"
+import { QrSheet } from "@/components/QrSheet"
 import { useText } from "@/i18n"
-import type { Text, TextKey } from "@/i18n"
-import { copyImage, copyText, draw, save, saveText } from "@/qr"
-import type { Picture } from "@/qr"
+import type { TextKey } from "@/i18n"
+import { draw } from "@/qr"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
 
@@ -30,9 +28,6 @@ const misses: Record<Miss, TextKey> = {
   "no-id": "clients.subscriptionNoId",
   "no-key": "clients.subscriptionNoKey",
 }
-
-// The browser copies a picture only on a page served over HTTPS or from localhost.
-const pictures = window.isSecureContext && typeof ClipboardItem !== "undefined"
 
 export function ClientConfig({ id, editable }: { id: number; editable: boolean }) {
   const t = useText()
@@ -69,166 +64,38 @@ export function ClientConfig({ id, editable }: { id: number; editable: boolean }
     return { says: t(misses[miss]), to: miss === "no-id" && editable ? `/clients/${id}/settings` : null }
   }
 
+  function note(kind: Kind) {
+    const gap = missing(kind)
+    if (gap === null) {
+      return null
+    }
+
+    return (
+      <>
+        {gap.says}
+        {gap.to !== null && (
+          <Link to={gap.to} className="text-brand-ink hover:text-brand-lit">
+            {t("action.settings")}
+          </Link>
+        )}
+      </>
+    )
+  }
+
   return (
-    <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
       {offered.map((one) => (
-        <Sheet
+        <QrSheet
           key={one.kind}
           caption={t(one.label)}
           text={words[one.kind]}
           picture={pictures.data?.[one.kind] ?? null}
           name={one.kind === "file" ? name : stem + one.tail}
           plain={one.kind === "file"}
-          missing={missing(one.kind)}
+          note={note(one.kind)}
           t={t}
         />
       ))}
     </div>
-  )
-}
-
-function Sheet({
-  caption,
-  text,
-  picture,
-  name,
-  plain,
-  missing,
-  t,
-}: {
-  caption: string
-  text: string
-  picture: Picture | null
-  name: string
-  plain: boolean
-  missing: Missing | null
-  t: Text
-}) {
-  const [taken, setTaken] = useState("")
-  const timer = useRef(0)
-
-  async function put(what: "text" | "image") {
-    const done = what === "text" ? await copyText(text) : await copyImage(picture)
-    if (!done) {
-      return
-    }
-
-    setTaken(what)
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => setTaken(""), 1500)
-  }
-
-  function keep() {
-    if (plain) {
-      saveText(name, text)
-    } else if (picture !== null) {
-      save(name, picture.url)
-    }
-  }
-
-  return (
-    <div className={card}>
-      <div className="flex min-h-12 items-center gap-2 border-b border-line px-4 py-2">
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{caption}</span>
-        {missing === null && (
-          <>
-            <button
-              type="button"
-              title={t("action.copyText")}
-              aria-label={t("action.copyText")}
-              onClick={() => void put("text")}
-              className={`${quiet} ${taken === "text" ? "text-good" : ""}`}
-            >
-              {taken === "text" ? <Tick /> : <Papers />}
-            </button>
-            {pictures && (
-              <button
-                type="button"
-                title={t("action.copyImage")}
-                aria-label={t("action.copyImage")}
-                onClick={() => void put("image")}
-                disabled={picture === null}
-                className={`${quiet} ${taken === "image" ? "text-good" : ""}`}
-              >
-                {taken === "image" ? <Tick /> : <Frame />}
-              </button>
-            )}
-            <button
-              type="button"
-              title={t("clients.download")}
-              aria-label={t("clients.download")}
-              onClick={keep}
-              disabled={!plain && picture === null}
-              className={quiet}
-            >
-              <Arrow />
-            </button>
-          </>
-        )}
-      </div>
-
-      {missing !== null && (
-        <div className="flex flex-wrap items-center gap-3 px-4 py-6 text-sm text-muted">
-          {missing.says}
-          {missing.to !== null && (
-            <Link to={missing.to} className="text-brand-ink hover:text-brand-lit">
-              {t("action.settings")}
-            </Link>
-          )}
-        </div>
-      )}
-
-      {missing === null && (
-        <div className="flex justify-center p-4">
-          {picture === null ? (
-            <div className="flex aspect-square w-full max-w-80 items-center justify-center rounded border border-line p-4 text-center text-sm text-muted">
-              {t("clients.qrTooBig")}
-            </div>
-          ) : (
-            <img
-              src={picture.url}
-              alt={t("clients.qr")}
-              className="aspect-square w-full max-w-80 rounded bg-white p-2 [image-rendering:pixelated]"
-            />
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Tick() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="m5 12.5 4.5 4.5L19 7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function Papers() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-      <rect x="9" y="9" width="11" height="11" rx="2" />
-      <path d="M5 15V5a2 2 0 0 1 2-2h8" />
-    </svg>
-  )
-}
-
-function Frame() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <circle cx="8.5" cy="9.5" r="1.5" />
-      <path d="m4 17 5-5 4 4 3-3 4 4" />
-    </svg>
-  )
-}
-
-function Arrow() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-      <path d="M12 4v11m-4-4 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M5 19h14" strokeLinecap="round" />
-    </svg>
   )
 }
