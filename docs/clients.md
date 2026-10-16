@@ -45,7 +45,9 @@ the first number free in every range of that endpoint, as an address out of each
 `POST /api/clients` fills in what the body leaves out: with no keys it makes a pair, with a private key alone it
 works out the public one, and with no address it takes the first free number of the endpoint. So a caller of its
 own needs no more than `{ "name": "...", "configId": <id> }`, and a body that names an endpoint the panel does
-not hold is answered with `unknown-config`.
+not hold is answered with `unknown-config`. Clients are added, changed and imported one at a time: clients sent
+at once without an address each take a free number of their own, and of clients sent at once with the same
+address the first takes it and the others are answered with `client-address-taken`.
 
 The panel adds a client to the interface picked in its form, and the address is written as a number: the head
 of every range comes from the interface and the number goes into each of them, so a client of an interface with

@@ -60,6 +60,8 @@ public sealed class ClientStore
 {
     private static readonly char[] Breaks = [',', ' ', '\t', '\n', '\r'];
 
+    private static readonly SemaphoreSlim Writes = new(1, 1);
+
     private readonly AppDbContext _db;
 
     private readonly TimeProvider _time;
@@ -188,13 +190,13 @@ public sealed class ClientStore
     }
 
     /// <summary>
-    /// Adds a client with the settings it carries.
+    /// Adds a client with the settings it carries, a client without an address on the first free one of its endpoint.
     /// </summary>
     public async Task<ClientResult> AddAsync(TunnelClient draft, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
-        return await InsertAsync(Whole(draft), fit: true, ct).ConfigureAwait(false);
+        return await InTurnAsync(() => AddInTurnAsync(Whole(draft), ct), ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -204,15 +206,7 @@ public sealed class ClientStore
     {
         ArgumentNullException.ThrowIfNull(draft);
 
-        var wanted = Subscribed(Whole(draft));
-        if (await KeyHeldAsync(wanted.PublicKey, 0, ct).ConfigureAwait(false))
-        {
-            return KeyTaken();
-        }
-
-        var free = await FreeNameAsync(wanted.Name, ct).ConfigureAwait(false);
-
-        return await InsertAsync(wanted with { Name = free }, fit: false, ct).ConfigureAwait(false);
+        return await InTurnAsync(() => ImportInTurnAsync(Subscribed(Whole(draft)), ct), ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -260,26 +254,7 @@ public sealed class ClientStore
     {
         ArgumentNullException.ThrowIfNull(draft);
 
-        var entity = await _db.Clients.FirstOrDefaultAsync(client => client.Id == id, ct).ConfigureAwait(false);
-        if (entity is null)
-        {
-            return Missing(id);
-        }
-
-        var wanted = Whole(draft) with { ConfigId = entity.ConfigId };
-        if (await Refusal(wanted, id, fit: true, ct).ConfigureAwait(false) is { } refusal)
-        {
-            return refusal;
-        }
-
-        var old = entity.Name;
-        var now = _time.GetUtcNow();
-        Write(entity, wanted);
-        entity.UpdatedUtc = now;
-        await NameFollow.ClientAsync(_db, old, entity.Name, now, ct).ConfigureAwait(false);
-        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
-
-        return ClientResult.Done(Read(entity));
+        return await InTurnAsync(() => ChangeInTurnAsync(id, draft, ct), ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -374,6 +349,83 @@ public sealed class ClientStore
         }
 
         return new ClientBatch(done, failed);
+    }
+
+    // Lets one write of the clients through at a time.
+    private static async Task<ClientResult> InTurnAsync(Func<Task<ClientResult>> write, CancellationToken ct)
+    {
+        await Writes.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return await write().ConfigureAwait(false);
+        }
+        finally
+        {
+            Writes.Release();
+        }
+    }
+
+    private async Task<ClientResult> AddInTurnAsync(TunnelClient draft, CancellationToken ct) =>
+        await InsertAsync(await PlacedAsync(draft, ct).ConfigureAwait(false), fit: true, ct).ConfigureAwait(false);
+
+    private async Task<ClientResult> ImportInTurnAsync(TunnelClient wanted, CancellationToken ct)
+    {
+        if (await KeyHeldAsync(wanted.PublicKey, 0, ct).ConfigureAwait(false))
+        {
+            return KeyTaken();
+        }
+
+        var free = await FreeNameAsync(wanted.Name, ct).ConfigureAwait(false);
+
+        return await InsertAsync(wanted with { Name = free }, fit: false, ct).ConfigureAwait(false);
+    }
+
+    private async Task<ClientResult> ChangeInTurnAsync(long id, TunnelClient draft, CancellationToken ct)
+    {
+        var entity = await _db.Clients.FirstOrDefaultAsync(client => client.Id == id, ct).ConfigureAwait(false);
+        if (entity is null)
+        {
+            return Missing(id);
+        }
+
+        var wanted = Whole(draft) with { ConfigId = entity.ConfigId };
+        if (await Refusal(wanted, id, fit: true, ct).ConfigureAwait(false) is { } refusal)
+        {
+            return refusal;
+        }
+
+        var old = entity.Name;
+        var now = _time.GetUtcNow();
+        Write(entity, wanted);
+        entity.UpdatedUtc = now;
+        await NameFollow.ClientAsync(_db, old, entity.Name, now, ct).ConfigureAwait(false);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return ClientResult.Done(Read(entity));
+    }
+
+    // Gives a client that carries no address the first free one of its endpoint.
+    private async Task<TunnelClient> PlacedAsync(TunnelClient draft, CancellationToken ct)
+    {
+        if (draft.Address.Count > 0)
+        {
+            return draft;
+        }
+
+        var ranges = await _db.Configs.AsNoTracking()
+            .Where(config => config.Id == draft.ConfigId)
+            .Select(config => config.Address)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        if (ranges is null)
+        {
+            return draft;
+        }
+
+        var own = Parts(ranges);
+        var taken = await AddressesAsync(draft.ConfigId, ct).ConfigureAwait(false);
+
+        return draft with { Address = ClientPool.Free(own, [.. taken, .. own]) };
     }
 
     private async Task<ClientResult> InsertAsync(TunnelClient wanted, bool fit, CancellationToken ct)

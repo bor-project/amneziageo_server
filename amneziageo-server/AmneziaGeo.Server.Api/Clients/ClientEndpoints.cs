@@ -139,28 +139,16 @@ public static class ClientEndpoints
             ClientTraffic.None));
     }
 
-    private static async Task<TunnelClient?> FilledAsync(
-        TunnelClient draft,
-        ConfigStore configs,
-        ClientStore store,
-        CancellationToken ct)
+    private static async Task<TunnelClient?> FilledAsync(TunnelClient draft, ConfigStore configs, CancellationToken ct)
     {
         if (draft.Address.Count > 0 && draft.PublicKey.Length > 0)
         {
             return draft;
         }
 
-        var endpoint = await configs.FindAsync(draft.ConfigId, ct).ConfigureAwait(false);
-        if (endpoint is null)
-        {
-            return null;
-        }
-
-        var keyed = ClientDefaults.Keyed(draft);
-
-        return keyed.Address.Count > 0
-            ? keyed
-            : keyed with { Address = await FreeAddressAsync(endpoint, store, ct).ConfigureAwait(false) };
+        return await configs.FindAsync(draft.ConfigId, ct).ConfigureAwait(false) is null
+            ? null
+            : ClientDefaults.Keyed(draft);
     }
 
     private static async Task<IReadOnlyList<string>> FreeAddressAsync(
@@ -246,7 +234,7 @@ public static class ClientEndpoints
         CancellationToken ct)
     {
         var draft = ClientAnswers.Draft(request, null);
-        if (await FilledAsync(draft, configs, store, ct).ConfigureAwait(false) is not { } settled)
+        if (await FilledAsync(draft, configs, ct).ConfigureAwait(false) is not { } settled)
         {
             return Missing(draft.ConfigId);
         }

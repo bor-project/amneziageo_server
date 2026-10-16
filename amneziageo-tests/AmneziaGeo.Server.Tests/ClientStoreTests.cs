@@ -3,11 +3,16 @@ using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Route;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AmneziaGeo.Server.Tests;
 
 public class ClientStoreTests
 {
+    private const int Writers = 8;
+
+    private const int Rounds = 10;
+
     [Fact]
     public async Task AFreshInstallCarriesNoClients()
     {
@@ -304,6 +309,63 @@ public class ClientStoreTests
         Assert.Equal(new[] { milena.Record.Id, bor.Record.Id }, batch.Done.Select(client => client.Id));
         Assert.Equal(404L, Assert.Single(batch.Failed).Id);
         Assert.Equal(phone.Record!.Id, Assert.Single(await bench.Clients.ListAsync(CancellationToken.None)).Id);
+    }
+
+    [Fact]
+    public async Task ClientsAddedAtOnceWithoutAnAddressEachTakeAFreeOne()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+
+        var added = await AtOnceAsync(bench, Rounds, (writer, round) => ClientDefaults.Fresh(endpoint, $"client-{writer}-{round}"));
+
+        Assert.All(added, one => Assert.True(one.IsOk, one.Message));
+        var addresses = added.SelectMany(one => one.Record!.Address).ToList();
+        Assert.Equal(Writers * Rounds * 2, addresses.Count);
+        Assert.Equal(addresses.Count, addresses.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public async Task OfClientsAddedAtOnceOnOneAddressOneTakesIt()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+
+        var added = await AtOnceAsync(bench, 1, (writer, _) => Fresh(endpoint, $"client-{writer}"));
+
+        Assert.Single(added, one => one.IsOk);
+        Assert.All(added.Where(one => !one.IsOk), one => Assert.Equal(ClientOutcome.AddressTaken, one.Outcome));
+    }
+
+    // Adds clients from several scopes of their own at once, each its rounds one after another.
+    private static async Task<List<ClientResult>> AtOnceAsync(Bench bench, int rounds, Func<int, int, TunnelClient> client)
+    {
+        var scopes = Enumerable.Range(0, Writers).Select(_ => bench.Scopes.CreateScope()).ToList();
+        try
+        {
+            using var start = new Barrier(Writers);
+            var writers = scopes.Select((scope, writer) => Task.Run(async () =>
+            {
+                var store = scope.ServiceProvider.GetRequiredService<ClientStore>();
+                var results = new List<ClientResult>();
+                start.SignalAndWait();
+                for (var round = 0; round < rounds; round++)
+                {
+                    results.Add(await store.AddAsync(client(writer, round), CancellationToken.None));
+                }
+
+                return results;
+            }));
+
+            return [.. (await Task.WhenAll(writers)).SelectMany(results => results)];
+        }
+        finally
+        {
+            foreach (var scope in scopes)
+            {
+                scope.Dispose();
+            }
+        }
     }
 
     private static async Task<long> EndpointAsync(Bench bench)
