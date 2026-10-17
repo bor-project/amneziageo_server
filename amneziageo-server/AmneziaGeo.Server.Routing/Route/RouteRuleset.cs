@@ -82,6 +82,11 @@ public static class RouteRuleset
     public static string WaitSet(bool six) => six ? "wait6" : "wait4";
 
     /// <summary>
+    /// Returns the name of the set that holds the name servers answering over HTTPS.
+    /// </summary>
+    public static string HttpsSet(bool six) => six ? "doh6" : "doh4";
+
+    /// <summary>
     /// Returns the ruleset that carries out the rules the panel holds.
     /// </summary>
     public static string Text(RoutePlan plan)
@@ -98,6 +103,7 @@ public static class RouteRuleset
             Sets(text, leg, plan.Dns);
         }
 
+        Https(text, plan);
         Handed(text, plan);
         text.Append("\tchain prerouting {\n");
         text.Append("\t\ttype filter hook prerouting priority mangle; policy accept;\n");
@@ -134,6 +140,44 @@ public static class RouteRuleset
         text.Append("}\n");
 
         return text.ToString();
+    }
+
+    /// <summary>
+    /// Returns the guard lines of a plan, none while no rule on the host matches by name.
+    /// </summary>
+    public static IReadOnlyList<string> Guard(RoutePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        return plan.HasNames ? Guard(plan.Dns, plan.Journal) : [];
+    }
+
+    /// <summary>
+    /// Returns the lines that keep the clients off the name servers they carry their own way.
+    /// </summary>
+    public static IReadOnlyList<string> Guard(DnsSettings dns, ushort? journal = null)
+    {
+        ArgumentNullException.ThrowIfNull(dns);
+
+        if (!dns.IsEnabled)
+        {
+            return [];
+        }
+
+        var lines = new List<string>();
+        if (dns.BlockDot)
+        {
+            lines.Add("meta l4proto { tcp, udp } th dport 853 " + Log(AccessTag.Dot, journal) + "drop");
+        }
+
+        if (dns.BlockDoh)
+        {
+            var log = Log(AccessTag.Doh, journal);
+            lines.Add($"ip daddr @{HttpsSet(false)} meta l4proto {{ tcp, udp }} th dport 443 {log}drop");
+            lines.Add($"ip6 daddr @{HttpsSet(true)} meta l4proto {{ tcp, udp }} th dport 443 {log}drop");
+        }
+
+        return lines;
     }
 
     /// <summary>
@@ -266,10 +310,15 @@ public static class RouteRuleset
             + (sources.Count > 0 ? $"{(six ? "ip6" : "ip")} saddr {{ {string.Join(", ", sources)} }} " : string.Empty);
     }
 
-    // Returns the lines of the decision chain: the rules in order, a rule by name followed by the lines that deal
-    // with the TCP connections it may take.
+    // Returns the lines of the decision chain: the guards of the resolver, then the rules in order, a rule by name
+    // followed by the lines that deal with the TCP connections it may take.
     private static IEnumerable<string> Decide(RoutePlan plan, IReadOnlyList<RouteLeg> live)
     {
+        foreach (var line in Guard(plan))
+        {
+            yield return line;
+        }
+
         var reading = Handing(plan);
         var handed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var leg in live)
@@ -425,6 +474,17 @@ public static class RouteRuleset
 
         Names(text, NameSet(leg.Rule.Id, false), "ipv4_addr", dns);
         Names(text, NameSet(leg.Rule.Id, true), "ipv6_addr", dns);
+    }
+
+    private static void Https(StringBuilder text, RoutePlan plan)
+    {
+        if (!plan.HasNames || !plan.Dns.IsEnabled || !plan.Dns.BlockDoh)
+        {
+            return;
+        }
+
+        Range(text, HttpsSet(false), "ipv4_addr", DnsDefaults.Https4);
+        Range(text, HttpsSet(true), "ipv6_addr", DnsDefaults.Https6);
     }
 
     private static void Redirect(StringBuilder text, RoutePlan plan)

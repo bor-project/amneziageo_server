@@ -71,7 +71,7 @@ public sealed record AccessRecord
     public string RuleName { get; init; } = string.Empty;
 
     /// <summary>
-    /// The outbound the connection left through, or the one a held rule waits for.
+    /// The outbound the connection left through, the one a held rule waits for, or the guard that dropped it.
     /// </summary>
     public string Way { get; init; } = string.Empty;
 

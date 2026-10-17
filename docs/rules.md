@@ -159,12 +159,14 @@ the host when the resolver is off. The client is a client of the panel, whose ad
 traffic then carries, or a bare address, whose interface is the configuration its range belongs to. The
 protocol is `tcp` or `udp`, both ports may be left out.
 
-The resolver comes first: while it intercepts, every question on port
+The guards of the resolver come first, while a rule on the host matches by name: with DoT blocked, port 853 is
+dropped, and with DoH blocked, port 443 to a known name server is dropped.
+Next comes the resolver itself: while it intercepts, every question on port
 53 that comes in on a client interface is answered by it, and the rules are not read at all. Then each rule is
 read in order: a rule off the host is passed over with its reason, a rule whose interface, client, protocol,
 port or source port does not fit is missed, and a rule
 whose targets take the traffic matches by a range, by the name or by an address the resolver laid into its
-set. The answer carries the verdict (`out`, `host`, `block`, `held` or `dns`), the rule that decided with
+set. The answer carries the verdict (`out`, `host`, `block`, `held`, `guard` or `dns`), the rule that decided with
 its place, the way out with the members of a balancer and which of them carry, the addresses the name
 resolved to and every rule read before the decision. Each member of the way out says whether it is on
 (`isEnabled`), whether it carries traffic at all (`carries`, the same measure the outbound itself reports)

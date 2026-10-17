@@ -8,7 +8,8 @@ namespace AmneziaGeo.Server.Routing.Access;
 /// </summary>
 /// <param name="Verdict">How the connection was carried.</param>
 /// <param name="Rule">The rule that decided, or null when none did.</param>
-public sealed record AccessDecision(string Verdict, long? Rule);
+/// <param name="Guard">The guard of the resolver that dropped the connection, or empty.</param>
+public sealed record AccessDecision(string Verdict, long? Rule, string Guard);
 
 /// <summary>
 /// Writes and reads the prefixes the records of the panel carry.
@@ -24,6 +25,16 @@ public static class AccessTag
     /// The prefix of a connection no rule took.
     /// </summary>
     public const string Nothing = "ag:n";
+
+    /// <summary>
+    /// The prefix of a connection the guard against DNS over TLS dropped.
+    /// </summary>
+    public const string Dot = "ag:g:dot";
+
+    /// <summary>
+    /// The prefix of a connection the guard against DNS over HTTPS dropped.
+    /// </summary>
+    public const string Doh = "ag:g:doh";
 
     /// <summary>
     /// The prefix of a packet that came back to a connection of a client.
@@ -51,13 +62,18 @@ public static class AccessTag
 
         if (prefix == Nothing)
         {
-            return new AccessDecision(AccessVerdict.Host, null);
+            return new AccessDecision(AccessVerdict.Host, null, string.Empty);
         }
 
         var parts = prefix.Split(':');
         if (parts.Length != 3 || parts[0] != "ag" || parts[1].Length != 1)
         {
             return null;
+        }
+
+        if (parts[1] == "g")
+        {
+            return parts[2] is "dot" or "doh" ? new AccessDecision(AccessVerdict.Guard, null, parts[2]) : null;
         }
 
         if (!long.TryParse(parts[2], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var rule))
@@ -74,7 +90,7 @@ public static class AccessTag
             _ => null,
         };
 
-        return verdict is null ? null : new AccessDecision(verdict, rule);
+        return verdict is null ? null : new AccessDecision(verdict, rule, string.Empty);
     }
 
     /// <summary>

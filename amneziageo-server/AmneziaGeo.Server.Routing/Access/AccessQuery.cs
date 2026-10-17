@@ -104,7 +104,7 @@ public sealed record AccessCount(string Key, long Count);
 /// </summary>
 /// <param name="Key">What the records are put together by.</param>
 /// <param name="Verdict">How the records were carried.</param>
-/// <param name="Way">The outbound they left through, or the one a held rule waits for.</param>
+/// <param name="Way">The outbound they left through, or the guard that dropped them.</param>
 /// <param name="Via">The balancer that picked the outbound, or empty.</param>
 /// <param name="RuleName">The rule that decided, or empty.</param>
 /// <param name="Clients">How many client addresses the records came from.</param>

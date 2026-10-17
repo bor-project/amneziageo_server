@@ -572,6 +572,10 @@ public sealed class DnsSettingsEntity
 
     public bool Intercept { get; set; }
 
+    public bool BlockDot { get; set; }
+
+    public bool BlockDoh { get; set; }
+
     public DateTimeOffset UpdatedUtc { get; set; }
 }
 

@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
+using AmneziaGeo.Server.Api.Names;
 using AmneziaGeo.Server.Awg.Netlink;
+using Microsoft.Extensions.Configuration;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -63,6 +65,26 @@ public class NameQueueTests
         Assert.Equal(16u, BinaryPrimitives.ReadUInt32LittleEndian(knock));
         Assert.Equal(1, Short(knock, 4));
         Assert.Equal(5, Short(knock, 6));
+    }
+
+    [Fact]
+    public void TheNamesAreReadOnlyWhenTheSettingsTurnTheReadingOn()
+    {
+        Assert.False(Options().IsEnabled);
+        Assert.True(Options(("Names:IsEnabled", "true")).IsEnabled);
+        Assert.False(Options(("Names:IsEnabled", "false")).IsEnabled);
+    }
+
+    private static NameOptions Options(params (string Key, string Value)[] pairs)
+    {
+        var options = new NameOptions();
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(pairs.Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value)))
+            .Build()
+            .GetSection(NameOptions.Section)
+            .Bind(options);
+
+        return options;
     }
 
     private static int Short(byte[] message, int at) => BinaryPrimitives.ReadUInt16LittleEndian(message.AsSpan(at));

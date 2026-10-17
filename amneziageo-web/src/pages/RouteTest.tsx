@@ -267,12 +267,14 @@ function verdict(answer: RouteAnswer, t: Text): string {
       return t("test.out", { name: answer.exit?.name ?? answer.rule?.outbound ?? "" })
     case "host":
       return t("test.host")
+    case "block":
+      return t("test.block")
     case "held":
       return t("test.held", { name: answer.rule?.outbound ?? "" })
     case "dns":
       return t("test.dns")
     default:
-      return t("test.block")
+      return t("test.guard", { guard: answer.guard === "dot" ? "DoT" : "DoH" })
   }
 }
 

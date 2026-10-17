@@ -31,6 +31,8 @@ takes a question of the installation, an item of the menu or a command.
 | Answers held in memory | how many answers are kept back, zero for none |
 | An answer lives from, to | the bounds the lifetime of a kept answer is clamped to, in seconds |
 | Take the questions of the clients | whether the questions sent elsewhere are redirected to the resolver |
+| Stop DNS over TLS | whether port 853 is dropped for the clients while a rule matches by name |
+| Stop DNS over HTTPS | whether port 443 to the known name servers is dropped for the clients while a rule matches by name |
 
 A port under 1024 needs `CAP_NET_BIND_SERVICE`: under an ordinary account the resolver reports
 `Permission denied` and takes no address. An address that is not on the host is skipped, and the
@@ -139,7 +141,7 @@ there is no address to answer the clients on`, and starts with the first endpoin
 
 ## What the host gets
 
-The ruleset the rules build carries one more thing once the resolver runs.
+The ruleset the rules build carries two more things once the resolver runs.
 
 The chain `resolve` sits on the nat prerouting hook and sends every question that arrives on an interface
 of a configuration to the resolver:
@@ -152,17 +154,30 @@ chain resolve {
 }
 ```
 
-Nothing is laid against the name servers a client asks its own way: a client that carries its questions inside
-TLS or HTTPS reaches its name server like any other address, whatever rules the host carries. The resolver never
-sees such a question, so the rules by name take that client by the name its connections carry themselves, see
-[Names read out of the connections](#names-read-out-of-the-connections).
+The decision chain starts with the lines that keep a client off the name servers it carries its own way,
+because a question inside TLS or HTTPS is a question the resolver never sees:
+
+```
+meta l4proto { tcp, udp } th dport 853 drop
+ip daddr @doh4 meta l4proto { tcp, udp } th dport 443 drop
+ip6 daddr @doh6 meta l4proto { tcp, udp } th dport 443 drop
+```
+
+The sets `doh4` and `doh6` hold the addresses of the public name servers that answer over HTTPS.
+
+These lines and both sets go on the host only while a rule or a basic list on it matches by name, since the answers
+the resolver sees are what such a rule goes by. A server none of whose rules matches by name lays none of them,
+whatever the two switches say: a client that carries its questions inside TLS or HTTPS goes on asking, and so does
+another AmneziaGeo server that leaves through this one and asks its name servers over HTTPS.
 
 ## A server that leaves through another
 
 A panel whose outbound is a tunnel to another AmneziaGeo server is a client of that server, and with `Ask through
-the channel` its questions arrive there like the traffic of any client. A question carried over TLS or HTTPS passes
-the far end as it is. A question in the open, to an upstream named as `1.1.1.1`, is taken by the resolver of the far
-end, while it takes the questions of the clients, and that resolver asks outside the way it is set to.
+the channel` its questions arrive there like the traffic of any client. The server at the far end passes them on
+while none of its own rules matches by name. Where it does hold such a rule, its guards drop a question carried
+over TLS or HTTPS. The near panel then names its upstream in the open, as `1.1.1.1`, and goes on asking through the
+channel: the tunnel carries the question to the far end, whose resolver takes it, while it takes the questions of
+the clients, and asks outside over HTTPS.
 
 ## The sets of the rules
 
@@ -192,6 +207,11 @@ name out of the connection itself, the resolver on or off: the server name of th
 443, the `Host` header of a request on TCP 80, and the server name inside the first packets of QUIC on UDP 443.
 The address goes into the sets of the rules the name falls under, the way an answered address does, and stays
 for `An address lives`.
+
+The reading is off unless `Names:IsEnabled` is set to `true` (the variable `Names__IsEnabled`). While it is off,
+the set of a rule by name holds only the addresses the resolver answered with: the guards keep the clients on the
+resolver, see [What the host gets](#what-the-host-gets), and a client that asks a name server they do not know goes
+the way the rules send the address.
 
 The firewall shows the first packets to the panel in queue 7318. The connections themselves stay in the kernel,
 and the queue is taken with `bypass`: while the panel does not run, the kernel passes the packets on by itself
@@ -259,8 +279,8 @@ What follows from the address being what the kernel goes by:
 The kernel loads `nft_queue`, `nfnetlink_queue`, `nft_tproxy`, `nft_fib` and `nft_redir` itself when the ruleset
 first names them, and resetting a connection from that chain takes Linux 5.9. A host that cannot take the
 ruleset with these lines gets it first without the taking over, then without the reading, and `fault` in the
-state of the resolver says why the names are not read. `Names:IsEnabled` set to `false` (the variable
-`Names__IsEnabled`) turns the reading off, `Names:Port` moves the port, `Names:Most` sets how many connections
+state of the resolver says why the names are not read. `Names:IsEnabled` set to `true` (the variable
+`Names__IsEnabled`) turns the reading on, `Names:Port` moves the port, `Names:Most` sets how many connections
 the panel carries at once.
 
 `GET /api/dns` carries `reading`: whether the queue and the port are taken (`queue`, `port`), how many packets

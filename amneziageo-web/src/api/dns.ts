@@ -25,6 +25,8 @@ export interface DnsDraft {
   minTtl: number
   maxTtl: number
   intercept: boolean
+  blockDot: boolean
+  blockDoh: boolean
 }
 
 export interface Resolver extends DnsDraft {
@@ -60,6 +62,8 @@ export function draftOf(resolver: Resolver): DnsDraft {
     minTtl: resolver.minTtl,
     maxTtl: resolver.maxTtl,
     intercept: resolver.intercept,
+    blockDot: resolver.blockDot,
+    blockDoh: resolver.blockDoh,
   }
 }
 

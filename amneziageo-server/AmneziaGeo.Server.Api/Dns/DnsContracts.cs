@@ -55,6 +55,8 @@ public sealed record DnsResponse(
     int MinTtl,
     int MaxTtl,
     bool Intercept,
+    bool BlockDot,
+    bool BlockDoh,
     bool Pending,
     DnsStateBody State,
     DnsReadingBody Reading);
@@ -72,7 +74,9 @@ public sealed record DnsRequest(
     int CacheSize,
     int MinTtl,
     int MaxTtl,
-    bool Intercept);
+    bool Intercept,
+    bool BlockDot,
+    bool BlockDoh);
 
 /// <summary>
 /// Turns the resolver settings into what the panel reads and back.
@@ -108,6 +112,8 @@ public static class DnsAnswers
             settings.MinTtl,
             settings.MaxTtl,
             settings.Intercept,
+            settings.BlockDot,
+            settings.BlockDoh,
             state.Settings is { } running && settings.Differs(running),
             new DnsStateBody(
                 state.IsRunning,
@@ -142,6 +148,8 @@ public static class DnsAnswers
             MinTtl = request.MinTtl,
             MaxTtl = request.MaxTtl,
             Intercept = request.Intercept,
+            BlockDot = request.BlockDot,
+            BlockDoh = request.BlockDoh,
         };
     }
 

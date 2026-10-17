@@ -34,6 +34,8 @@ public class DnsStoreTests
             MinTtl = 30,
             MaxTtl = 600,
             Intercept = false,
+            BlockDot = false,
+            BlockDoh = false,
         };
 
         var saved = await bench.Resolver.SaveAsync(settings, CancellationToken.None);
@@ -50,6 +52,8 @@ public class DnsStoreTests
         Assert.Equal(30, held.MinTtl);
         Assert.Equal(600, held.MaxTtl);
         Assert.False(held.Intercept);
+        Assert.False(held.BlockDot);
+        Assert.False(held.BlockDoh);
     }
 
     [Fact]

@@ -16,7 +16,7 @@ type Period = "hour" | "hours6" | "day" | "week" | "range"
 
 type Shown = "summary" | "records"
 
-type Stop = "block" | "held"
+type Stop = "block" | "held" | "guard"
 
 type Words = Record<Intl.LDMLPluralRule, TextKey>
 
@@ -36,7 +36,7 @@ const periods: Period[] = ["hour", "hours6", "day", "week", "range"]
 
 const failures: Outcome[] = ["silent", "reset", "empty", "unreachable"]
 
-const stops: Stop[] = ["block", "held"]
+const stops: Stop[] = ["block", "held", "guard"]
 
 const groupings: Grouping[] = ["domain", "name", "rule", "way", "client"]
 
@@ -781,16 +781,20 @@ function look(t: Text, verdict: Verdict, way: string): [string, string] {
       return [t("access.block"), "bg-alarm-soft text-alarm"]
     case "held":
       return [t("access.held"), "bg-warn-soft text-warn"]
-    case "host":
-      return [t("access.direct"), "bg-hover text-muted"]
+    case "guard":
+      return [t("access.guard"), "bg-alarm-soft text-alarm"]
     default:
-      return [verdict, "bg-hover text-muted"]
+      return [t("access.direct"), "bg-hover text-muted"]
   }
 }
 
 function aside(t: Text, verdict: Verdict, way: string, path: string): string {
   if (verdict === "held") {
     return way
+  }
+
+  if (verdict === "guard") {
+    return way.toUpperCase()
   }
 
   if (verdict !== "out" || path === "") {

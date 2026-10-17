@@ -23,7 +23,7 @@ public sealed class NameOptions
     /// <summary>
     /// Whether the names are read.
     /// </summary>
-    public bool IsEnabled { get; set; } = true;
+    public bool IsEnabled { get; set; }
 
     /// <summary>
     /// Whether the panel takes the first TCP connections over where the host lets them reach it.

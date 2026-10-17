@@ -58,6 +58,7 @@ how many did not (`failed`).
 | `host` | let out the way the host sends its own: by a direct rule, the direct list, or no rule at all |
 | `block` | dropped by a blocking rule or the block list |
 | `held` | dropped while the channel of its rule, named in `way`, carries nothing |
+| `guard` | dropped by a guard of the resolver, `dot` or `doh` in `way` |
 
 | Path | Means |
 |---|---|
@@ -72,7 +73,7 @@ how many did not (`failed`).
 | `silent` | nothing came back in time: 10 seconds after the last packet that asked, 30 at most |
 | `unreachable` | an ICMP error came back: the address or the port cannot be reached |
 
-A connection the panel dropped (`block`, `held`) has no path and no outcome, and neither has one the
+A connection the panel dropped (`block`, `held`, `guard`) has no path and no outcome, and neither has one the
 panel stopped watching because the log was turned off or the panel stopped.
 
 ### How the records are taken
@@ -80,7 +81,7 @@ panel stopped watching because the log was turned off or the panel stopped.
 The kernel decides a connection once, on its first packet, in the chain `decide` of the table
 `inet amneziageo_rt` (see [rules.md](rules.md)). While the log runs, every line of that chain hands the packet it
 decides to log group 7317 before its verdict, under a prefix that names the rule and the verdict (`ag:o:12`,
-`ag:b:-1`), and a last line hands over what no rule took (`ag:n`). The panel takes the group over
+`ag:b:-1`, `ag:g:dot`), and a last line hands over what no rule took (`ag:n`). The panel takes the group over
 netlink (NFLOG) with the first 96 bytes of each packet. The kernel loads `nfnetlink_log` and `nft_log` itself
 when the group is taken and when the ruleset first names it. A host that cannot take the ruleset with the log
 gets it without, and the log says why.

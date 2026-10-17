@@ -26,7 +26,12 @@ public static class AccessVerdict
     public const string Held = "held";
 
     /// <summary>
+    /// Dropped by a guard of the resolver.
+    /// </summary>
+    public const string Guard = "guard";
+
+    /// <summary>
     /// Every verdict a record can carry.
     /// </summary>
-    public static readonly IReadOnlyList<string> All = [Out, Host, Block, Held];
+    public static readonly IReadOnlyList<string> All = [Out, Host, Block, Held, Guard];
 }

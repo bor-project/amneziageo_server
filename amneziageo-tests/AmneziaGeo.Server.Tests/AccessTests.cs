@@ -131,15 +131,32 @@ public class AccessTests
         Assert.Equal("meta mark set numgen inc mod 2 map { 0 : 0xa602, 1 : 0xa601 } log prefix \"ag:o:1\" group 7317 return", line);
     }
 
-    [Theory]
-    [InlineData("ag:o:12", AccessVerdict.Out, 12L)]
-    [InlineData("ag:d:3", AccessVerdict.Host, 3L)]
-    [InlineData("ag:b:-1", AccessVerdict.Block, -1L)]
-    [InlineData("ag:h:4", AccessVerdict.Held, 4L)]
-    [InlineData("ag:n", AccessVerdict.Host, null)]
-    public void APrefixSaysHowTheConnectionWasDecided(string prefix, string verdict, long? rule)
+    [Fact]
+    public void TheGuardsOfTheResolverLogWhatTheyDrop()
     {
-        Assert.Equal(new AccessDecision(verdict, rule), AccessTag.Read(prefix));
+        var lines = RouteRuleset.Guard(Resolver, Group);
+
+        Assert.Equal(
+            [
+                "meta l4proto { tcp, udp } th dport 853 log prefix \"ag:g:dot\" group 7317 drop",
+                "ip daddr @doh4 meta l4proto { tcp, udp } th dport 443 log prefix \"ag:g:doh\" group 7317 drop",
+                "ip6 daddr @doh6 meta l4proto { tcp, udp } th dport 443 log prefix \"ag:g:doh\" group 7317 drop",
+            ],
+            lines);
+        Assert.DoesNotContain(RouteRuleset.Guard(Resolver), line => line.Contains("log", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("ag:o:12", AccessVerdict.Out, 12L, "")]
+    [InlineData("ag:d:3", AccessVerdict.Host, 3L, "")]
+    [InlineData("ag:b:-1", AccessVerdict.Block, -1L, "")]
+    [InlineData("ag:h:4", AccessVerdict.Held, 4L, "")]
+    [InlineData("ag:g:dot", AccessVerdict.Guard, null, "dot")]
+    [InlineData("ag:g:doh", AccessVerdict.Guard, null, "doh")]
+    [InlineData("ag:n", AccessVerdict.Host, null, "")]
+    public void APrefixSaysHowTheConnectionWasDecided(string prefix, string verdict, long? rule, string guard)
+    {
+        Assert.Equal(new AccessDecision(verdict, rule, guard), AccessTag.Read(prefix));
     }
 
     [Theory]
@@ -148,8 +165,6 @@ public class AccessTests
     [InlineData("ag:x:1")]
     [InlineData("ag:o:one")]
     [InlineData("ag:g:dns")]
-    [InlineData("ag:g:dot")]
-    [InlineData("ag:g:doh")]
     [InlineData("ag:o:1:2")]
     public void APrefixOfSomeoneElseIsNotRead(string prefix) => Assert.Null(AccessTag.Read(prefix));
 
@@ -311,6 +326,16 @@ public class AccessTests
 
         Assert.Equal(AccessVerdict.Held, record?.Verdict);
         Assert.Equal("awgoff", record?.Way);
+    }
+
+    [Fact]
+    public void ARecordOfAGuardNamesTheGuard()
+    {
+        var record = Record(Packet("ag:g:dot", 0, Four("10.8.1.2", "9.9.9.9", AccessFlow.Tcp, 853)), null, new AccessNames());
+
+        Assert.Equal(AccessVerdict.Guard, record?.Verdict);
+        Assert.Equal("dot", record?.Way);
+        Assert.Null(record?.Rule);
     }
 
     [Fact]

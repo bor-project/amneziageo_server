@@ -71,7 +71,7 @@ public static class AccessReader
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(target);
 
-        var (way, via, path) = Way(new AccessDecision(verdict, leg?.Rule.Id), leg, plan, mark);
+        var (way, via, path) = Way(new AccessDecision(verdict, leg?.Rule.Id, string.Empty), leg, plan, mark);
 
         return new AccessRecord
         {
@@ -112,6 +112,7 @@ public static class AccessReader
 
         return decision.Verdict switch
         {
+            AccessVerdict.Guard => (decision.Guard, string.Empty, string.Empty),
             AccessVerdict.Held => (named, string.Empty, string.Empty),
             AccessVerdict.Host => (string.Empty, string.Empty, AccessPath.Local),
             AccessVerdict.Out => Out(plan, named, mark),

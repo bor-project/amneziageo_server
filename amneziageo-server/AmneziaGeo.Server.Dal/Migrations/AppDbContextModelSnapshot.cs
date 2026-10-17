@@ -571,6 +571,12 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("BlockDoh")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("BlockDot")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("CacheSize")
                         .HasColumnType("INTEGER");
 
