@@ -18,12 +18,14 @@ forwarding_conf=/etc/sysctl.d/90-amneziageo.conf
 bbr_conf=/etc/sysctl.d/91-amneziageo-bbr.conf
 bbr_module=/etc/modules-load.d/amneziageo-bbr.conf
 qdisc_file=/proc/sys/net/core/default_qdisc
+os_release=/etc/os-release
 override_mark='# written by amneziageo-server'
 answers_file=/root/.amneziageo-install
 declare -gA given=() seen=()
 made_password=
 made_client=
 made_link=
+made_shortcut=
 server_name=
 api_base=
 api_work=
@@ -424,9 +426,10 @@ module_loaded() {
   [ -d /sys/module/amneziawg ]
 }
 
-# Tells whether the host forwards packets.
+# Tells whether the host forwards packets of both families, of IPv4 alone where it carries no IPv6.
 forwarding() {
-  [ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null)" = 1 ]
+  [ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null)" = 1 ] || return 1
+  [ ! -e /proc/sys/net/ipv6/conf/all/forwarding ] || [ "$(cat /proc/sys/net/ipv6/conf/all/forwarding)" = 1 ]
 }
 
 # Tells whether BBR drives TCP on the host.
@@ -497,6 +500,11 @@ fronts_running() {
 # Prints the address of the host on its default route.
 public_address() {
   ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -1
+}
+
+# Prints the global IPv6 address of the host on its default route.
+public_address6() {
+  ip -6 route get 2001:4860:4860::8888 2> /dev/null | sed -n 's/.* src \([0-9a-f:]*\).*/\1/p' | head -1 | grep -E '^[23]'
 }
 
 # Prints the port sshd listens on.
@@ -626,9 +634,18 @@ restart_panel() {
   wait_panel
 }
 
-# Takes the menu of the release the panel runs now.
+# Prints the menu of the release the container of the panel runs.
+release_menu() {
+  dcompose exec -T panel cat /usr/local/share/amneziageo-server/amneziageo-server < /dev/null 2> /dev/null
+}
+
+# Takes the menu of the release the panel runs now, onto a host that has none when told new.
 refresh_self() {
   local next=$self.next
+  if [ ! -e "$self" ] && [ "${1:-}" != new ]; then
+    return 0
+  fi
+
   case $(kind) in
     package)
       if [ -f "$base/current/amneziageo-server" ]; then
@@ -636,7 +653,7 @@ refresh_self() {
       fi
       ;;
     docker)
-      dcompose exec -T panel cat /usr/local/share/amneziageo-server/amneziageo-server < /dev/null > "$next" 2>/dev/null
+      release_menu > "$next"
       ;;
   esac
 
@@ -645,6 +662,62 @@ refresh_self() {
     mv -f "$next" "$self"
   else
     rm -f "$next"
+  fi
+}
+
+# Puts the menu of the release on the host of a container where the answers ask for it, and takes it off otherwise.
+settle_self() {
+  if [ "${given[host_menu]:-yes}" = yes ]; then
+    refresh_self new
+  elif grep -qs '^# Manages the AmneziaGeo server on this host' "$self"; then
+    drop_shortcuts
+    rm -f "$self"
+  fi
+}
+
+# Puts the short command the answers name on the host, a link to the menu.
+put_shortcut() {
+  local name=${given[shortcut]:-} link
+  link=${self%/*}/$name
+  if [ -z "$name" ] || [ ! -e "$self" ]; then
+    return 0
+  fi
+
+  if [ "$(readlink "$link")" = "$self" ] || ln -s "$self" "$link" 2> /dev/null; then
+    made_shortcut=$name
+    good "the short command $name runs amneziageo-server"
+  else
+    bad "$link is taken: the short command is not put on"
+  fi
+}
+
+# Takes the short commands that lead to the menu off the host.
+drop_shortcuts() {
+  local link
+  for link in "${self%/*}"/*; do
+    if [ -L "$link" ] && [ "$(readlink "$link")" = "$self" ]; then
+      rm -f "$link" && say "removed the short command ${link##*/}"
+    fi
+  done
+}
+
+# Opens the menu of the release the container runs in place of this copy on the host, where the two differ.
+follow_release() {
+  local held
+  if [ -n "${AMNEZIAGEO_FOLLOWED:-}" ] || [ "$(kind)" != docker ] || [ ! -f "$self" ] \
+    || [ "$(readlink -f "$0")" != "$(readlink -f "$self")" ] || [ "$(container_state)" != running ]; then
+    return 0
+  fi
+
+  held=$(release_menu)
+  if [ -z "$held" ] || [ "$held" = "$(cat "$self")" ]; then
+    return 0
+  fi
+
+  refresh_self
+  if [ "$held" = "$(cat "$self")" ]; then
+    export AMNEZIAGEO_FOLLOWED=1
+    exec "$self"
   fi
 }
 
@@ -822,11 +895,47 @@ install_module() {
   modprobe amneziawg
 }
 
-# Turns forwarding on now and at boot.
+# Tells whether the kernel takes the advertisements of routers on an interface.
+takes_ra() {
+  case $(cat "/proc/sys/net/ipv6/conf/$1/accept_ra" 2> /dev/null) in
+    1 | 2) return 0 ;;
+  esac
+
+  return 1
+}
+
+# Prints the interfaces of the IPv6 default route the kernel took from the advertisements of a router.
+ra_uplinks() {
+  local dev
+  for dev in $(ip -6 route show default 2> /dev/null | awk '/ proto ra( |$)/ {for (i = 1; i < NF; i++) if ($i == "dev") print $(i + 1)}' | sort -u); do
+    if takes_ra "$dev"; then
+      printf '%s\n' "$dev"
+    fi
+  done
+}
+
+# Prints the settings of the kernel the endpoints need, the interfaces of the IPv6 route first.
+forwarding_lines() {
+  local dev
+  for dev in $(ra_uplinks); do
+    printf 'net/ipv6/conf/%s/accept_ra = 2\n' "$dev"
+  done
+
+  printf 'net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\n'
+}
+
+# Tells whether forwarding is on and comes back the same at boot.
+forwarding_kept() {
+  forwarding && [ "$(forwarding_lines)" = "$(cat "$forwarding_conf" 2> /dev/null)" ]
+}
+
+# Turns forwarding on now and at boot, the interfaces of the IPv6 route still taking it from the router.
 forwarding_on() {
-  printf 'net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\n' > "$forwarding_conf"
+  local uplinks
+  uplinks=$(ra_uplinks | tr '\n' ' ')
+  forwarding_lines > "$forwarding_conf"
   sysctl -p "$forwarding_conf" > /dev/null
-  good "forwarding on"
+  good "forwarding on${uplinks:+, the router still gives ${uplinks% } the IPv6 route}"
 }
 
 # Turns BBR with the fq queue on now and at boot.
@@ -876,8 +985,12 @@ prepare_host() {
   fi
 
   good "amneziawg module loaded"
-  if ! forwarding; then
+  if ! forwarding_kept; then
     forwarding_on
+  fi
+
+  if [ -n "${seen[docker]:-}" ]; then
+    docker_forward
   fi
 
   if ! bbr_on && answer_yes bbr "Turn BBR on?" yes; then
@@ -885,51 +998,129 @@ prepare_host() {
   fi
 }
 
-# Puts Docker on from the repository of Docker and keeps it off the forwarded packets.
-install_docker() {
-  local dist
-  if ! command -v docker > /dev/null 2>&1 || ! docker compose version > /dev/null 2>&1; then
-    # shellcheck disable=SC1091
-    . /etc/os-release
-    dist=debian
-    if [ "${ID:-}" = ubuntu ]; then
-      dist=ubuntu
-    fi
+# Tells whether apt can put a package on.
+apt_has() {
+  apt-cache policy "$1" 2> /dev/null | grep -q 'Candidate: [0-9]'
+}
 
-    install -d -m 755 /etc/apt/keyrings
-    curl -fsSL "https://download.docker.com/linux/$dist/gpg" -o /etc/apt/keyrings/docker.asc || return 1
-    printf 'Types: deb\nURIs: https://download.docker.com/linux/%s\nSuites: %s\nComponents: stable\nSigned-By: /etc/apt/keyrings/docker.asc\n' \
-      "$dist" "${VERSION_CODENAME:-}" > /etc/apt/sources.list.d/docker.sources
-    apt-get update > /dev/null && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin || return 1
+# Prints what of Docker the host lacks for the container of the panel: docker, compose or daemon, nothing for none.
+docker_lacks() {
+  if ! command -v docker > /dev/null 2>&1; then
+    printf 'docker'
+  elif ! docker compose version > /dev/null 2>&1; then
+    printf 'compose'
+  elif ! docker info > /dev/null 2>&1; then
+    printf 'daemon'
+  fi
+}
+
+# Prints the commands that put on what of Docker the host lacks, from the repository of Docker for its system.
+docker_hint() {
+  local dist=debian suite
+  # shellcheck disable=SC1090
+  . "$os_release"
+  suite=${VERSION_CODENAME:-}
+  if [ "${ID:-}" = ubuntu ] || [[ ${ID_LIKE:-} == *ubuntu* ]]; then
+    dist=ubuntu
+    suite=${UBUNTU_CODENAME:-$suite}
   fi
 
-  if [ ! -f /etc/docker/daemon.json ]; then
-    install -d -m 755 /etc/docker
-    printf '{\n  "ip-forward-no-drop": true\n}\n' > /etc/docker/daemon.json
-  elif ! grep -q '"ip-forward-no-drop"' /etc/docker/daemon.json; then
-    cp -p /etc/docker/daemon.json "/etc/docker/daemon.json.$(date -u +%Y%m%d-%H%M%S)"
-    if ! python3 - /etc/docker/daemon.json <<'PY'
+  if [ "$1" = daemon ]; then
+    say "  systemctl enable --now docker"
+    return 0
+  fi
+
+  if [ "$1" = compose ] && apt_has docker-compose-plugin; then
+    say "  apt-get install -y docker-compose-plugin"
+    return 0
+  fi
+
+  if [ "$1" = compose ] && apt_has docker-compose-v2; then
+    say "  apt-get install -y docker-compose-v2"
+    return 0
+  fi
+
+  say "  install -d -m 755 /etc/apt/keyrings"
+  say "  curl -fsSL https://download.docker.com/linux/$dist/gpg -o /etc/apt/keyrings/docker.asc"
+  say "  printf 'Types: deb\nURIs: https://download.docker.com/linux/$dist\nSuites: $suite\nComponents: stable\nSigned-By: /etc/apt/keyrings/docker.asc\n' > /etc/apt/sources.list.d/docker.sources"
+  say "  apt-get update"
+  say "  apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin"
+}
+
+# Stops the installation where the host lacks Docker for the container, with the commands that put it on.
+need_docker() {
+  local lacks
+  lacks=$(docker_lacks)
+  case $lacks in
+    '') return 0 ;;
+    docker) bad "Docker is not on this host: the container of the panel needs Docker with compose" ;;
+    compose) bad "docker compose does not answer: the container of the panel needs the compose plugin of Docker" ;;
+    daemon) bad "the daemon of Docker does not answer" ;;
+  esac
+
+  say "put it on as root:"
+  docker_hint "$lacks"
+  say "then run amneziageo-server install again"
+  exit 1
+}
+
+# Tells the daemon of Docker in its settings to leave the forwarded packets alone, where its version takes that.
+docker_no_drop() {
+  local conf=/etc/docker/daemon.json next=/etc/docker/daemon.json.next
+  if grep -qs '"ip-forward-no-drop"' "$conf"; then
+    return 0
+  fi
+
+  install -d -m 755 /etc/docker
+  if [ ! -f "$conf" ]; then
+    printf '{\n  "ip-forward-no-drop": true\n}\n' > "$next"
+  elif ! python3 - "$conf" "$next" 2> /dev/null <<'PY'
 import json, sys
 with open(sys.argv[1]) as f:
     conf = json.load(f)
 conf["ip-forward-no-drop"] = True
-with open(sys.argv[1], "w") as f:
+with open(sys.argv[2], "w") as f:
     json.dump(conf, f, indent=2)
     f.write("\n")
 PY
-    then
-      bad "add \"ip-forward-no-drop\": true to /etc/docker/daemon.json and restart docker: clients reach nothing past the host without it"
-      return 0
-    fi
+  then
+    rm -f "$next"
+    bad "$conf does not read as JSON: \"ip-forward-no-drop\": true goes into it by hand"
+    return 0
   fi
 
-  if nft list chain ip filter FORWARD 2> /dev/null | grep -q 'policy drop'; then
-    if [ -z "$(docker ps -q 2> /dev/null)" ] || answer_yes docker_restart "Restart Docker with its containers to let the packets of the clients through?" yes; then
-      systemctl restart docker
-    else
-      bad "docker drops the packets of the clients until it restarts: systemctl restart docker"
-    fi
+  if ! dockerd --validate --config-file "$next" > /dev/null 2>&1; then
+    rm -f "$next"
+    say "Docker $(docker version --format '{{.Server.Version}}' 2> /dev/null) takes no \"ip-forward-no-drop\": forwarding on at boot keeps it from dropping"
+    return 0
   fi
+
+  if [ -f "$conf" ]; then
+    cp -p "$conf" "$conf.$(date -u +%Y%m%d-%H%M%S)"
+  fi
+
+  mv -f "$next" "$conf"
+  good "Docker leaves the forwarded packets alone from its next start"
+}
+
+# Tells whether the FORWARD chain of iptables or ip6tables drops what no rule of it lets through.
+forward_drops() {
+  command -v "$1" > /dev/null 2>&1 && "$1" -S FORWARD 2> /dev/null | grep -qx -- '-P FORWARD DROP'
+}
+
+# Lets the packets of the clients past the drop Docker puts on forwarding.
+docker_forward() {
+  local tool
+  docker_no_drop
+  if ufw_active; then
+    return 0
+  fi
+
+  for tool in iptables ip6tables; do
+    if forward_drops "$tool"; then
+      "$tool" -P FORWARD ACCEPT && good "$tool forwards the packets of the clients again"
+    fi
+  done
 }
 
 # Writes the compose file of the panel the instructions give.
@@ -987,7 +1178,6 @@ install_package() {
 install_container() {
   local channel=$1 work found version
   step "the container"
-  install_docker || return 1
   work=$(mktemp -d) || return 1
   found=$(manifest "$channel" "$work") || { rm -rf "$work"; return 1; }
   rm -rf "$work"
@@ -996,7 +1186,12 @@ install_container() {
   printf 'AMNEZIAGEO_TAG=%s\n' "$version" > "$docker_dir/.env"
   write_compose
   dcompose pull && dcompose up -d || return 1
-  good "the container of $version runs"
+  good "the container of $version runs from $docker_dir/compose.yaml"
+}
+
+# Tells whether a person answers the questions on a terminal.
+on_terminal() {
+  [ -t 0 ]
 }
 
 # Asks a question of the installation once, an answer given before or in a file of answers standing.
@@ -1046,7 +1241,7 @@ answer_until() {
     fi
 
     unset "given[$key]"
-    if [ ! -t 0 ]; then
+    if ! on_terminal; then
       return 1
     fi
   done
@@ -1118,6 +1313,32 @@ client_ok() {
   fi
 }
 
+# Tells whether a word can name a short command of the menu: a name no command holds, or a link to the menu already.
+shortcut_ok() {
+  local link=${self%/*}/$1 taken
+  if ! [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$ ]]; then
+    bad "'$1' cannot name a command: letters, digits, dots, dashes and underscores"
+    return 1
+  fi
+
+  if [ "$link" = "$self" ]; then
+    taken=$self
+  elif [ "$(readlink "$link")" = "$self" ]; then
+    return 0
+  elif [ -e "$link" ] || [ -L "$link" ]; then
+    taken=$link
+  elif compgen -b -k -- "$1" | grep -qxF -- "$1"; then
+    taken="a command of the shell"
+  else
+    taken=$(type -P "$1")
+  fi
+
+  if [ -n "$taken" ]; then
+    bad "$1 is taken: $taken"
+    return 1
+  fi
+}
+
 # Tells whether a word is a name or an address clients can reach.
 host_ok() {
   if ! [[ $1 =~ ^[A-Za-z0-9.:-]+$ ]]; then
@@ -1156,6 +1377,24 @@ backup_ok() {
   fi
 }
 
+# Tells whether a word names a directory of its own for the compose project of the panel: absolute, new or empty.
+compose_dir_ok() {
+  if ! [[ $1 =~ ^/[^[:space:]]*$ ]]; then
+    bad "'$1' is not an absolute path"
+    return 1
+  fi
+
+  if [ -e "$1" ] && [ ! -d "$1" ]; then
+    bad "$1 is not a directory"
+    return 1
+  fi
+
+  if [ -d "$1" ] && [ -n "$(ls -A "$1" 2> /dev/null)" ]; then
+    bad "$1 holds files already: the project of the panel takes a directory of its own"
+    return 1
+  fi
+}
+
 # Tells whether a port of a protocol is free on the host.
 port_free() {
   [ -z "$(ss -Hln"${1:0:1}" "sport = :$2" 2> /dev/null)" ]
@@ -1179,6 +1418,13 @@ free_port() {
   done
 }
 
+# Prints a range of unique local IPv6 addresses for the clients of an interface, its first address the interface's.
+ula_range() {
+  local -a bytes
+  read -r -a bytes < <(od -An -N5 -tu1 /dev/urandom)
+  printf 'fd%02x:%x:%x::1/64' "${bytes[0]}" $((bytes[1] * 256 + bytes[2])) $((bytes[3] * 256 + bytes[4]))
+}
+
 # Prints the first name of an interface from a stem on that neither the host nor its files carry.
 free_interface() {
   local number=0
@@ -1187,6 +1433,17 @@ free_interface() {
   done
 
   printf '%s%s' "$1" "$number"
+}
+
+# Prints the first name of a short command no command holds: the name given, else it with a number after it.
+free_shortcut() {
+  local name=$1 number=1
+  while ! shortcut_ok "$name" 2> /dev/null; do
+    name=$1$number
+    number=$((number + 1))
+  done
+
+  printf '%s' "$name"
 }
 
 # Prints the sockets that listen past the loopback as "protocol port process", the kernel for a tunnel.
@@ -1275,12 +1532,12 @@ client_address() {
 # Reads what the host carries before the installation, prints it and stops on what the panel cannot live with.
 assess_host() {
   local memory swap tunnels certs
-  # shellcheck disable=SC1091
-  . /etc/os-release
+  # shellcheck disable=SC1090
+  . "$os_release"
   seen[virt]=$(systemd-detect-virt 2> /dev/null)
   seen[box]=$(systemd-detect-virt -c 2> /dev/null)
   seen[ipv4]=$(public_address)
-  seen[ipv6]=$(ip -6 route get 2001:4860:4860::8888 2> /dev/null | sed -n 's/.* src \([0-9a-f:]*\).*/\1/p' | head -1)
+  seen[ipv6]=$(public_address6)
   memory=$(awk '/^MemTotal/ {print int($2 / 1024)}' /proc/meminfo)
   swap=$(awk '/^SwapTotal/ {print int($2 / 1024)}' /proc/meminfo)
   seen[disk]=$(df -Pm / 2> /dev/null | awk 'NR == 2 {print $4}')
@@ -1312,17 +1569,17 @@ assess_host() {
       --format '{{.Names}} ({{.Status}})' 2> /dev/null | head -1)
   fi
 
-  seen[drop]=
-  if nft list chain ip filter FORWARD 2> /dev/null | grep -q 'policy drop'; then
-    seen[drop]=yes
-  fi
-
   if ! command -v ufw > /dev/null 2>&1; then
     seen[ufw]=missing
   elif ufw status 2> /dev/null | grep -q '^Status: active'; then
     seen[ufw]=active
   else
     seen[ufw]=inactive
+  fi
+
+  seen[drop]=
+  if [ "${seen[ufw]}" != active ] && { forward_drops iptables || forward_drops ip6tables; }; then
+    seen[drop]=yes
   fi
 
   tunnels=$({ ip -o link show type amneziawg; ip -o link show type wireguard; } 2> /dev/null | awk -F': ' '{print $2}' | tr '\n' ' ')
@@ -1339,7 +1596,7 @@ assess_host() {
   say "module        amneziawg ${seen[module]}"
   say "network       forwarding $(forwarding && printf on || printf off), BBR $(bbr_state), IPv4 ${seen[ipv4]:-none}, IPv6 ${seen[ipv6]:-none}"
   say "docker        ${seen[docker]:-none}${seen[containers]:+, containers: ${seen[containers]}}${seen[drop]:+, drops forwarded packets}"
-  say "firewall      ufw ${seen[ufw]}"
+  say "firewall      ufw ${seen[ufw]}$(grep -qs '^IPV6=no' /etc/default/ufw && printf ', IPv6 unguarded: IPV6=no in /etc/default/ufw')"
   say "listening     $(listeners | awk '{printf "%s%s/%s %s", (NR > 1 ? ", " : ""), $2, $1, $3}')"
   say "tunnels       ${tunnels:-none}${seen[wstunnel]:+, /usr/local/bin/wstunnel: ${seen[wstunnel]}}"
   say "certificates  ${certs:-none}"
@@ -1352,7 +1609,7 @@ assess_host() {
     return 1
   fi
 
-  if ! grep -qsE '^ID(_LIKE)?=.*(debian|ubuntu)' /etc/os-release; then
+  if ! grep -qsE '^ID(_LIKE)?=.*(debian|ubuntu)' "$os_release"; then
     bad "the installer knows Debian and Ubuntu"
     confirm "Go on anyway?" || return 1
   fi
@@ -1391,6 +1648,49 @@ planned_ports() {
   fi
 
   printf '%s' "${ports[*]}"
+}
+
+# Prints the first interface whose clients ufw is to let through for the container, which gives ufw no rules.
+routed_interface() {
+  if [ "${given[kind]:-}" = docker ] && [ "${given[endpoint]:-no}" = yes ]; then
+    printf '%s' "${given[endpoint_name]}"
+  fi
+}
+
+# Prints the rules of ufw past the ports that the clients of the first interface need, one a line.
+interface_rules() {
+  local name
+  name=$(routed_interface)
+  if [ -z "$name" ]; then
+    return 0
+  fi
+
+  printf 'route allow in on %s\n' "$name"
+  printf 'route allow out on %s\n' "$name"
+  if [ "${given[resolver]:-no}" = yes ]; then
+    printf 'allow in on %s to any port 53 proto udp\n' "$name"
+    printf 'allow in on %s to any port 53 proto tcp\n' "$name"
+  fi
+}
+
+# Prints the ports of the host the installation gave the panel and its first interface.
+held_ports() {
+  printf 'TCP %s the panel' "${given[port]:-}"
+  if [ "${given[endpoint]:-no}" = yes ]; then
+    printf ', UDP %s and TCP %s the interface %s' "${given[endpoint_port]}" "${given[endpoint_port]}" "${given[endpoint_name]}"
+  fi
+}
+
+# Prints what the installation made of the IPv6 of the host.
+ipv6_line() {
+  if [ -z "${seen[ipv6]:-}" ]; then
+    printf 'none on the host, the clients go without it'
+  else
+    printf '%s, forwarded' "${seen[ipv6]}"
+    if [ -n "${given[ipv6_range]:-}" ]; then
+      printf ', the clients of %s in %s' "${given[endpoint_name]}" "${given[ipv6_range]}"
+    fi
+  fi
 }
 
 # Asks for a name of the server and what its certificate needs, keeping a certificate the host holds for it.
@@ -1433,14 +1733,23 @@ ask_certificate() {
   fi
 }
 
-# Asks everything the installation needs before it changes anything.
-ask_installation() {
-  local opening
-  step "questions"
-  if [ "${given[stage]:-}" != upgraded ]; then
-    answer_yes upgrade "Upgrade the system first (apt full-upgrade, ${seen[upgrades]:-0} packages)?" yes || true
+# Asks for a short command of the menu on the host, none where no one answers on a terminal.
+ask_shortcut() {
+  if [ -z "${given[shortcut]+set}" ] && { ! on_terminal || ! agree "Put a short command for amneziageo-server on the host?"; }; then
+    given[shortcut]=
   fi
 
+  if [ -n "${given[shortcut]+set}" ] && [ -z "${given[shortcut]}" ]; then
+    return 0
+  fi
+
+  answer_until shortcut "Name of the short command" "$(free_shortcut ag-s)" shortcut_ok || given[shortcut]=
+}
+
+# Asks everything the installation needs before it changes anything.
+ask_installation() {
+  local opening routed
+  step "questions"
   if [ -z "${given[kind]+set}" ]; then
     say "  1. Package"
     say "  2. Docker"
@@ -1451,6 +1760,23 @@ ask_installation() {
     2 | docker) given[kind]=docker ;;
     *) given[kind]=package ;;
   esac
+
+  if [ "${given[kind]}" = docker ]; then
+    need_docker
+    answer_until docker_dir "Directory for compose.yaml" "$docker_dir" compose_dir_ok || return 1
+    docker_dir=${given[docker_dir]}
+    answer_yes host_menu "Put the command amneziageo-server on the host, to run the menu and the utility without entering the container?" yes || true
+  fi
+
+  if [ "${given[kind]}" = package ] || [ "${given[host_menu]:-yes}" = yes ]; then
+    ask_shortcut
+  else
+    given[shortcut]=
+  fi
+
+  if [ "${given[stage]:-}" != upgraded ]; then
+    answer_yes upgrade "Upgrade the system first (apt full-upgrade, ${seen[upgrades]:-0} packages)?" yes || true
+  fi
 
   if [ -z "${given[channel]+set}" ]; then
     say "  1. Stable"
@@ -1466,10 +1792,6 @@ ask_installation() {
   answer_until restore "Backup file to restore, empty for a fresh panel" "" backup_ok || return 1
   if ! bbr_on; then
     answer_yes bbr "Turn BBR on?" yes || true
-  fi
-
-  if [ "${given[kind]}" = docker ] && [ -n "${seen[drop]}" ] && [ -n "${seen[containers]}" ]; then
-    answer_yes docker_restart "Docker drops the packets of the clients: restart it with its containers ${seen[containers]}?" yes || true
   fi
 
   if [ -n "${given[restore]}" ]; then
@@ -1504,12 +1826,16 @@ ask_installation() {
     fi
 
     answer_yes resolver "Answer the DNS of its clients on this server, asking outside over HTTPS?" yes || true
+    if [ -n "${seen[ipv6]:-}" ] && [ -z "${given[ipv6_range]+set}" ]; then
+      given[ipv6_range]=$(ula_range)
+    fi
   fi
 
   opening=$(planned_ports)
+  routed=$(routed_interface)
   if [ "${seen[ufw]}" = active ]; then
     if [ -n "$opening" ]; then
-      answer_yes ufw "Open $opening in ufw?" yes || true
+      answer_yes ufw "Open $opening in ufw${routed:+, letting the clients of $routed through}?" yes || true
     fi
   else
     if [ -z "${given[ufw_others]+set}" ]; then
@@ -1517,13 +1843,14 @@ ask_installation() {
       given[ufw_others]=${given[ufw_others]% }
     fi
 
-    answer_yes ufw "Turn ufw on, letting in $(ssh_port)/tcp for ssh${opening:+, $opening}${given[ufw_others]:+ and what listens now: ${given[ufw_others]}}?" \
+    answer_yes ufw "Turn ufw on, letting in $(ssh_port)/tcp for ssh${opening:+, $opening}${given[ufw_others]:+ and what listens now: ${given[ufw_others]}}${routed:+, the clients of $routed through}?" \
       "$([ "${seen[ufw]}" = missing ] && printf yes || printf no)" || true
   fi
 }
 
 # Prints what the installation is going to do.
 plan() {
+  local uplinks routed
   step "the plan"
   if [ "${given[upgrade]:-no}" = yes ] && [ "${given[stage]:-}" != upgraded ]; then
     say "- upgrade the system; with a new kernel reboot, and the same command goes on after it"
@@ -1533,19 +1860,37 @@ plan() {
     say "- build the amneziawg module from the PPA of Amnezia"
   fi
 
-  if ! forwarding; then
-    say "- turn forwarding on"
+  if ! forwarding_kept; then
+    uplinks=$(ra_uplinks | tr '\n' ' ')
+    say "- turn forwarding on, now and at boot${uplinks:+, ${uplinks% } still taking the IPv6 route from the router}"
   fi
 
   if [ "${given[bbr]:-no}" = yes ]; then
     say "- turn BBR on"
   fi
 
-  if [ "${given[kind]}" = docker ] && [ -z "${seen[docker]}" ]; then
-    say "- put Docker on from the repository of Docker"
+  if [ -n "${seen[docker]}" ] && ! grep -qs '"ip-forward-no-drop"' /etc/docker/daemon.json; then
+    say "- add \"ip-forward-no-drop\": true to /etc/docker/daemon.json, where Docker takes it"
+  fi
+
+  if [ -n "${seen[docker]}" ] && [ -n "${seen[drop]}" ]; then
+    say "- let the packets of the clients past the drop Docker put on forwarding"
+  fi
+
+  if [ "${given[kind]}" = docker ]; then
+    say "- write $docker_dir/compose.yaml"
+    if [ "${given[host_menu]:-yes}" = yes ]; then
+      say "- put the menu of the release on the host as $self"
+    elif [ -e "$self" ]; then
+      say "- take $self off the host: the menu opens in the container"
+    fi
   fi
 
   say "- put the panel on as a ${given[kind]} of the newest ${given[channel]} release"
+  if [ -n "${given[shortcut]:-}" ]; then
+    say "- put the short command ${given[shortcut]} on the host, a link to $self"
+  fi
+
   if [ -n "${given[restore]}" ]; then
     say "- put the backup ${given[restore]} in place of its database"
     return 0
@@ -1578,6 +1923,9 @@ plan() {
     fi
 
     say "- make the interface ${given[endpoint_name]} on UDP ${given[endpoint_port]} for ${given[endpoint_host]}$([ "${given[websocket]}" = yes ] && printf ', with a websocket')"
+    if [ -n "${given[ipv6_range]:-}" ]; then
+      say "- give its clients IPv6 through the server, from ${given[ipv6_range]}"
+    fi
     if [ -n "${given[client]}" ]; then
       say "- make the client ${given[client]} of it, its configuration in /root"
     fi
@@ -1588,6 +1936,11 @@ plan() {
       say "- open $(planned_ports) in ufw"
     else
       say "- turn ufw on with $(ssh_port)/tcp $(planned_ports) ${given[ufw_others]:-}"
+    fi
+
+    routed=$(routed_interface)
+    if [ -n "$routed" ]; then
+      say "- let the clients of $routed through ufw$([ "${given[resolver]:-no}" = yes ] && printf ', and their DNS to the server')"
     fi
   fi
 }
@@ -1710,6 +2063,14 @@ api_call() {
   cat "$api_work/answer"
 }
 
+# Prints the JSON of the input with a range added to its addresses.
+json_address() {
+  python3 -c 'import json, sys
+body = json.load(sys.stdin)
+body["address"] = list(body.get("address") or []) + [sys.argv[1]]
+print(json.dumps(body))' "$1"
+}
+
 # Prints the JSON of the input with fields set from name=json pairs.
 json_set() {
   python3 -c 'import json, sys
@@ -1737,6 +2098,10 @@ endpoint_calls() {
   draft=$(api_call GET "/configs/draft?name=${given[endpoint_name]}") || return 1
   body=$(json_set "name=\"${given[endpoint_name]}\"" "listenPort=${given[endpoint_port]}" \
     "host=\"${given[endpoint_host]}\"" nat=true opened=true isEnabled=true "webSocket=$websocket" <<< "$draft") || return 1
+  if [ -n "${given[ipv6_range]:-}" ]; then
+    body=$(json_address "${given[ipv6_range]}" <<< "$body") || return 1
+  fi
+
   config=$(api_call POST /configs <<< "$body" | json_get id) || return 1
   good "the interface ${given[endpoint_name]} runs on UDP ${given[endpoint_port]}"
   first_resolver
@@ -1808,7 +2173,7 @@ ufw_holds() {
 
 # Opens in ufw the ports of the answers it does not let in yet, turning ufw on first when asked.
 guard_host() {
-  local port opened=() first=()
+  local port opened=() first=() rule=()
   if [ "${given[ufw]:-no}" != yes ]; then
     return 0
   fi
@@ -1828,6 +2193,12 @@ guard_host() {
     fi
   done
 
+  while read -r -a rule; do
+    if ! ufw_holds "${rule[@]}"; then
+      ufw "${rule[@]}" comment "amneziageo ${given[endpoint_name]}" > /dev/null
+    fi
+  done < <(interface_rules)
+
   if [ "${seen[ufw]}" != active ]; then
     ufw --force enable > /dev/null || return 1
     if [ "$(kind)" = package ]; then
@@ -1836,6 +2207,9 @@ guard_host() {
   fi
 
   good "ufw lets in $(planned_ports)${opened[*]:+, opened now: ${opened[*]}}"
+  if [ -n "$(routed_interface)" ]; then
+    good "ufw lets the clients of $(routed_interface) through"
+  fi
 }
 
 # Checks the panel the way the guides do and names what the installation made.
@@ -1886,7 +2260,17 @@ final_check() {
     fi
   fi
 
-  say "the menu: amneziageo-server"
+  if [ "${given[kind]}" = docker ]; then
+    say "compose: $docker_dir/compose.yaml"
+  fi
+
+  say "ports: $(held_ports)"
+  say "IPv6: $(ipv6_line)"
+  if [ "${given[kind]}" = docker ] && [ "${given[host_menu]:-yes}" != yes ]; then
+    say "the menu: docker compose -f $docker_dir/compose.yaml exec panel amneziageo-server"
+  else
+    say "the menu: amneziageo-server${made_shortcut:+, or $made_shortcut}"
+  fi
 }
 
 # Item 1: looks the host over, asks everything first, then puts the panel on as a package or a container, fresh or on
@@ -1921,19 +2305,22 @@ install_panel() {
     step "the backup"
     if [ "${given[kind]}" = docker ]; then
       wait_panel
-      refresh_self
+      settle_self
     fi
 
+    put_shortcut
     restore_copy "${given[restore]}"
     return
   fi
 
   if [ "${given[kind]}" = docker ]; then
     wait_panel || return 1
-    refresh_self
+    settle_self
   else
     start_panel || return 1
   fi
+
+  put_shortcut
 
   step "the first administrator"
   first_admin || return 1
@@ -2427,6 +2814,7 @@ uninstall_panel() {
   fi
 
   say "left on the host: the amneziawg module, $forwarding_conf"
+  drop_shortcuts
   rm -f "$self"
   good "the panel is off the host"
   exit 0
@@ -2653,7 +3041,7 @@ view_settings() {
 
 # Item 18: the service, the answer of the panel and what the host lacks, with the fixes it takes.
 check_status() {
-  local kind version services
+  local kind version services tool
   kind=$(kind)
   step "the panel"
   case $kind in
@@ -2697,8 +3085,12 @@ check_status() {
     fi
   fi
 
-  if { [ "$kind" = docker ] || [ "$kind" = container ]; } && nft list chain ip filter FORWARD 2> /dev/null | grep -q 'policy drop'; then
-    bad "docker drops forwarded packets: add \"ip-forward-no-drop\": true to /etc/docker/daemon.json and restart docker"
+  if { [ "$kind" = docker ] || [ "$kind" = container ]; } && ! ufw_active; then
+    for tool in iptables ip6tables; do
+      if forward_drops "$tool"; then
+        bad "docker drops forwarded packets: $tool -P FORWARD ACCEPT lets them through, \"ip-forward-no-drop\": true in /etc/docker/daemon.json keeps it from dropping them again"
+      fi
+    done
   fi
 
   say "websocket fronts $(fronts_running), BBR $(bbr_state)"
@@ -2835,9 +3227,9 @@ get_certificate() {
   use_certificate "$live/fullchain.pem" "$live/privkey.pem"
 }
 
-# Gets a Let's Encrypt certificate for a name of the host, without questions of certbot when given an email or none.
+# Gets a Let's Encrypt certificate with an RSA key for a name of the host, no questions of certbot given an email or none.
 certify() {
-  local name=$1 who=()
+  local name=$1 who=() kind=()
   if ! getent ahostsv4 "$name" > /dev/null; then
     bad "$name does not resolve"
     return 1
@@ -2862,7 +3254,14 @@ certify() {
     who=(--non-interactive --agree-tos --register-unsafely-without-email)
   fi
 
-  certbot certonly --standalone --preferred-challenges http "${who[@]}" --cert-name "$name" -d "$name" || return 1
+  if certbot --help all 2> /dev/null | grep -q -- '--key-type'; then
+    kind=(--key-type rsa --rsa-key-size 2048)
+    if grep -qs '^key_type = ecdsa' "/etc/letsencrypt/renewal/$name.conf"; then
+      kind+=(--force-renewal)
+    fi
+  fi
+
+  certbot certonly --standalone --preferred-challenges http "${who[@]}" "${kind[@]}" --cert-name "$name" -d "$name" || return 1
   systemctl enable --now certbot.timer > /dev/null 2>&1
 }
 
@@ -3412,7 +3811,10 @@ main() {
   need_root
   locate_compose
   case ${1:-} in
-    "") menu ;;
+    "")
+      follow_release
+      menu
+      ;;
     install)
       shift
       while [ $# -gt 0 ]; do

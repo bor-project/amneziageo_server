@@ -20,15 +20,23 @@ container on a bare host as well, see [The menu](#the-menu).
   sysctl --system
   ```
 
-- A `FORWARD` chain that lets packets through. Docker turns the policy of the chain to `drop` when it starts,
-  and then no client of the tunnel reaches past the host. The daemon keeps its hands off the policy with:
+  On a host that takes its IPv6 route from the advertisements of a router, `net/ipv6/conf/<interface>/accept_ra = 2`
+  goes first in the same file: once forwarding is on, the kernel drops that route at once and takes no advertisement
+  after, unless the interface keeps `accept_ra` at 2.
+
+- A `FORWARD` chain that lets packets through. Docker turns the policy of the chain to `drop` when it starts and
+  turns forwarding on itself, and then no client of the tunnel reaches past the host. The daemon keeps its hands
+  off the policy with:
 
   ```
   echo '{ "ip-forward-no-drop": true }' > /etc/docker/daemon.json
   systemctl restart docker
   ```
 
-  The same holds for the package on a host that runs Docker.
+  The option keeps the drop from coming, and does not lift one already set: `iptables -P FORWARD ACCEPT` does,
+  once, and `ip6tables -P FORWARD ACCEPT` for IPv6. An older Docker does not take the option, and forwarding on at
+  boot keeps it from setting the drop, since Docker sets it only as it turns forwarding on. The same holds for the
+  package on a host that runs Docker.
 
 The container names in its log what of this the host lacks, as it starts.
 
@@ -64,15 +72,23 @@ list`, and so does the switch of the resolver, `docker compose exec panel amnezi
 the panel off and a certificate of Let's Encrypt, answer that the container does not reach the host. The rules of
 ufw, turning ufw on or off, BBR and forwarding print the command for the host instead.
 
-`amneziageo-server install`, see [install.md](install.md#the-menu), puts the container on a bare host when asked
-for Docker: Docker itself from the repository of Docker with `"ip-forward-no-drop": true` added to
-`/etc/docker/daemon.json`, restarting Docker only while it drops forwarded packets and asking first when other
-containers run,
-`/opt/amneziageo-docker/compose.yaml` that runs the image of the newest release of the channel from
-`ghcr.io/bor-project/amneziageo-server` with directories of the host for the database and the settings, and the
-first administrator. The script it runs from stays on the host and drives the container from outside with the same
-items, the ones of the host among them; it finds the project in `/opt/amneziageo-docker` or by the labels of its
-container.
+`amneziageo-server install`, see [install.md](install.md#the-menu), puts the container on a host that carries
+Docker with its compose plugin when asked for Docker. Where the host lacks Docker, the plugin or a running daemon,
+it prints the commands that put them on from the repository of Docker and stops before it changes anything; the same
+command goes on once they are on. It asks for the directory of `compose.yaml`, `/opt/amneziageo-docker` by default,
+adds `"ip-forward-no-drop": true` to `/etc/docker/daemon.json` where the version of Docker takes it, lifts the drop
+Docker put on forwarding where no ufw holds the chain, and writes `compose.yaml` that runs the image of the newest
+release of the channel from `ghcr.io/bor-project/amneziageo-server` with directories of the host for the database
+and the settings, then makes the first administrator. On a host that ufw guards it gives ufw what the panel cannot
+give it from the container: the ports, the clients of the first endpoint through it and their DNS to the server.
+It asks whether the command goes on the host, yes by default. With yes the menu of the release goes to
+`/usr/local/bin/amneziageo-server` and drives the container from outside with the same items, the ones of the host
+among them, and the commands of the utility go into the container through it, `amneziageo-server user list`; it
+finds the project in the directory it was given or by the labels of its container, and as it opens it takes the
+menu of the release the container runs where the two differ, after an update from the `Overview` of the panel as
+well. With no the installation takes the command off `/usr/local/bin`, and the menu opens in the container,
+`docker compose -f <directory>/compose.yaml exec panel amneziageo-server`. With yes it asks for a short command of
+the menu on a terminal too, `ag-s` by default, see [install.md](install.md#the-menu).
 
 `amneziageo-server install --restore <file>` and `amneziageo-server restore <file>` put a backup a panel downloaded
 into the directory of the database while the container is stopped, see

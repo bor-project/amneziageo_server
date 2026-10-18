@@ -144,7 +144,7 @@ public class MenuQuestionsTests
         "cli_in() { echo \"utility: $*\"; }; ";
 
     // Runs words of the menu with its functions read in and the lines given on its input.
-    private static async Task<(int Exit, string Told, string Said)> RunAsync(string words, string input)
+    internal static async Task<(int Exit, string Told, string Said)> RunAsync(string words, string input)
     {
         var start = new ProcessStartInfo("bash")
         {

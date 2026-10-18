@@ -24,17 +24,32 @@ amneziageo-server install
 `install` looks the host over first and prints what it carries: the system and the kernel, the upgrades waiting,
 the module of AmneziaWG, memory and disk, Docker and its containers, forwarding and BBR, ufw, the ports taken and the
 services behind them, the interfaces of AmneziaWG and WireGuard, the certificates of Let's Encrypt. It stops on what
-the panel cannot live with: a release missing for the architecture, a container host without the module. Then it asks
-everything at once, the answers of the look as defaults, prints the plan and, once told to go on, upgrades the
-system, rebooting when a new kernel comes and going on with the same answers when run again, puts on the module from
-the PPA of Amnezia when the kernel lacks it, turns forwarding and BBR on, checks the release against the key the
-releases are signed with and puts it on as a package or a container, makes the first administrator with a temporary
+the panel cannot live with: a release missing for the architecture, a container host without the module. The first
+question is a package or a container. A container takes Docker with its compose plugin and a running daemon: where
+the host lacks one of them, the script prints the commands that put it on from the repository of Docker and stops
+before it changes anything, and the same command goes on once it is on. Then it asks everything at once, for a
+container the directory of `compose.yaml` and whether the command goes on the host among it, then on a terminal
+whether a short command of the menu goes on the host and its name, `ag-s` by default, the answers of the
+look as defaults, prints the plan and, once
+told to go on, upgrades the system, rebooting when a new kernel comes and going on with the same answers when run
+again, puts on the module from the PPA of Amnezia when the kernel lacks it, turns forwarding on now and at boot,
+with `accept_ra = 2` for the interface the router advertises the IPv6 route on, turns BBR on, lets the packets of
+the clients past the drop Docker puts on forwarding, checks the release against the key the releases are signed
+with and puts it on as a package or a container, makes the first administrator with a temporary
 password, gets a certificate of Let's Encrypt for the name of the server or takes the one the host holds for it, opens
-the panel on every address, makes the first endpoint, turns the resolver of the clients on when asked and makes the
-first client through the API, opens the ports in ufw or
-turns ufw on with ssh and what already listens kept open, and checks the panel, the certificate and the endpoint. The
+the panel on every address, makes the first endpoint, with a range of unique local IPv6 addresses for its clients
+on a host that carries a global IPv6 address, turns the resolver of the clients on when asked and makes the
+first client through the API, opens the ports in ufw or turns ufw on with ssh and what already listens kept open,
+for a container letting the clients of the first endpoint and their DNS to the server through ufw as well, since
+the panel gives ufw no rules from a container, and checks the panel, the certificate and the endpoint. It ends
+with the directory of `compose.yaml`, the ports the panel and the endpoint hold, the IPv6 of the host and the
+command of the menu with its short command. The
 configuration of the client goes to `/root`, and to the terminal as a QR code when asked. The package puts the script
-into `/usr/local/bin` with every release it installs. Given a backup a panel downloaded, it starts the panel on that
+into `/usr/local/bin` with every release it installs, and a container when asked to, see [docker.md](docker.md#the-menu).
+The short command is a link to it in the same directory: the installation leaves a name another command or the shell
+holds alone and asks for another one, an update leaves the link be, `uninstall` takes it off, and
+`ln -s /usr/local/bin/amneziageo-server /usr/local/bin/ag-s` puts one on a host installed without it.
+Given a backup a panel downloaded, it starts the panel on that
 database instead of making an administrator and an endpoint, see [Moving to another server](#moving-to-another-server).
 
 `install --answers <file>` takes the answers from a file of `key=value` lines and asks only for what it lacks; with
@@ -47,7 +62,9 @@ every key the installation runs without a question:
 | `channel` | `stable` or `test` |
 | `restore` | a backup to put the panel on, empty for a fresh panel |
 | `bbr` | `yes` turns BBR on |
-| `docker_restart` | `yes` restarts Docker with its containers while it drops forwarded packets |
+| `docker_dir` | the directory of `compose.yaml` of a container, new or empty, `/opt/amneziageo-docker` by default |
+| `host_menu` | `yes` puts the menu on the host of a container as `/usr/local/bin/amneziageo-server`, `no` leaves it in the container alone |
+| `shortcut` | the name of the short command of the menu, a link to `/usr/local/bin/amneziageo-server`, like `ag-s`; empty for none; without it and without a terminal none |
 | `login` | the first administrator |
 | `host_admin` | `yes` makes the first administrator stand for the user of the host its login names (a package alone), `no` asks for another login |
 | `generate` | `yes` makes up a temporary password and prints it once, `no` asks for one |
@@ -59,6 +76,7 @@ every key the installation runs without a question:
 | `endpoint_host` | the address clients reach the endpoint at; without it the name of the server, or the address of the host when it is public, and a question when there is neither |
 | `client`, `qr` | the name of the first client, empty for none; `yes` shows its configuration as a QR code |
 | `resolver` | `yes` turns the resolver on with the first endpoint: its clients ask the server about names and the server asks outside over HTTPS, see [dns.md](dns.md#turning-the-resolver-on) |
+| `ipv6_range` | the range of IPv6 of the clients of the first endpoint, its first address the endpoint's, like `fd3a:4b5c:6d7e::1/64`; empty for none; without it a range of its own on a host with a global IPv6 address |
 | `ufw` | `yes` opens the ports in an active ufw or turns ufw on |
 | `reboot` | `yes` reboots after an upgrade that brings a kernel |
 | `go` | `yes` goes on past the plan |
@@ -75,7 +93,7 @@ firewall, endpoints, websocket fronts, BBR and the resolver of the clients. Its 
 | `restore <file>` | puts a backup a panel downloaded in place of the database |
 | `update`, `update beta` | moves the panel to the newest release of its channel, of the test channel for `beta` |
 | `rollback` | goes back to the release before |
-| `uninstall` | takes the panel off the host, its database and settings when asked to |
+| `uninstall` | takes the panel off the host, its database and settings when asked to, the short commands of the menu with it |
 | `settings` | what the panel answers under, its endpoints and what the host carries |
 | `start`, `stop`, `restart`, `status`, `log` | the service |
 | `enable`, `disable` | whether the panel starts with the host |
