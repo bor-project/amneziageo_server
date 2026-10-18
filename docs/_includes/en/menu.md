@@ -58,7 +58,7 @@ Every change of the address, port, path or certificate restarts the panel and pr
 
 | Sub-item | What it does |
 |---|---|
-| 1 | the state of ufw, the nftables tables of the panel and the ports it needs: ssh, the panel, subscriptions, interfaces, 80 for renewing the certificate |
+| 1 | the state of ufw, the nftables tables of the panel and the ports it needs: ssh, the panel, subscriptions, interfaces, 80 for renewing the certificate; the interfaces whose clients ufw keeps from the resolver |
 | 2, 3 | keep the port of the panel open or leave it to the host |
 | 4, 5 | the same for the subscription port |
 | 6, 7 | open or close the ports of an interface: the UDP port, the TCP services port and both directions of forwarding through the interface |
@@ -66,6 +66,7 @@ Every change of the address, port, path or certificate restarts the panel and pr
 | 10 | turn ufw on: installs it, lets the ssh port in, turns it on and restarts the panel so that it puts its rules |
 | 11 | turn ufw off |
 | 12 | the nftables tables of the panel as the host holds them: `amneziageo_in` (NAT and access to clients), `amneziageo_rt` (routing), `amneziageo_out` (channels), `amneziageo_open` (open ports without ufw), `amneziageo_guard` (a second device) |
+| 13 | `Let the clients reach the resolver`: let the clients of the interfaces ufw keeps from the resolver of the panel (port 53) reach it, with the rule `allow in on <interface> to any port 53`; with the resolver off it says that item 29 turns it on{% if page.kind == "docker" %}; from the container it prints the commands for the host{% endif %}. As a command: `amneziageo-server dns open`, see [DNS](panel/dns.html#how-it-works) |
 
 The panel itself never turns ufw on or off. How it keeps ports open: [Ports in the firewall](panel/interfaces.html#ports-in-the-firewall).
 
@@ -83,7 +84,7 @@ The panel itself never turns ufw on or off. How it keeps ports open: [Ports in t
 
 **28 `Update Geo Files`.** Downloads the enabled geo sources of the panel now, like "Update all" on the [Geo lists](panel/geo.html) page.
 
-**29 `DNS for Clients`.** Prints the settings of the resolver (`dns show`) and offers to turn it on or off; if the upstream servers are asked in plain DNS, it offers to replace them with those a fresh panel starts with, over HTTPS. As a command: `amneziageo-server dns on`, `dns off`, `dns` with a question. More in [DNS](panel/dns.html).
+**29 `DNS for Clients`.** Prints the settings of the resolver (`dns show`) and offers to turn it on or off; if the upstream servers are asked in plain DNS, it offers to replace them with those a fresh panel starts with, over HTTPS. When the resolver is on and ufw keeps the clients of some interfaces from it, the item offers to let them in, as sub-item 13 of item 23 does. As a command: `amneziageo-server dns on`, `dns off`, `dns` with a question, `dns open`. More in [DNS](panel/dns.html).
 
 ## Commands
 
@@ -100,5 +101,6 @@ The panel itself never turns ufw on or off. How it keeps ports open: [Ports in t
 | `enable`, `disable` | whether the panel starts with the host |
 | `bbr on`, `bbr off` | BBR with the `fq` queue, now and at boot |
 | `dns on`, `dns off`, `dns` | the resolver for the clients |
+| `dns open` | let the clients of the interfaces ufw keeps from the resolver reach it |
 | `<utility command>` | `user`, `role`, `token`, `panel`, `endpoint`, `subscriptions`, `import`, `device`, `family`, `geo`, `dns`, `init`, `login`, `whoami`, `update status`, see [Utility](cli.html) |
 | `help` | the list of commands |

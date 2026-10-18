@@ -47,6 +47,7 @@ amneziageo-server install
 | `Answer the DNS of its clients on this server, asking outside over HTTPS?` | yes | `resolver` |
 | (not asked) the IPv6 range of the clients of the first interface, its first address the address of the interface | on a host with a global IPv6 address a random range of its own, `fdXX:XXXX:XXXX::1/64`, otherwise no IPv6 | `ipv6_range`: like `fd3a:4b5c:6d7e::1/64`, empty for none |
 | `Open <ports> in ufw?`, or `Turn ufw on, letting in ssh and what listens now?` | yes when ufw is not installed | `ufw` |
+| `ufw keeps the clients of <interfaces> from the resolver of the panel: let them reach it?`, at the end, when ufw keeps the clients of interfaces from the resolver | yes | `resolver_ufw` |
 | `Reboot now?` after an upgrade with a new kernel | | `reboot` |
 | `Go on?` past the plan | | `go` |
 
@@ -63,6 +64,7 @@ The answers can be put into a file beforehand as `key=value` lines and given wit
 - makes the first interface and client through the API of the panel: the configuration of the client goes to `/root` and, when asked, is printed as a QR code; on a host with a global IPv6 address the interface gets a range of unique local IPv6 addresses, and the clients go over IPv6 through the server;
 - turns the resolver for the clients on, if you agreed;
 - opens the ports in ufw or turns ufw on, keeping ssh and what already listened open;
+- if ufw keeps the clients of some interface from the resolver of the panel, offers to let them in with the rule `allow in on <interface> to any port 53`, see [DNS](panel/dns.md#how-it-works);
 - puts the short command of the menu on, if you agreed: a link `/usr/local/bin/ag-s` to `amneziageo-server`, or with the name you gave; a name another command already holds is not taken, and the script asks for another one;
 - checks the service, the panel, the certificate and the interface and prints the address of the panel, the login and the password, the ports of the panel and the interface, the IPv6 address of the host and the command of the menu with its short command.
 
@@ -100,7 +102,7 @@ The service runs as root: reading and writing an interface need `CAP_NET_ADMIN`,
 
 ## Updates
 
-The panel installs a new release by itself. Every 12 hours it asks GitHub about releases, checks the signature of the `update.json` manifest with the release key and, if the release is newer, shows it in the header of "Overview" next to its own version. The "Update" button, for a role with the "Update the panel" permission, assembles the package for the architecture of the host: the files the host already has are copied, the rest are downloaded from the release in parts (usually a megabyte or two out of about 55), each is checked against its digest, and the `install.sh` of the package is run apart from the panel, through `systemd-run`. The page follows the steps "Download", "Install", "Restart", "Done" and loads the new panel by itself once it answers; a failed update stays in the header with its log until the next one. More in [Updates](panel/overview.md#updates).
+The panel installs a new release by itself. Every 12 hours it asks GitHub about releases, checks the signature of the `update.json` manifest with the release key and, if the release is newer, shows it in the header of "Overview" next to its own version. The "Update" button, for a role with the "Update the panel" permission, assembles the package for the architecture of the host: the files the host already has are copied, the rest are downloaded from the release in parts (usually a megabyte or two out of about 55), each is checked against its digest, and the `install.sh` of the package is run apart from the panel, through `systemd-run`. The page follows the steps "Download", "Install", "Restart", "Done" and loads the new panel by itself once it answers; a failed update stays in the header with its log until it is hidden with the "Hide" cross or the next one goes through. More in [Updates](panel/overview.md#updates).
 
 The `install.sh` of the new release puts it next to the working one, stops the service, copies the database to `/var/lib/amneziageo-server/backup`, moves `current` to the new release and starts the service. It waits until the server says it is up and watches it for five more seconds: a release that did not come up or fell over in that time rolls back by itself: the copy of the database comes back, `current` points at the previous release, the service starts on it, and the script ends with an error. A service stopped before the update stays stopped.
 
