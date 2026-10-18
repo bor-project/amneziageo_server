@@ -180,6 +180,30 @@ public sealed class TemplateStore
     }
 
     /// <summary>
+    /// Writes the ranges of a template worked out anew, unless the template was changed after it was read, and tells
+    /// whether it wrote them.
+    /// </summary>
+    public async Task<bool> RenewAsync(ClientTemplate renewed, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(renewed);
+
+        var entity = await _db.Templates
+            .FirstOrDefaultAsync(template => template.Id == renewed.Id, ct)
+            .ConfigureAwait(false);
+        if (entity is null || entity.UpdatedUtc != renewed.UpdatedUtc)
+        {
+            return false;
+        }
+
+        entity.AllowedIps = string.Join(", ", renewed.AllowedIps);
+        entity.Missed = string.Join(", ", renewed.Missed);
+        entity.RefreshedUtc = renewed.RefreshedUtc;
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return true;
+    }
+
+    /// <summary>
     /// Removes a template, unless a client takes it.
     /// </summary>
     public async Task<TemplateResult> RemoveAsync(long id, CancellationToken ct)

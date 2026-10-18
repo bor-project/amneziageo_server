@@ -166,6 +166,44 @@ public class TemplateStoreTests
     }
 
     [Fact]
+    public async Task RangesWorkedOutAnewAreWrittenWithoutChangingTheTemplate()
+    {
+        using var bench = new Bench();
+        var template = (await bench.Templates.AddAsync(Fresh("blocked"), CancellationToken.None)).Record!;
+        bench.Clock.Pass(TimeSpan.FromHours(1));
+
+        var written = await bench.Templates.RenewAsync(
+            template with { AllowedIps = ["10.0.0.0/8"], Missed = ["192.168.0.0/16"], RefreshedUtc = bench.Clock.Now },
+            CancellationToken.None);
+        var read = await bench.Templates.FindAsync(template.Id, CancellationToken.None);
+
+        Assert.True(written);
+        Assert.Equal(["10.0.0.0/8"], read!.AllowedIps);
+        Assert.Equal(["192.168.0.0/16"], read.Missed);
+        Assert.Equal(bench.Clock.Now, read.RefreshedUtc);
+        Assert.Equal(template.UpdatedUtc, read.UpdatedUtc);
+        Assert.Equal(template.Entries, read.Entries);
+    }
+
+    [Fact]
+    public async Task RangesOfATemplateChangedMeanwhileAreNotWritten()
+    {
+        using var bench = new Bench();
+        var seen = (await bench.Templates.AddAsync(Fresh("blocked"), CancellationToken.None)).Record!;
+        bench.Clock.Pass(TimeSpan.FromMinutes(1));
+        await bench.Templates.ChangeAsync(
+            seen.Id,
+            Fresh("blocked") with { AllowedIps = ["172.16.0.0/12"] },
+            CancellationToken.None);
+
+        var written = await bench.Templates.RenewAsync(seen with { AllowedIps = ["10.0.0.0/8"] }, CancellationToken.None);
+        var read = await bench.Templates.FindAsync(seen.Id, CancellationToken.None);
+
+        Assert.False(written);
+        Assert.Equal(["172.16.0.0/12"], read!.AllowedIps);
+    }
+
+    [Fact]
     public async Task ACommandOnATemplateThePanelDoesNotHoldIsRefused()
     {
         using var bench = new Bench();
