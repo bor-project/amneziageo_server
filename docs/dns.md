@@ -89,6 +89,9 @@ tunnel of that configuration, the client takes what the configuration or the tem
 questions of the clients stays useful for the clients that ask elsewhere anyway, but the chain no longer rests
 on it.
 
+The address of the resolver goes into `AllowedIPs` of the client too when the ranges of its template or of its
+configuration leave it out: it answers only through the tunnel.
+
 Where the panel holds the ports of an endpoint open in the firewall of the host, it lets the clients of that
 endpoint reach the resolver as well: the port of the resolver is opened on the interface of the endpoint, for UDP
 and TCP, while the resolver answers on one of its addresses, see [firewall.md](firewall.md). An endpoint whose

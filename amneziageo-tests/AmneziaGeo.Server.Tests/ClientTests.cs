@@ -615,6 +615,79 @@ public class ClientTests
     }
 
     [Fact]
+    public void TheResolverTheTemplateLeavesOutGoesIntoTheTunnel()
+    {
+        var endpoint = Endpoint() with { Address = ["10.8.0.1/24", "fd00::1/64"] };
+        var template = new ClientTemplate { Name = "listed", AllowedIps = ["203.0.113.0/24", "2001:db8::/32"] };
+
+        var text = ClientText.Text(endpoint, Client(), template, ["10.8.0.1", "fd00::1"]);
+
+        Assert.Contains("DNS = 10.8.0.1, fd00::1\n", text, StringComparison.Ordinal);
+        Assert.Contains("AllowedIPs = 203.0.113.0/24, 2001:db8::/32, 10.8.0.1/32, fd00::1/128\n", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARangeThatHoldsTheResolverLeavesTheRangesAsTheyAre()
+    {
+        var template = new ClientTemplate { Name = "listed", AllowedIps = ["203.0.113.0/24", "10.8.0.0/24"] };
+
+        var text = ClientText.Text(Endpoint(), Client(), template, ["10.8.0.1"]);
+
+        Assert.Contains("AllowedIPs = 203.0.113.0/24, 10.8.0.0/24\n", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ANameServerOutsideTheNetworkOfTheEndpointStaysOutOfTheRanges()
+    {
+        var template = new ClientTemplate { Name = "listed", AllowedIps = ["203.0.113.0/24"] };
+
+        var text = ClientText.Text(Endpoint(), Client(), template);
+
+        Assert.Contains("DNS = 1.1.1.1\n", text, StringComparison.Ordinal);
+        Assert.Contains("AllowedIPs = 203.0.113.0/24\n", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ANameServerOfTheTemplateInsideTheNetworkOfTheEndpointGoesIntoTheTunnel()
+    {
+        var template = new ClientTemplate { Name = "listed", AllowedIps = ["203.0.113.0/24"], Dns = ["10.8.0.1", "9.9.9.9"] };
+
+        var text = ClientText.Text(Endpoint(), Client(), template);
+
+        Assert.Contains("AllowedIPs = 203.0.113.0/24, 10.8.0.1/32\n", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AClientWithoutATemplateTakesTheResolverOnlyWhereTheRangesOfTheEndpointMissIt()
+    {
+        var whole = ClientText.Text(Endpoint(), Client(), null, ["10.8.0.1"]);
+        var narrow = ClientText.Text(Endpoint() with { AllowedIps = ["198.51.100.0/24"] }, Client(), null, ["10.8.0.1"]);
+
+        Assert.Contains("AllowedIPs = 0.0.0.0/0, ::/0\n", whole, StringComparison.Ordinal);
+        Assert.Contains("AllowedIPs = 198.51.100.0/24, 10.8.0.1/32\n", narrow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheLinkAndTheSubscriptionCarryTheResolverTheTemplateLeavesOut()
+    {
+        var template = new ClientTemplate { Id = 3, Name = "listed", AllowedIps = ["203.0.113.0/24"] };
+        var client = Client() with { TemplateId = 3 };
+
+        using var document = Opened(ClientLink.Link(Endpoint(), client, template, ["10.8.0.1"]));
+        var awg = document.RootElement.GetProperty("containers")[0].GetProperty("awg");
+        using var last = JsonDocument.Parse(awg.GetProperty("last_config").GetString()!);
+        var feed = ClientFeed.Of(
+            [Endpoint() with { IsEnabled = true }],
+            [client],
+            new Dictionary<long, ClientTemplate> { [3] = template },
+            _ => new ClientUsage(0, 0),
+            _ => ["10.8.0.1"]);
+
+        Assert.Contains("AllowedIPs = 203.0.113.0/24, 10.8.0.1/32\n", last.RootElement.GetProperty("config").GetString(), StringComparison.Ordinal);
+        Assert.Contains("AllowedIPs = 203.0.113.0/24, 10.8.0.1/32\n", feed.Sheets.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ATemplateWithABadNameOrValueIsRefused()
     {
         Assert.Equal("bad-template-name", TemplateRules.Check(new ClientTemplate { Name = " " })!.Code);

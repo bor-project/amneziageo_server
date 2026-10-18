@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using AmneziaGeo.Server.Awg.Config;
+using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Panel;
 
 namespace AmneziaGeo.Server.Awg.Client;
@@ -26,9 +27,12 @@ public static class ClientText
 
         // A field the template leaves empty takes what the endpoint holds, and only then the built in value.
         var dns = Names(config, template, resolver);
-        var ranges = template is null
-            ? config.AllowedIps
-            : Either(template.AllowedIps, Either(config.AllowedIps, TemplateDefaults.AllowedIps(client.Address)));
+        var ranges = Reaching(
+            template is null
+                ? config.AllowedIps
+                : Either(template.AllowedIps, Either(config.AllowedIps, TemplateDefaults.AllowedIps(client.Address))),
+            dns,
+            config.Address);
         var mtu = template?.Mtu ?? config.Mtu;
         var keepalive = template?.Keepalive ?? config.Keepalive;
 
@@ -144,6 +148,29 @@ public static class ClientText
 
     private static IReadOnlyList<string> Either(IReadOnlyList<string> own, IReadOnlyList<string> otherwise) =>
         own.Count > 0 ? own : otherwise;
+
+    // Adds the name servers inside the network of the endpoint that the ranges leave out.
+    private static IReadOnlyList<string> Reaching(IReadOnlyList<string> ranges, IReadOnlyList<string> dns, IReadOnlyList<string> network)
+    {
+        var own = Ranges(network);
+        var inside = Ranges(dns).Where(server => own.Exists(range => ClientPool.Inside(range, server.Address))).ToList();
+        if (inside.Count == 0)
+        {
+            return ranges;
+        }
+
+        var held = Ranges(ranges);
+        var added = inside
+            .Where(server => !held.Exists(range => ClientPool.Inside(range, server.Address)))
+            .Select(server => server.ToString())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return added.Length == 0 ? ranges : [.. ranges, .. added];
+    }
+
+    private static List<AwgAllowedIp> Ranges(IEnumerable<string> texts) =>
+        [.. texts.Select(text => AwgAllowedIp.TryParse(text, out var range) ? range : null).OfType<AwgAllowedIp>()];
 
     private static IReadOnlyList<string> Names(ServerConfig config, ClientTemplate? template, IReadOnlyList<string>? resolver)
     {
