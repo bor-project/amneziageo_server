@@ -56,9 +56,17 @@ public sealed class TemplateResolver
     /// <summary>
     /// Returns the ranges the entries stand for, what each of them gave and the ones that gave none.
     /// </summary>
+    public Task<TemplateResolution> ResolveAsync(IReadOnlyList<string> entries, GeoIndex index, CancellationToken ct) =>
+        ResolveAsync(entries, index, false, ct);
+
+    /// <summary>
+    /// Returns the ranges the entries stand for, what each of them gave and the ones that gave none; names answered
+    /// with stand-in addresses give no range.
+    /// </summary>
     public async Task<TemplateResolution> ResolveAsync(
         IReadOnlyList<string> entries,
         GeoIndex index,
+        bool standIns,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(entries);
@@ -66,6 +74,7 @@ public sealed class TemplateResolver
 
         var found = new Dictionary<string, List<AwgAllowedIp>>(StringComparer.Ordinal);
         var named = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        var stood = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entry in entries)
         {
             if (found.ContainsKey(entry))
@@ -89,6 +98,10 @@ public sealed class TemplateResolver
             {
                 ranges.AddRange(index.Cidrs(rule.Value).Select(Range).OfType<AwgAllowedIp>());
             }
+            else if (standIns)
+            {
+                stood.Add(entry);
+            }
             else
             {
                 named[entry] = rule.Kind == GeoRuleKind.Domain ? [rule.Value] : Names(index.Domains(rule.Value));
@@ -108,7 +121,7 @@ public sealed class TemplateResolver
 
         return new TemplateResolution(
             Written(found.Values.SelectMany(ranges => ranges)),
-            [.. kept.Where(entry => found[entry].Count == 0)],
+            [.. kept.Where(entry => found[entry].Count == 0 && !stood.Contains(entry))],
             [.. kept.Select(entry => new TemplatePart(entry, Written(found[entry])))]);
     }
 

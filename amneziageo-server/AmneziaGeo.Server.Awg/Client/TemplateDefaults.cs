@@ -25,6 +25,11 @@ public static class TemplateDefaults
     public const string AnySix = "::/0";
 
     /// <summary>
+    /// The range the stand-in addresses the resolver answers names with come from.
+    /// </summary>
+    public const string StandIns = "198.19.0.0/16";
+
+    /// <summary>
     /// The packet size.
     /// </summary>
     public const int Mtu = ConfigDefaults.Mtu;

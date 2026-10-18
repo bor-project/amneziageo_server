@@ -16,7 +16,8 @@ public sealed record DnsStateBody(
     long Added,
     int Waiting,
     int Names,
-    DateTimeOffset? StartedUtc);
+    DateTimeOffset? StartedUtc,
+    IReadOnlyList<string> KeptOut);
 
 /// <summary>
 /// What the reading of names out of the connections themselves has done since the panel started.
@@ -95,7 +96,8 @@ public static class DnsAnswers
         DnsSets sets,
         RoutePlan? plan,
         string? fault = null,
-        DnsReadingBody? reading = null)
+        DnsReadingBody? reading = null,
+        IReadOnlyList<string>? keptOut = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(state);
@@ -125,7 +127,8 @@ public static class DnsAnswers
                 sets.Added,
                 sets.Waiting,
                 DnsNames.Build(plan).Count,
-                state.StartedUtc),
+                state.StartedUtc,
+                keptOut ?? []),
             reading ?? new DnsReadingBody(false, false, 0, 0, 0, 0, 0, 0, 0));
     }
 

@@ -96,7 +96,12 @@ Where the panel holds the ports of an endpoint open in the firewall of the host,
 endpoint reach the resolver as well: the port of the resolver is opened on the interface of the endpoint, for UDP
 and TCP, while the resolver answers on one of its addresses, see [firewall.md](firewall.md). An endpoint whose
 ports the panel does not hold open is left to the host: its clients get no answer until that port is let in on
-its interface by hand.
+its interface. The panel reads ufw for it and names the interfaces whose clients ufw keeps from the resolver
+(`state.keptOut` of `GET /api/dns`); the form of a template with Route by name shows them with the commands that
+let them in. On the host, item 23 of the menu, subitem 13, or `amneziageo-server dns open` gives ufw
+`allow in on <interface> to any port 53` for each of them, under the comment `amneziageo resolver <interface>`;
+item 29 and the installation offer the same once the resolver answers. A host without ufw keeps nobody out, and a
+ufw whose rules nftables shows only as matches of iptables names nothing.
 
 The questions leave through the way out of the host until a channel is picked. Where the local network
 answers about a service differently from the network behind the channel, a rule by name fills its set with
@@ -200,6 +205,20 @@ A rule keeps the newest 128 of its addresses standing. They go into the database
 come back into the set before the first question is asked and take a fresh time of their own while they stand,
 so a machine that rebooted does not leave the rule empty and a name that stopped answering leaves its
 addresses behind. An address a newer one pushes out of the standing ones lives out its time and goes.
+
+## Stand-in addresses
+
+The clients of a template with Route by name on (`standIns`, [templates.md](templates.md)) are answered about the
+names of the template with stand-in addresses out of `198.19.0.0/16`. The resolver asks the name as it does for any
+client, so the rules take the real addresses into their sets and the connection log knows the name. The client gets
+one `A` record with the stand-in address and a lifetime of at most 300 seconds; `AAAA` and `HTTPS` come back empty. A
+name that leads to a name of the template through an alias takes a stand-in too.
+
+The host holds the map `stand` in the table `amneziageo_rt`. A new connection of a client to a stand-in goes to the
+real address (`dnat`), the rules decide it by the real address in a chain right after that, and a stand-in the map
+does not hold is refused with a reset. The panel keeps the names with their stand-ins in its database ten seconds
+after they change and when it stops, and lays them again when it starts; a name nobody asked about for seven days
+lets its address go.
 
 ## Names read out of the connections
 

@@ -18,6 +18,8 @@ public sealed class DnsHost : BackgroundService
 
     private static readonly TimeSpan Saving = TimeSpan.FromMinutes(1);
 
+    private static readonly TimeSpan StandSaving = TimeSpan.FromSeconds(10);
+
     private const int WarmPerTick = 16;
 
     private readonly SemaphoreSlim _turn = new(1, 1);
@@ -31,6 +33,10 @@ public sealed class DnsHost : BackgroundService
     private readonly DnsState _state;
 
     private readonly AccessNames _names;
+
+    private readonly StandInBook _book;
+
+    private readonly DnsStandIns _standIns;
 
     private readonly TimeProvider _time;
 
@@ -50,7 +56,11 @@ public sealed class DnsHost : BackgroundService
 
     private long _saved;
 
+    private long _stood;
+
     private DateTimeOffset _saving;
+
+    private DateTimeOffset _standSaving;
 
     private DateTimeOffset _warmAt = DateTimeOffset.MaxValue;
 
@@ -65,6 +75,8 @@ public sealed class DnsHost : BackgroundService
         DnsSets sets,
         DnsState state,
         AccessNames names,
+        StandInBook book,
+        DnsStandIns standIns,
         TimeProvider time,
         ILogger<DnsHost> logger)
     {
@@ -73,9 +85,12 @@ public sealed class DnsHost : BackgroundService
         _sets = sets;
         _state = state;
         _names = names;
+        _book = book;
+        _standIns = standIns;
         _time = time;
         _logger = logger;
         _plans.Kept += Poke;
+        _book.Stirred += Poke;
     }
 
     /// <summary>
@@ -134,6 +149,13 @@ public sealed class DnsHost : BackgroundService
         Hush();
         _state.Stopped();
         await base.StopAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await SaveStandInsAsync(true, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     /// <summary>
@@ -142,6 +164,7 @@ public sealed class DnsHost : BackgroundService
     public override void Dispose()
     {
         _plans.Kept -= Poke;
+        _book.Stirred -= Poke;
         _poke.Dispose();
         _turn.Dispose();
         base.Dispose();
@@ -156,10 +179,12 @@ public sealed class DnsHost : BackgroundService
             while (!stopping.IsCancellationRequested)
             {
                 await RestAsync(stopping).ConfigureAwait(false);
+                await BookAsync(stopping).ConfigureAwait(false);
                 Look();
                 await WarmAsync(stopping).ConfigureAwait(false);
                 await FlushAsync(stopping).ConfigureAwait(false);
                 await SaveAsync(stopping).ConfigureAwait(false);
+                await SaveStandInsAsync(false, stopping).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -187,6 +212,7 @@ public sealed class DnsHost : BackgroundService
             }
 
             await RestoreAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
+            await _book.RefreshAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
             if (_plans.Held is null)
             {
                 await scope.ServiceProvider.GetRequiredService<RouteApplier>().BuildAsync(ct).ConfigureAwait(false);
@@ -222,7 +248,9 @@ public sealed class DnsHost : BackgroundService
             _settings,
             _state,
             LandAsync,
-            _names.Hear);
+            _names.Hear,
+            _standIns,
+            _book.For);
 
         var server = new DnsServer(resolver);
         var taken = default(IReadOnlyList<IPAddress>);
@@ -280,6 +308,26 @@ public sealed class DnsHost : BackgroundService
         }
         catch (Exception ex) when (ex is SemaphoreFullException or ObjectDisposedException)
         {
+        }
+    }
+
+    // Takes anew the clients and the templates the stand-in addresses go by when they are due.
+    private async Task BookAsync(CancellationToken ct)
+    {
+        if (!_book.Due)
+        {
+            return;
+        }
+
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            await _book.RefreshAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
+            _standIns.Sweep();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "the clients the stand-in addresses go by were not read");
         }
     }
 
@@ -427,6 +475,14 @@ public sealed class DnsHost : BackgroundService
         }
 
         _restored = true;
+        var stood = await services.GetRequiredService<StandInStore>().ListAsync(ct).ConfigureAwait(false);
+        if (stood.Count > 0)
+        {
+            _standIns.Restore(stood);
+            _stood = _standIns.Stirs;
+            _logger.LogInformation("{Count} stand-in addresses came back", stood.Count);
+        }
+
         var standings = await services.GetRequiredService<DnsStandingStore>().ListAsync(ct).ConfigureAwait(false);
         if (standings.Count == 0)
         {
@@ -462,6 +518,29 @@ public sealed class DnsHost : BackgroundService
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "the addresses the rules stand on did not reach the panel database");
+        }
+    }
+
+    // Saves the stand-in addresses once they changed, at most every few seconds unless the panel stops.
+    private async Task SaveStandInsAsync(bool now, CancellationToken ct)
+    {
+        var stirs = _standIns.Stirs;
+        var at = _time.GetUtcNow();
+        if (stirs == _stood || (!now && at < _standSaving))
+        {
+            return;
+        }
+
+        _standSaving = at + StandSaving;
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<StandInStore>().SaveAsync(_standIns.Held(), ct).ConfigureAwait(false);
+            _stood = stirs;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "the stand-in addresses did not reach the panel database");
         }
     }
 

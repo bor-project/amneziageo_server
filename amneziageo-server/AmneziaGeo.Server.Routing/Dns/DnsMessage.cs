@@ -126,6 +126,21 @@ public sealed record DnsMessage(
     }
 
     /// <summary>
+    /// Returns the answer that carries no record for the question.
+    /// </summary>
+    public static byte[] Empty(ReadOnlySpan<byte> question) => Answered(question, null, 0);
+
+    /// <summary>
+    /// Returns the answer that gives the question one IPv4 address.
+    /// </summary>
+    public static byte[] Single(ReadOnlySpan<byte> question, IPAddress address, uint ttl)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        return Answered(question, address, ttl);
+    }
+
+    /// <summary>
     /// Marks a message with the number the asking side used.
     /// </summary>
     public static void Stamp(Span<byte> packet, ushort id)
@@ -156,6 +171,39 @@ public sealed record DnsMessage(
         BinaryPrimitives.WriteUInt16BigEndian(cut.AsSpan(10), 0);
 
         return cut;
+    }
+
+    // Returns the question turned into its answer, with the address as its only record or with none.
+    private static byte[] Answered(ReadOnlySpan<byte> question, IPAddress? address, uint ttl)
+    {
+        if (question.Length < HeaderLength || !Asked(question, out var end))
+        {
+            return Refusal(question, ServerFailure);
+        }
+
+        var data = address?.MapToIPv4().GetAddressBytes() ?? [];
+        var reply = new byte[end + (data.Length == 0 ? 0 : 12 + data.Length)];
+        question[..end].CopyTo(reply);
+        var flags = BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(2));
+        BinaryPrimitives.WriteUInt16BigEndian(reply.AsSpan(2), (ushort)((flags & 0x7900) | 0x8080));
+        BinaryPrimitives.WriteUInt16BigEndian(reply.AsSpan(6), (ushort)(data.Length == 0 ? 0 : 1));
+        BinaryPrimitives.WriteUInt16BigEndian(reply.AsSpan(8), 0);
+        BinaryPrimitives.WriteUInt16BigEndian(reply.AsSpan(10), 0);
+        if (data.Length == 0)
+        {
+            return reply;
+        }
+
+        var record = reply.AsSpan(end);
+        record[0] = 0xC0;
+        record[1] = HeaderLength;
+        BinaryPrimitives.WriteUInt16BigEndian(record[2..], (ushort)DnsRecordType.A);
+        BinaryPrimitives.WriteUInt16BigEndian(record[4..], 1);
+        BinaryPrimitives.WriteUInt32BigEndian(record[6..], ttl);
+        BinaryPrimitives.WriteUInt16BigEndian(record[10..], (ushort)data.Length);
+        data.CopyTo(record[12..]);
+
+        return reply;
     }
 
     // Returns how many bytes a datagram to the asking side may carry: the size its question names, within the bounds.

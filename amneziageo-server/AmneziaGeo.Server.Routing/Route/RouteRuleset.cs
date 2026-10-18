@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Routing.Access;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Dns;
@@ -105,6 +106,7 @@ public static class RouteRuleset
 
         Https(text, plan);
         Handed(text, plan);
+        Stand(text, plan);
         text.Append("\tchain prerouting {\n");
         text.Append("\t\ttype filter hook prerouting priority mangle; policy accept;\n");
         if (plan.Inbound.Count > 0)
@@ -115,10 +117,13 @@ public static class RouteRuleset
             text.Append("\t\tct mark and ").Append(Hex8(RouteMarks)).Append(" != 0x00000000 meta mark set ct mark and ");
             text.Append(Hex8(RouteMarks)).Append(" accept\n");
             text.Append("\t\tct state != new accept\n");
+            if (Standing(plan))
+            {
+                text.Append("\t\tip daddr ").Append(TemplateDefaults.StandIns).Append(" accept\n");
+            }
+
             text.Append("\t\tjump decide\n");
-            text.Append(plan.Journal is null
-                ? "\t\tmeta mark != 0x00000000 ct mark set meta mark\n"
-                : $"\t\tct mark set meta mark or {Hex8(AccessDefaults.Watching)}\n");
+            text.Append("\t\t").Append(Settled(plan));
             Asked(text, plan, live);
         }
 
@@ -135,6 +140,7 @@ public static class RouteRuleset
 
         text.Append("\t}\n");
         Redirect(text, plan);
+        Stood(text, plan);
         Door(text, plan);
         Answers(text, plan);
         text.Append("}\n");
@@ -499,6 +505,61 @@ public static class RouteRuleset
         text.Append("\t\tiifname != { ").Append(Quoted(plan.Inbound)).Append(" } accept\n");
         text.Append("\t\tmeta l4proto { tcp, udp } th dport 53 redirect to :");
         text.Append(plan.Dns.Port.ToString(CultureInfo.InvariantCulture)).Append('\n');
+        text.Append("\t}\n");
+    }
+
+    // Tells whether the ruleset leads the stand-in addresses to the real ones.
+    private static bool Standing(RoutePlan plan) => plan.StandIns && plan.Inbound.Count > 0;
+
+    // Returns the line that keeps on the connection what the rules decided for its first packet.
+    private static string Settled(RoutePlan plan) =>
+        plan.Journal is null
+            ? "meta mark != 0x00000000 ct mark set meta mark\n"
+            : $"ct mark set meta mark or {Hex8(AccessDefaults.Watching)}\n";
+
+    private static void Stand(StringBuilder text, RoutePlan plan)
+    {
+        if (!Standing(plan))
+        {
+            return;
+        }
+
+        text.Append("\tmap ").Append(DnsStandIns.MapName).Append(" {\n");
+        text.Append("\t\ttype ipv4_addr : ipv4_addr\n");
+        text.Append("\t}\n\n");
+    }
+
+    // Writes the chains that lead a stand-in address to the real one, decide the connection by the real one and turn
+    // away a stand-in that leads nowhere.
+    private static void Stood(StringBuilder text, RoutePlan plan)
+    {
+        if (!Standing(plan))
+        {
+            return;
+        }
+
+        var inbound = Quoted(plan.Inbound);
+        var range = TemplateDefaults.StandIns;
+        text.Append("\n\tchain standin {\n");
+        text.Append("\t\ttype nat hook prerouting priority dstnat; policy accept;\n");
+        text.Append("\t\tiifname != { ").Append(inbound).Append(" } accept\n");
+        text.Append("\t\tdnat ip to ip daddr map @").Append(DnsStandIns.MapName).Append('\n');
+        text.Append("\t}\n");
+        text.Append("\n\tchain stood {\n");
+        text.Append("\t\ttype filter hook prerouting priority dstnat + 10; policy accept;\n");
+        text.Append("\t\tiifname != { ").Append(inbound).Append(" } accept\n");
+        text.Append("\t\tct state != new accept\n");
+        text.Append("\t\tmeta nfproto != ipv4 accept\n");
+        text.Append("\t\tip daddr ").Append(range).Append(" accept\n");
+        text.Append("\t\tct original ip daddr != ").Append(range).Append(" accept\n");
+        text.Append("\t\tjump decide\n");
+        text.Append("\t\t").Append(Settled(plan));
+        text.Append("\t}\n");
+        text.Append("\n\tchain unstood {\n");
+        text.Append("\t\ttype filter hook forward priority filter - 5; policy accept;\n");
+        text.Append("\t\tiifname != { ").Append(inbound).Append(" } accept\n");
+        text.Append("\t\tip daddr ").Append(range).Append(" meta l4proto tcp reject with tcp reset\n");
+        text.Append("\t\tip daddr ").Append(range).Append(" reject\n");
         text.Append("\t}\n");
     }
 

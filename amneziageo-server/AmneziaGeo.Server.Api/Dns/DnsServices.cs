@@ -16,9 +16,14 @@ public static class DnsServices
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<DnsState>();
+        services.AddSingleton(provider => new DnsStandIns(provider.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<StandInBook>();
+        services.AddSingleton<ResolverDoors>();
         services.AddSingleton(provider => new DnsSets(
             provider.GetRequiredService<IHostNetwork>(),
-            provider.GetRequiredService<TimeProvider>()));
+            provider.GetRequiredService<TimeProvider>(),
+            DnsDefaults.StandingAddresses,
+            provider.GetRequiredService<DnsStandIns>()));
 
         services.AddSingleton<DnsHost>();
         services.AddHostedService(provider => provider.GetRequiredService<DnsHost>());

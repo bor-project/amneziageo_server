@@ -7,6 +7,8 @@ import { useFailure } from "@/api/failure"
 import { useOutbounds } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
 import { Box, Count, Flag, ListLine, Part, Pick } from "@/components/fields"
+import { ResolverTrouble } from "@/components/ResolverTrouble"
+import { troubleOf } from "@/components/trouble"
 import { footer, primary, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -89,6 +91,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
   const save = useSaveResolver()
   const saved = draftOf(settings)
   const draft = kept ?? saved
+  const trouble = troubleOf(settings)
 
   function set(part: Partial<DnsDraft>) {
     const next = { ...draft, ...part }
@@ -115,6 +118,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
       <Part title={t("dns.serving")}>
         <div className="sm:col-span-2">
           <Flag id="dns-on" caption={t("dns.enabled")} value={draft.isEnabled} onChange={(v) => set({ isEnabled: v })} />
+          <ResolverTrouble trouble={trouble?.kind === "kept" ? trouble : null} kept="dns.troubleKept" />
         </div>
         <Count id="dns-port" caption={t("dns.port")} value={draft.port} onChange={(v) => set({ port: v })} />
         <Count

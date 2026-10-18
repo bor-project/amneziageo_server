@@ -120,9 +120,14 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         && string.Equals(one.Protocol, other.Protocol, StringComparison.Ordinal)
         && string.Equals(one.Interface, other.Interface, StringComparison.Ordinal);
 
-    // Tells whether the resolver answers on an address of an endpoint.
-    private static bool Answers(DnsSettings resolver, ServerConfig config)
+    /// <summary>
+    /// Tells whether the resolver answers on an address of an endpoint.
+    /// </summary>
+    public static bool Answers(DnsSettings resolver, ServerConfig config)
     {
+        ArgumentNullException.ThrowIfNull(resolver);
+        ArgumentNullException.ThrowIfNull(config);
+
         if (!resolver.IsEnabled)
         {
             return false;

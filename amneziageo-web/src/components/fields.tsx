@@ -33,6 +33,7 @@ export function Line({
   fault = "",
   after,
   onBlur,
+  disabled = false,
 }: {
   id: string
   caption: ReactNode
@@ -44,12 +45,14 @@ export function Line({
   fault?: string
   after?: ReactNode
   onBlur?: () => void
+  disabled?: boolean
 }) {
   const input = (
     <input
       id={id}
       value={value}
       placeholder={placeholder}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       onBlur={onBlur}
       className={after === undefined ? `mt-1 ${field}` : `min-w-0 flex-1 ${field}`}

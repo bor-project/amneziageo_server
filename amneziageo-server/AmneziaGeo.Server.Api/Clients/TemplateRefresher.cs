@@ -67,15 +67,15 @@ public sealed class TemplateRefresher
             return template with { AllowedIps = [], Missed = [], RefreshedUtc = null };
         }
 
-        var found = await FindAsync(template.Entries, ct).ConfigureAwait(false);
+        var found = await FindAsync(template.Entries, template.StandIns, ct).ConfigureAwait(false);
 
         return template with { AllowedIps = found.AllowedIps, Missed = found.Missed, RefreshedUtc = _time.GetUtcNow() };
     }
 
     /// <summary>
-    /// Returns what the entries stand for now.
+    /// Returns what the entries stand for now, the names left to the stand-in addresses when they take them.
     /// </summary>
-    public async Task<TemplateResolution> FindAsync(IReadOnlyList<string> entries, CancellationToken ct)
+    public async Task<TemplateResolution> FindAsync(IReadOnlyList<string> entries, bool standIns, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(entries);
 
@@ -92,6 +92,6 @@ public sealed class TemplateRefresher
         using var upstream = new DnsUpstream(settings.Upstreams, Wait, () => way.Mark);
         var resolver = new TemplateResolver(upstream);
 
-        return await resolver.ResolveAsync(entries, GeoIndex.Load(sources, _files), ct).ConfigureAwait(false);
+        return await resolver.ResolveAsync(entries, GeoIndex.Load(sources, _files), standIns, ct).ConfigureAwait(false);
     }
 }

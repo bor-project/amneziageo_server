@@ -25,14 +25,11 @@ public static class ClientText
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
+        var stood = template is { StandIns: true } && resolver is { Count: > 0 } ? resolver : null;
+
         // A field the template leaves empty takes what the endpoint holds, and only then the built in value.
-        var dns = Names(config, template, resolver);
-        var ranges = Reaching(
-            template is null
-                ? config.AllowedIps
-                : Either(template.AllowedIps, Either(config.AllowedIps, TemplateDefaults.AllowedIps(client.Address))),
-            dns,
-            config.Address);
+        var dns = stood ?? Names(config, template, resolver);
+        var ranges = Reaching(Carried(config, client, template, stood is not null), dns, config.Address);
         var mtu = template?.Mtu ?? config.Mtu;
         var keepalive = template?.Keepalive ?? config.Keepalive;
 
@@ -148,6 +145,19 @@ public static class ClientText
 
     private static IReadOnlyList<string> Either(IReadOnlyList<string> own, IReadOnlyList<string> otherwise) =>
         own.Count > 0 ? own : otherwise;
+
+    // Returns the ranges the client routes into the tunnel before the name servers join them.
+    private static IReadOnlyList<string> Carried(ServerConfig config, TunnelClient client, ClientTemplate? template, bool stood)
+    {
+        if (template is null)
+        {
+            return config.AllowedIps;
+        }
+
+        return stood
+            ? [.. template.AllowedIps, TemplateDefaults.StandIns]
+            : Either(template.AllowedIps, Either(config.AllowedIps, TemplateDefaults.AllowedIps(client.Address)));
+    }
 
     // Adds the name servers inside the network of the endpoint that the ranges leave out.
     private static IReadOnlyList<string> Reaching(IReadOnlyList<string> ranges, IReadOnlyList<string> dns, IReadOnlyList<string> network)

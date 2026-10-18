@@ -35,11 +35,14 @@ public static class DnsEndpoints
         DnsSets sets,
         RoutePlans plans,
         NameState names,
+        ConfigStore configs,
+        ResolverDoors doors,
         CancellationToken ct)
     {
         var settings = await store.ReadAsync(ct).ConfigureAwait(false);
+        var shut = await doors.KeptOutAsync(settings, await configs.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
 
-        return Results.Ok(DnsAnswers.Resolver(settings, state, sets, plans.Held, names.Fault, names.Counts));
+        return Results.Ok(DnsAnswers.Resolver(settings, state, sets, plans.Held, names.Fault, names.Counts, shut));
     }
 
     private static async Task<IResult> SaveAsync(

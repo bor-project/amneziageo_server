@@ -61,6 +61,8 @@ public sealed class FirewallHost
 
     private const string UserInput = "ufw-user-input";
 
+    private const string Udp = "udp";
+
     private const string NotLocal = "ufw-not-local";
 
     private const string Unreached =
@@ -243,6 +245,68 @@ public sealed class FirewallHost
                 ? PortState.OfChains(input.Output, rules.Output, one.Protocol, one.Port)
                 : PortState.Unknown),
         ];
+    }
+
+    /// <summary>
+    /// Returns the interfaces whose clients the firewall of the host keeps from a UDP port of the host, over IPv4 or
+    /// IPv6; a host without ufw keeps nobody out.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> KeptOutAsync(IReadOnlyList<string> interfaces, int port, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(interfaces);
+
+        if (interfaces.Count == 0)
+        {
+            return [];
+        }
+
+        try
+        {
+            if (_tool.Length > 0)
+            {
+                var status = await RunAsync(["status", "verbose"], ct).ConfigureAwait(false);
+
+                return status.IsOk
+                    ? [.. interfaces.Where(name => PortState.OfUfw(status.Output, Udp, port, name) == PortState.Closed)]
+                    : [];
+            }
+
+            if (await ChainsAsync("ip", "ufw", ct).ConfigureAwait(false) is not { } four)
+            {
+                return [];
+            }
+
+            var six = await ChainsAsync("ip6", "ufw6", ct).ConfigureAwait(false);
+
+            return
+            [
+                .. interfaces.Where(name =>
+                    PortState.OfChains(four.Input, four.Rules, Udp, port, name) == PortState.Closed
+                    || (six is { } other && PortState.OfChains(other.Input, other.Rules, Udp, port, name) == PortState.Closed)),
+            ];
+        }
+        catch (Exception ex)
+            when (ex is HostNetworkException or IOException or UnauthorizedAccessException
+                or InvalidOperationException or Win32Exception)
+        {
+            return [];
+        }
+    }
+
+    // Returns the input chain of one family and the rules ufw reads in it ahead of its policy, or null without ufw.
+    private async Task<(string Input, string Rules)?> ChainsAsync(string family, string prefix, CancellationToken ct)
+    {
+        var input = await _commands.RunAsync(Nft, ["list", "chain", family, "filter", "INPUT"], null, ct).ConfigureAwait(false);
+        var before = await _commands.RunAsync(Nft, ["list", "chain", family, "filter", prefix + "-before-input"], null, ct)
+            .ConfigureAwait(false);
+        var rules = await _commands.RunAsync(Nft, ["list", "chain", family, "filter", prefix + "-user-input"], null, ct)
+            .ConfigureAwait(false);
+        if (!input.IsOk || !rules.IsOk)
+        {
+            return null;
+        }
+
+        return (input.Output, (before.IsOk ? before.Output + "\n" : string.Empty) + rules.Output);
     }
 
     private async Task<FirewallSync> UfwAsync(FirewallPlan plan, CancellationToken ct)

@@ -189,4 +189,116 @@ public sealed class FirewallPortTests
 
         Assert.Equal([PortState.Unknown, PortState.Unknown], states);
     }
+
+    private const string Tunnels = """
+        Status: active
+        Logging: on (low)
+        Default: deny (incoming), allow (outgoing), allow (routed)
+        New profiles: skip
+
+        To                         Action      From
+        --                         ------      ----
+        22/tcp                     ALLOW IN    Anywhere
+        53 on awg0                 ALLOW IN    Anywhere                   # amneziageo resolver awg0
+        53 on awg2                 ALLOW IN    10.0.2.0/24
+        Anywhere on awg3           ALLOW IN    Anywhere
+        53/tcp on awg4             ALLOW IN    Anywhere
+        53 (v6) on awg0            ALLOW IN    Anywhere (v6)
+        """;
+
+    private const string TunnelRules = """
+        table ip filter {
+            chain ufw-user-input {
+                meta l4proto tcp tcp dport 22 counter packets 0 bytes 0 accept
+                iifname "awg0" meta l4proto udp udp dport 53 counter packets 0 bytes 0 accept
+                iifname "awg0" meta l4proto tcp tcp dport 53 counter packets 0 bytes 0 accept
+                iifname "wg*" meta l4proto udp udp dport 53 counter packets 0 bytes 0 accept
+                iifname "awg2" ip saddr 10.0.2.0/24 meta l4proto udp udp dport 53 counter packets 0 bytes 0 accept
+                iifname "awg3" counter packets 0 bytes 0 accept
+                iifname "awg4" meta l4proto tcp counter packets 0 bytes 0 accept
+                iifname "awg5" meta l4proto udp udp dport 53 counter packets 0 bytes 0 drop
+                iifname { "awg6", "awg7" } meta l4proto udp udp dport 53 counter packets 0 bytes 0 accept
+            }
+        }
+        """;
+
+    private const string Before = """
+        table ip filter {
+            chain ufw-before-input {
+                iifname "lo" counter packets 0 bytes 0 accept
+                ct state related,established counter packets 0 bytes 0 accept
+                ct state invalid counter packets 0 bytes 0 drop
+                meta l4proto udp udp sport 67 udp dport 68 counter packets 0 bytes 0 accept
+                counter packets 0 bytes 0 jump ufw-user-input
+            }
+        }
+        """;
+
+    private const string Rules6 = """
+        table ip6 filter {
+            chain ufw6-user-input {
+                iifname "awg0" meta l4proto udp udp dport 53 counter packets 0 bytes 0 accept
+                iifname "awg3" counter packets 0 bytes 0 accept
+            }
+        }
+        """;
+
+    [Theory]
+    [InlineData("awg0", PortState.Open)]
+    [InlineData("awg1", PortState.Closed)]
+    [InlineData("awg2", PortState.Closed)]
+    [InlineData("awg3", PortState.Open)]
+    [InlineData("awg4", PortState.Closed)]
+    public void UfwTellsAPortOfOneInterfaceByTheRulesForItOrForEveryOne(string inbound, string state)
+    {
+        Assert.Equal(state, PortState.OfUfw(Tunnels, "udp", 53, inbound));
+    }
+
+    [Theory]
+    [InlineData("awg0", PortState.Open)]
+    [InlineData("wg7", PortState.Open)]
+    [InlineData("awg1", PortState.Closed)]
+    [InlineData("awg2", PortState.Closed)]
+    [InlineData("awg3", PortState.Open)]
+    [InlineData("awg4", PortState.Closed)]
+    [InlineData("awg5", PortState.Closed)]
+    [InlineData("awg7", PortState.Open)]
+    public void TheChainsOfUfwTellAPortOfOneInterfaceTheSameWay(string inbound, string state)
+    {
+        Assert.Equal(state, PortState.OfChains(Input, Before + TunnelRules, "udp", 53, inbound));
+    }
+
+    [Fact]
+    public void AnInterfaceLetsThePortInWhereTheFirewallLetsEverythingIn()
+    {
+        var accepting = Input.Replace("policy drop;", "policy accept;", StringComparison.Ordinal);
+
+        Assert.Equal(PortState.Open, PortState.OfChains(accepting, Before, "udp", 53, "awg1"));
+        Assert.Equal(PortState.Open, PortState.OfUfw("Status: inactive\n", "udp", 53, "awg1"));
+    }
+
+    [Fact]
+    public async Task TheHostNamesTheInterfacesItsFirewallKeepsFromAPortOverEitherFamily()
+    {
+        var chains = new Tools();
+        chains.Answers["nft list chain ip filter INPUT"] = new CommandResult(0, Input, string.Empty);
+        chains.Answers["nft list chain ip filter ufw-before-input"] = new CommandResult(0, Before, string.Empty);
+        chains.Answers["nft list chain ip filter ufw-user-input"] = new CommandResult(0, TunnelRules, string.Empty);
+        chains.Answers["nft list chain ip6 filter INPUT"] = new CommandResult(0, Input, string.Empty);
+        chains.Answers["nft list chain ip6 filter ufw6-before-input"] = new CommandResult(0, Before, string.Empty);
+        chains.Answers["nft list chain ip6 filter ufw6-user-input"] = new CommandResult(0, Rules6, string.Empty);
+        var bare = new Tools();
+        bare.Answers["nft list chain"] = new CommandResult(1, string.Empty, "Error: No such file or directory");
+        var withUfw = new Tools();
+        withUfw.Answers["ufw status verbose"] = new CommandResult(0, Tunnels, string.Empty);
+
+        Assert.Equal(
+            ["awg1", "wg7"],
+            await new FirewallHost(chains, new Ledger(), string.Empty).KeptOutAsync(["awg0", "awg1", "wg7", "awg3"], 53, CancellationToken.None));
+        Assert.Empty(await new FirewallHost(bare, new Ledger(), string.Empty).KeptOutAsync(["awg0"], 53, CancellationToken.None));
+        Assert.Equal(
+            ["awg1", "awg2"],
+            await new FirewallHost(withUfw, new Ledger(), "ufw").KeptOutAsync(["awg0", "awg1", "awg2", "awg3"], 53, CancellationToken.None));
+        Assert.Empty(await new FirewallHost(chains, new Ledger(), string.Empty).KeptOutAsync([], 53, CancellationToken.None));
+    }
 }

@@ -1,10 +1,13 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
+import { useResolver } from "@/api/dns"
 import { usePresets } from "@/api/presets"
 import { useTemplateDefaults, useTemplatePreview } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
 import { EntryList } from "@/components/EntryList"
-import { Hinted, Line, Multi, Part } from "@/components/fields"
+import { Hinted, Line, Multi, Part, Switch } from "@/components/fields"
+import { ResolverTrouble } from "@/components/ResolverTrouble"
+import { troubleOf } from "@/components/trouble"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
@@ -33,10 +36,11 @@ export function TemplateForm({
   const t = useText()
   const defaults = useTemplateDefaults().data
   const presets = usePresets().data ?? []
+  const resolver = useResolver(false).data
   const [draft, setDraft] = useState(start)
   const [servers, setServers] = useState(start.dns.join(", "))
   const [touched, setTouched] = useState(false)
-  const preview = useTemplatePreview(touched ? draft.entries : [])
+  const preview = useTemplatePreview(touched ? draft.entries : [], draft.standIns)
   const found = preview.data ?? kept(held)
   const total = found === undefined || preview.isFetching ? null : found.total
   const heavy = total !== null && total > stopAt
@@ -49,6 +53,11 @@ export function TemplateForm({
   function list(entries: string[]) {
     setTouched(true)
     put({ entries })
+  }
+
+  function stand(standIns: boolean) {
+    setTouched(true)
+    put({ standIns })
   }
 
   return (
@@ -87,6 +96,7 @@ export function TemplateForm({
               parts={found?.parts}
               placeholder={draft.entries.length === 0 ? (defaults?.allowedIps.join(", ") ?? "") : ""}
               onChange={list}
+              standIns={draft.standIns}
             />
           </div>
         </div>
@@ -100,6 +110,16 @@ export function TemplateForm({
         {preview.error !== null && (
           <div className="text-xs text-alarm sm:col-span-2">{t(complaint(preview.error))}</div>
         )}
+
+        <div className="sm:col-span-2">
+          <Switch
+            id="template-stand-ins"
+            caption={<Hinted caption={t("templates.standIns")} text={t("templates.standInsHint")} />}
+            value={draft.standIns}
+            onChange={stand}
+          />
+          {draft.standIns && <ResolverTrouble trouble={troubleOf(resolver)} kept="templates.troubleKept" />}
+        </div>
 
         <div className="sm:col-span-2">
           <label className={label} htmlFor="template-presets">
@@ -123,9 +143,10 @@ export function TemplateForm({
         <Line
           id="template-dns"
           caption={t("templates.dns")}
-          value={servers}
+          value={draft.standIns ? (resolver?.state.listening ?? []).join(", ") : servers}
           placeholder={defaults?.dns.join(", ") ?? ""}
           onChange={setServers}
+          disabled={draft.standIns}
           wide
         />
 

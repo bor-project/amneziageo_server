@@ -127,6 +127,11 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
     public RouteReading? Reading { get; init; }
 
     /// <summary>
+    /// Whether the resolver answers clients with stand-in addresses the host leads to the real ones.
+    /// </summary>
+    public bool StandIns { get; init; }
+
+    /// <summary>
     /// Tells whether a rule on the host matches by name.
     /// </summary>
     public bool HasNames => Legs.Any(leg => leg.IsOnHost && leg.Domains.Count > 0);

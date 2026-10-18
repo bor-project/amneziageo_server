@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Balance;
@@ -72,6 +73,10 @@ public sealed class RouteApplier
 
     private readonly NameGate _names;
 
+    private readonly TemplateStore _templates;
+
+    private readonly StandInBook _book;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -90,9 +95,13 @@ public sealed class RouteApplier
         ClientStore clients,
         OutboundHost host,
         AccessGate gate,
-        NameGate names)
+        NameGate names,
+        TemplateStore templates,
+        StandInBook book)
     {
         _names = names;
+        _templates = templates;
+        _book = book;
         _rules = rules;
         _outbounds = outbounds;
         _balancers = balancers;
@@ -122,6 +131,7 @@ public sealed class RouteApplier
         var resolver = _resolver.Settings ?? await _dns.ReadAsync(ct).ConfigureAwait(false);
         var clients = await _clients.ListAsync(ct).ConfigureAwait(false);
         var basic = await _rules.ReadBasicAsync(ct).ConfigureAwait(false);
+        var standIns = await StandInsAsync(resolver, ct).ConfigureAwait(false);
         _live.Keep(_host.Carrying(outbounds));
         var plan = RoutePlan.Build(
             rules,
@@ -132,7 +142,7 @@ public sealed class RouteApplier
             balancers,
             _live.Alive,
             clients,
-            basic) with { Journal = _gate.Group, Reading = _names.Offer };
+            basic) with { Journal = _gate.Group, Reading = _names.Offer, StandIns = standIns };
 
         _plans.Keep(plan);
 
@@ -160,8 +170,23 @@ public sealed class RouteApplier
     /// </summary>
     public async Task FollowClientsAsync(CancellationToken ct)
     {
+        _book.Stir();
         var plan = await ReadAsync(ct).ConfigureAwait(false);
         if (plan.Legs.Any(leg => leg.Rule.Clients.Count > 0))
+        {
+            await SettleAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Has the resolver take the templates anew and puts the rules on the host anew when the templates turned the
+    /// stand-in addresses on or off.
+    /// </summary>
+    public async Task FollowStandInsAsync(CancellationToken ct)
+    {
+        _book.Stir();
+        var plan = await ReadAsync(ct).ConfigureAwait(false);
+        if (plan.StandIns != await StandInsAsync(plan.Dns, ct).ConfigureAwait(false))
         {
             await SettleAsync(ct).ConfigureAwait(false);
         }
@@ -183,6 +208,11 @@ public sealed class RouteApplier
 
         return plan;
     }
+
+    // Tells whether the resolver answers some clients with stand-in addresses.
+    private async Task<bool> StandInsAsync(DnsSettings resolver, CancellationToken ct) =>
+        resolver.IsEnabled
+        && (await _templates.ListAsync(ct).ConfigureAwait(false)).Any(template => template.StandIns);
 
     private async Task<RoutePlan> LayAsync(RoutePlan plan, CancellationToken ct)
     {

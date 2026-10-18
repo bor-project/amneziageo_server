@@ -11,6 +11,7 @@ export interface Template {
   mtu: number | null
   keepalive: number | null
   presets: number[]
+  standIns: boolean
   clients: number
   refreshedUtc: string | null
   createdUtc: string
@@ -24,6 +25,7 @@ export interface TemplateDraft {
   mtu: number | null
   keepalive: number | null
   presets: number[]
+  standIns: boolean
 }
 
 export interface TemplatePart {
@@ -62,10 +64,10 @@ export function useTemplateDefaults() {
   })
 }
 
-export function useTemplatePreview(entries: string[]) {
+export function useTemplatePreview(entries: string[], standIns = false) {
   return useQuery({
-    queryKey: ["template-preview", entries],
-    queryFn: async () => (await client.post<TemplatePreview>("/templates/preview", { entries }, slow)).data,
+    queryKey: ["template-preview", entries, standIns],
+    queryFn: async () => (await client.post<TemplatePreview>("/templates/preview", { entries, standIns }, slow)).data,
     enabled: entries.length > 0,
     staleTime: 60000,
   })
@@ -97,6 +99,7 @@ export function draftOf(template: Template): TemplateDraft {
     mtu: template.mtu,
     keepalive: template.keepalive,
     presets: template.presets,
+    standIns: template.standIns,
   }
 }
 
@@ -107,6 +110,7 @@ export const freshTemplate: TemplateDraft = {
   mtu: null,
   keepalive: null,
   presets: [],
+  standIns: false,
 }
 
 function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) {

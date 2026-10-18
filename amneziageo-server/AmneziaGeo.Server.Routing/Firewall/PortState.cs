@@ -114,6 +114,147 @@ public static partial class PortState
         return policy.Success && policy.Groups[1].Value != "accept" ? Closed : Open;
     }
 
+    /// <summary>
+    /// Reads what <c>ufw status verbose</c> says of a port for what comes in on one interface: a rule for another
+    /// interface or from some addresses only does not decide.
+    /// </summary>
+    public static string OfUfw(string status, string protocol, int port, string inbound)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        ArgumentNullException.ThrowIfNull(inbound);
+
+        var lines = status.Split('\n', StringSplitOptions.TrimEntries);
+        if (lines.Contains("Status: inactive"))
+        {
+            return Open;
+        }
+
+        if (!lines.Contains("Status: active"))
+        {
+            return Unknown;
+        }
+
+        var policy = Array.Find(lines, line => line.StartsWith("Default:", StringComparison.Ordinal)) ?? string.Empty;
+        var rules = false;
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("--", StringComparison.Ordinal))
+            {
+                rules = true;
+                continue;
+            }
+
+            if (!rules || line.Length == 0 || line.Contains("(v6)", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var columns = Columns().Split(line);
+            if (columns.Length < 3 || columns[1].Contains("OUT", StringComparison.Ordinal)
+                || columns[1].Contains("FWD", StringComparison.Ordinal) || columns[2] != "Anywhere"
+                || !Takes(OnInterface(columns[0]), inbound) || !Names(columns[0], protocol, port))
+            {
+                continue;
+            }
+
+            if (columns[1].StartsWith("ALLOW", StringComparison.Ordinal) || columns[1].StartsWith("LIMIT", StringComparison.Ordinal))
+            {
+                return Open;
+            }
+
+            if (columns[1].StartsWith("DENY", StringComparison.Ordinal) || columns[1].StartsWith("REJECT", StringComparison.Ordinal))
+            {
+                return Closed;
+            }
+        }
+
+        return policy.Contains("allow (incoming)", StringComparison.Ordinal) ? Open : Closed;
+    }
+
+    /// <summary>
+    /// Reads what the chains of ufw in nftables say of a port for what comes in on one interface: a rule for another
+    /// interface or for some addresses only does not decide, a rule for the interface without a port does.
+    /// </summary>
+    public static string OfChains(string input, string rules, string protocol, int port, string inbound)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(inbound);
+
+        foreach (var line in rules.Split('\n', StringSplitOptions.TrimEntries))
+        {
+            var verdict = Verdict(line);
+            if (verdict.Length == 0 || Addressed().IsMatch(line) || line.Contains("oifname", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var named = Inbound().Match(line);
+            if (named.Success && !Takes(named.Groups[1].Value + named.Groups[2].Value, inbound))
+            {
+                continue;
+            }
+
+            var match = Destination().Match(line);
+            if (match.Success)
+            {
+                if (string.Equals(match.Groups[1].Value, protocol, StringComparison.OrdinalIgnoreCase)
+                    && match.Groups[2].Value.Trim('{', '}', ' ').Split(',').Any(part => Within(part.Trim(), '-', port)))
+                {
+                    return verdict == "accept" ? Open : Closed;
+                }
+
+                continue;
+            }
+
+            if (line.Contains("xt match", StringComparison.Ordinal))
+            {
+                return Unknown;
+            }
+
+            var carried = Carried().Match(line);
+            if (named.Success && !line.Contains("ct state", StringComparison.Ordinal)
+                && (!carried.Success || string.Equals(carried.Groups[1].Value, protocol, StringComparison.OrdinalIgnoreCase)))
+            {
+                return verdict == "accept" ? Open : Closed;
+            }
+        }
+
+        var policy = Policy().Match(input);
+
+        return policy.Success && policy.Groups[1].Value != "accept" ? Closed : Open;
+    }
+
+    // Returns the interface a rule of ufw names after " on ", empty when it names none.
+    private static string OnInterface(string target)
+    {
+        var on = target.IndexOf(" on ", StringComparison.Ordinal);
+
+        return on >= 0 ? target[(on + 4)..].Trim() : string.Empty;
+    }
+
+    // Tells whether the interfaces a rule names take one interface: none named takes every one, a name ending in + or *
+    // takes the ones it starts.
+    private static bool Takes(string named, string inbound)
+    {
+        if (named.Length == 0)
+        {
+            return true;
+        }
+
+        foreach (var one in named.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            var name = one.Trim('"');
+            var wild = name.EndsWith('+') || name.EndsWith('*');
+            if (wild ? inbound.StartsWith(name[..^1], StringComparison.Ordinal) : name == inbound)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // Tells whether the target of a rule of ufw takes the port.
     private static bool Names(string target, string protocol, int port)
     {
@@ -179,4 +320,13 @@ public static partial class PortState
 
     [GeneratedRegex(@"policy (\w+);")]
     private static partial Regex Policy();
+
+    [GeneratedRegex(@"\biifname (?:""([^""]+)""|\{([^}]*)\})")]
+    private static partial Regex Inbound();
+
+    [GeneratedRegex(@"\bip6? (saddr|daddr)\b")]
+    private static partial Regex Addressed();
+
+    [GeneratedRegex(@"\bmeta l4proto (\w+)")]
+    private static partial Regex Carried();
 }

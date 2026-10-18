@@ -1,4 +1,6 @@
 using System.Net;
+using System.Net.Sockets;
+using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Route;
 
 namespace AmneziaGeo.Server.Routing.Dns;
@@ -24,6 +26,10 @@ public sealed class DnsResolver
 
     private readonly Action<IPAddress?, DnsMessage>? _heard;
 
+    private readonly DnsStandIns? _standIns;
+
+    private readonly Func<IPAddress, DomainMatcher?>? _standing;
+
     private readonly Lock _sync = new();
 
     private RoutePlan? _seen;
@@ -41,7 +47,9 @@ public sealed class DnsResolver
         DnsSettings settings,
         DnsState state,
         Func<CancellationToken, Task> land,
-        Action<IPAddress?, DnsMessage>? heard = null)
+        Action<IPAddress?, DnsMessage>? heard = null,
+        DnsStandIns? standIns = null,
+        Func<IPAddress, DomainMatcher?>? standing = null)
     {
         _upstream = upstream;
         _cache = cache;
@@ -51,6 +59,8 @@ public sealed class DnsResolver
         _state = state;
         _land = land;
         _heard = heard;
+        _standIns = standIns;
+        _standing = standing;
     }
 
     /// <summary>
@@ -75,11 +85,8 @@ public sealed class DnsResolver
         if (held is not null)
         {
             _state.Held();
-            var kept = DnsMessage.Read(held);
-            Heard(client, kept);
-            await LandAsync(kept, ct).ConfigureAwait(false);
 
-            return Carried(question, stream, held);
+            return await TellAsync(question, stream, client, asked, held, DnsMessage.Read(held), ct).ConfigureAwait(false);
         }
 
         var answer = await _upstream.AskAsync(question, stream, ct).ConfigureAwait(false);
@@ -91,19 +98,74 @@ public sealed class DnsResolver
         }
 
         var read = DnsMessage.Read(answer);
-        if (read is { Code: 0 })
+        if (read is not { Code: 0 })
         {
-            _cache.Keep(read.Question, read.Type, answer, Lifetime(read));
-            Heard(client, read);
-            await LandAsync(read, ct).ConfigureAwait(false);
+            return Carried(question, stream, answer);
         }
 
-        return Carried(question, stream, answer);
+        _cache.Keep(read.Question, read.Type, answer, Lifetime(read));
+
+        return await TellAsync(question, stream, client, asked, answer, read, ct).ConfigureAwait(false);
     }
 
     // Returns the answer as the asking side takes it: whole over a stream, within the size of a datagram otherwise.
     private static byte[] Carried(ReadOnlyMemory<byte> question, bool stream, byte[] answer) =>
         stream ? answer : DnsMessage.Fit(question.Span, answer);
+
+    // Hands the answer to the journal and the sets and returns it the way the client is answered: with the stand-in
+    // address where its template takes stand-ins for the name.
+    private async Task<byte[]> TellAsync(
+        ReadOnlyMemory<byte> question,
+        bool stream,
+        IPAddress? client,
+        DnsMessage asked,
+        byte[] answer,
+        DnsMessage? read,
+        CancellationToken ct)
+    {
+        Heard(client, read);
+        var stood = Stood(question.Span, client, asked, read, out var waiting);
+        await LandAsync(read, waiting, ct).ConfigureAwait(false);
+
+        return stood ?? Carried(question, stream, answer);
+    }
+
+    // Returns the answer with the stand-in address of the name, an empty one for the other kinds of addresses, or
+    // null when the client is answered as it is.
+    private byte[]? Stood(ReadOnlySpan<byte> question, IPAddress? client, DnsMessage asked, DnsMessage? read, out bool waiting)
+    {
+        waiting = false;
+        if (_standIns is null
+            || client is null
+            || read is not { Code: 0 }
+            || asked.Type is not (DnsRecordType.A or DnsRecordType.Aaaa or DnsRecordType.Https)
+            || _standing?.Invoke(client) is not { } names
+            || !Named(names, read))
+        {
+            return null;
+        }
+
+        if (asked.Type != DnsRecordType.A)
+        {
+            return DnsMessage.Empty(question);
+        }
+
+        var real = read.Addresses.Where(address => address.AddressFamily == AddressFamily.InterNetwork).ToArray();
+        if (real.Length == 0)
+        {
+            return null;
+        }
+
+        var address = _standIns.Take(asked.Question, real, out waiting);
+
+        return DnsMessage.Single(question, address, StandInLife(read));
+    }
+
+    private static bool Named(DomainMatcher names, DnsMessage answer) =>
+        names.Matches(answer.Question) || answer.Answers.Any(record => names.Matches(record.Name));
+
+    private uint StandInLife(DnsMessage answer) =>
+        Math.Min(Math.Clamp(answer.Lifetime, (uint)_settings.MinTtl, (uint)_settings.MaxTtl), DnsDefaults.StandInSeconds);
 
     private void Heard(IPAddress? client, DnsMessage? answer)
     {
@@ -125,9 +187,9 @@ public sealed class DnsResolver
         return TimeSpan.FromSeconds(seconds);
     }
 
-    private async Task LandAsync(DnsMessage? answer, CancellationToken ct)
+    private async Task LandAsync(DnsMessage? answer, bool waiting, CancellationToken ct)
     {
-        if (!Spread(answer))
+        if (!Spread(answer) && !waiting)
         {
             return;
         }

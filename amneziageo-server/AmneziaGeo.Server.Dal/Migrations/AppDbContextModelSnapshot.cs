@@ -1195,6 +1195,38 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.ToTable("Sessions");
                 });
 
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.StandInEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Real")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("SeenUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("StandIns");
+                });
+
             modelBuilder.Entity("AmneziaGeo.Server.Dal.SubscriptionEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -1296,6 +1328,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
 
                     b.Property<DateTimeOffset?>("RefreshedUtc")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("StandIns")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset>("UpdatedUtc")
                         .HasColumnType("TEXT");

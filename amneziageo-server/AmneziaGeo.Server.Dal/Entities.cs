@@ -594,6 +594,22 @@ public sealed class DnsStandingEntity
 }
 
 /// <summary>
+/// One name the resolver answers with a stand-in address as the database holds it.
+/// </summary>
+public sealed class StandInEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Address { get; set; } = string.Empty;
+
+    public string Real { get; set; } = string.Empty;
+
+    public DateTimeOffset SeenUtc { get; set; }
+}
+
+/// <summary>
 /// One balancer as the database holds it.
 /// </summary>
 public sealed class BalancerEntity
@@ -727,6 +743,8 @@ public sealed class TemplateEntity
     public int? Mtu { get; set; }
 
     public int? Keepalive { get; set; }
+
+    public bool StandIns { get; set; }
 
     public string Presets { get; set; } = string.Empty;
 

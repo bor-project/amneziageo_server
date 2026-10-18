@@ -100,7 +100,8 @@ stays on for the next settle.
 | `POST /api/subscription/open` | `access:write` |
 
 Where the panel may not change the firewall, or for a role without the right, the closed port is named with where it
-is opened by hand: item 23 of the menu, subitem 6 for an endpoint, or `ufw allow <port>` on the host behind
+is opened by hand: item 23 of the menu, subitem 6 for an endpoint, subitem 13 for the port of the resolver on the
+interfaces ufw keeps it from (`amneziageo-server dns open`, see [dns.md](dns.md)), or `ufw allow <port>` on the host behind
 `host-ufw`. A new port the firewall closes on the tabs `Server` and `Subscriptions` is not saved until it is opened,
 by the button or by hand, so the panel does not move where nobody reaches it; a port that stays as it was is only
 named. An endpoint is saved all the same, since the ports of an endpoint that is already there are opened from its

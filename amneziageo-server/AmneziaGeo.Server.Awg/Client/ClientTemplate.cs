@@ -46,6 +46,11 @@ public sealed record ClientTemplate
     public int? Keepalive { get; init; }
 
     /// <summary>
+    /// Whether the resolver answers the names of the entries with stand-in addresses.
+    /// </summary>
+    public bool StandIns { get; init; }
+
+    /// <summary>
     /// The numbers of the routing presets the clients of the template are handed, in the order they get them.
     /// </summary>
     public IReadOnlyList<long> Presets { get; init; } = [];

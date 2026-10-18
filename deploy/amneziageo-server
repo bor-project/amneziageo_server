@@ -2166,6 +2166,50 @@ ufw_lets() {
     '($1 == port || $1 == exact) && $2 == "ALLOW" && !/\(v6\)/ {found = 1} END {exit !found}'
 }
 
+# Tells whether ufw lets UDP in on a port for what comes in on an interface, by a rule for it or for every interface.
+ufw_lets_in() {
+  ufw status verbose 2> /dev/null | awk -v name="$1" -v port="$2" '
+    function takes(spec,    list, i, range) {
+      split(spec, list, ",")
+      for (i in list) {
+        if (split(list[i], range, ":") == 2) {
+          if (range[1] + 0 <= port + 0 && port + 0 <= range[2] + 0) {
+            return 1
+          }
+        } else if (list[i] == port) {
+          return 1
+        }
+      }
+      return 0
+    }
+    /^Status: inactive/ {open = 1}
+    /^Default:/ {open = /allow \(incoming\)/}
+    /^--/ {rules = 1; next}
+    !rules || NF == 0 || /\(v6\)/ || decided {next}
+    {
+      split($0, part, /  +/)
+      target = part[1]
+      action = part[2]
+      if (action ~ /OUT|FWD/ || part[3] != "Anywhere") {
+        next
+      }
+      at = index(target, " on ")
+      if (at > 0) {
+        if (substr(target, at + 4) != name) {
+          next
+        }
+        target = substr(target, 1, at - 1)
+      }
+      split(target, spec, "/")
+      if ((spec[2] != "" && spec[2] != "udp") || (target != "Anywhere" && !takes(spec[1]))) {
+        next
+      }
+      decided = 1
+      open = action ~ /^(ALLOW|LIMIT)/
+    }
+    END {exit !open}'
+}
+
 # Tells whether ufw was given this very rule already, on or off, whatever its comment.
 ufw_holds() {
   ufw show added 2> /dev/null | grep -qxE "ufw $*( comment .*)?"
@@ -2331,6 +2375,7 @@ install_panel() {
   place_panel || return 1
   first_endpoint || bad "the interface was not made: item 25 of the menu and the panel make one"
   guard_host || bad "ufw did not take the ports: item 23 of the menu opens them"
+  install_doors
   final_check
 }
 
@@ -3316,7 +3361,7 @@ ssl_menu() {
 
 # Lists the firewall and the ports the panel needs open.
 firewall_status() {
-  local subscriptions
+  local subscriptions kept=()
   if command -v ufw > /dev/null 2>&1; then
     ufw status verbose
   elif [ "$(kind)" = container ]; then
@@ -3337,6 +3382,11 @@ firewall_status() {
   cli endpoint list
   if [ -d /etc/letsencrypt/live ]; then
     say "TCP 80  renewals of Let's Encrypt"
+  fi
+
+  mapfile -t kept < <(resolver_kept)
+  if [ ${#kept[@]} -gt 0 ]; then
+    bad "ufw keeps the clients of ${kept[*]} from the resolver: item 13 lets them reach it"
   fi
 }
 
@@ -3425,6 +3475,7 @@ firewall_menu() {
     say " 10. Turn the firewall on"
     say " 11. Turn the firewall off"
     say " 12. The nftables rules of the panel"
+    say " 13. Let the clients reach the resolver"
     say "  0. Back"
     choice=$(ask "Choose:") || return 0
     case $choice in
@@ -3440,6 +3491,7 @@ firewall_menu() {
       10) ufw_on ;;
       11) host_command "turning ufw off" "ufw disable" && command -v ufw > /dev/null 2>&1 && ufw disable ;;
       12) firewall_tables ;;
+      13) resolver_open ;;
       0 | "") return 0 ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -3631,10 +3683,97 @@ resolver_item() {
   fi
 
   case $want in
-    on | off) cli dns set --enabled "$want" ${usual:+--upstreams default} ;;
+    on | off) cli dns set --enabled "$want" ${usual:+--upstreams default} || return 1 ;;
     "") ;;
-    *) bad "dns takes on or off" ;;
+    *)
+      bad "dns takes on, off or open"
+      return 1
+      ;;
   esac
+
+  if [ "$want" != off ] && [ "$(cli dns get enabled 2> /dev/null | tr -d '\r')" = on ]; then
+    resolver_offer
+  fi
+}
+
+# Prints the names of the endpoints of the panel, one a line.
+endpoint_names() {
+  cli endpoint list 2> /dev/null | tr -d '\r' | sed -n 's/^\([A-Za-z0-9_.-]*\): .*/\1/p'
+}
+
+# Prints the interfaces of the endpoints whose clients ufw keeps from the resolver of the panel, one a line.
+resolver_kept() {
+  local port name
+  if [ "$(kind)" = container ] || ! ufw_active || [ "$(cli dns get enabled 2> /dev/null | tr -d '\r')" != on ]; then
+    return 0
+  fi
+
+  port=$(cli dns get port 2> /dev/null | tr -d '\r')
+  while read -r name; do
+    if ! ufw_lets_in "$name" "${port:-53}"; then
+      printf '%s\n' "$name"
+    fi
+  done < <(endpoint_names)
+}
+
+# Item 23, 13: lets the clients of the endpoints reach the resolver of the panel through ufw.
+resolver_open() {
+  local port name kept=()
+  need_panel || return 1
+  port=$(cli dns get port 2> /dev/null | tr -d '\r')
+  port=${port:-53}
+  if [ "$(kind)" = container ]; then
+    host_command "letting the clients reach the resolver" \
+      "$(endpoint_names | sed "s/.*/ufw allow in on & to any port $port/" | paste -sd ';' - | sed 's/;/; /g')"
+    return 1
+  fi
+
+  if [ "$(cli dns get enabled 2> /dev/null | tr -d '\r')" != on ]; then
+    bad "the resolver is off: item 29 of the menu turns it on"
+    return 1
+  fi
+
+  if ! ufw_active; then
+    good "ufw is off and keeps no client from the resolver"
+    return 0
+  fi
+
+  mapfile -t kept < <(resolver_kept)
+  if [ ${#kept[@]} -eq 0 ]; then
+    good "ufw lets the clients of every endpoint reach the resolver on port $port"
+    return 0
+  fi
+
+  for name in "${kept[@]}"; do
+    if ufw allow in on "$name" to any port "$port" comment "amneziageo resolver $name" > /dev/null; then
+      good "ufw lets the clients of $name reach the resolver on port $port"
+    else
+      bad "ufw did not let the clients of $name reach the resolver on port $port"
+    fi
+  done
+}
+
+# Offers to let the clients that ufw keeps from the resolver of the panel reach it.
+resolver_offer() {
+  local kept=()
+  mapfile -t kept < <(resolver_kept)
+  if [ ${#kept[@]} -gt 0 ] && agree "ufw keeps the clients of ${kept[*]} from the resolver: let them reach it?"; then
+    resolver_open
+  fi
+}
+
+# Offers at the end of the installation to let the clients that ufw keeps from the resolver of the panel reach it.
+install_doors() {
+  local kept=()
+  mapfile -t kept < <(resolver_kept)
+  if [ ${#kept[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  answer_yes resolver_ufw "ufw keeps the clients of ${kept[*]} from the resolver of the panel: let them reach it?" yes || true
+  if [ "${given[resolver_ufw]}" = yes ]; then
+    resolver_open
+  fi
 }
 
 # Writes a line of the menu frame.
@@ -3794,6 +3933,7 @@ usage:
   amneziageo-server enable | disable   start the panel with the host or not
   amneziageo-server bbr [on | off]     BBR with the fq queue for TCP
   amneziageo-server dns [on | off]     the resolver of the clients, which asks outside over HTTPS
+  amneziageo-server dns open           let the clients of the endpoints reach the resolver through ufw
   amneziageo-server <command>          a command of the utility: user, role, token, panel, endpoint,
                                        import, device, family, geo, dns, init, login, whoami, update status
 EOF
@@ -3863,6 +4003,7 @@ main() {
     dns)
       case ${2:-} in
         "" | on | off) resolver_item "${2:-}" ;;
+        open) need_panel && resolver_open ;;
         *) cli_in "$@" ;;
       esac
       ;;

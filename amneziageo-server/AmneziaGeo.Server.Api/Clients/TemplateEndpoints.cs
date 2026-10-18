@@ -1,7 +1,9 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Template;
 
 namespace AmneziaGeo.Server.Api.Clients;
@@ -71,6 +73,7 @@ public static class TemplateEndpoints
         TemplateRequest request,
         TemplateStore store,
         TemplateRefresher refresher,
+        RouteApplier routes,
         CancellationToken ct)
     {
         var draft = TemplateAnswers.Draft(request);
@@ -86,6 +89,8 @@ public static class TemplateEndpoints
             return Explain(result);
         }
 
+        await routes.FollowStandInsAsync(ct).ConfigureAwait(false);
+
         return Results.Created($"/api/templates/{result.Record!.Id}", TemplateAnswers.Template(result.Record, 0));
     }
 
@@ -94,14 +99,16 @@ public static class TemplateEndpoints
         TemplateRequest request,
         TemplateStore store,
         TemplateRefresher refresher,
+        RouteApplier routes,
         CancellationToken ct)
     {
-        if (await store.FindAsync(id, ct).ConfigureAwait(false) is null)
+        var held = await store.FindAsync(id, ct).ConfigureAwait(false);
+        if (held is null)
         {
             return Missing(id);
         }
 
-        var draft = TemplateAnswers.Draft(request);
+        var draft = TemplateAnswers.Draft(request) with { StandIns = request.StandIns ?? held.StandIns };
         if (await store.RefuseAsync(draft, id, ct).ConfigureAwait(false) is { } refusal)
         {
             return Explain(refusal);
@@ -109,13 +116,14 @@ public static class TemplateEndpoints
 
         var full = await refresher.ResolveAsync(draft, ct).ConfigureAwait(false);
 
-        return await KeepAsync(id, full, store, ct).ConfigureAwait(false);
+        return await KeepAsync(id, full, store, routes, ct).ConfigureAwait(false);
     }
 
     private static async Task<IResult> RefreshAsync(
         long id,
         TemplateStore store,
         TemplateRefresher refresher,
+        RouteApplier routes,
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -126,7 +134,7 @@ public static class TemplateEndpoints
 
         var full = await refresher.ResolveAsync(held, ct).ConfigureAwait(false);
 
-        return await KeepAsync(id, full, store, ct).ConfigureAwait(false);
+        return await KeepAsync(id, full, store, routes, ct).ConfigureAwait(false);
     }
 
     private static async Task<IResult> PreviewAsync(
@@ -140,22 +148,29 @@ public static class TemplateEndpoints
             return Refuse(StatusCodes.Status400BadRequest, fault.Code, fault.Message);
         }
 
-        var found = await refresher.FindAsync(entries, ct).ConfigureAwait(false);
+        var found = await refresher.FindAsync(entries, request.StandIns ?? false, ct).ConfigureAwait(false);
 
         return Results.Ok(TemplateAnswers.Preview(found));
     }
 
-    private static async Task<IResult> RemoveAsync(long id, TemplateStore store, CancellationToken ct)
+    private static async Task<IResult> RemoveAsync(long id, TemplateStore store, RouteApplier routes, CancellationToken ct)
     {
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
 
-        return result.IsOk ? Results.NoContent() : Explain(result);
+        await routes.FollowStandInsAsync(ct).ConfigureAwait(false);
+
+        return Results.NoContent();
     }
 
     private static async Task<IResult> KeepAsync(
         long id,
         ClientTemplate template,
         TemplateStore store,
+        RouteApplier routes,
         CancellationToken ct)
     {
         var result = await store.ChangeAsync(id, template, ct).ConfigureAwait(false);
@@ -164,6 +179,7 @@ public static class TemplateEndpoints
             return Explain(result);
         }
 
+        await routes.FollowStandInsAsync(ct).ConfigureAwait(false);
         var uses = await store.UsesAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(TemplateAnswers.Template(result.Record!, uses.GetValueOrDefault(id)));

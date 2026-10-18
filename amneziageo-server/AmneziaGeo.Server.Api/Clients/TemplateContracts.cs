@@ -16,6 +16,7 @@ public sealed record TemplateResponse(
     int? Mtu,
     int? Keepalive,
     IReadOnlyList<long> Presets,
+    bool StandIns,
     int Clients,
     DateTimeOffset? RefreshedUtc,
     DateTimeOffset CreatedUtc,
@@ -30,12 +31,13 @@ public sealed record TemplateRequest(
     IReadOnlyList<string>? Dns,
     int? Mtu,
     int? Keepalive,
-    IReadOnlyList<long>? Presets = null);
+    IReadOnlyList<long>? Presets = null,
+    bool? StandIns = null);
 
 /// <summary>
 /// The entries the panel asks what they come out as.
 /// </summary>
-public sealed record TemplatePreviewRequest(IReadOnlyList<string>? Entries);
+public sealed record TemplatePreviewRequest(IReadOnlyList<string>? Entries, bool? StandIns = null);
 
 /// <summary>
 /// What one entry of a template gives.
@@ -94,6 +96,7 @@ public static class TemplateAnswers
             template.Mtu,
             template.Keepalive,
             template.Presets,
+            template.StandIns,
             clients,
             template.RefreshedUtc,
             template.CreatedUtc,
@@ -125,6 +128,7 @@ public static class TemplateAnswers
             Mtu = request.Mtu,
             Keepalive = request.Keepalive,
             Presets = [.. (request.Presets ?? []).Distinct()],
+            StandIns = request.StandIns ?? false,
         };
     }
 

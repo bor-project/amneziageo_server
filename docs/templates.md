@@ -55,6 +55,30 @@ through the tunnel: when the ranges leave it out, it is added to `AllowedIPs` as
 The list is worked out again when the template is saved and by `Refresh` (`POST /api/templates/{id}/refresh`):
 names move and geo databases update, and the files of the clients follow only after a refresh.
 
+## Routing by name
+
+A client with nothing but `AllowedIPs` cannot follow a name. A service behind a CDN answers with the cache nearest
+to whoever asks, the caches stand in the networks of providers and change, and neither the addresses a pass found
+nor the geo ranges of the service cover them. With the switch Route by name on (`standIns`), the names of the
+template are not turned into addresses at all. The resolver of the panel answers a client of the template about one of them with a stand-in
+address out of `198.19.0.0/16`: one address per name, the same for as long as the name is asked about, and the same
+on every server as long as two names do not land on one address. The host leads the stand-in to the real address
+the resolver got for the name and decides the connection by the real one, so the rules of the server see it as any
+other ([dns.md](dns.md)).
+
+The file of such a client carries the resolver of the panel as its only name server, and in `AllowedIPs` the
+networks and addresses of the template, `198.19.0.0/16` and the address of the resolver. A geo key of addresses
+(`geoip:`) stays a range: it serves the applications that go to addresses without asking a name, Telegram and
+calls among them.
+
+The switch works while the resolver of the panel answers the clients on port 53 and the firewall of the host lets
+them reach it. The template is saved with the switch on in any case, and the form names what keeps it from working
+with the command that mends it: the resolver off, the resolver on another port, or ufw keeping the clients of an
+interface from it ([dns.md](dns.md)). An application with name servers of its own goes past the stand-ins; the resolver keeps the clients off the known ones
+(`blockDoh`, `blockDot`). A stand-in name answers no IPv6 address and no `HTTPS` record, so the client goes over
+IPv4. A stand-in that leads nowhere, after a client came over from another server or for a name nobody asked about
+for a week, is refused at once, and the client asks for the name again.
+
 A template a client takes cannot be removed (`template-in-use`): pick another template for those clients
 first.
 
@@ -65,6 +89,7 @@ first.
 | DNS | name server addresses; empty gives the resolver of the panel, or `1.1.1.1` and `1.0.0.1` when it is off |
 | MTU | 576 to 9000; empty gives 1420 |
 | Keepalive | 0 to 65535 seconds, 0 turns it off; empty gives 25 |
+| Route by name | on or off (`standIns`); works while the resolver of the panel answers its clients on port 53 |
 
 `GET /api/templates` lists the templates with their entries, the ranges they gave, the entries that gave
 nothing, the time of the last pass and the number of clients that take each; `GET /api/templates/{id}` returns

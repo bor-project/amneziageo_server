@@ -17,12 +17,14 @@ export function EntryList({
   parts,
   placeholder,
   onChange,
+  standIns = false,
 }: {
   id: string
   value: string[]
   parts: TemplatePart[] | undefined
   placeholder: string
   onChange: (value: string[]) => void
+  standIns?: boolean
 }) {
   const t = useText()
   const keys = useGeoKeys()
@@ -111,7 +113,13 @@ export function EntryList({
               <div className="flex items-center gap-3 px-3 py-1.5 text-sm">
                 <span className="w-16 shrink-0 text-xs text-muted">{t(badge(one))}</span>
                 <span className="min-w-0 flex-1 truncate font-mono text-ink">{one}</span>
-                <span className="shrink-0 text-xs text-muted">{held(parts, one)?.total}</span>
+                {standIns && named(one) ? (
+                  <span className="shrink-0 rounded-md bg-active px-1.5 py-0.5 text-xs text-brand-ink">
+                    {t("templates.standIn")}
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-xs text-muted">{held(parts, one)?.total}</span>
+                )}
                 <button
                   type="button"
                   title={t("templates.showEntries")}
@@ -233,6 +241,10 @@ function badge(one: string): TextKey {
 
 function geo(one: string): boolean {
   return one.startsWith("geoip:") || one.startsWith("geosite:")
+}
+
+function named(one: string): boolean {
+  return one.startsWith("geosite:") || one.startsWith("domain:")
 }
 
 function geoKeys(keys: GeoKeys | undefined): string[] {

@@ -57,6 +57,8 @@ public sealed class DnsSets
 
     private readonly int _standing;
 
+    private readonly DnsStandIns? _standIns;
+
     private long _added;
 
     private long _stirs;
@@ -70,11 +72,16 @@ public sealed class DnsSets
     /// <summary>
     /// ctor
     /// </summary>
-    public DnsSets(IHostNetwork network, TimeProvider? time = null, int standing = DnsDefaults.StandingAddresses)
+    public DnsSets(
+        IHostNetwork network,
+        TimeProvider? time = null,
+        int standing = DnsDefaults.StandingAddresses,
+        DnsStandIns? standIns = null)
     {
         _network = network;
         _time = time ?? TimeProvider.System;
         _standing = standing > 0 ? standing : 0;
+        _standIns = standIns;
     }
 
     /// <summary>
@@ -170,17 +177,14 @@ public sealed class DnsSets
         {
             Note(lifetime);
             Renew(plan);
-            if (_waiting.IsEmpty)
-            {
-                return 0;
-            }
-
-            var taken = Take(Live(plan));
+            var taken = _waiting.IsEmpty ? new List<DnsEntry>() : Take(Live(plan));
             foreach (var batch in taken.Chunk(MaxBatch))
             {
                 await _network.FirewallAsync(Text(batch, lifetime), ct).ConfigureAwait(false);
                 Interlocked.Add(ref _added, batch.Length);
             }
+
+            await StandAsync(plan, ct).ConfigureAwait(false);
 
             return taken.Count;
         }
@@ -207,7 +211,21 @@ public sealed class DnsSets
             }
 
             var kept = Kept(plan);
-            await _network.FirewallAsync(ruleset + Write(kept), ct).ConfigureAwait(false);
+            var stood = plan is { StandIns: true } ? _standIns?.Lay() ?? string.Empty : string.Empty;
+            try
+            {
+                await _network.FirewallAsync(ruleset + Write(kept) + stood, ct).ConfigureAwait(false);
+            }
+            catch (HostNetworkException)
+            {
+                _standIns?.Spoil();
+                throw;
+            }
+
+            if (plan is not { StandIns: true })
+            {
+                _standIns?.Forget();
+            }
 
             return kept.Count;
         }
@@ -247,6 +265,31 @@ public sealed class DnsSets
     }
 
     private static int Seconds(TimeSpan lifetime) => (int)Math.Max(1, Math.Ceiling(lifetime.TotalSeconds));
+
+    // Carries to the host where the stand-in addresses lead, while it holds their map.
+    private async Task StandAsync(RoutePlan? plan, CancellationToken ct)
+    {
+        if (_standIns is null || plan is not { StandIns: true })
+        {
+            return;
+        }
+
+        var text = _standIns.Changes();
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await _network.FirewallAsync(text, ct).ConfigureAwait(false);
+        }
+        catch (HostNetworkException)
+        {
+            _standIns.Spoil();
+            throw;
+        }
+    }
 
     private List<DnsEntry> Take(HashSet<long> live)
     {

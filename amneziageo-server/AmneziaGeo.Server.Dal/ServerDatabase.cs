@@ -71,6 +71,7 @@ public static class ServerDatabase
         services.AddScoped<BalanceStore>();
         services.AddScoped<DnsStore>();
         services.AddScoped<DnsStandingStore>();
+        services.AddScoped<StandInStore>();
         services.AddScoped<AccessStore>();
         services.AddScoped<PanelStore>();
         services.AddScoped<TemplateStore>();

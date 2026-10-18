@@ -12,6 +12,7 @@ export interface DnsState {
   waiting: number
   names: number
   startedUtc: string | null
+  keptOut: string[]
 }
 
 export interface DnsDraft {

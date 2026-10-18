@@ -36,6 +36,11 @@ public static class DnsDefaults
     public const int MaxTtl = 3600;
 
     /// <summary>
+    /// The longest a client holds an answer with a stand-in address, in seconds.
+    /// </summary>
+    public const uint StandInSeconds = 300;
+
+    /// <summary>
     /// How long a question waits for an upstream.
     /// </summary>
     public static readonly TimeSpan Wait = TimeSpan.FromSeconds(4);

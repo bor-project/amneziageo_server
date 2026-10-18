@@ -41,7 +41,8 @@ the panel on every address, makes the first endpoint, with a range of unique loc
 on a host that carries a global IPv6 address, turns the resolver of the clients on when asked and makes the
 first client through the API, opens the ports in ufw or turns ufw on with ssh and what already listens kept open,
 for a container letting the clients of the first endpoint and their DNS to the server through ufw as well, since
-the panel gives ufw no rules from a container, and checks the panel, the certificate and the endpoint. It ends
+the panel gives ufw no rules from a container, offers to let in the clients of any endpoint that ufw still keeps from
+the resolver, and checks the panel, the certificate and the endpoint. It ends
 with the directory of `compose.yaml`, the ports the panel and the endpoint hold, the IPv6 of the host and the
 command of the menu with its short command. The
 configuration of the client goes to `/root`, and to the terminal as a QR code when asked. The package puts the script
@@ -78,6 +79,7 @@ every key the installation runs without a question:
 | `resolver` | `yes` turns the resolver on with the first endpoint: its clients ask the server about names and the server asks outside over HTTPS, see [dns.md](dns.md#turning-the-resolver-on) |
 | `ipv6_range` | the range of IPv6 of the clients of the first endpoint, its first address the endpoint's, like `fd3a:4b5c:6d7e::1/64`; empty for none; without it a range of its own on a host with a global IPv6 address |
 | `ufw` | `yes` opens the ports in an active ufw or turns ufw on |
+| `resolver_ufw` | `yes` lets the clients of the endpoints that ufw keeps from the resolver reach it, `no` leaves ufw as it is |
 | `reboot` | `yes` reboots after an upgrade that brings a kernel |
 | `go` | `yes` goes on past the plan |
 
@@ -99,6 +101,7 @@ firewall, endpoints, websocket fronts, BBR and the resolver of the clients. Its 
 | `enable`, `disable` | whether the panel starts with the host |
 | `bbr on`, `bbr off` | BBR with the `fq` queue for TCP, now and at boot |
 | `dns on`, `dns off` | the resolver of the clients, which asks outside over HTTPS; `dns` alone shows it and asks |
+| `dns open` | lets the clients of the endpoints that ufw keeps from the resolver reach it |
 
 Any other command goes to the console of the panel, as in `amneziageo-server user list` or
 `amneziageo-server panel show`; `amneziageo-server help` lists them.
