@@ -41,7 +41,8 @@ public sealed record UpdateLatestResponse(string Version, DateTimeOffset? Publis
 /// <param name="State">Whether it runs, went through or failed.</param>
 /// <param name="Started">When it started.</param>
 /// <param name="Log">The last lines of its log.</param>
-public sealed record UpdateRunResponse(string From, string To, string State, DateTimeOffset Started, IReadOnlyList<string> Log);
+/// <param name="Seen">Whether how it ended was seen.</param>
+public sealed record UpdateRunResponse(string From, string To, string State, DateTimeOffset Started, IReadOnlyList<string> Log, bool Seen);
 
 /// <summary>
 /// The release the panel is told to move to.

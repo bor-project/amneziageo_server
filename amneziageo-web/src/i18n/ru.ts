@@ -400,6 +400,7 @@ export const ru: Dictionary = {
   "update.confirm": "Обновить",
   "update.running": "обновление до {version}",
   "update.failed": "обновление до {version} не удалось",
+  "update.hide": "Скрыть",
   "update.check": "Проверить обновления",
   "update.fault": "обновления не проверены",
   "update.watchTitle": "Обновление до {version}",

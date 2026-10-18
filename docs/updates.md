@@ -45,6 +45,14 @@ the tab says. `GET /api/update` names the channel in `channel`.
 | `GET /api/update` | `state:read` | the version that runs, the release newer than it, whether the panel can put it on by itself, how the last update went |
 | `POST /api/update/check` | `updates:write` | looks the releases over now |
 | `POST /api/update/apply` | `updates:write` | `{"version": "<version>"}` moves the panel to the newest release, that one or a newer one; a look older than ten minutes is taken again first, waiting for it at most ten seconds |
+| `POST /api/update/seen` | `updates:write` | marks how the last update ended as seen, so the head of `Overview` no longer shows its failure; `409` while an update runs |
+
+`run` in the answer of `GET /api/update` is the update the panel started last. Its `state` is `running` while the tool
+that puts the release on works, `done` when the tool ended well and the panel runs the version it moved to or a newer
+one, and `failed` when the tool ended otherwise or the panel stayed on the version it ran; a tool silent for 30 minutes
+counts as ended, and as ended well where the panel runs the version it moved to. `seen` tells that its end was marked
+seen. Otherwise `run` is left out when the panel runs neither of its two versions, as after the panel was put on
+another way.
 
 `blocker` in the answer tells why the panel cannot put a release on by itself:
 
@@ -117,7 +125,9 @@ that ended are removed at the next look.
 The head of `Overview` shows the version of the panel and, beside it, the release newer than it with a link to
 its page. An account that holds `updates:write` moves the panel to it with `Update`; the page follows the update
 and loads the new panel once it answers. An update that failed stays in the head, with its log, until the next
-one.
+one; an account that holds `updates:write` hides it with the cross beside it, for every account. An update whose
+versions the panel no longer runs is not shown. The directory `update` keeps the logs and the exit codes of the last
+five updates; older ones go at the next look at the releases.
 
 ## The key of the releases
 

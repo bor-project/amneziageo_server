@@ -43,6 +43,7 @@ public static class UpdateEndpoints
         var writing = routes.MapGroup("/api/update").RequireScope(Scopes.ManageUpdates);
         writing.MapPost("/check", CheckAsync);
         writing.MapPost("/apply", ApplyAsync);
+        writing.MapPost("/seen", See);
 
         return routes;
     }
@@ -71,5 +72,12 @@ public static class UpdateEndpoints
             .LogInformation("the panel was told to move to {Version} and moves to {Newest}", version, moving.Latest?.Version);
 
         return Results.Accepted(value: moving);
+    }
+
+    private static IResult See(UpdateCenter center)
+    {
+        var refusal = center.See();
+
+        return refusal is null ? Results.Ok(center.Status()) : Results.Json(refusal, statusCode: StatusCodes.Status409Conflict);
     }
 }

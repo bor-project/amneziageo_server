@@ -398,6 +398,7 @@ export const en = {
   "update.confirm": "Update",
   "update.running": "updating to {version}",
   "update.failed": "the update to {version} failed",
+  "update.hide": "Hide",
   "update.check": "Check for updates",
   "update.fault": "updates not checked",
   "update.watchTitle": "Updating to {version}",

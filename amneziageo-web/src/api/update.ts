@@ -13,6 +13,7 @@ export interface UpdateRun {
   state: "running" | "done" | "failed"
   started: string
   log: string[]
+  seen: boolean
 }
 
 export interface UpdateState {
@@ -48,6 +49,17 @@ export function useCheckUpdate() {
 
   return useMutation({
     mutationFn: async () => (await client.post<UpdateState>("/update/check", null, { timeout: 90000 })).data,
+    onSuccess: (state) => {
+      queryClient.setQueryData(["update"], state)
+    },
+  })
+}
+
+export function useSeeUpdate() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async () => (await client.post<UpdateState>("/update/seen")).data,
     onSuccess: (state) => {
       queryClient.setQueryData(["update"], state)
     },

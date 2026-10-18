@@ -9,7 +9,8 @@ namespace AmneziaGeo.Server.Api.Updates;
 /// <param name="To">The version the panel moves to.</param>
 /// <param name="Mode">How the panel was put on the host.</param>
 /// <param name="Started">When the update started.</param>
-public sealed record UpdateRecord(string From, string To, string Mode, DateTimeOffset Started);
+/// <param name="Seen">Whether how it ended was seen.</param>
+public sealed record UpdateRecord(string From, string To, string Mode, DateTimeOffset Started, bool Seen = false);
 
 /// <summary>
 /// How the update started last went.
@@ -30,7 +31,7 @@ public sealed class UpdateJournal
     public const string Running = "running";
 
     /// <summary>
-    /// The panel runs the version the update moved to.
+    /// The panel runs the version the update moved to or a newer one.
     /// </summary>
     public const string Done = "done";
 
@@ -42,6 +43,8 @@ public sealed class UpdateJournal
     private const string PendingFile = "pending.json";
 
     private const int TailLines = 40;
+
+    private const int Kept = 5;
 
     private static readonly TimeSpan Patience = TimeSpan.FromMinutes(30);
 
@@ -99,13 +102,52 @@ public sealed class UpdateJournal
     }
 
     /// <summary>
-    /// Returns how the update started last went, or null when there was none.
+    /// Returns how the update started last went, or null when there was none or the panel runs neither of its versions.
     /// </summary>
     public UpdateRun? Read(Version current, DateTimeOffset now)
     {
-        var record = Load();
+        if (Load() is not { } record || StateOf(record, current, now) is not { } state)
+        {
+            return null;
+        }
 
-        return record is null ? null : new UpdateRun(record, StateOf(record, current, now), Tail(LogOf(record.To)));
+        return new UpdateRun(record, state, Tail(LogOf(record.To)));
+    }
+
+    /// <summary>
+    /// Writes down that how the update started last ended was seen.
+    /// </summary>
+    public void See()
+    {
+        if (Load() is { } record)
+        {
+            File.WriteAllText(Path.Combine(Folder, PendingFile), JsonSerializer.Serialize(record with { Seen = true }, Json));
+        }
+    }
+
+    /// <summary>
+    /// Removes the logs and the exit codes of all but the last updates.
+    /// </summary>
+    public void Prune()
+    {
+        if (!Directory.Exists(Folder))
+        {
+            return;
+        }
+
+        var last = Load()?.To;
+        var old = new DirectoryInfo(Folder).GetFiles("*.log")
+            .Where(log => VersionOf(Path.GetFileNameWithoutExtension(log.Name)) is not null)
+            .OrderByDescending(log => log.LastWriteTimeUtc)
+            .Skip(Kept)
+            .Select(log => Path.GetFileNameWithoutExtension(log.Name))
+            .Where(version => version != last)
+            .ToList();
+        foreach (var version in old)
+        {
+            File.Delete(LogOf(version));
+            File.Delete(ExitOf(version));
+        }
     }
 
     private UpdateRecord? Load()
@@ -126,15 +168,32 @@ public sealed class UpdateJournal
         }
     }
 
-    private string StateOf(UpdateRecord record, Version current, DateTimeOffset now)
+    private string? StateOf(UpdateRecord record, Version current, DateTimeOffset now)
     {
+        var from = VersionOf(record.From);
+        var to = VersionOf(record.To);
         var exit = File.Exists(ExitOf(record.To)) ? File.ReadAllText(ExitOf(record.To)).Trim() : null;
-        if (exit is null)
+        if (exit == "0" && to is not null && current >= to)
         {
-            return now - record.Started < Patience ? Running : Failed;
+            return Done;
         }
 
-        return exit == "0" && Version.TryParse(record.To, out var to) && to == current ? Done : Failed;
+        if (current != from && current != to)
+        {
+            return null;
+        }
+
+        if (exit is not null)
+        {
+            return Failed;
+        }
+
+        if (now - record.Started < Patience)
+        {
+            return Running;
+        }
+
+        return current == to ? Done : Failed;
     }
 
     private static List<string> Tail(string path)
@@ -153,4 +212,6 @@ public sealed class UpdateJournal
             return [];
         }
     }
+
+    private static Version? VersionOf(string text) => Version.TryParse(text, out var version) ? version : null;
 }

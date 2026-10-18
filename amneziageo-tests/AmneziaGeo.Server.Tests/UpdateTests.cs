@@ -427,6 +427,146 @@ public sealed class UpdateTests : IDisposable
     }
 
     [Fact]
+    public void AnUpdateThatWentThroughStaysDoneOnceThePanelMovesOn()
+    {
+        var journal = new UpdateJournal(_folder.FullName);
+        var started = new DateTimeOffset(2026, 9, 21, 10, 0, 0, TimeSpan.Zero);
+        journal.Begin(new UpdateRecord("1.0.0.2", "1.0.1.0", UpdateModes.Docker, started));
+        File.WriteAllText(journal.ExitOf("1.0.1.0"), "0\n");
+
+        Assert.Equal(UpdateJournal.Done, journal.Read(new Version(1, 0, 1, 1), started.AddDays(2))?.State);
+    }
+
+    [Theory]
+    [InlineData("1", "1.0.1.1", 30)]
+    [InlineData(null, "1.0.1.1", 90)]
+    [InlineData(null, "1.0.1.1", 5)]
+    [InlineData("0", "1.0.0.1", 30)]
+    [InlineData("1", "1.0.0.1", 30)]
+    public void TheRecordOfAnUpdateIsLeftOutOnceThePanelRunsNeitherOfItsVersions(string? exit, string current, int minutes)
+    {
+        var journal = new UpdateJournal(_folder.FullName);
+        var started = new DateTimeOffset(2026, 9, 21, 10, 0, 0, TimeSpan.Zero);
+        journal.Begin(new UpdateRecord("1.0.0.2", "1.0.1.0", UpdateModes.Docker, started));
+        if (exit is not null)
+        {
+            File.WriteAllText(journal.ExitOf("1.0.1.0"), exit + "\n");
+        }
+
+        Assert.Null(journal.Read(Version.Parse(current), started.AddMinutes(minutes)));
+    }
+
+    [Fact]
+    public void AnUpdateWhoseToolLeftNoExitCodeIsDoneOnceThePanelRunsItsTarget()
+    {
+        var journal = new UpdateJournal(_folder.FullName);
+        var started = new DateTimeOffset(2026, 9, 21, 10, 0, 0, TimeSpan.Zero);
+        journal.Begin(new UpdateRecord("1.0.0.2", "1.0.1.0", UpdateModes.Package, started));
+
+        Assert.Equal(UpdateJournal.Running, journal.Read(new Version(1, 0, 1, 0), started.AddMinutes(5))?.State);
+        Assert.Equal(UpdateJournal.Done, journal.Read(new Version(1, 0, 1, 0), started.AddHours(1))?.State);
+    }
+
+    [Theory]
+    [InlineData("1", "1.0.0.2")]
+    [InlineData("1", "1.0.1.0")]
+    [InlineData("0", "1.0.0.2")]
+    public void AnUpdateThatFailedStaysFailedWhileThePanelRunsOneOfItsVersions(string exit, string current)
+    {
+        var journal = new UpdateJournal(_folder.FullName);
+        var started = new DateTimeOffset(2026, 9, 21, 10, 0, 0, TimeSpan.Zero);
+        journal.Begin(new UpdateRecord("1.0.0.2", "1.0.1.0", UpdateModes.Docker, started));
+        File.WriteAllText(journal.ExitOf("1.0.1.0"), exit + "\n");
+
+        Assert.Equal(UpdateJournal.Failed, journal.Read(Version.Parse(current), started.AddDays(2))?.State);
+    }
+
+    [Fact]
+    public void TheFailureSeenStaysWrittenDownUntilTheNextUpdate()
+    {
+        var journal = new UpdateJournal(_folder.FullName);
+        var started = new DateTimeOffset(2026, 9, 21, 10, 0, 0, TimeSpan.Zero);
+        journal.Begin(new UpdateRecord("1.0.0.2", "1.0.1.0", UpdateModes.Package, started));
+        journal.Refuse("1.0.1.0", "the release carries no package for riscv64");
+
+        var unseen = journal.Read(new Version(1, 0, 0, 2), started);
+        journal.See();
+        var seen = journal.Read(new Version(1, 0, 0, 2), started);
+        journal.Begin(new UpdateRecord("1.0.0.2", "1.0.1.1", UpdateModes.Package, started.AddHours(1)));
+        var next = journal.Read(new Version(1, 0, 0, 2), started.AddHours(1));
+
+        Assert.False(unseen?.Record.Seen);
+        Assert.Equal(UpdateJournal.Failed, seen?.State);
+        Assert.True(seen?.Record.Seen);
+        Assert.Contains("the release carries no package for riscv64", seen?.Log ?? []);
+        Assert.Equal(UpdateJournal.Running, next?.State);
+        Assert.False(next?.Record.Seen);
+    }
+
+    [Fact]
+    public void ARecordWrittenBeforeTheSeenMarkReadsAsNotSeen()
+    {
+        File.WriteAllText(
+            Path.Combine(_folder.FullName, "pending.json"),
+            "{\"from\":\"1.0.0.2\",\"to\":\"1.0.1.0\",\"mode\":\"docker\",\"started\":\"2026-09-21T10:00:00+00:00\"}");
+        File.WriteAllText(Path.Combine(_folder.FullName, "1.0.1.0.rc"), "1\n");
+
+        var run = new UpdateJournal(_folder.FullName).Read(new Version(1, 0, 0, 2), DateTimeOffset.UtcNow);
+
+        Assert.Equal(UpdateJournal.Failed, run?.State);
+        Assert.False(run?.Record.Seen);
+    }
+
+    [Fact]
+    public void TheLogsOfAllButTheLastUpdatesGo()
+    {
+        var journal = new UpdateJournal(_folder.FullName);
+        journal.Begin(new UpdateRecord("1.0.1.0", "1.0.2.0", UpdateModes.Docker, DateTimeOffset.UtcNow));
+        var day = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        for (var minor = 1; minor <= 8; minor++)
+        {
+            var version = $"1.0.{minor}.0";
+            File.WriteAllText(journal.LogOf(version), "log\n");
+            File.WriteAllText(journal.ExitOf(version), "0\n");
+            File.SetLastWriteTimeUtc(journal.LogOf(version), day.AddDays(minor));
+        }
+
+        File.WriteAllText(Path.Combine(_folder.FullName, "notes.log"), "kept\n");
+
+        journal.Prune();
+
+        var left = _folder.GetFiles().Select(file => file.Name).Order(StringComparer.Ordinal);
+        var kept = new[] { "1.0.2.0", "1.0.4.0", "1.0.5.0", "1.0.6.0", "1.0.7.0", "1.0.8.0" }
+            .SelectMany(version => new[] { version + ".log", version + ".rc" })
+            .Append("notes.log")
+            .Append("pending.json");
+
+        Assert.Equal(kept, left);
+    }
+
+    [Fact]
+    public void TheEndOfAnUpdateIsSeenOnlyOnceItEnded()
+    {
+        using var bench = new Bench();
+        using var handler = new Files(new());
+        var options = new UpdateOptions { Directory = Path.Combine(_folder.FullName, "update") };
+        var center = new UpdateCenter(options, new Clients(handler), bench.Clock, NullLogger<UpdateCenter>.Instance, bench.Scopes);
+        var journal = new UpdateJournal(options.Directory);
+        var current = UpdateCenter.Current;
+        var next = new Version(current.Major, current.Minor, current.Build + 1, 0).ToString();
+        journal.Begin(new UpdateRecord(current.ToString(), next, UpdateModes.Package, bench.Clock.GetUtcNow()));
+
+        var running = center.See();
+        journal.Refuse(next, "the release carries no package for riscv64");
+        var ended = center.See();
+
+        Assert.Equal("update-busy", running?.Error);
+        Assert.Null(ended);
+        Assert.Equal(UpdateJournal.Failed, center.Status().Run?.State);
+        Assert.True(center.Status().Run?.Seen);
+    }
+
+    [Fact]
     public void NoUpdateLeavesNoRun()
     {
         Assert.Null(new UpdateJournal(_folder.FullName).Read(new Version(1, 0, 0, 2), DateTimeOffset.UtcNow));

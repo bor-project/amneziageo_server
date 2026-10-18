@@ -127,7 +127,7 @@ public sealed class UpdateCenter
                 _fault,
                 run is null
                     ? null
-                    : new UpdateRunResponse(run.Record.From, run.Record.To, run.State, run.Record.Started, run.Log));
+                    : new UpdateRunResponse(run.Record.From, run.Record.To, run.State, run.Record.Started, run.Log, run.Record.Seen));
         }
     }
 
@@ -233,6 +233,24 @@ public sealed class UpdateCenter
             var offer = _offer;
             var place = _place;
             _ = Task.Run(() => RunAsync(offer, place));
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Writes down that how the update started last ended was seen, or tells why it was not.
+    /// </summary>
+    public Failure? See()
+    {
+        lock (_gate)
+        {
+            if (_stage is Downloading or Starting || _journal.Read(Current, _time.GetUtcNow())?.State == UpdateJournal.Running)
+            {
+                return new Failure("update-busy", "the panel is busy with an update");
+            }
+
+            _journal.See();
         }
 
         return null;
@@ -400,12 +418,16 @@ public sealed class UpdateCenter
 
     private void Tidy()
     {
-        if (_mode != UpdateModes.Package || _journal.Read(Current, _time.GetUtcNow())?.State == UpdateJournal.Running)
+        if (_journal.Read(Current, _time.GetUtcNow())?.State == UpdateJournal.Running)
         {
             return;
         }
 
-        Quietly(() => PackageUpdater.Sweep(_journal.Folder));
+        Quietly(_journal.Prune);
+        if (_mode == UpdateModes.Package)
+        {
+            Quietly(() => PackageUpdater.Sweep(_journal.Folder));
+        }
     }
 
     private void Move(string stage, string? from)

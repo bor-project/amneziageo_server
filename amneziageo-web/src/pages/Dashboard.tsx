@@ -7,7 +7,7 @@ import { useHealth } from "@/api/health"
 import { useOverview, useServices } from "@/api/overview"
 import type { Overview, ServiceFault, ServiceHealth } from "@/api/overview"
 import { scopes } from "@/api/scopes"
-import { busy, useApplyUpdate, useCheckUpdate, useUpdate } from "@/api/update"
+import { busy, useApplyUpdate, useCheckUpdate, useSeeUpdate, useUpdate } from "@/api/update"
 import { Sparkline } from "@/components/Chart"
 import type { Trace } from "@/components/Chart"
 import { Dialog } from "@/components/Dialog"
@@ -591,18 +591,36 @@ function Update() {
 
 function Failed() {
   const t = useText()
+  const user = useAppSelector((s) => s.auth.user)
+  const may = holds(user, scopes.manageUpdates)
   const update = useUpdate()
+  const see = useSeeUpdate()
   const run = update.data?.run
 
-  if (!run || run.state !== "failed") {
+  if (!run || run.state !== "failed" || run.seen) {
     return null
   }
 
   return (
-    <details className="mt-3 border-t border-line pt-3 text-sm">
-      <summary className="cursor-pointer text-alarm">{t("update.failed", { version: run.to })}</summary>
-      <pre className="mt-2 max-h-64 overflow-auto text-xs whitespace-pre-wrap text-muted">{run.log.join("\n")}</pre>
-    </details>
+    <div className="mt-3 flex items-start gap-2 border-t border-line pt-3 text-sm">
+      <details className="min-w-0 flex-1">
+        <summary className="cursor-pointer text-alarm">{t("update.failed", { version: run.to })}</summary>
+        <pre className="mt-2 max-h-64 overflow-auto text-xs whitespace-pre-wrap text-muted">{run.log.join("\n")}</pre>
+      </details>
+
+      {may && (
+        <button
+          type="button"
+          className={`-my-1 ${quiet}`}
+          title={t("update.hide")}
+          aria-label={t("update.hide")}
+          disabled={see.isPending}
+          onClick={() => see.mutate()}
+        >
+          <Cross />
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -768,6 +786,14 @@ function Again({ spinning }: { spinning: boolean }) {
       strokeWidth="1.6"
     >
       <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function Cross() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M7 7l10 10M17 7L7 17" strokeLinecap="round" />
     </svg>
   )
 }
