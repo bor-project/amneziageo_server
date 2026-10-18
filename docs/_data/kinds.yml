@@ -1,0 +1,14 @@
+- id: package
+  name:
+    en: Package
+    ru: Пакет
+  summary:
+    en: a systemd service on the host, Debian 12 and Ubuntu, amd64 and arm64
+    ru: служба systemd на хосте, Debian 12 и Ubuntu, amd64 и arm64
+- id: docker
+  name:
+    en: Docker
+    ru: Docker
+  summary:
+    en: a container in the network of the host, the image for amd64 and arm64
+    ru: контейнер в сети хоста, образ для amd64 и arm64

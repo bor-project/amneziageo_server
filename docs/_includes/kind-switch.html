@@ -1,0 +1,17 @@
+{%- assign ks_t = site.data.i18n[page.lang] -%}
+<nav class="kind-switch" aria-label="{{ ks_t.kind_switch }}">
+{%- for ks_kind in site.data.kinds -%}
+  {%- assign ks_pages = site.pages | where: "kind", ks_kind.id | where: "lang", page.lang -%}
+  {%- assign ks_target = ks_pages | where: "topic", page.topic | first -%}
+  {%- unless ks_target -%}
+    {%- if page.topic contains "/" -%}
+      {%- assign ks_group = page.topic | split: "/" | first | append: "/index" -%}
+      {%- assign ks_target = ks_pages | where: "topic", ks_group | first -%}
+    {%- endif -%}
+  {%- endunless -%}
+  {%- unless ks_target -%}
+    {%- assign ks_target = ks_pages | where: "topic", "index" | first -%}
+  {%- endunless %}
+  <a href="{{ ks_target.url | relative_url }}"{% if ks_kind.id == page.kind %} aria-current="page"{% endif %}>{{ ks_kind.name[page.lang] }}</a>
+{%- endfor %}
+</nav>
