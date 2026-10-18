@@ -3,20 +3,20 @@ title: About
 lang: en
 topic: home
 permalink: /
-description: Panel for an AmneziaWG server on Linux - interfaces, clients with configurations and subscriptions, templates, routing by geo databases and domains through other servers, a resolver for the clients, updates and backups. As a package or in Docker.
+description: Panel for an AmneziaWG server on Linux - interfaces, clients with configurations and subscriptions, templates, routing by geo databases and domains through other servers, a resolver for the clients, updates and backups. As a service or in Docker.
 ---
 
 # AmneziaGeo Server
 
 **English** | [Русский](index.ru.md)
 
-AmneziaGeo Server is a panel for an AmneziaWG server on Linux. It raises the tunnel interfaces in the kernel itself, keeps the clients and hands them their configurations as a file, a QR code, a `vpn://` link and a subscription, counts their traffic, and can send that traffic further: by geo databases and domains through other servers, through the host itself or into a block. It runs on Debian and Ubuntu with the `amneziawg` kernel module, as a package or in Docker, on amd64 and arm64.
+AmneziaGeo Server is a panel for an AmneziaWG server on Linux. It raises the tunnel interfaces in the kernel itself, keeps the clients and hands them their configurations as a file, a QR code, a `vpn://` link and a subscription, counts their traffic, and can send that traffic further: by geo databases and domains through other servers, through the host itself or into a block. It runs on Debian and Ubuntu with the `amneziawg` kernel module, as a service or in Docker, on amd64 and arm64.
 
 ## Choose how to install
 
 {% include kind-cards.html %}
 
-Both ways give the same server: the container runs in the network of the host, so its interfaces, firewall rules and ports are the same as those of the package. One command puts either of them on the host: the console menu `amneziageo-server`, which then keeps the server running: updates and rollback, database backups, certificates, the firewall, users and tokens.
+Both ways give the same server: the container runs in the network of the host, so its interfaces, firewall rules and ports are the same as those of the service. One command puts either of them on the host: the console menu `amneziageo-server`, which then keeps the server running: updates and rollback, database backups, certificates, the firewall, users and tokens.
 
 ## What it does
 

@@ -2,6 +2,8 @@
 
 The "Certificates" tab sets the certificate under which the panel answers over HTTPS. With it the TCP services ports of the interfaces and the subscriptions on the port of the panel answer over TLS too. Without a certificate the panel answers in plain HTTP, and the services ports under a certificate the panel makes itself at the start.
 
+{% include shot.html name="certificates" alt="Certificates tab: the domain of the certificate and the paths of the certificate and its key" caption="The panel without a certificate of its own." %}
+
 | Field | What it sets |
 |---|---|
 | Certificate domain | a directory from `/etc/letsencrypt/live`: choosing a domain fills the two paths below with its `fullchain.pem` and `privkey.pem`; "No certificate" takes the certificate off; "A certificate of its own" opens the fields for your own files |

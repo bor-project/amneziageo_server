@@ -3,7 +3,7 @@ title: Installation
 lang: en
 kind: docker
 topic: install
-description: The container in one command of the menu or with your own compose.yaml, updates and rollback, what lies on the host, how it differs from the package, uninstalling.
+description: The container in one command of the menu or with your own compose.yaml, updates and rollback, what lies on the host, how it differs from the service, uninstalling.
 ---
 
 # Installation
@@ -36,7 +36,7 @@ chmod 755 /usr/local/bin/amneziageo-server
 amneziageo-server install
 ```
 
-The script looks the host over, asks all its questions at once, prints the plan and, once you agree, does everything on the list. Answer the first question, `Install as`, with `2` (Docker). If the host lacks Docker, its compose plugin, or the Docker daemon does not answer, the script prints the commands that put on what is missing from the repository of Docker and exits without changing anything; once they are on, the same command goes on. The questions, the keys of the answers file for `install --answers <file>` and the steps are shared with the package, see [Installation as a package](../package/install.md#questions); Docker adds two:
+The script looks the host over, asks all its questions at once, prints the plan and, once you agree, does everything on the list. Answer the first question, `Install as`, with `2` (Docker). If the host lacks Docker, its compose plugin, or the Docker daemon does not answer, the script prints the commands that put on what is missing from the repository of Docker and exits without changing anything; once they are on, the same command goes on. The questions, the keys of the answers file for `install --answers <file>` and the steps are shared with the service, see [Installation as a service](../service/install.md#questions); Docker adds two:
 
 | Question | Default | Key of the answers file |
 |---|---|---|
@@ -55,7 +55,7 @@ Next: [First run](first-run.md).
 
 ### Moving from another server
 
-`amneziageo-server install --restore <file>` puts the container on and, while it is stopped, puts a database backup downloaded from another panel in place of the database; `amneziageo-server restore <file>` does the same on a running panel. More in [Installation as a package](../package/install.md#moving-from-another-server) and [Backup](panel/overview.md#backup).
+`amneziageo-server install --restore <file>` puts the container on and, while it is stopped, puts a database backup downloaded from another panel in place of the database; `amneziageo-server restore <file>` does the same on a running panel. More in [Installation as a service](../service/install.md#moving-from-another-server) and [Backup](panel/overview.md#backup).
 
 ## By hand
 
@@ -99,7 +99,7 @@ docker compose exec panel amneziageo-server init --user admin
 - Directories of the host instead of volumes: the database and the signing key lie in plain sight and are simple to copy and bring back. The `deploy/docker/compose.yaml` of the repository, which builds the image from source, keeps them in the volumes `data` and `settings`.
 - `/var/run/docker.sock`: through it the panel updates itself with a button, recreating its container on the new image. The socket gives the container the whole host: whoever owns the panel owns the host as well. Without this line updates stay manual.
 - The version comes from `.env` next to `compose.yaml`: an update with the button writes the new tag there, so a later `docker compose up -d` by hand brings up the same version.
-- `server.env` next to `compose.yaml` takes the same variables as `/etc/amneziageo-server/server.env` of the package. The certificate is read inside the container, so its directory goes into `volumes` too: `/etc/letsencrypt:/etc/letsencrypt:ro`; the menu adds this line to `compose.override.yaml` itself.
+- `server.env` next to `compose.yaml` takes the same variables as `/etc/amneziageo-server/server.env` of the service. The certificate is read inside the container, so its directory goes into `volumes` too: `/etc/letsencrypt:/etc/letsencrypt:ro`; the menu adds this line to `compose.override.yaml` itself.
 - `init --user` is required in the container: the accounts of the host do not reach into it.
 
 The health check asks `/api/health` at the address the panel writes into the `health` file next to the database as it starts, so it follows the panel to another port, path and TLS; `AMNEZIAGEO_HEALTH` in the environment sets another address.
@@ -145,7 +145,7 @@ A manual update does not copy the database aside, so the copy is taken by hand.
 
 In the image: `/opt/amneziageo-server` with the server, the utility and the web interface, `/usr/local/bin/wstunnel`, the scripts of the container and the menu of the release.
 
-## How it differs from the package
+## How it differs from the service
 
 | What | In the container |
 |---|---|

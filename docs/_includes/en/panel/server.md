@@ -14,6 +14,8 @@ The "Server" tab sets where the panel answers and a few settings of the panel as
 | Config name template | the name under which the configuration of a client goes in the file, the link and the subscription, see below |
 | Receive prerelease versions | whether to offer pre-releases of the panel; the panel looks at the releases again right after saving, see [Updates](overview.html#updates) |
 
+{% include shot.html name="server" alt="Server tab: listen addresses and domains, port, path, language, configuration name template with an example, pre-releases" caption="The Server tab of the settings." %}
+
 After a restart that moved the panel, the page moves to the new address by itself: to the new path at the same address, and to the new port and scheme as well, if the page is open on a port the panel listens on.
 
 The panel can also answer on the TCP services port of the interfaces: it is enough to name the same port here. Then hello, the speed test, the WebSocket of the tunnel and subscriptions are answered by the panel itself on this port, no listener of its own is raised for it, and the server answers the world on one TCP port. Such a port always answers over TLS: under the certificate of the panel when there is one, otherwise under a certificate the panel makes itself. Only the path under which the WebSocket of an interface comes on this port is refused: "The path is taken on this port by the WebSocket of an interface".

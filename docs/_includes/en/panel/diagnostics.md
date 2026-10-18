@@ -2,6 +2,8 @@
 
 The "Diagnostics" tab shows what the panel runs on, its event log and the connection log of the clients.
 
+{% include shot.html name="diagnostics" alt="Diagnostics: versions of the components and the event log" caption="Versions and the event log." %}
+
 ## Versions
 
 "Panel", "AmneziaWG" (the version of the module or "none"), ".NET", "System", "Kernel" and "wstunnel", which is what `wstunnel --version` prints.

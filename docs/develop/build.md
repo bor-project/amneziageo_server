@@ -3,7 +3,7 @@ title: For developers
 lang: en
 topic: develop/build
 permalink: /build.html
-description: The layout of the repository, building the server, the panel and the submodules, the package and the image, releases, the documentation site.
+description: The layout of the repository, building the server, the panel and the submodules, the release archive and the image, releases, the documentation site.
 ---
 
 # For developers
@@ -24,7 +24,7 @@ The repository is [bor-project/amneziageo_server](https://github.com/bor-project
 | `amneziageo-tests` | tests |
 | `amneziawg` | the kernel module as a submodule |
 | `wstunnel` | the WebSocket proxy as a submodule |
-| `deploy` | the systemd service, the package installer, the console menu, the container |
+| `deploy` | the systemd service, the installer of the service, the console menu, the container |
 | `docs` | the English reference by section and this site |
 | `tools` | the generator of netlink constants and the site preview |
 
@@ -61,7 +61,7 @@ sudo depmod -a && sudo modprobe amneziawg
 cargo build --release --manifest-path wstunnel/wstunnel/Cargo.toml -p wstunnel-cli
 ```
 
-The package takes a static musl build of it (`x86_64-unknown-linux-musl` or `aarch64-unknown-linux-musl`), so that the binary runs on any glibc of the host: this needs the target (`rustup target add x86_64-unknown-linux-musl`) and `musl-gcc` from `musl-tools`. The image builds its own against the glibc of the image.
+The release archive takes a static musl build of it (`x86_64-unknown-linux-musl` or `aarch64-unknown-linux-musl`), so that the binary runs on any glibc of the host: this needs the target (`rustup target add x86_64-unknown-linux-musl`) and `musl-gcc` from `musl-tools`. The image builds its own against the glibc of the image.
 
 ## Building
 
@@ -108,13 +108,13 @@ The data paths are set by the variables `AMNEZIAGEO_DB` (the database, `/var/lib
 
 The strings of the interface lie in `amneziageo-web/src/i18n/en.ts` and `ru.ts`; a string added without its Russian pair breaks the build. The server answers a refusal with a code, not a phrase, and the panel translates the code itself.
 
-## Package and image
+## Archive and image
 
 ```
 ./deploy/publish.sh
 ```
 
-It builds the panel, publishes the server and the utility for `linux-x64` with the runtime inside and writes `out/amneziageo-server.tar.gz`, about 50 MB; `./deploy/publish.sh --ui` builds the web interface alone into `out/amneziageo-web.tar.gz`. The package goes on the host with its `install.sh`, see [Installation](../package/install.md#by-hand).
+It builds the panel, publishes the server and the utility for `linux-x64` with the runtime inside and writes `out/amneziageo-server.tar.gz`, about 50 MB; `./deploy/publish.sh --ui` builds the web interface alone into `out/amneziageo-web.tar.gz`. The archive goes on the host with its `install.sh`, see [Installation](../service/install.md#by-hand).
 
 The image for amd64 and arm64:
 
@@ -126,10 +126,10 @@ The layers of the image go from those that change rarely to those every release 
 
 ## Releases
 
-A release is a `vX.Y.Z.W` tag on a commit of the `master` branch; a tag outside `master` builds nothing. The workflow `.github/workflows/release.yml` builds packages for x64 and arm64, next to each of them its files one by one (`.pack`) and their list (`.files`), the image `ghcr.io/bor-project/amneziageo-server` for both platforms and the manifest `update.json` with the version, the image by digest and the digests of the packages; `update.json.sig` signs the manifest with the release key. A tag with a fourth number above zero or with a suffix makes a pre-release. The panel checks the signature of the manifest with the key it carries inside and offers a release only with a valid signature, see [Updates](../package/panel/overview.md#updates).
+A release is a `vX.Y.Z.W` tag on a commit of the `master` branch; a tag outside `master` builds nothing. The workflow `.github/workflows/release.yml` builds archives for x64 and arm64, next to each of them its files one by one (`.pack`) and their list (`.files`), the image `ghcr.io/bor-project/amneziageo-server` for both platforms and the manifest `update.json` with the version, the image by digest and the digests of the archives; `update.json.sig` signs the manifest with the release key. A tag with a fourth number above zero or with a suffix makes a pre-release. The panel checks the signature of the manifest with the key it carries inside and offers a release only with a valid signature, see [Updates](../service/panel/overview.md#updates).
 
 ## This site
 
-Jekyll builds the site from `docs/` the same way as the client site: the shared text of the pages lies in `docs/_includes/en/` and `docs/_includes/ru/`, the wrapper pages for each way of installation and language (`<topic>.md` and `<topic>.ru.md`) in `docs/package/` and `docs/docker/`, the table of contents in `docs/_data/toc.yml`, the ways of installation in `docs/_data/kinds.yml`. Text that differs branches on Liquid conditions by the `page.kind` field of the wrapper page (`package` or `docker`). Screenshots come in through `shot.html` from `docs/assets/img/<language>/`; when there is no shot in the language of the page, the English one is taken, and the check counts it.
+Jekyll builds the site from `docs/` the same way as the client site: the shared text of the pages lies in `docs/_includes/en/` and `docs/_includes/ru/`, the wrapper pages for each way of installation and language (`<topic>.md` and `<topic>.ru.md`) in `docs/service/` and `docs/docker/`, the table of contents in `docs/_data/toc.yml`, the ways of installation in `docs/_data/kinds.yml`. Text that differs branches on Liquid conditions by the `page.kind` field of the wrapper page (`service` or `docker`). Screenshots come in through `shot.html` from `docs/assets/img/<language>/`; when there is no shot in the language of the page, the English one is taken, and the check counts it.
 
 Preview: `tools/docs-site.sh serve` builds the site as GitHub Pages does and serves it at `http://127.0.0.1:4001/amneziageo_server/`, rebuilding on save; in VS Code this is F5 "Docs Site". On Windows the script runs in WSL, takes the `github-pages` and `webrick` gems from `~/ag-docs` (the `AG_DOCS_GEMS` variable) and keeps the built site in `~/ag-server-docs` (`AG_SERVER_DOCS_HOME`). `tools/docs-site.sh check` checks the built site: links, anchors, Liquid leftovers, placeholders, shots in another language and long dashes in the sources.

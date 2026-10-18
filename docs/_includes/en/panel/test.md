@@ -2,6 +2,8 @@
 
 The route test tells what the rules on the host will do with a connection. The page opens at `/routing/test` and by a link from the routing pages; it is not in the menu.
 
+{% include shot.html name="test" alt="Route test of www.youtube.com on port 443 for a client: direct through the host, no rule matched, the addresses of the name" caption="No rule takes the connection, so it goes through the host." %}
+
 | Field | What it sets |
 |---|---|
 | Name or address | a name, an address or a link whose host is taken; the name is asked through the way out of the resolver, and with the resolver off through the host |

@@ -37,24 +37,24 @@ curl -H "Authorization: Bearer agt_..." https://panel.example.com:8443/api/clien
 
 | Раздел | Страница сайта | Справка репозитория с маршрутами |
 |---|---|---|
-| учётные записи, роли, токены | [Пользователи и роли](../package/panel/users.ru.md) | [auth.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/auth.md) |
-| интерфейсы | [Интерфейсы](../package/panel/interfaces.ru.md) | [configs.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/configs.md) |
-| клиенты | [Клиенты](../package/panel/clients.ru.md) | [clients.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/clients.md), [devices.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/devices.md) |
-| шаблоны и пресеты маршрутизации | [Шаблоны](../package/panel/templates.ru.md), [Пресеты маршрутизации](../package/panel/presets.ru.md) | [templates.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/templates.md) |
-| подписки | [Подписки](../package/panel/subscriptions.ru.md) | [subscriptions.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/subscriptions.md) |
-| каналы и группы | [Каналы](../package/panel/channels.ru.md) | [outbounds.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/outbounds.md), [balancers.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/balancers.md) |
-| правила, базовые списки, проверка | [Правила](../package/panel/rules.ru.md), [Базовые](../package/panel/basic.ru.md), [Проверка](../package/panel/test.ru.md) | [rules.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/rules.md) |
-| резолвер | [DNS](../package/panel/dns.ru.md) | [dns.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/dns.md) |
-| списки Geo | [Списки Geo](../package/panel/geo.ru.md) | [geo.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/geo.md) |
-| сервисы интерфейса: hello, скорость, WebSocket, сигнал | [Интерфейсы](../package/panel/interfaces.ru.md#сервисы-на-tcp-порту) | [services.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/services.md) |
-| где отвечает панель, сертификат | [Сервер](../package/panel/server.ru.md), [Сертификаты](../package/panel/certificates.ru.md) | [serving.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/serving.md) |
-| порты в брандмауэре хоста | [Интерфейсы](../package/panel/interfaces.ru.md#порты-в-брандмауэре) | [firewall.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/firewall.md) |
-| резервные копии базы | [Обзор](../package/panel/overview.ru.md#резервная-копия) | [install.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/install.md#moving-to-another-server) |
-| диагностика, журнал подключений | [Диагностика](../package/panel/diagnostics.ru.md) | [diagnostics.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/diagnostics.md) |
-| обзор хоста и службы | [Обзор](../package/panel/overview.ru.md) | [overview.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/overview.md) |
-| обновления панели | [Обзор](../package/panel/overview.ru.md#обновление) | [updates.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/updates.md) |
+| учётные записи, роли, токены | [Пользователи и роли](../service/panel/users.ru.md) | [auth.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/auth.md) |
+| интерфейсы | [Интерфейсы](../service/panel/interfaces.ru.md) | [configs.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/configs.md) |
+| клиенты | [Клиенты](../service/panel/clients.ru.md) | [clients.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/clients.md), [devices.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/devices.md) |
+| шаблоны и пресеты маршрутизации | [Шаблоны](../service/panel/templates.ru.md), [Пресеты маршрутизации](../service/panel/presets.ru.md) | [templates.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/templates.md) |
+| подписки | [Подписки](../service/panel/subscriptions.ru.md) | [subscriptions.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/subscriptions.md) |
+| каналы и группы | [Каналы](../service/panel/channels.ru.md) | [outbounds.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/outbounds.md), [balancers.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/balancers.md) |
+| правила, базовые списки, проверка | [Правила](../service/panel/rules.ru.md), [Базовые](../service/panel/basic.ru.md), [Проверка](../service/panel/test.ru.md) | [rules.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/rules.md) |
+| резолвер | [DNS](../service/panel/dns.ru.md) | [dns.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/dns.md) |
+| списки Geo | [Списки Geo](../service/panel/geo.ru.md) | [geo.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/geo.md) |
+| сервисы интерфейса: hello, скорость, WebSocket, сигнал | [Интерфейсы](../service/panel/interfaces.ru.md#сервисы-на-tcp-порту) | [services.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/services.md) |
+| где отвечает панель, сертификат | [Сервер](../service/panel/server.ru.md), [Сертификаты](../service/panel/certificates.ru.md) | [serving.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/serving.md) |
+| порты в брандмауэре хоста | [Интерфейсы](../service/panel/interfaces.ru.md#порты-в-брандмауэре) | [firewall.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/firewall.md) |
+| резервные копии базы | [Обзор](../service/panel/overview.ru.md#резервная-копия) | [install.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/install.md#moving-to-another-server) |
+| диагностика, журнал подключений | [Диагностика](../service/panel/diagnostics.ru.md) | [diagnostics.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/diagnostics.md) |
+| обзор хоста и службы | [Обзор](../service/panel/overview.ru.md) | [overview.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/overview.md) |
+| обновления панели | [Обзор](../service/panel/overview.ru.md#обновление) | [updates.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/updates.md) |
 
-Страницы панели одинаковы для пакета и Docker, ссылки ведут на вариант пакета.
+Страницы панели одинаковы для службы и Docker, ссылки ведут на вариант службы.
 
 ## Что остаётся в консоли
 

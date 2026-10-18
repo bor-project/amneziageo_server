@@ -1,6 +1,6 @@
 # {{ page.title }}
 
-If `amneziageo-server install` put the panel on, the administrator, the interface and the first client are already there, and at the end it printed the address of the panel, the login and the temporary password: go on to [signing in](#signing-in). Here is the same path by hand for a panel installed {% if page.kind == "docker" %}with your own `compose.yaml`{% else %}as a package with `install.sh`{% endif %}.
+If `amneziageo-server install` put the panel on, the administrator, the interface and the first client are already there, and at the end it printed the address of the panel, the login and the temporary password: go on to [signing in](#signing-in). Here is the same path by hand for a panel installed {% if page.kind == "docker" %}with your own `compose.yaml`{% else %}as a service with `install.sh`{% endif %}.
 
 ## The first administrator
 {% if page.kind == "docker" %}
@@ -19,7 +19,7 @@ Without `--user` the administrator becomes the account of the host the utility r
 {% endif %}
 The utility asks for the password twice. With the `--generate` key it makes up a password itself and prints it once as a line `password: ...`. The password is temporary: at the first sign-in the panel asks to replace it; `--permanent` keeps the password as it is. `init` works only while the panel has no enabled administrator; after that accounts are made in the panel or with `user add`, see [Users and roles](panel/users.html).
 
-The last line of the utility names the port and the path of the panel.{% if page.kind == "package" %} If the service has never run yet, the database has no settings, and the utility says that the log of the first start will name them. Starting the service: `systemctl start amneziageo-server`.{% endif %}
+The last line of the utility names the port and the path of the panel.{% if page.kind == "service" %} If the service has never run yet, the database has no settings, and the utility says that the log of the first start will name them. Starting the service: `systemctl start amneziageo-server`.{% endif %}
 
 ## Where the panel answers
 

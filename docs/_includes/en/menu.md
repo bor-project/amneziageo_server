@@ -23,14 +23,14 @@ Under the menu the script prints the status:
 | 2 `Update` | moves the panel to the newest release of its channel: asks the panel to update and waits up to five minutes for it to answer with the new version |
 | 3 `Update Beta` | the same, with pre-releases |
 | 4 `Roll Back` | brings back the previous release, see [Rollback](install.html#rollback), and offers to bring back the copy of the database made before the update |
-| 5 `Releases & Backups` | a submenu: releases on the host; database copies; bring a copy back (the panel stops, the former database is put aside next to it); restore a backup file from another panel; make a copy now (the panel stops for a moment); release channel; check for a new release; install a web interface package{% if page.kind == "docker" %} (for the package only){% endif %} |
+| 5 `Releases & Backups` | a submenu: releases on the host; database copies; bring a copy back (the panel stops, the former database is put aside next to it); restore a backup file from another panel; make a copy now (the panel stops for a moment); release channel; check for a new release; install a web interface archive{% if page.kind == "docker" %} (for the service only){% endif %} |
 | 6 `Uninstall` | takes the panel off the host, with its database and settings if asked, see [Uninstalling](install.html#uninstalling) |
 
 ## Access and settings of the panel
 
 | Item | What it does |
 |---|---|
-| 7 `Reset Username & Password` | prints the accounts and sets a password for the one named, enabling it; for a login that does not exist it offers to make an administrator with it{% if page.kind == "package" %}; for a login that belongs to a user of the host it offers to make that user an administrator of the panel, see [System users](panel/users.html#system-users){% endif %} |
+| 7 `Reset Username & Password` | prints the accounts and sets a password for the one named, enabling it; for a login that does not exist it offers to make an administrator with it{% if page.kind == "service" %}; for a login that belongs to a user of the host it offers to make that user an administrator of the panel, see [System users](panel/users.html#system-users){% endif %} |
 | 8 `Users & Roles` | a submenu: users; add; password; role; enable; disable; remove; roles; add a role; permissions of a role; remove a role. These are the `user` and `role` commands of the [utility](cli.html) |
 | 9 `API Tokens` | a submenu: tokens; add; revoke; sign in and print the session tokens; who am I: what the panel thinks of the account of the host |
 | 10 `Reset Web Base Path` | the path of the panel: a new random one, the root or your own |
@@ -76,7 +76,7 @@ The panel itself never turns ufw on or off. How it keeps ports open: [Ports in t
 
 **25 `Endpoints & Interfaces`.** A submenu: the interfaces of the panel with their ports and who keeps each port open (`endpoint list`); open or close the ports of an interface; interfaces in the kernel (`device list`); an interface with its peers (`device show`); import an interface from an `awg-quick` file with an address for the clients; import the peers of an interface; import clients from a file of the host. Moving over is described in [Interfaces](panel/interfaces.html#moving-from-awg-quick).
 
-**26 `Websocket Fronts`.** Interfaces and the ports of their WebSocket{% if page.kind == "package" %} with the `amneziageo-proxy@<interface>` services{% endif %}, restarting the fronts, their logs.
+**26 `Websocket Fronts`.** Interfaces and the ports of their WebSocket{% if page.kind == "service" %} with the `amneziageo-proxy@<interface>` services{% endif %}, restarting the fronts, their logs.
 
 **27 `Enable BBR`.** Prints the congestion algorithm and the queue discipline and offers to turn BBR with the `fq` queue on or off: now and at boot (`/etc/sysctl.d/91-amneziageo-bbr.conf`, `tcp_bbr` in `/etc/modules-load.d`).{% if page.kind == "docker" %} From the container it prints the commands for the host.{% endif %} As a command: `amneziageo-server bbr on` and `bbr off`.
 

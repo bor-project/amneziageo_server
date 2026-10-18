@@ -2,6 +2,8 @@
 
 A template carries what in a client file does not belong to one client: `AllowedIPs`, name servers, the packet size and keepalive, and also the routing presets the AmneziaGeo app gets. A client points at a template rather than holding a copy: editing the template changes the files of all its clients, and a subscription serves the new file at once, because the file is assembled at the moment of the request. A fresh panel starts with the `default` template.
 
+{% include shot.html name="templates" alt="List of templates: a template with geo keys and the default one, the number of addresses in the file and of clients" caption="Templates of the server." %}
+
 The "Templates" tab of the "Clients" page lists the templates with their `AllowedIPs`, DNS, MTU, keepalive and the number of clients; the name leads to the settings, "Add" opens a new one, "Duplicate" in the row menu makes a copy "<name> copy". The "Template" field in the settings of a client picks its template, "Default" leaves the client the settings of the interface.
 
 ## Main
@@ -31,6 +33,8 @@ While a template is being edited, the panel counts what each entry gives: "Addre
 ## Route by name
 
 A client with nothing but `AllowedIPs` cannot follow a name. A service behind a CDN answers with the cache nearest to whoever asks; the caches stand in the networks of providers and change, and neither the addresses a pass found nor the geo ranges of the service cover them. With the "Route by name" switch in the "Routing" part, the names of the template (`geosite:` and `domain:`) are not unfolded into addresses, and such entries show "by name" instead of a number of addresses. The resolver of the panel answers a client of the template about these names with a stand-in address out of `198.19.0.0/16`: one address per name, the same for as long as the name is asked about, and the same on every server as long as two names do not land on one address. The host leads a connection to the stand-in to the real address the resolver got for the name and decides it by the real one, so the rules of the server see such a connection as any other, see [Stand-in addresses](dns.html#stand-in-addresses).
+
+{% include shot.html name="template-form" alt="Form of a template: geosite entries marked by name and the Route by name switch on" caption="A template with routing by name." %}
 
 The file of such a client carries the resolver of the panel as its only name server (the "DNS" field of the "Network" part shows its addresses and cannot be edited), and in `AllowedIPs` the networks and addresses of the template, `198.19.0.0/16` and the address of the resolver. A geo key of addresses (`geoip:`) stays a range: it serves the applications that go to addresses without asking a name, Telegram and calls among them.
 

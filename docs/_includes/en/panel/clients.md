@@ -4,6 +4,8 @@ A client is one peer of an interface: a key pair, addresses inside the tunnel an
 
 ## List
 
+{% include shot.html name="clients" alt="List of clients: switch, name, interface, template, address, speed, traffic and the time last online" caption="Clients of two interfaces." %}
+
 The "Configs" tab shows the clients of every interface or of one, as chosen with "Every interface" above the list, with a search by name. The columns:
 
 | Column | What it shows |
@@ -30,6 +32,8 @@ The page of a client carries two tabs: "Export" and "Settings" (the second one f
 
 Three cards with a QR code: "QR: .conf file", the file of the client; "QR: vpn:// link", the same configuration as an Amnezia link; "QR: subscription", the subscription address, while subscriptions are on (otherwise "Subscriptions are off", "The client has no subscription address" or "The client has no private key"). Each has "Copy the text", "Copy the picture" and "Download". The picture is copied only over HTTPS or from `localhost`, where the browser allows it; the text is copied always. A long `AllowedIPs` list may not fit into the QR code of the file: then the panel opens the card on the link, in which it takes far less room, and if that does not fit either, it writes "Does not fit in a QR code".
 
+{% include shot.html name="client-export" alt="Export tab of a client: QR codes of the subscription, the .conf file and the vpn:// link with buttons to copy and download" caption="QR codes of an invented configuration." %}
+
 The file carries the private key of the client, its addresses, name servers, the packet size and the obfuscation of the interface, and under `[Peer]` the public key of the interface, the preshared key, `AllowedIPs`, `Endpoint` with the host of the interface and keepalive. A client with a template takes `AllowedIPs`, name servers, the packet size and keepalive from the template. An interface without a host gives a file without the `Endpoint` line, and such a client has nowhere to connect. While the resolver of the panel answers at the addresses of the interfaces, the `DNS` line carries the address of the interface of the client instead of public servers, and `AllowedIPs` carries this address too when the ranges leave it out, see [DNS](dns.html). A client of a template with [Route by name](templates.html#route-by-name) gets the resolver of the panel as its only name server and `198.19.0.0/16` in `AllowedIPs`.
 
 The name of the configuration in the file, the link and the subscription is built from the name template on the [Server](server.html#config-name-template) tab, `{HOST}-{INTERFACE}-{CLIENT}` by default.
@@ -50,6 +54,8 @@ The name of the configuration in the file, the link and the subscription is buil
 | Access to the client | "As the interface says", "Closed", "The server alone", "The whole tunnel network", see below |
 | Allow the server to disconnect the tunnel | whether to send the app the signal to take the tunnel down when the client is disabled, yes by default |
 | Daily limit, GB | how much the client may move in a day both ways; empty means no limit |
+
+{% include shot.html name="client-settings" alt="Settings tab of a client: enabled, interface, name, preshared key, address, note, template" caption="A client with a template." %}
 
 Removing stands at the bottom of the page: "Remove <name>?". The client is taken off the interface, and the routing rules that named it no longer find it.
 

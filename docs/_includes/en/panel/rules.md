@@ -10,6 +10,8 @@ The list shows the rules in their order with a number, a switch, what the rule c
 
 ### General
 
+{% include shot.html name="rule-form" alt="Form of a new rule: the name youtube, the action Through a channel and the targets of the recipe" caption="A rule being filled in, not saved yet." %}
+
 | Field | What it sets |
 |---|---|
 | Name | up to 32 characters |

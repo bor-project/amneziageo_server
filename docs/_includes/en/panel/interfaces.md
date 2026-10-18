@@ -6,9 +6,13 @@ An interface is the server side of an AmneziaWG tunnel: the UDP port the clients
 
 The list names the name, the host, the connection address `<host>:<port>`, the number of clients and the state. Under the address of an enabled interface the closed ports are named if the firewall of the host does not let in its UDP port or TCP services port: "51820 is closed in the firewall of the host" or "51820 and 8446 are closed in the firewall of the host", with the "Open" button when the panel can change the firewall. The name leads to the settings of the interface, "Add" opens the form of a new one.
 
+{% include shot.html name="interfaces" alt="List of interfaces: two interfaces with the connection address, the interface address and the number of clients" caption="Two interfaces of one server." %}
+
 ## Form
 
 A new interface comes as a draft that already fits together: port 51820 or the first free one above it, the network `10.8.0.1/24`, MTU 1420, keepalive 25, DNS `1.1.1.1` and `1.0.0.1`, AllowedIPs `0.0.0.0/0` and `::/0`, a fresh key pair and random obfuscation. The name is the first free one like `awgN`; the host is the one another interface names, otherwise the domain of the certificate of the panel, otherwise the address the request came to if the clients reach it from outside, otherwise the public IPv4 of the host. The draft is not written until the form is saved.
+
+{% include shot.html name="interface-form" alt="Form of an interface: name, host, port, interface address, NAT, access to the clients, WebSocket proxy" caption="An interface on port 443 with WebSocket." %}
 
 ### General
 

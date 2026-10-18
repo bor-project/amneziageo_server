@@ -2,6 +2,8 @@
 
 A channel is a way by which traffic leaves the host: through the host itself, through an AmneziaWG tunnel the host keeps as a client of another server, or through the same tunnel inside WebSocket to a `wstunnel` proxy. Each channel has its own mark: a packet with the mark leaves through this channel. A group gathers several channels under one name. A rule names a channel or a group in the "Channel" field.
 
+{% include shot.html name="channels" alt="List of channels: the direct channel through the host, ready" caption="The direct channel through the host." %}
+
 The "Channels" page is split into "Channels" and "Groups". The list of channels names the type, the server, "fwmark / table", the status ("ready", "not up", "refused" with the reason, "no handshake yet", "the check does not get through", "off") and the traffic both ways; a channel through the host has no traffic, because it has no interface of its own. Channels are moved with the arrows, and "Apply" puts all the channels and rules on the host again. A fresh panel starts with one channel through the host named `direct`.
 
 ## Channel
@@ -31,6 +33,8 @@ The "Channels" page is split into "Channels" and "Groups". The list of channels 
 | Preshared key | a key on top of the handshake, if the server asks for one |
 | Obfuscation | the AmneziaWG profile, which must match the server exactly |
 | Client configuration | a field at the bottom of the form: paste the `.conf` an AmneziaWG server gave a client, and "Read" fills the form with the keys, addresses, obfuscation and the server |
+
+{% include shot.html name="channel-form" alt="Form of a new AmneziaWG channel: name, reachability check, address and port of the server, interface address, MTU, keepalive" caption="An AmneziaWG channel to another server being filled in." %}
 
 A tunnel without obfuscation is plain WireGuard. A WebSocket channel to another AmneziaGeo server is written as `wss://<host>:<services port>/<WebSocket path of the interface>`: without credentials the proxy gets a token from the keys of the channel and the server and accepts any certificate of the front; without a path it takes `v1`, the path of interfaces of earlier releases. Changing the proxy opens a new carrying WebSocket, turning the channel off closes it.
 
