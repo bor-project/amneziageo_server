@@ -1,0 +1,66 @@
+<!doctype html>
+{%- assign t = site.data.i18n[page.lang] -%}
+{%- assign kind = nil -%}
+{%- if page.kind -%}
+  {%- assign kind = site.data.kinds | where: "id", page.kind | first -%}
+{%- endif -%}
+{%- assign api_page = site.pages | where: "topic", "api" | where: "lang", page.lang | first -%}
+{%- unless api_page -%}
+  {%- assign api_page = site.pages | where: "topic", "api" | where: "lang", "ru" | first -%}
+{%- endunless -%}
+{%- assign build_page = site.pages | where: "topic", "develop/build" | where: "lang", page.lang | first -%}
+{%- unless build_page -%}
+  {%- assign build_page = site.pages | where: "topic", "develop/build" | where: "lang", "ru" | first -%}
+{%- endunless %}
+<html lang="{{ page.lang }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title | escape }}{% if kind and page.topic != "index" %} · {{ kind.name[page.lang] }}{% endif %} · {{ site.title | escape }}</title>
+    <meta name="description" content="{{ page.description | default: site.description | escape }}">
+    {%- if page.noindex %}
+    <meta name="robots" content="noindex">
+    {%- endif %}
+    <link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}">
+  </head>
+  <body>
+    <a class="skip-link" href="#content">{{ t.skip }}</a>
+    <header class="site-header">
+      <a class="brand" href="{{ t.home | relative_url }}">AmneziaGeo Server <span>{{ t.docs }}</span></a>
+      <nav class="header-links" aria-label="{{ t.project_links }}">
+        <a href="https://github.com/bor-project/amneziageo_server/releases">{{ t.releases }}</a>
+        <a href="https://github.com/bor-project/amneziageo_server">GitHub</a>
+        <a href="{{ t.client_site }}">{{ t.client }}</a>
+        {% include language-link.html %}
+      </nav>
+    </header>
+    <div class="page-grid">
+      <aside class="sidebar">
+        {%- if kind %}
+        {% include kind-switch.html %}
+        {% include toc.html %}
+        {%- else %}
+        {% include kind-nav.html %}
+        {%- endif %}
+        <div class="policy-links">
+          <a href="{{ api_page.url | relative_url }}"{% if page.topic == 'api' %} aria-current="page"{% endif %}>{{ t.api }}</a>
+          <a href="{{ build_page.url | relative_url }}"{% if page.topic == 'develop/build' %} aria-current="page"{% endif %}>{{ t.build }}</a>
+        </div>
+      </aside>
+      <main id="content" class="article" tabindex="-1">
+        {%- if kind %}
+        {% include breadcrumbs.html %}
+        {%- endif %}
+        {{ content }}
+        <footer class="article-footer">
+          <a href="https://github.com/bor-project/amneziageo_server/issues">{{ t.report_issue }}</a>
+        </footer>
+      </main>
+    </div>
+    <script>
+      if (window.matchMedia('(max-width: 800px)').matches) {
+        document.querySelectorAll('.toc-details').forEach(function (toc) { toc.removeAttribute('open'); });
+      }
+    </script>
+  </body>
+</html>

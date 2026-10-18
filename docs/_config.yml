@@ -1,0 +1,50 @@
+title: AmneziaGeo Server
+description: Panel for an AmneziaWG server - interfaces, clients, templates and subscriptions, routing by geo databases and domains through other servers, a resolver for the clients, updates and backups. Debian and Ubuntu, as a package or in Docker.
+url: https://bor-project.github.io
+baseurl: /amneziageo_server
+repository: bor-project/amneziageo_server
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+plugins:
+  - jekyll-relative-links
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+      lang: en
+
+# The reference pages of the repository stay where README.md links them and are not part of the site.
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - .gitkeep
+  - api.md
+  - appearance.md
+  - auth.md
+  - balancers.md
+  - clients.md
+  - configs.md
+  - devices.md
+  - diagnostics.md
+  - dns.md
+  - docker.md
+  - firewall.md
+  - geo.md
+  - install.md
+  - kernel.md
+  - outbounds.md
+  - overview.md
+  - rules.md
+  - services.md
+  - serving.md
+  - submodules.md
+  - subscriptions.md
+  - templates.md
+  - updates.md
+  - ru/

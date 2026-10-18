@@ -1,0 +1,13 @@
+<ul class="kind-cards">
+{%- for kc_kind in site.data.kinds -%}
+  {%- assign kc_pages = site.pages | where: "kind", kc_kind.id | where: "lang", page.lang -%}
+  {%- assign kc_index = kc_pages | where: "topic", "index" | first -%}
+  {%- assign kc_install = kc_pages | where: "topic", "install" | first -%}
+  {%- assign kc_first = kc_pages | where: "topic", "first-run" | first %}
+  <li>
+    <a class="kind-card-title" href="{{ kc_index.url | relative_url }}">{{ kc_kind.name[page.lang] }}</a>
+    <span>{{ kc_kind.summary[page.lang] }}</span>
+    <span class="kind-card-links"><a href="{{ kc_install.url | relative_url }}">{{ kc_install.title }}</a> · <a href="{{ kc_first.url | relative_url }}">{{ kc_first.title }}</a></span>
+  </li>
+{%- endfor %}
+</ul>
