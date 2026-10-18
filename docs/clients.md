@@ -190,8 +190,9 @@ prefix }`: the text is either an interface file, whose peers become clients, or 
 read from the part named after the endpoint or from its only part, with `prefix` doing what `--v6` does. It answers
 with how many clients it took (`taken`), how many it passed over as already held (`held`), which ones it took under
 another name (`renamed`) and which ones it refused with the code (`refused`), and puts the endpoint on the host
-once. A text with no client of the endpoint is refused as `bad-client-import`. The page of the clients carries the
-same import behind `Import` for an account whose role holds `clients:write`.
+once. A text with no client of the endpoint is refused as `bad-client-import`. The page of the clients carries no
+button for it: clients come in through this route or through the utility, and the panel itself reads only the
+interface file, in the form of a new interface, see [configs.md](configs.md#taking-an-interface-file).
 
 ## When something is refused
 
