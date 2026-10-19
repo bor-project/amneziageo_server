@@ -325,14 +325,18 @@ export function Switch({
   caption,
   value,
   onChange,
+  disabled = false,
+  title,
 }: {
   id: string
   caption: ReactNode
   value: boolean
   onChange: (value: boolean) => void
+  disabled?: boolean
+  title?: string
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" title={title}>
       <label className="text-sm text-ink" htmlFor={id}>
         {caption}
       </label>
@@ -341,8 +345,9 @@ export function Switch({
         type="button"
         role="switch"
         aria-checked={value}
+        disabled={disabled}
         onClick={() => onChange(!value)}
-        className={`relative h-5 w-9 shrink-0 rounded-full ${value ? "bg-brand" : "bg-line"}`}
+        className={`relative h-5 w-9 shrink-0 rounded-full disabled:opacity-60 ${value ? "bg-brand" : "bg-line"}`}
       >
         <span
           className={`absolute top-[2px] size-4 rounded-full bg-surface ${value ? "left-[18px]" : "left-[2px]"}`}

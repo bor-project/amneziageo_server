@@ -139,6 +139,12 @@ public static class ClientEndpoints
             ClientTraffic.None));
     }
 
+    // Puts a client that names no endpoint on the default one.
+    private static async Task<TunnelClient> PlacedAsync(TunnelClient draft, ConfigStore configs, CancellationToken ct) =>
+        draft.ConfigId == 0 && ClientDefaults.Default(await configs.ListAsync(ct).ConfigureAwait(false)) is { } endpoint
+            ? draft with { ConfigId = endpoint.Id }
+            : draft;
+
     private static async Task<TunnelClient?> FilledAsync(TunnelClient draft, ConfigStore configs, CancellationToken ct)
     {
         if (draft.Address.Count > 0 && draft.PublicKey.Length > 0)
@@ -233,7 +239,7 @@ public static class ClientEndpoints
         RouteApplier routes,
         CancellationToken ct)
     {
-        var draft = ClientAnswers.Draft(request, null);
+        var draft = await PlacedAsync(ClientAnswers.Draft(request, null), configs, ct).ConfigureAwait(false);
         if (await FilledAsync(draft, configs, ct).ConfigureAwait(false) is not { } settled)
         {
             return Missing(draft.ConfigId);

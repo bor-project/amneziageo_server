@@ -3,7 +3,7 @@ using AmneziaGeo.Server.Awg.Config;
 namespace AmneziaGeo.Server.Cli.Commands;
 
 /// <summary>
-/// The commands that hold the ports of the endpoints open in the firewall of the host.
+/// The commands that list the endpoints, hold their ports open in the firewall of the host and pick the default one.
 /// </summary>
 public static class EndpointCommands
 {
@@ -20,6 +20,7 @@ public static class EndpointCommands
             "list" => await ListAsync(context, ct).ConfigureAwait(false),
             "open" => await OpenedAsync(context, args, opened: true, ct).ConfigureAwait(false),
             "close" => await OpenedAsync(context, args, opened: false, ct).ConfigureAwait(false),
+            "default" => await DefaultAsync(context, args, ct).ConfigureAwait(false),
             _ => Usage(),
         };
     }
@@ -42,7 +43,8 @@ public static class EndpointCommands
         foreach (var config in held)
         {
             var carried = config.WebSocket ? $", websocket on TCP {ConfigServices.Port(config)}" : string.Empty;
-            Terminal.Say($"{config.Name}: port {config.ListenPort}, {Keeper(config.Opened)}{carried}");
+            var marked = config.IsDefault ? ", default" : string.Empty;
+            Terminal.Say($"{config.Name}: port {config.ListenPort}, {Keeper(config.Opened)}{carried}{marked}");
         }
 
         return 0;
@@ -79,6 +81,37 @@ public static class EndpointCommands
         return 0;
     }
 
+    /// <summary>
+    /// Makes an endpoint the one a new client starts on.
+    /// </summary>
+    public static async Task<int> DefaultAsync(Context context, Arguments args, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(args);
+
+        var name = (args.At(2) ?? Terminal.Ask("endpoint: ")).Trim();
+        if (name.Length == 0)
+        {
+            return Refuse("name the endpoint to make the default");
+        }
+
+        var found = await FindAsync(context, name, ct).ConfigureAwait(false);
+        if (found is null)
+        {
+            return Refuse("there is no such endpoint");
+        }
+
+        var result = await context.Configs.DefaultAsync(found.Id, ct).ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Refuse(result.Message);
+        }
+
+        Terminal.Say($"{name}: new clients start on this endpoint");
+
+        return 0;
+    }
+
     private static async Task<ServerConfig?> FindAsync(Context context, string name, CancellationToken ct)
     {
         var held = await context.Configs.ListAsync(ct).ConfigureAwait(false);
@@ -100,5 +133,6 @@ public static class EndpointCommands
           endpoint list name the endpoints and who keeps their ports open
           endpoint open <name> hold the port of the endpoint open in the firewall
           endpoint close <name> leave the port of the endpoint to the host
+          endpoint default <name> make the endpoint the one a new client starts on
         """);
 }

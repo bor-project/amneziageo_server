@@ -97,14 +97,22 @@ export function Configs() {
               sort: (one) => one.name,
               lead: true,
               body: "font-semibold text-ink",
-              cell: (one) =>
-                may ? (
-                  <Link to={`/interfaces/${one.id}/edit`} className="hover:text-brand-ink">
-                    {one.name}
-                  </Link>
-                ) : (
-                  one.name
-                ),
+              cell: (one) => (
+                <span className="flex min-w-0 items-center gap-2">
+                  {may ? (
+                    <Link to={`/interfaces/${one.id}/edit`} className="truncate hover:text-brand-ink">
+                      {one.name}
+                    </Link>
+                  ) : (
+                    <span className="truncate">{one.name}</span>
+                  )}
+                  {one.isDefault && (
+                    <span className="shrink-0 rounded-full bg-chip px-2 py-0.5 text-xs font-normal text-chip-ink">
+                      {t("configs.default").toLowerCase()}
+                    </span>
+                  )}
+                </span>
+              ),
             },
             {
               key: "endpoint",

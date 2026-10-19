@@ -252,6 +252,8 @@ public sealed class ConfigEntity : IObfuscated
 
     public bool IsEnabled { get; set; } = true;
 
+    public bool IsDefault { get; set; }
+
     public bool Nat { get; set; } = true;
 
     public bool Opened { get; set; }

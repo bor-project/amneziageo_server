@@ -194,6 +194,11 @@ public sealed record ServerConfig
     public bool IsEnabled { get; init; } = true;
 
     /// <summary>
+    /// Whether a new client starts on this endpoint when no endpoint is named.
+    /// </summary>
+    public bool IsDefault { get; init; }
+
+    /// <summary>
     /// Whether what clients send out is masqueraded behind the address of the host.
     /// </summary>
     public bool Nat { get; init; } = true;

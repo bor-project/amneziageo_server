@@ -84,6 +84,7 @@ export interface ServiceHealth {
 export interface ServicesReport {
   checked: string | null
   services: ServiceHealth[]
+  panelPort: number
 }
 
 export function useServices(on: boolean) {

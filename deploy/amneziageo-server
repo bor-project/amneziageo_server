@@ -29,6 +29,8 @@ made_shortcut=
 server_name=
 api_base=
 api_work=
+spinning=
+kept_tty=
 ppa_key=75C9DD72C799870E310542E24166F2C257290828
 release_key='-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEzgZ6s+M0wvE0HMsFuPhwk7cZsCSY
@@ -45,6 +47,11 @@ else
   green=
   yellow=
   plain=
+fi
+
+person=
+if [ -t 0 ] && [ -t 1 ] && [ -t 2 ]; then
+  person=1
 fi
 
 # Writes a line.
@@ -109,6 +116,54 @@ agree() {
 pause() {
   local answer=
   read -r -p "Press Enter to return to the menu " answer || true
+}
+
+# Turns a spinner on the terminal until it is killed.
+spin() {
+  local frames="|/-\\" i=0
+  while true; do
+    printf '\r%s reading...' "${frames:i:1}" >&2
+    i=$(((i + 1) % 4))
+    sleep 0.1
+  done
+}
+
+# Stops the spinner, drops the keys typed meanwhile and gives the terminal its echo back.
+unspin() {
+  kill "$spinning" 2> /dev/null
+  wait "$spinning" 2> /dev/null
+  spinning=
+  printf '\r\e[K' >&2
+  while read -r -s -t 0.05 -n 1 _; do
+    :
+  done
+
+  stty "$kept_tty" 2> /dev/null
+}
+
+# Runs a command that reads the state and prints what it wrote, on the terminal of a person with a spinner in its place
+# and the keys typed meanwhile dropped.
+reading() {
+  local said code
+  if [ -z "$person" ] || [ -n "$spinning" ] || [ ! -t 0 ] || [ ! -t 2 ] || ! kept_tty=$(stty -g 2> /dev/null); then
+    "$@"
+    return
+  fi
+
+  stty -echo 2> /dev/null
+  spin &
+  spinning=$!
+  trap 'unspin; trap - INT; kill -INT "$BASHPID"' INT
+  trap 'unspin; trap - TERM; kill -TERM "$BASHPID"' TERM
+  said=$("$@" 2>&1)
+  code=$?
+  unspin
+  trap - INT TERM
+  if [ -n "$said" ]; then
+    printf '%s\n' "$said"
+  fi
+
+  return "$code"
 }
 
 # Stops unless the script runs as root.
@@ -2724,8 +2779,9 @@ list_backups() {
 
 # Sets the channel the panel takes its releases from.
 channel_item() {
-  local choice
-  say "the panel takes releases from the $(setting channel) channel"
+  local choice channel
+  channel=$(reading setting channel)
+  say "the panel takes releases from the $channel channel"
   say "  1. Stable"
   say "  2. Test"
   choice=$(ask "Channel:")
@@ -2769,13 +2825,13 @@ releases_menu() {
     say "  0. Back"
     choice=$(ask "Choose:") || return 0
     case $choice in
-      1) list_releases ;;
+      1) reading list_releases ;;
       2) list_backups ;;
       3) restore_backup ;;
       4) restore_file ;;
       5) take_backup ;;
       6) channel_item ;;
-      7) cli update check ;;
+      7) reading cli update check ;;
       8) web_package ;;
       0 | "") return 0 ;;
       *) bad "there is no item $choice" ;;
@@ -2870,11 +2926,16 @@ host_user() {
   [ "$(kind)" = package ] && getent passwd "$1" > /dev/null 2>&1
 }
 
+# Prints the accounts of the panel under a heading, one a line.
+accounts() {
+  cli user list 2> /dev/null | tr -d '\r'
+}
+
 # Item 7: sets the password of an administrator, or makes one under a new login.
 reset_login() {
   local login users
   need_panel || return 1
-  users=$(cli user list 2> /dev/null | tr -d '\r')
+  users=$(reading accounts)
   printf '%s\n' "$users"
   login=$(ask "Login:")
   if [ -z "$login" ]; then
@@ -2917,14 +2978,14 @@ users_menu() {
     say "  0. Back"
     choice=$(ask "Choose:") || return 0
     case $choice in
-      1) cli user list ;;
+      1) reading cli user list ;;
       2) cli_in user add ;;
       3) cli_in user passwd ;;
       4) cli_in user role ;;
       5) cli_in user enable ;;
       6) cli_in user disable ;;
       7) cli_in user remove ;;
-      8) cli role list ;;
+      8) reading cli role list ;;
       9) cli_in role add ;;
       10) cli_in role set ;;
       11) cli_in role remove ;;
@@ -2948,11 +3009,11 @@ tokens_menu() {
     say "  0. Back"
     choice=$(ask "Choose:") || return 0
     case $choice in
-      1) cli token list ;;
+      1) reading cli token list ;;
       2) cli_in token add ;;
       3) cli_in token revoke ;;
       4) cli_in login ;;
-      5) cli whoami ;;
+      5) reading cli whoami ;;
       0 | "") return 0 ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -2961,9 +3022,10 @@ tokens_menu() {
 
 # Item 10: gives the panel a fresh path, the root or a path of the host's choice.
 reset_path() {
-  local choice path
+  local choice path current
   need_panel || return 1
-  say "the panel sits under $(setting path)"
+  current=$(reading setting path)
+  say "the panel sits under $current"
   say "  1. A random path"
   say "  2. The root"
   say "  3. A path of your own"
@@ -2991,7 +3053,7 @@ reset_settings() {
 change_port() {
   local port current
   need_panel || return 1
-  current=$(setting port)
+  current=$(reading setting port)
   port=$(ask "Port [$current]:" "$current")
   if ! [[ $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
     bad "'$port' is not a port"
@@ -3027,13 +3089,18 @@ chosen_addresses() {
   fi
 }
 
+# Prints the addresses the panel listens on and the names it answers to.
+listen_lines() {
+  cli panel show | grep -E '^(listen|names) '
+}
+
 # Item 13: the addresses the panel listens on and the names it answers to.
 listen_menu() {
   local choice names
   need_panel || return 1
   while true; do
     step "Listen Addresses & Domains"
-    cli panel show | grep -E '^(listen|names) '
+    reading listen_lines
     say "  1. Listen on every address"
     say "  2. Listen on chosen addresses"
     say "  3. Names the panel answers to"
@@ -3084,11 +3151,10 @@ view_settings() {
   say "firewall      $(ufw_active && printf 'ufw active' || printf 'ufw off')"
 }
 
-# Item 18: the service, the answer of the panel and what the host lacks, with the fixes it takes.
-check_status() {
-  local kind version services tool
+# Prints the service or the container of the panel, whether the panel answers and on which version, and its autostart.
+panel_report() {
+  local kind version
   kind=$(kind)
-  step "the panel"
   case $kind in
     package) systemctl --no-pager status "$unit" 2> /dev/null | head -4 ;;
     docker) dcompose ps panel ;;
@@ -3106,7 +3172,28 @@ check_status() {
 
     say "autostart $(autostart_state)"
   fi
+}
 
+# Prints the websocket fronts, BBR and the line of the services of the panel.
+services_report() {
+  local services
+  say "websocket fronts $(fronts_running), BBR $(bbr_state)"
+  if [ "$(panel_state)" = running ]; then
+    services=$(services_line)
+    case $services in
+      '') ;;
+      *down*) bad "services: $services" ;;
+      *) good "services: $services" ;;
+    esac
+  fi
+}
+
+# Item 18: the service, the answer of the panel and what the host lacks, with the fixes it takes.
+check_status() {
+  local kind tool
+  kind=$(kind)
+  step "the panel"
+  reading panel_report
   step "the host"
   if module_loaded; then
     good "amneziawg module loaded"
@@ -3138,15 +3225,7 @@ check_status() {
     done
   fi
 
-  say "websocket fronts $(fronts_running), BBR $(bbr_state)"
-  if [ "$(panel_state)" = running ]; then
-    services=$(services_line)
-    case $services in
-      '') ;;
-      *down*) bad "services: $services" ;;
-      *) good "services: $services" ;;
-    esac
-  fi
+  reading services_report
 }
 
 # Item 19: the logs of the panel, of its updates and of its fronts.
@@ -3344,7 +3423,7 @@ ssl_menu() {
     case $choice in
       1) get_certificate ;;
       2) host_only "renewing the certificates" && certbot renew ;;
-      3) show_certificates ;;
+      3) reading show_certificates ;;
       4)
         chain=$(ask "Certificate chain, like /etc/letsencrypt/live/<name>/fullchain.pem:")
         key=$(ask "Key, like /etc/letsencrypt/live/<name>/privkey.pem:")
@@ -3479,7 +3558,7 @@ firewall_menu() {
     say "  0. Back"
     choice=$(ask "Choose:") || return 0
     case $choice in
-      1) firewall_status ;;
+      1) reading firewall_status ;;
       2) need_panel && cli panel set --opened on && restart_panel ;;
       3) need_panel && cli panel set --opened off && restart_panel ;;
       4) need_panel && cli subscriptions set --opened on && restart_panel ;;
@@ -3529,14 +3608,15 @@ endpoints_menu() {
     say "  6. Import an endpoint from a file"
     say "  7. Import the peers of an endpoint"
     say "  8. Import clients"
+    say "  9. Make an endpoint the default"
     say "  0. Back"
     choice=$(ask "Choose:") || return 0
     case $choice in
-      1) cli endpoint list ;;
+      1) reading cli endpoint list ;;
       2) cli_in endpoint open && restart_panel ;;
       3) cli_in endpoint close && restart_panel ;;
-      4) cli device list ;;
-      5) cli device show "$(ask "Interface:")" ;;
+      4) reading cli device list ;;
+      5) reading cli device show "$(ask "Interface:")" ;;
       6)
         file=$(ask "File of the interface, like $endpoints/awg0.conf:")
         target=$(ask "Address the clients reach the server at:")
@@ -3550,6 +3630,7 @@ endpoints_menu() {
         file=$(ask "File of the clients:")
         cli_in import clients "$file" --endpoint "$(ask "Endpoint:")"
         ;;
+      9) cli_in endpoint default ;;
       0 | "") return 0 ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -3558,11 +3639,12 @@ endpoints_menu() {
 
 # Item 26: the websocket fronts of the endpoints.
 fronts_menu() {
-  local choice unit_name
+  local choice unit_name fronts
   need_panel || return 1
   while true; do
     step "Websocket Fronts"
-    say "running: $(fronts_running), BBR $(bbr_state)"
+    fronts=$(reading fronts_running)
+    say "running: $fronts, BBR $(bbr_state)"
     say "  1. Endpoints and their websocket ports"
     say "  2. Restart the fronts"
     say "  3. The logs of the fronts"
@@ -3570,7 +3652,7 @@ fronts_menu() {
     choice=$(ask "Choose:") || return 0
     case $choice in
       1)
-        cli endpoint list
+        reading cli endpoint list
         if [ "$(kind)" = package ]; then
           systemctl list-units --all --no-pager 'amneziageo-proxy@*'
         fi
@@ -3658,8 +3740,8 @@ resolver_line() {
 resolver_item() {
   local want=${1:-} state usual=
   need_panel || return 1
-  cli dns show || return 1
-  state=$(resolver_line)
+  reading cli dns show || return 1
+  state=$(reading resolver_line)
   if [ -z "$want" ]; then
     case $state in
       on*)
@@ -3871,7 +3953,7 @@ menu() {
     entry 28 "Update Geo Files"
     entry 29 "DNS for Clients"
     printf '%s\n' '╚───────────────────────────────────────────────╝'
-    status_block
+    reading status_block
     choice=$(ask "Choose [0-29]:") || exit 0
     hold=1
     case $choice in
@@ -3889,7 +3971,7 @@ menu() {
       11) reset_settings ;;
       12) change_port ;;
       13) listen_menu && hold= ;;
-      14) view_settings ;;
+      14) reading view_settings ;;
       15) need_panel && start_panel ;;
       16) need_panel && stop_panel && good "the panel is stopped" ;;
       17) need_panel && restart_panel ;;

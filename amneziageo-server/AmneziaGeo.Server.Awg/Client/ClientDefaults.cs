@@ -32,12 +32,17 @@ public static class ClientDefaults
     }
 
     /// <summary>
-    /// Returns the endpoint a new client starts on: the one of the newest client, else the first.
+    /// Returns the endpoint a new client starts on: the default one, else the one of the newest client, else the first.
     /// </summary>
     public static ServerConfig? Endpoint(IReadOnlyList<ServerConfig> endpoints, IReadOnlyList<TunnelClient> clients)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentNullException.ThrowIfNull(clients);
+
+        if (endpoints.FirstOrDefault(endpoint => endpoint.IsDefault) is { } marked)
+        {
+            return marked;
+        }
 
         var newest = clients
             .Where(client => endpoints.Any(endpoint => endpoint.Id == client.ConfigId))
@@ -46,6 +51,16 @@ public static class ClientDefaults
         return newest is null
             ? endpoints.FirstOrDefault()
             : endpoints.First(endpoint => endpoint.Id == newest.ConfigId);
+    }
+
+    /// <summary>
+    /// Returns the endpoint a client that names none goes to: the default one, else the first.
+    /// </summary>
+    public static ServerConfig? Default(IReadOnlyList<ServerConfig> endpoints)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+
+        return endpoints.FirstOrDefault(endpoint => endpoint.IsDefault) ?? endpoints.FirstOrDefault();
     }
 
     /// <summary>

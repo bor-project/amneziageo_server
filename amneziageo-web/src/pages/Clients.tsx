@@ -13,7 +13,7 @@ import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { summary } from "@/components/batch"
 import type { Summary } from "@/components/batch"
-import { Find, Knob } from "@/components/fields"
+import { Find, Knob, Switch } from "@/components/fields"
 import { alarmBar, alarmLine, card, fieldBox, tool, toolRisky } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -37,10 +37,13 @@ export function Clients() {
   const may = holds(user, scopes.manageClients)
   const picked = Number(params.get("config") ?? 0)
   const find = params.get("find") ?? ""
+  const online = params.get("online") === "1"
   const all = clients.data ?? []
-  const shown = all.filter((one) => (picked === 0 || one.configId === picked) && matches(one, find))
+  const shown = all.filter(
+    (one) => (picked === 0 || one.configId === picked) && (!online || one.state.isOnline) && matches(one, find),
+  )
   const names = new Map((templates.data ?? []).map((one): [number, string] => [one.id, one.name]))
-  const view = `${picked}|${find}`
+  const view = `${picked}|${find}|${online ? 1 : 0}`
   const [choice, setChoice] = useState({ view, keys: nothing })
   const [note, setNote] = useState({ view, told: quiet })
   const chosen = choice.view === view ? choice.keys : nothing
@@ -163,6 +166,15 @@ export function Clients() {
               </select>
 
               <Find value={find} onChange={(value) => put("find", value)} className="w-full wide:w-64" />
+
+              <div className="wide:ml-2">
+                <Switch
+                  id="client-online"
+                  caption={t("clients.onlineOnly")}
+                  value={online}
+                  onChange={(on) => put("online", on ? "1" : "")}
+                />
+              </div>
             </div>
           }
           columns={[

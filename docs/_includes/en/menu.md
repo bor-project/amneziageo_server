@@ -15,6 +15,8 @@ Under the menu the script prints the status:
 | `DNS` | the resolver for the clients: off, on, and whether it encrypts the queries going out |
 | `Services` | the line of the services of the panel, for example `all 3 work` or `2 of 3 down: subscriptions (port-refused), endpoint awg1 (port-closed udp 443)`, the same as in the "Services" card of the [Overview](panel/overview.html#services) |
 
+While the script gathers these lines, a `reading...` spinner turns in their place, and keys typed meanwhile neither show nor reach the question of the menu. The menu does the same while it reads the settings and lists of its items and submenus.
+
 ## Installation and releases
 
 | Item | What it does |
@@ -74,7 +76,7 @@ The panel itself never turns ufw on or off. How it keeps ports open: [Ports in t
 
 ## Interfaces, fronts, BBR
 
-**25 `Endpoints & Interfaces`.** A submenu: the interfaces of the panel with their ports and who keeps each port open (`endpoint list`); open or close the ports of an interface; interfaces in the kernel (`device list`); an interface with its peers (`device show`); import an interface from an `awg-quick` file with an address for the clients; import the peers of an interface; import clients from a file of the host. Moving over is described in [Interfaces](panel/interfaces.html#moving-from-awg-quick).
+**25 `Endpoints & Interfaces`.** A submenu: the interfaces of the panel with their ports and who keeps each port open (`endpoint list`); open or close the ports of an interface; interfaces in the kernel (`device list`); an interface with its peers (`device show`); import an interface from an `awg-quick` file with an address for the clients; import the peers of an interface; import clients from a file of the host; make an interface the default one (`endpoint default`), the one a new client goes on. Moving over is described in [Interfaces](panel/interfaces.html#moving-from-awg-quick).
 
 **26 `Websocket Fronts`.** Interfaces and the ports of their WebSocket{% if page.kind == "package" %} with the `amneziageo-proxy@<interface>` services{% endif %}, restarting the fronts, their logs.
 

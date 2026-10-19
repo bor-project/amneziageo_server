@@ -46,6 +46,7 @@ export interface Config {
   keepalive: number
   offlineAfter: number
   isEnabled: boolean
+  isDefault: boolean
   nat: boolean
   opened: boolean
   inbound: Inbound
@@ -72,6 +73,7 @@ export interface ConfigDraft {
   keepalive: number
   offlineAfter: number
   isEnabled: boolean
+  isDefault: boolean
   nat: boolean
   inbound: Inbound
   webSocket: boolean
@@ -197,6 +199,7 @@ export function draftOf(config: Config): ConfigDraft {
     keepalive: config.keepalive,
     offlineAfter: config.offlineAfter,
     isEnabled: config.isEnabled,
+    isDefault: config.isDefault,
     nat: config.nat,
     inbound: config.inbound,
     webSocket: config.webSocket,

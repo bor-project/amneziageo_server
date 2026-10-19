@@ -61,6 +61,20 @@ public class ClientTests
     }
 
     [Fact]
+    public void ANewClientStartsOnTheDefaultEndpointWhateverTheNewestClientHolds()
+    {
+        var first = Endpoint();
+        var second = Endpoint() with { Id = 2, Name = "awg2", IsDefault = true };
+        var clients = new[] { Client() with { Id = 9, ConfigId = 1 } };
+
+        Assert.Same(second, ClientDefaults.Endpoint([first, second], clients));
+        Assert.Same(second, ClientDefaults.Endpoint([first, second], []));
+        Assert.Same(second, ClientDefaults.Default([first, second]));
+        Assert.Same(first, ClientDefaults.Default([first]));
+        Assert.Null(ClientDefaults.Default([]));
+    }
+
+    [Fact]
     public void ANewClientStartsOnTheFirstEndpointWhenNoClientHoldsOne()
     {
         var first = Endpoint() with { Id = 4, Name = "awg0" };

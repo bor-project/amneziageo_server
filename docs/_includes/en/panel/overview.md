@@ -24,12 +24,15 @@ The numbers come from `/proc` of the host without kernel privileges. The window 
 
 ## Services
 
-The "Services" card lists what the server keeps for the clients, with the mark "checked <time>":
+The "Services" card lists what the server keeps for the clients and the ports of each service, with the mark "checked <time>":
 
+- "Panel": the TCP port the panel answers on;
 - "Subscriptions": on their own port or "on the ports of the interfaces", while subscriptions are on;
 - "Interface <name>" for each enabled interface, with the parts its TCP port serves: hello, speed, WebSocket, subscription;
 - "DNS": the resolver, while it is on;
 - "Certificate <name>" for each certificate file the panel and subscriptions answer under, with "until <date>".
+
+The "Change" link in a row leads to where the port and the settings of the service change: the panel - [Server](server.html), the subscriptions - [Subscriptions](subscriptions.html), an interface - [its page](interfaces.html), DNS - [DNS](dns.html), a certificate - [Certificates](certificates.html). A user who may change those settings sees it.
 
 A service that is down carries "Down since <time>: <reason>":
 

@@ -461,6 +461,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<int>("Inbound")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("INTEGER");
 

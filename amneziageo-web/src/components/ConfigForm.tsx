@@ -142,12 +142,20 @@ export function ConfigForm({
   return (
     <div className="mt-4 flex flex-col gap-4">
       <Part title={t("configs.network")}>
-        <div className="sm:col-span-2">
+        <div className="flex flex-wrap gap-x-8 gap-y-3 sm:col-span-2">
           <Switch
             id="config-on"
             caption={t("configs.enabled")}
             value={draft.isEnabled}
             onChange={(value) => put({ isEnabled: value })}
+          />
+          <Switch
+            id="config-default"
+            caption={t("configs.default")}
+            value={draft.isDefault}
+            onChange={(value) => put({ isDefault: value })}
+            disabled={saved?.isDefault === true}
+            title={saved?.isDefault === true ? t("configs.defaultHeld") : undefined}
           />
         </div>
         <Line

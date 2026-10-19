@@ -4,7 +4,7 @@ An interface is the server side of an AmneziaWG tunnel: the UDP port the clients
 
 ## List
 
-The list names the name, the host, the connection address `<host>:<port>`, the number of clients and the state. Under the address of an enabled interface the closed ports are named if the firewall of the host does not let in its UDP port or TCP services port: "51820 is closed in the firewall of the host" or "51820 and 8446 are closed in the firewall of the host", with the "Open" button when the panel can change the firewall. The name leads to the settings of the interface, "Add" opens the form of a new one.
+The list names the name, the host, the connection address `<host>:<port>`, the number of clients and the state. Under the address of an enabled interface the closed ports are named if the firewall of the host does not let in its UDP port or TCP services port: "51820 is closed in the firewall of the host" or "51820 and 8446 are closed in the firewall of the host", with the "Open" button when the panel can change the firewall. The name leads to the settings of the interface, "Add" opens the form of a new one. The "default" badge at the name marks the interface a new client goes on when no interface is named.
 
 ## Form
 
@@ -24,6 +24,7 @@ A new interface comes as a draft that already fits together: port 51820 or the f
 | Interface address | the networks the interface carries, for example `10.8.0.1/24`; the clients get their addresses from them |
 | Closed to clients | networks the clients of the interface are not let into, for example `192.168.0.0/16` of the home network of the server |
 | Enabled | whether the interface goes on the host. Disabling takes it off the host, and the clients lose the connection |
+| Default | the interface a new client goes on: the form of a new client picks it at once, and a client from the API without `configId` goes on it. Exactly one is always marked: the first interface is marked by itself, marking another takes the mark from the old one, a removed one hands it to the next in order. The mark comes off only by marking another interface |
 | NAT for clients | whether to mask what the clients send out with the address of the host; without NAT the clients reach the internet only with routes to their network |
 | Access to the clients | who in the tunnel may start a connection to the clients of the interface: "Closed", nobody; "The server alone", the panel and the host; "The whole tunnel network", all the clients of the interface; a single client may choose its own, see [Access to the client](clients.html#access-to-the-client) |
 | Client online for, s | for how many seconds after its last packet, keepalive included, a client counts as online: 60 by default, from 10 to 3600 and no less than two keepalive intervals. The "online" mark in the list of clients and the guard against a second device go by it |

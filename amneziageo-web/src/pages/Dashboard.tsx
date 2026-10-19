@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react"
+import { Link } from "react-router-dom"
 import axios from "axios"
 import { complaint } from "@/api/auth"
 import { useBackup, useRestore } from "@/api/backup"
+import { useConfigs } from "@/api/configs"
+import type { Config } from "@/api/configs"
 import { useFailure } from "@/api/failure"
 import { useHealth } from "@/api/health"
 import { useOverview, useServices } from "@/api/overview"
@@ -24,6 +27,7 @@ import { updateWatched } from "@/store/uiSlice"
 const small = "rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-hover disabled:opacity-50"
 
 const serviceTitles: Record<string, TextKey> = {
+  panel: "services.panel",
   subscription: "services.subscription",
   endpoint: "services.endpoint",
   dns: "services.dns",
@@ -51,9 +55,12 @@ const serviceFaults: Record<string, TextKey> = {
   "certificate-unreadable": "services.certificateUnreadable",
 }
 
-const serviceRow = "grid grid-cols-[14px_240px_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-1 py-2 text-sm max-sm:grid-cols-[14px_minmax(0,1fr)]"
+const serviceRow =
+  "grid grid-cols-[14px_240px_minmax(0,1fr)_auto] items-baseline gap-x-2.5 gap-y-1 py-2 text-sm max-sm:grid-cols-[14px_minmax(0,1fr)_auto]"
 
-const serviceLine = "col-start-3 max-sm:col-start-2"
+const serviceLine = "col-start-3 max-sm:col-span-2 max-sm:col-start-2"
+
+const serviceLink = "col-start-4 row-start-1 text-xs text-brand-ink hover:text-brand-lit max-sm:col-start-3"
 
 export function Dashboard() {
   const t = useText()
@@ -382,11 +389,16 @@ function Head({ data, version }: { data: Overview; version?: string }) {
 function Services() {
   const t = useText()
   const language = useLanguage()
+  const user = useAppSelector((s) => s.auth.user)
   const report = useServices(true).data
+  const configs = useConfigs().data ?? []
 
-  if (!report || report.services.length === 0) {
+  if (!report || (report.services.length === 0 && report.panelPort === 0)) {
     return null
   }
+
+  const services = report.panelPort > 0 ? [panelService(report.panelPort, report.checked), ...report.services] : report.services
+  const change = (one: ServiceHealth) => serviceTarget(one, configs, (scope) => holds(user, scope))
 
   return (
     <div className={`px-4 py-3 ${card}`}>
@@ -400,15 +412,49 @@ function Services() {
       </div>
 
       <div className="mt-1 divide-y divide-line">
-        {report.services.map((one) => (
-          <Service key={`${one.kind}:${one.name}`} one={one} />
+        {services.map((one) => (
+          <Service key={`${one.kind}:${one.name}`} one={one} to={change(one)} />
         ))}
       </div>
     </div>
   )
 }
 
-function Service({ one }: { one: ServiceHealth }) {
+function panelService(port: number, checked: string | null): ServiceHealth {
+  return {
+    kind: "panel",
+    name: "",
+    ports: [{ protocol: "tcp", port }],
+    shared: false,
+    parts: [],
+    faults: [],
+    notes: [],
+    until: null,
+    since: checked ?? "",
+  }
+}
+
+function serviceTarget(one: ServiceHealth, configs: Config[], may: (scope: string) => boolean): string | null {
+  switch (one.kind) {
+    case "panel":
+      return may(scopes.manageAccess) ? "/settings/server" : null
+    case "subscription":
+      return may(scopes.manageAccess) ? "/settings/subscriptions" : null
+    case "certificate":
+      return may(scopes.manageAccess) ? "/settings/certificates" : null
+    case "dns":
+      return may(scopes.manageRouting) ? "/routing/dns" : null
+    case "endpoint": {
+      const config = configs.find((item) => item.name === one.name)
+
+      return config !== undefined && may(scopes.manageInterfaces) ? `/interfaces/${config.id}/edit` : null
+    }
+    default:
+      return null
+  }
+}
+
+function Service({ one, to }: { one: ServiceHealth; to: string | null }) {
   const t = useText()
   const language = useLanguage()
   const down = one.faults.length > 0
@@ -423,6 +469,11 @@ function Service({ one }: { one: ServiceHealth }) {
       <span className="truncate text-ink" title={title}>
         {title}
       </span>
+      {to !== null && (
+        <Link to={to} className={serviceLink}>
+          {t("services.change")}
+        </Link>
+      )}
       {facts !== "" && <span className={`text-muted ${serviceLine}`}>{facts}</span>}
       {down && <span className={`text-alarm ${serviceLine}`}>{serviceDown(one, t, language)}</span>}
       {!down &&

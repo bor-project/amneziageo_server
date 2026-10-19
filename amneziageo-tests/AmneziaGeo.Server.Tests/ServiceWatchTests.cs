@@ -317,6 +317,8 @@ public class ServiceWatchTests
 
             Assert.All(first.Services, one => Assert.True(one.Works));
             Assert.Equal(Now, first.Checked);
+            Assert.Equal(PanelDefaults.Port, first.PanelPort);
+            Assert.Equal(0, ServicesReport.None.PanelPort);
             Assert.Equal([new ServiceFault(ServiceChecks.FrontFell, "wstunnel ended with code 1")], fallen.Services[1].Faults);
             Assert.Equal(Now.AddSeconds(30), fallen.Services[1].Since);
             Assert.Equal(Now, fallen.Services[0].Since);

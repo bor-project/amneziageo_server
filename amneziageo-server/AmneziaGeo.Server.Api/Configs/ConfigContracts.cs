@@ -60,7 +60,8 @@ public sealed record ConfigResponse(
     string? PresharedKey,
     ObfuscationBody Obfuscation,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    bool IsDefault = false);
 
 /// <summary>
 /// An endpoint as the interface sends it; keep leaves a port the panel held open and holds no longer open in the
@@ -87,7 +88,8 @@ public sealed record ConfigRequest(
     bool? WebSocket = null,
     int? ServicesPort = null,
     string? WebSocketPath = null,
-    bool? Keep = null);
+    bool? Keep = null,
+    bool? IsDefault = null);
 
 /// <summary>
 /// What a request to turn an endpoint on or off carries.
@@ -152,7 +154,8 @@ public static class ConfigAnswers
         secrets ? config.PresharedKey : null,
         Obfuscation(config.Obfuscation),
         config.CreatedUtc,
-        config.UpdatedUtc);
+        config.UpdatedUtc,
+        config.IsDefault);
 
     /// <summary>
     /// Describes the obfuscation of an endpoint as the interface reads it.
@@ -199,6 +202,7 @@ public static class ConfigAnswers
         Keepalive = request.Keepalive,
         OfflineAfter = request.OfflineAfter ?? ConfigDefaults.OfflineAfter,
         IsEnabled = request.IsEnabled ?? true,
+        IsDefault = request.IsDefault ?? held?.IsDefault ?? false,
         Nat = request.Nat ?? true,
         Opened = request.Opened ?? held?.Opened ?? false,
         Inbound = InboundName.Read(request.Inbound, ClientInbound.Off),

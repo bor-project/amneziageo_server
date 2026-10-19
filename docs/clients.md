@@ -38,14 +38,14 @@ The private key of a client is written out only to a caller that holds `clients:
 | Allow the server to disconnect the tunnel | whether the panel tells the application to take the tunnel down when the client is turned off; on unless set otherwise, see [Turning a client off](#turning-a-client-off) |
 
 `GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair, a subscription of its own and
-a name no other client carries. It stands on the endpoint `?config=<id>` names; without it, on the endpoint of the
-newest client, else on the first one by name, so a panel with one endpoint has it chosen at once. It also carries
+a name no other client carries. It stands on the endpoint `?config=<id>` names; without it, on the default endpoint (see
+[configs.md](configs.md#the-settings)), so the form of a new client has it chosen at once. It also carries
 the first number free in every range of that endpoint, as an address out of each.
 
 `POST /api/clients` fills in what the body leaves out: with no keys it makes a pair, with a private key alone it
 works out the public one, and with no address it takes the first free number of the endpoint. So a caller of its
-own needs no more than `{ "name": "...", "configId": <id> }`, and a body that names an endpoint the panel does
-not hold is answered with `unknown-config`. Clients are added, changed and imported one at a time: clients sent
+own needs no more than `{ "name": "..." }`: a body without `configId`, or with 0, puts the client on the default
+endpoint, and a body that names an endpoint the panel does not hold is answered with `unknown-config`. Clients are added, changed and imported one at a time: clients sent
 at once without an address each take a free number of their own, and of clients sent at once with the same
 address the first takes it and the others are answered with `client-address-taken`.
 

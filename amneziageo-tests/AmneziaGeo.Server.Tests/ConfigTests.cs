@@ -137,6 +137,68 @@ public class ConfigTests
     }
 
     [Fact]
+    public async Task TheFirstEndpointIsTheDefaultAndTheNextIsNot()
+    {
+        using var bench = new Bench();
+
+        var first = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg0"), default)).Record!;
+        var second = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { ListenPort = 443, Address = ["10.0.1.1/24"] }, default)).Record!;
+
+        Assert.True(first.IsDefault);
+        Assert.False(second.IsDefault);
+        Assert.Equal(["awg0"], Defaults(await bench.Configs.ListAsync(default)));
+    }
+
+    [Fact]
+    public async Task MakingAnEndpointTheDefaultTakesTheMarkFromTheOther()
+    {
+        using var bench = new Bench();
+        await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg0"), default);
+        var second = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { ListenPort = 443, Address = ["10.0.1.1/24"] }, default)).Record!;
+
+        var made = await bench.Configs.DefaultAsync(second.Id, default);
+        var missing = await bench.Configs.DefaultAsync(99, default);
+
+        Assert.True(made.IsOk);
+        Assert.True(made.Record!.IsDefault);
+        Assert.Equal(["awg1"], Defaults(await bench.Configs.ListAsync(default)));
+        Assert.Equal("unknown-config", missing.Code);
+    }
+
+    [Fact]
+    public async Task AnEndpointAddedOrChangedAsTheDefaultTakesTheMarkAndAChangeDoesNotDropIt()
+    {
+        using var bench = new Bench();
+        var first = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg0"), default)).Record!;
+
+        var second = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { ListenPort = 443, Address = ["10.0.1.1/24"], IsDefault = true },
+            default)).Record!;
+        var after = Defaults(await bench.Configs.ListAsync(default));
+        await bench.Configs.ChangeAsync(first.Id, first with { IsDefault = true }, default);
+        var back = Defaults(await bench.Configs.ListAsync(default));
+        await bench.Configs.ChangeAsync(first.Id, first with { IsDefault = false, Mtu = 1300 }, default);
+
+        Assert.True(second.IsDefault);
+        Assert.Equal(["awg1"], after);
+        Assert.Equal(["awg0"], back);
+        Assert.Equal(["awg0"], Defaults(await bench.Configs.ListAsync(default)));
+    }
+
+    [Fact]
+    public async Task RemovingTheDefaultEndpointHandsTheMarkToTheNextInOrder()
+    {
+        using var bench = new Bench();
+        var first = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg0"), default)).Record!;
+        await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg2") with { ListenPort = 443, Address = ["10.0.2.1/24"] }, default);
+        await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1") with { ListenPort = 444, Address = ["10.0.1.1/24"] }, default);
+
+        await bench.Configs.RemoveAsync(first.Id, default);
+
+        Assert.Equal(["awg2"], Defaults(await bench.Configs.ListAsync(default)));
+    }
+
+    [Fact]
     public async Task AnEndpointIsTurnedOffAndOnWithoutItsOtherSettingsMoving()
     {
         using var bench = new Bench();
@@ -453,4 +515,7 @@ public class ConfigTests
 
     private static string? ObfuscationCode(Func<ObfuscationSettings, ObfuscationSettings> change) =>
         ConfigRules.CheckObfuscation(change(ConfigDefaults.Obfuscation()))?.Code;
+
+    private static string[] Defaults(IReadOnlyList<ServerConfig> configs) =>
+        [.. configs.Where(config => config.IsDefault).Select(config => config.Name)];
 }

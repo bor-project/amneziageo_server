@@ -73,6 +73,11 @@ public sealed record ServicesReport(DateTimeOffset? Checked, IReadOnlyList<Servi
     /// The report before the first check.
     /// </summary>
     public static readonly ServicesReport None = new(null, []);
+
+    /// <summary>
+    /// The port the panel answers on, zero before the first check.
+    /// </summary>
+    public int PanelPort { get; init; }
 }
 
 /// <summary>

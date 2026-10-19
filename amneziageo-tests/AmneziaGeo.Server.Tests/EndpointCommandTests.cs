@@ -32,10 +32,24 @@ public sealed class EndpointCommandTests : IDisposable
 
         Assert.Equal(
             [
-                "awg0: port 51821, left to the host, websocket on TCP 51821",
+                "awg0: port 51821, left to the host, websocket on TCP 51821, default",
                 "awg1: port 443, held open by the panel",
             ],
             said);
+    }
+
+    [Fact]
+    public async Task MakingAnEndpointTheDefaultMovesTheMark()
+    {
+        await Add(ConfigDefaults.Fresh("awg0"), opened: false);
+        await Add(ConfigDefaults.Fresh("awg1") with { ListenPort = 443, Address = ["10.0.1.1/24"] }, opened: false);
+
+        var made = await Said("endpoint", "default", "awg1");
+        var listed = await Said("endpoint", "list");
+
+        Assert.Equal(["awg1: new clients start on this endpoint"], made);
+        Assert.Equal(["awg0: port 51820, left to the host", "awg1: port 443, left to the host, default"], listed);
+        Assert.Equal(2, await Code("endpoint", "default", "awg9"));
     }
 
     [Fact]
@@ -81,5 +95,23 @@ public sealed class EndpointCommandTests : IDisposable
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Where(line => line.StartsWith("awg", StringComparison.Ordinal)),
         ];
+    }
+
+    // Runs one command and returns its exit code.
+    private async Task<int> Code(params string[] words)
+    {
+        var before = Console.Error;
+        using var heard = new StringWriter(CultureInfo.InvariantCulture);
+        Console.SetError(heard);
+        try
+        {
+            using var context = Context.Open(Database);
+
+            return await EndpointCommands.RunAsync(context, new Arguments(words), CancellationToken.None);
+        }
+        finally
+        {
+            Console.SetError(before);
+        }
     }
 }

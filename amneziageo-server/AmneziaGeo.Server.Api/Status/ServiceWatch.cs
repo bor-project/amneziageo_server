@@ -117,7 +117,7 @@ public sealed class ServiceWatch : BackgroundService
             var now = _time.GetUtcNow();
             var found = ServiceChecks.Of(await FactsAsync(now, ct).ConfigureAwait(false), now);
             var before = _report;
-            var report = new ServicesReport(now, [.. found.Select(one => Carried(one, before))]);
+            var report = new ServicesReport(now, [.. found.Select(one => Carried(one, before))]) { PanelPort = _panel.Port };
             Say(report, before);
             _report = report;
             Write(report);

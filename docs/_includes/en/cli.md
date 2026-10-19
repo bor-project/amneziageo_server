@@ -40,6 +40,7 @@ The settings change in the database; the panel takes the address, port, path and
 |---|---|
 | `endpoint list` | interfaces with their port and who keeps the port open: the panel or the host |
 | `endpoint open <name>`, `endpoint close <name>` | keep the ports of an interface open in the firewall or leave them to the host |
+| `endpoint default <name>` | make the interface the one a new client goes on; `endpoint list` marks it with `default` at the end of the line |
 | `import endpoint <file.conf> [--name <name>] [--host <address>] [--dns <list>] [--allowed <list>]` | an interface from an `awg-quick` file, with its keys and obfuscation |
 | `import peers <file.conf> [--endpoint <name>]` | the peers of an interface file as clients without private keys |
 | `import clients <file.json> [--endpoint <name>] [--v6 <prefix>]` | clients from a file in which the host kept them with private keys |

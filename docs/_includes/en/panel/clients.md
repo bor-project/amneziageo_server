@@ -4,7 +4,7 @@ A client is one peer of an interface: a key pair, addresses inside the tunnel an
 
 ## List
 
-The "Configs" tab shows the clients of every interface or of one, as chosen with "Every interface" above the list, with a search by name. The columns:
+The "Configs" tab shows the clients of every interface or of one, as chosen with "Every interface" above the list, with a search by name. The "Online only" switch next to them keeps the clients that are online now. The columns:
 
 | Column | What it shows |
 |---|---|
@@ -39,7 +39,7 @@ The name of the configuration in the file, the link and the subscription is buil
 | Field | What it sets |
 |---|---|
 | Name | up to 64 characters, one of a kind in the whole panel regardless of case |
-| Interface | the interface the client goes on |
+| Interface | the interface the client goes on; a new client starts on the default interface, see [Interfaces](interfaces.html#general) |
 | Address | one address out of each network of the interface; the panel fills in the first free number and hints at a taken one: "Taken by <name>" |
 | Private and public keys | the pair of the client, "Generate" makes a new one; the public key is computed from the private one |
 | Preshared key | a preshared key of the client's own; empty means the key of the interface |

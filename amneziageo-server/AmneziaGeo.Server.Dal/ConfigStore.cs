@@ -204,9 +204,15 @@ public sealed class ConfigStore
             return busy;
         }
 
+        var first = !await _db.Configs.AnyAsync(ct).ConfigureAwait(false);
         var now = _time.GetUtcNow();
         var entity = new ConfigEntity { CreatedUtc = now, UpdatedUtc = now };
         Write(entity, draft);
+        if (first || draft.IsDefault)
+        {
+            await DropDefaultAsync(ct).ConfigureAwait(false);
+            entity.IsDefault = true;
+        }
 
         _db.Configs.Add(entity);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -256,6 +262,12 @@ public sealed class ConfigStore
         var old = entity.Name;
         var now = _time.GetUtcNow();
         Write(entity, draft);
+        if (draft.IsDefault && !entity.IsDefault)
+        {
+            await DropDefaultAsync(ct).ConfigureAwait(false);
+            entity.IsDefault = true;
+        }
+
         entity.UpdatedUtc = now;
         await NameFollow.InboundAsync(_db, old, entity.Name, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -318,7 +330,29 @@ public sealed class ConfigStore
     }
 
     /// <summary>
-    /// Removes an endpoint.
+    /// Makes an endpoint the one a new client starts on.
+    /// </summary>
+    public async Task<ConfigResult> DefaultAsync(long id, CancellationToken ct)
+    {
+        var held = await _db.Configs.FirstOrDefaultAsync(row => row.Id == id, ct).ConfigureAwait(false);
+        if (held is null)
+        {
+            return Missing(id);
+        }
+
+        if (!held.IsDefault)
+        {
+            await DropDefaultAsync(ct).ConfigureAwait(false);
+            held.IsDefault = true;
+            held.UpdatedUtc = _time.GetUtcNow();
+            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        return ConfigResult.Done(Read(held));
+    }
+
+    /// <summary>
+    /// Removes an endpoint, handing the default mark to the next endpoint in order.
     /// </summary>
     public async Task<ConfigResult> RemoveAsync(long id, CancellationToken ct)
     {
@@ -330,9 +364,25 @@ public sealed class ConfigStore
 
         var gone = Read(entity);
         _db.Configs.Remove(entity);
+        if (entity.IsDefault
+            && await _db.Configs.Where(config => config.Id != id).OrderBy(config => config.Id).FirstOrDefaultAsync(ct).ConfigureAwait(false)
+                is { } next)
+        {
+            next.IsDefault = true;
+        }
+
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ConfigResult.Done(gone);
+    }
+
+    // Takes the default mark off every endpoint.
+    private async Task DropDefaultAsync(CancellationToken ct)
+    {
+        foreach (var held in await _db.Configs.Where(config => config.IsDefault).ToListAsync(ct).ConfigureAwait(false))
+        {
+            held.IsDefault = false;
+        }
     }
 
     private static ConfigResult Missing(long id) =>
@@ -397,6 +447,7 @@ public sealed class ConfigStore
         Keepalive = entity.Keepalive,
         OfflineAfter = entity.OfflineAfter,
         IsEnabled = entity.IsEnabled,
+        IsDefault = entity.IsDefault,
         Nat = entity.Nat,
         Opened = entity.Opened,
         Inbound = (ClientInbound)entity.Inbound,

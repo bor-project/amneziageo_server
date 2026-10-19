@@ -57,7 +57,7 @@ static int Usage()
           amneziageo-server role list | add | set | remove
           amneziageo-server token list | add | revoke
           amneziageo-server import endpoint | peers | clients
-          amneziageo-server endpoint list | open <name> | close <name>
+          amneziageo-server endpoint list | open <name> | close <name> | default <name>
           amneziageo-server panel show | get <name> | set <options> | reset
           amneziageo-server subscriptions show | get <name> | set --opened on | off
           amneziageo-server dns show | get <name> | set --enabled on | off [--upstreams <servers> | default]

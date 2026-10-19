@@ -37,6 +37,7 @@ public static class ConfigEndpoints
         writing.MapPost("/{id:long}/apply", ApplyAsync);
         writing.MapPost("/{id:long}/switch", SwitchAsync);
         writing.MapPost("/{id:long}/open", OpenAsync);
+        writing.MapPost("/{id:long}/default", DefaultAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
@@ -196,6 +197,13 @@ public static class ConfigEndpoints
         return sync.IsDone
             ? Results.Ok(ConfigAnswers.Config(result.Record!, true))
             : Refuse(StatusCodes.Status409Conflict, "firewall-refused", sync.Message);
+    }
+
+    private static async Task<IResult> DefaultAsync(long id, ConfigStore store, CancellationToken ct)
+    {
+        var result = await store.DefaultAsync(id, ct).ConfigureAwait(false);
+
+        return result.IsOk ? Results.Ok(ConfigAnswers.Config(result.Record!, true)) : Explain(result);
     }
 
     private static async Task<IResult> SwitchAsync(
