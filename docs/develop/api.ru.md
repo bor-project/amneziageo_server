@@ -80,4 +80,4 @@ curl -s -H "Authorization: Bearer agt_..." -H "Content-Type: application/json" \
 curl -s -H "Authorization: Bearer agt_..." "$API/clients/7/config"
 ```
 
-Телу `POST /api/clients` хватает имени и номера интерфейса: ключи и адрес панель подберёт сама, клиент будет включён. Ответ `GET /api/clients/{id}/config` несёт текст файла, ссылку `vpn://` и адрес подписки.
+Телу `POST /api/clients` хватает имени: без `configId` клиент встаёт на интерфейс по умолчанию, ключи и адрес панель подберёт сама, клиент будет включён. Ответ `GET /api/clients/{id}/config` несёт текст файла, ссылку `vpn://` и адрес подписки.

@@ -4,7 +4,7 @@ A client is one peer of an interface: a key pair, addresses inside the tunnel an
 
 ## List
 
-{% include shot.html name="clients" alt="List of clients: switch, name, interface, template, address, speed, traffic and the time last online" caption="Clients of two interfaces." %}
+{% include shot.html name="clients" alt="List of clients: the interface filter, search and the Online only switch; switch, name, interface, template, address, speed, traffic and the time last online" caption="Clients of two interfaces." %}
 
 The "Configs" tab shows the clients of every interface or of one, as chosen with "Every interface" above the list, with a search by name. The "Online only" switch next to them keeps the clients that are online now. The columns:
 

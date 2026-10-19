@@ -2,7 +2,7 @@
 
 "Overview" is the first page of the panel. It reads the host every two seconds and shows its state, the services of the server, the update of the panel and the backup.
 
-{% include shot.html name="overview" alt="Overview page: the AmneziaWG module, services, CPU, memory, swap and disk cards, speed and connections" caption="The overview of a working server." %}
+{% include shot.html name="overview" alt="Overview page: the AmneziaWG module, services with their ports and Change links, CPU, memory, swap and disk cards, speed and connections" caption="The overview of a working server." %}
 
 ## Page header
 

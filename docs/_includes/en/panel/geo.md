@@ -43,6 +43,8 @@ The request carries the `If-None-Match` and `If-Modified-Since` of the previous 
 
 Downloads also run by themselves: two minutes after the start and then every half hour for sources older than `Geo__UpdateHours` hours (24 by default; 0 leaves downloading to the button). Item 28 of the console menu and `amneziageo-server geo update` download everything now.
 
+When the databases change, the panel works out the ranges of every template with entries anew at once: after a download that replaced a file, and after a source is added, changed, removed or moved. The clients get the new `AllowedIPs` with their file through the subscription, see [Templates](templates.html#routing).
+
 ## What is read from them
 
 A rule or a template names a key like `geoip:ru` or `geosite:youtube`. The usual databases give about 260 countries and 1500 categories, `zkeenip` adds some twenty networks such as `discord`, `hetzner`, `youtube`, and the own database the `ag-` keys. A country brings its domain zones as well: `ru` also `su`, `xn--p1ai` and `рф`. A geosite entry comes in four kinds: an exact name, a suffix, a keyword and an expression; an expression gets 50 milliseconds. What a key carries is shown by "Show what it holds" on an entry of a template, see [Templates](templates.html#routing).
