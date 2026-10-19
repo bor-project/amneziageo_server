@@ -80,4 +80,4 @@ curl -s -H "Authorization: Bearer agt_..." -H "Content-Type: application/json" \
 curl -s -H "Authorization: Bearer agt_..." "$API/clients/7/config"
 ```
 
-The body of `POST /api/clients` needs only a name and the number of the interface: the panel picks the keys and the address itself. The answer of `GET /api/clients/{id}/config` carries the text of the file, the `vpn://` link and the subscription address.
+The body of `POST /api/clients` needs only a name and the number of the interface: the panel picks the keys and the address itself, and the client is on. The answer of `GET /api/clients/{id}/config` carries the text of the file, the `vpn://` link and the subscription address.

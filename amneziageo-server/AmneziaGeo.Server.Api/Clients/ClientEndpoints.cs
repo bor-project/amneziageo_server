@@ -280,7 +280,7 @@ public static class ClientEndpoints
             return Refuse(StatusCodes.Status404NotFound, "unknown-client", $"there is no client under the number {id}");
         }
 
-        if (held.IsEnabled && !request.IsEnabled)
+        if (held.IsEnabled && request.IsEnabled is false)
         {
             await signals.SendAsync([held], await configs.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
         }
