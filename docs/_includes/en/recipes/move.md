@@ -14,7 +14,7 @@ Copy the file to the new host and install the panel there:
 amneziageo-server install --restore /root/amneziageo-<name>-<time>.db
 ```
 
-The script checks the file, installs the panel {% if page.kind == "docker" %}as a container{% else %}as a package{% endif %}, puts the fresh database aside into `backup` and starts the panel on the copy; it makes no administrator and no interface, since they are already in the copy. If the panel is already on the new host, the same is done by `amneziageo-server restore <file>` or "Restore from a file" on "Overview" (a copy with addresses the host does not have does not go in from the panel, while the console command fits it to the host).
+The script checks the file, installs the panel {% if page.kind == "docker" %}as a container{% else %}as a service{% endif %}, puts the fresh database aside into `backup` and starts the panel on the copy; it makes no administrator and no interface, since they are already in the copy. If the panel is already on the new host, the same is done by `amneziageo-server restore <file>` or "Restore from a file" on "Overview" (a copy with addresses the host does not have does not go in from the panel, while the console command fits it to the host).
 
 ## 3. The name
 

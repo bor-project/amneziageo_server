@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Clients;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Dal;
@@ -69,14 +70,20 @@ public static class GeoEndpoints
         GeoSourceRequest request,
         GeoStore store,
         RouteApplier routes,
+        TemplateSchedule templates,
         CancellationToken ct)
     {
         var result = await store.ChangeAsync(id, GeoAnswers.Draft(request), ct).ConfigureAwait(false);
 
-        return await SettleAsync(result, routes, ct).ConfigureAwait(false);
+        return await SettleAsync(result, routes, templates, ct).ConfigureAwait(false);
     }
 
-    private static async Task<IResult> RemoveAsync(long id, GeoStore store, RouteApplier routes, CancellationToken ct)
+    private static async Task<IResult> RemoveAsync(
+        long id,
+        GeoStore store,
+        RouteApplier routes,
+        TemplateSchedule templates,
+        CancellationToken ct)
     {
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
         if (!result.IsOk)
@@ -84,6 +91,7 @@ public static class GeoEndpoints
             return Explain(result);
         }
 
+        templates.Wake();
         await routes.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.NoContent();
@@ -94,11 +102,12 @@ public static class GeoEndpoints
         GeoMoveRequest request,
         GeoStore store,
         RouteApplier routes,
+        TemplateSchedule templates,
         CancellationToken ct)
     {
         var result = await store.MoveAsync(id, request.Up, ct).ConfigureAwait(false);
 
-        return await SettleAsync(result, routes, ct).ConfigureAwait(false);
+        return await SettleAsync(result, routes, templates, ct).ConfigureAwait(false);
     }
 
     private static async Task<IResult> UpdateAsync(
@@ -106,6 +115,7 @@ public static class GeoEndpoints
         GeoStore store,
         GeoRefresher refresher,
         RouteApplier routes,
+        TemplateSchedule templates,
         CancellationToken ct)
     {
         var source = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -115,6 +125,7 @@ public static class GeoEndpoints
         }
 
         var fresh = await refresher.RefreshAsync(source, ct).ConfigureAwait(false);
+        templates.Wake();
         await routes.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(GeoAnswers.Source(fresh));
@@ -123,22 +134,29 @@ public static class GeoEndpoints
     private static async Task<IResult> UpdateAllAsync(
         GeoRefresher refresher,
         RouteApplier routes,
+        TemplateSchedule templates,
         TimeProvider time,
         CancellationToken ct)
     {
         var fresh = await refresher.RefreshAllAsync(null, time.GetUtcNow(), ct).ConfigureAwait(false);
+        templates.Wake();
         await routes.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(fresh.Select(GeoAnswers.Source).ToArray());
     }
 
-    private static async Task<IResult> SettleAsync(GeoResult result, RouteApplier routes, CancellationToken ct)
+    private static async Task<IResult> SettleAsync(
+        GeoResult result,
+        RouteApplier routes,
+        TemplateSchedule templates,
+        CancellationToken ct)
     {
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
+        templates.Wake();
         await routes.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(GeoAnswers.Source(result.Record!));

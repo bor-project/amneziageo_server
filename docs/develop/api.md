@@ -37,24 +37,24 @@ Every `POST /api/<section>/{id}/switch` takes `{ "on": true }` or `{ "on": false
 
 | Section | Page of the site | Reference in the repository with the routes |
 |---|---|---|
-| accounts, roles, tokens | [Users and roles](../package/panel/users.md) | [auth.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/auth.md) |
-| interfaces | [Interfaces](../package/panel/interfaces.md) | [configs.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/configs.md) |
-| clients | [Clients](../package/panel/clients.md) | [clients.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/clients.md), [devices.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/devices.md) |
-| templates and routing presets | [Templates](../package/panel/templates.md), [Routing presets](../package/panel/presets.md) | [templates.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/templates.md) |
-| subscriptions | [Subscriptions](../package/panel/subscriptions.md) | [subscriptions.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/subscriptions.md) |
-| channels and groups | [Channels](../package/panel/channels.md) | [outbounds.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/outbounds.md), [balancers.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/balancers.md) |
-| rules, basic lists, test | [Rules](../package/panel/rules.md), [Basic](../package/panel/basic.md), [Test](../package/panel/test.md) | [rules.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/rules.md) |
-| resolver | [DNS](../package/panel/dns.md) | [dns.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/dns.md) |
-| geo lists | [Geo lists](../package/panel/geo.md) | [geo.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/geo.md) |
-| interface services: hello, speed, WebSocket, signal | [Interfaces](../package/panel/interfaces.md#services-on-the-tcp-port) | [services.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/services.md) |
-| where the panel answers, certificate | [Server](../package/panel/server.md), [Certificates](../package/panel/certificates.md) | [serving.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/serving.md) |
-| ports in the firewall of the host | [Interfaces](../package/panel/interfaces.md#ports-in-the-firewall) | [firewall.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/firewall.md) |
-| database backups | [Overview](../package/panel/overview.md#backup) | [install.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/install.md#moving-to-another-server) |
-| diagnostics, connection log | [Diagnostics](../package/panel/diagnostics.md) | [diagnostics.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/diagnostics.md) |
-| host overview and services | [Overview](../package/panel/overview.md) | [overview.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/overview.md) |
-| panel updates | [Overview](../package/panel/overview.md#updates) | [updates.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/updates.md) |
+| accounts, roles, tokens | [Users and roles](../service/panel/users.md) | [auth.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/auth.md) |
+| interfaces | [Interfaces](../service/panel/interfaces.md) | [configs.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/configs.md) |
+| clients | [Clients](../service/panel/clients.md) | [clients.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/clients.md), [devices.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/devices.md) |
+| templates and routing presets | [Templates](../service/panel/templates.md), [Routing presets](../service/panel/presets.md) | [templates.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/templates.md) |
+| subscriptions | [Subscriptions](../service/panel/subscriptions.md) | [subscriptions.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/subscriptions.md) |
+| channels and groups | [Channels](../service/panel/channels.md) | [outbounds.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/outbounds.md), [balancers.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/balancers.md) |
+| rules, basic lists, test | [Rules](../service/panel/rules.md), [Basic](../service/panel/basic.md), [Test](../service/panel/test.md) | [rules.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/rules.md) |
+| resolver | [DNS](../service/panel/dns.md) | [dns.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/dns.md) |
+| geo lists | [Geo lists](../service/panel/geo.md) | [geo.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/geo.md) |
+| interface services: hello, speed, WebSocket, signal | [Interfaces](../service/panel/interfaces.md#services-on-the-tcp-port) | [services.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/services.md) |
+| where the panel answers, certificate | [Server](../service/panel/server.md), [Certificates](../service/panel/certificates.md) | [serving.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/serving.md) |
+| ports in the firewall of the host | [Interfaces](../service/panel/interfaces.md#ports-in-the-firewall) | [firewall.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/firewall.md) |
+| database backups | [Overview](../service/panel/overview.md#backup) | [install.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/install.md#moving-to-another-server) |
+| diagnostics, connection log | [Diagnostics](../service/panel/diagnostics.md) | [diagnostics.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/diagnostics.md) |
+| host overview and services | [Overview](../service/panel/overview.md) | [overview.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/overview.md) |
+| panel updates | [Overview](../service/panel/overview.md#updates) | [updates.md](https://github.com/bor-project/amneziageo_server/blob/master/docs/updates.md) |
 
-The pages of the panel are the same for the package and Docker; the links lead to the package version.
+The pages of the panel are the same for the service and Docker; the links lead to the service version.
 
 ## What stays in the console
 

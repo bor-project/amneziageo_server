@@ -13,6 +13,8 @@ Geo lists are the geo databases rules and templates compare against: `geoip.dat`
 | Size, Updated | the size of the file and the time of the download; "not downloaded", "off", or the reason the download failed |
 | Enabled | whether rules are compared against the source |
 
+{% include shot.html name="geo" alt="Geo lists: the number of countries and categories and the sources with address, entries, size and time of update" caption="The sources of a fresh panel, downloaded." %}
+
 "Update" on a source downloads it, "Update all" all the enabled ones. Sources are moved with the "Up" and "Down" arrows.
 
 ## Order

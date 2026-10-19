@@ -6,6 +6,8 @@ A subscription is an address from which the app of a client reads its configurat
 
 "Save" takes effect at once: the panel raises the subscription port again, and if the host did not give it, keeps the previous settings and writes the reason under the buttons.
 
+{% include shot.html name="subscriptions" alt="Subscriptions tab: enabled, separate port, listen domains, base path, update interval, profile title" caption="Subscriptions on the ports of the interfaces." %}
+
 | Field | What it sets |
 |---|---|
 | Enabled | whether the panel serves subscriptions; no by default |

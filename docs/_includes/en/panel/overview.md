@@ -2,6 +2,8 @@
 
 "Overview" is the first page of the panel. It reads the host every two seconds and shows its state, the services of the server, the update of the panel and the backup.
 
+{% include shot.html name="overview" alt="Overview page: the AmneziaWG module, services, CPU, memory, swap and disk cards, speed and connections" caption="The overview of a working server." %}
+
 ## Page header
 
 Under the title stand `panel <version>`, the AmneziaWG module (`loaded <version>` or `not loaded`) and `interfaces N`: how many interfaces of the `amneziawg` type are up on the host. When a release newer than the panel is out, `<version> available` appears next to them with a link to its page, and the "Update" button, see [Updates](#updates); "Check for updates" asks for the releases now.
@@ -58,7 +60,7 @@ The "Update" button, for a role with the "Update the panel" permission, leads th
 {% if page.kind == "docker" %}
 The container updates through the Docker socket its `compose.yaml` gives it: the panel pulls the image of the release by digest, copies the database to `backup` in the data directory, writes `AMNEZIAGEO_TAG=<version>` into the `.env` of the project, stops itself and starts the helper container `amneziageo-server-update-<version>`, which recreates its container on the new image with the same settings. The old container waits under its own name: if the new one does not become healthy within three minutes, the database and `.env` come back, and the old one goes on working. The helper containers of finished updates are removed at the next check.
 {% else %}
-The package updates through the `install.sh` of the new release: the panel assembles the package for the architecture of the host in `update/stage-<version>` next to the database, taking the files it already has from the working release and downloading the rest from the release in parts, each checked against the digest from the file list of the release; between two releases this is usually a megabyte or two out of about 55. If the list does not match, the files are not served in parts or more than three quarters of the package changed, the panel downloads the whole package. Then it runs `install.sh` apart from itself, through `systemd-run`, as the service `amneziageo-server-update-<version>`: that stops the server, copies the database, moves `current` to the new release and brings the previous one back if the new one did not come up. The output of the script goes to `update/<version>.log`, the result to `update/<version>.rc`.
+The service updates through the `install.sh` of the new release: the panel assembles the archive for the architecture of the host in `update/stage-<version>` next to the database, taking the files it already has from the working release and downloading the rest from the release in parts, each checked against the digest from the file list of the release; between two releases this is usually a megabyte or two out of about 55. If the list does not match, the files are not served in parts or more than three quarters of the archive changed, the panel downloads the whole archive. Then it runs `install.sh` apart from itself, through `systemd-run`, as the service `amneziageo-server-update-<version>`: that stops the server, copies the database, moves `current` to the new release and brings the previous one back if the new one did not come up. The output of the script goes to `update/<version>.log`, the result to `update/<version>.rc`.
 {% endif %}
 Why the panel cannot update itself, the header says in words:
 

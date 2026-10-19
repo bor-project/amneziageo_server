@@ -2,6 +2,8 @@
 
 A routing preset is a routing list of the AmneziaGeo client that is kept on the panel and handed to the app through the hello of the interface. The template of a client names the presets its clients get; routing by them happens on the device, not on the server. The "Routing presets" tab of the "Clients" page lists the presets with the time of the change and the number of templates that hand them out.
 
+{% include shot.html name="preset-form" alt="Form of a new routing preset: name, On by default, the lists Through the VPN, Directly and Block" caption="An empty form of a preset." %}
+
 ## Main
 
 "Name": up to 64 characters, one of a kind in the panel; this is what the list is called on the client. "On by default": the client puts the list in use when it adds it, unless another list is in use already.

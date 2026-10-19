@@ -33,6 +33,9 @@ public static class ClientServices
         services.AddSingleton<TrafficLedger>();
         services.AddSingleton<ClientHost>();
         services.AddScoped<TemplateRefresher>();
+        services.AddScoped<TemplateRenewer>();
+        services.AddSingleton<TemplateSchedule>();
+        services.AddHostedService(provider => provider.GetRequiredService<TemplateSchedule>());
         services.AddHostedService<ClientBoot>();
         services.AddKeyedSingleton<IAwgDevices>(
             InterfaceReads.Key,

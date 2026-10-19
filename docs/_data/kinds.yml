@@ -1,10 +1,10 @@
-- id: package
+- id: service
   name:
-    en: Package
-    ru: Пакет
+    en: Service
+    ru: Служба
   summary:
-    en: a systemd service on the host, Debian 12 and Ubuntu, amd64 and arm64
-    ru: служба systemd на хосте, Debian 12 и Ubuntu, amd64 и arm64
+    en: systemd on the host, Debian 12 and Ubuntu, amd64 and arm64
+    ru: systemd на хосте, Debian 12 и Ubuntu, amd64 и arm64
 - id: docker
   name:
     en: Docker

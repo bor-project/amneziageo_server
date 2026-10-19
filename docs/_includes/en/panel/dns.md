@@ -2,6 +2,8 @@
 
 The resolver of the panel answers the questions of the tunnel clients about names itself: it passes a question to an upstream server, over HTTPS unless told otherwise, gives the answer to the client and puts the addresses it sees into the sets of the rules that compare by this name. This is how a rule by domain works: the kernel decides by address, and the resolver brings the addresses. Along the way the questions of the clients do not leave the server as plain DNS.
 
+{% include shot.html name="dns" alt="DNS page: state, listen addresses, questions, cache, unanswered, the settings of the resolver" caption="The resolver answers the clients of two interfaces." %}
+
 A fresh panel keeps the resolver off: the clients get name servers in their configuration and ask them through the tunnel. It is turned on by the question of the installation, item 29 of the console menu `DNS for Clients`, the command `amneziageo-server dns on`, or "Answer the clients" here. A resolver that is off does not run, holds no port and keeps no connections to upstream servers.
 
 ## State

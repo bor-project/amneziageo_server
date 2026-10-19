@@ -1,5 +1,5 @@
 title: AmneziaGeo Server
-description: Panel for an AmneziaWG server - interfaces, clients, templates and subscriptions, routing by geo databases and domains through other servers, a resolver for the clients, updates and backups. Debian and Ubuntu, as a package or in Docker.
+description: Panel for an AmneziaWG server - interfaces, clients, templates and subscriptions, routing by geo databases and domains through other servers, a resolver for the clients, updates and backups. Debian and Ubuntu, as a service or in Docker.
 url: https://bor-project.github.io
 baseurl: /amneziageo_server
 repository: bor-project/amneziageo_server

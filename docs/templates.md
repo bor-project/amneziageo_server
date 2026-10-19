@@ -52,8 +52,10 @@ the template; when nothing came out, the default ranges go instead.
 A name server of the file inside the network of the interface, the resolver of the panel among them, answers only
 through the tunnel: when the ranges leave it out, it is added to `AllowedIPs` as a single address.
 
-The list is worked out again when the template is saved and by `Refresh` (`POST /api/templates/{id}/refresh`):
-names move and geo databases update, and the files of the clients follow only after a refresh.
+The list is worked out again when the template is saved, by `Refresh` (`POST /api/templates/{id}/refresh`), on
+its own once a day and right after the geo databases change: names move and geo databases update, and the files
+of the clients follow only after a new pass. When the name servers give no answer, the panel keeps the list it had
+and tries again in an hour.
 
 ## Routing by name
 

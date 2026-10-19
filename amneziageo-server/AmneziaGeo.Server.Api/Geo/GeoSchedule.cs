@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Api.Clients;
 using AmneziaGeo.Server.Api.Rules;
 
 namespace AmneziaGeo.Server.Api.Geo;
@@ -17,16 +18,24 @@ public sealed class GeoSchedule : BackgroundService
 
     private readonly TimeProvider _time;
 
+    private readonly TemplateSchedule _templates;
+
     private readonly ILogger<GeoSchedule> _logger;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public GeoSchedule(IServiceScopeFactory scopes, GeoOptions options, TimeProvider time, ILogger<GeoSchedule> logger)
+    public GeoSchedule(
+        IServiceScopeFactory scopes,
+        GeoOptions options,
+        TimeProvider time,
+        TemplateSchedule templates,
+        ILogger<GeoSchedule> logger)
     {
         _scopes = scopes;
         _options = options;
         _time = time;
+        _templates = templates;
         _logger = logger;
     }
 
@@ -69,6 +78,7 @@ public sealed class GeoSchedule : BackgroundService
             }
 
             _logger.LogDebug("the rules are laid anew over the geo files the round replaced");
+            _templates.Wake();
             await scope.ServiceProvider.GetRequiredService<RouteApplier>().SettleAsync(ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

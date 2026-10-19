@@ -1,0 +1,22 @@
+# Order of shooting. A frame is docs/assets/img/<language>/<name>.png, its job is frames/<name>.mjs.
+overview         Overview: the host, the services, the load
+interfaces       Interfaces: the list
+interface-form   Interfaces: the form of an interface
+clients          Clients: the list
+client-export    Clients: the Export tab with an invented QR code
+client-settings  Clients: the Settings tab
+templates        Templates: the list
+template-form    Templates: the form with route by name
+preset-form      Routing presets: a new preset
+rule-form        Rules: a new rule
+basic            Basic lists
+test             Route test
+channels         Channels: the list
+channel-form     Channels: a new channel
+geo              Geo lists
+dns              DNS
+server           Settings: Server
+certificates     Settings: Certificates
+subscriptions    Settings: Subscriptions
+users            Settings: Users and roles
+diagnostics      Settings: Diagnostics

@@ -2,6 +2,8 @@
 
 The "Users and roles" tab carries three tables: "Users", "Roles" and "Tokens". People sign in to the panel with an account of the panel and a password; scripts with a long-lived token that acts on behalf of a role.
 
+{% include shot.html name="users" alt="Users and roles: the users admin and root, the built-in Administrator role, a token" caption="An administrator, the system user and a token for scripts." %}
+
 ## Users
 
 | Column | What it shows |
@@ -12,10 +14,10 @@ The "Users and roles" tab carries three tables: "Users", "Roles" and "Tokens". P
 | Role | the role or "no role" |
 | Status | "enabled" or "disabled" |
 
-"Add" opens a new account: the name (lower case letters, digits, dot, dash and underscore, starting with a letter), the display name, the role, the password with the "Generate" button, "Require a password change" (the new user changes the issued password at the first sign-in){% if page.kind == "package" %}, "User of the system" with the "Public ssh key" field, see below{% endif %}. The page of an account changes the role and the state, "Password" in the row menu sets a new password, "Remove" removes the account with its sessions. Everyone changes their own password in the account menu in the header. A password shorter than eight characters is not accepted (`AMNEZIAGEO_MIN_PASSWORD` in the environment sets another threshold); ten misses lock the account for fifteen minutes. The last enabled account with the "Manage access" permission cannot be demoted, disabled or removed, and none of this can be done to your own account.
+"Add" opens a new account: the name (lower case letters, digits, dot, dash and underscore, starting with a letter), the display name, the role, the password with the "Generate" button, "Require a password change" (the new user changes the issued password at the first sign-in){% if page.kind == "service" %}, "User of the system" with the "Public ssh key" field, see below{% endif %}. The page of an account changes the role and the state, "Password" in the row menu sets a new password, "Remove" removes the account with its sessions. Everyone changes their own password in the account menu in the header. A password shorter than eight characters is not accepted (`AMNEZIAGEO_MIN_PASSWORD` in the environment sets another threshold); ten misses lock the account for fifteen minutes. The last enabled account with the "Manage access" permission cannot be demoted, disabled or removed, and none of this can be done to your own account.
 
 A name a user of the host carries is not given to an account of the panel: "The host carries a user with this name, that name is left to it".
-{% if page.kind == "package" %}
+{% if page.kind == "service" %}
 ### System users
 
 An account with "User of the system" checked also stands behind a user of the host: the panel makes the user (`useradd` with a home directory and `/bin/bash`, or completes an existing one), puts it into the groups `amneziageo`, which reaches the files of the panel, and `amneziageo-<role>`, which carries the role, and puts the public key from the field into its `~/.ssh/authorized_keys`; it sets no host password, and the user signs in to the host by key. The files of the panel are given to the `amneziageo` group with `0660` permissions, so a member of the group runs `AmneziaGeo.Server.Cli` without `sudo`; raising interfaces still needs root. Disabling closes the sign-in to the host and takes the user out of the groups, enabling brings it back; removing takes the user out of the groups and leaves the user of the host with its home. Changing the role moves it between the role groups.
