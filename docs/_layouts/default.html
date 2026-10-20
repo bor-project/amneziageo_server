@@ -21,6 +21,7 @@
     {%- if page.noindex %}
     <meta name="robots" content="noindex">
     {%- endif %}
+    {%- include language-head.html %}
     <link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}">
   </head>
   <body>
