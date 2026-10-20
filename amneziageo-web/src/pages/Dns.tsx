@@ -86,11 +86,15 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
   const dispatch = useAppDispatch()
   const kept = useAppSelector((s) => s.drafts.dns)
   const [fault, setFault] = useState<TextKey | null>(null)
+  const [way, setWay] = useState<"direct" | "out" | null>(null)
   const outbounds = useOutbounds()
   const balancers = useBalancers()
   const save = useSaveResolver()
   const saved = draftOf(settings)
   const draft = kept ?? saved
+  const ways = [...(outbounds.data ?? []), ...(balancers.data ?? [])].map((one) => one.name)
+  const via = way ?? (draft.outbound === "" ? "direct" : "out")
+  const unpicked = via === "out" && draft.outbound === ""
   const trouble = troubleOf(settings)
 
   function set(part: Partial<DnsDraft>) {
@@ -103,6 +107,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
     try {
       await save.mutateAsync(draft)
       dispatch(dnsDrafted(null))
+      setWay(null)
     } catch (error) {
       setFault(complaint(error))
     }
@@ -111,6 +116,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
   function drop() {
     setFault(null)
     dispatch(dnsDrafted(null))
+    setWay(null)
   }
 
   return (
@@ -142,29 +148,53 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
           wide
         />
         <Pick
-          id="dns-outbound"
+          id="dns-way"
           caption={t("dns.outbound")}
-          value={draft.outbound}
-          onChange={(v) => set({ outbound: v })}
+          value={via}
+          onChange={(v) => {
+            setWay(v === "out" ? "out" : null)
+            if (v !== "out") {
+              set({ outbound: "" })
+            }
+          }}
         >
-          <option value="">{t("dns.throughHost")}</option>
-          <optgroup label={t("rules.outbounds")}>
-            {(outbounds.data ?? []).map((one) => (
-              <option key={one.id} value={one.name}>
-                {one.name}
-              </option>
-            ))}
-          </optgroup>
-          {(balancers.data ?? []).length > 0 && (
-            <optgroup label={t("rules.balancers")}>
-              {(balancers.data ?? []).map((one) => (
+          <option value="direct">{t("rules.actionDirect")}</option>
+          <option value="out" disabled={ways.length === 0}>
+            {t("rules.actionOut")}
+          </option>
+        </Pick>
+        {via === "out" && (
+          <Pick
+            id="dns-outbound"
+            caption={t("rules.outbound")}
+            value={draft.outbound}
+            onChange={(v) => {
+              setWay("out")
+              set({ outbound: v })
+            }}
+          >
+            <option value="">{t("rules.pick")}</option>
+            {draft.outbound !== "" && !ways.includes(draft.outbound) && (
+              <option value={draft.outbound}>{draft.outbound}</option>
+            )}
+            <optgroup label={t("rules.outbounds")}>
+              {(outbounds.data ?? []).map((one) => (
                 <option key={one.id} value={one.name}>
                   {one.name}
                 </option>
               ))}
             </optgroup>
-          )}
-        </Pick>
+            {(balancers.data ?? []).length > 0 && (
+              <optgroup label={t("rules.balancers")}>
+                {(balancers.data ?? []).map((one) => (
+                  <option key={one.id} value={one.name}>
+                    {one.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </Pick>
+        )}
       </Part>
 
       <Part title={t("dns.memory")}>
@@ -189,7 +219,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
           <button
             type="button"
             onClick={() => void keep()}
-            disabled={kept === null || save.isPending}
+            disabled={kept === null || unpicked || save.isPending}
             className={primary}
           >
             {t("dns.save")}

@@ -22,11 +22,11 @@ takes a question of the installation, an item of the menu or a command.
 
 | Setting | Holds |
 |---|---|
-| Answer the clients | whether the resolver runs |
+| Enabled | whether the resolver runs |
 | Port | the port questions are taken on, 53 by default |
 | Listen on | the addresses questions are taken on, empty for the addresses of the configurations |
 | Upstream servers | the name servers questions are passed to and the way each is asked, see [How the name servers are asked](#how-the-name-servers-are-asked) |
-| Ask through the channel | the outbound or the balancer the questions leave through, empty for the way out of the host |
+| Queries to them | `Direct` for the way out of the host, or `Through a channel` with the outbound or the balancer of `Channel` the questions leave through |
 | An address lives | how long an answered address stays in the set of a rule, in minutes |
 | Answers held in memory | how many answers are kept back, zero for none |
 | An answer lives from, to | the bounds the lifetime of a kept answer is clamped to, in seconds |
@@ -61,7 +61,7 @@ it. When three questions in a row find no server, the panel says why: `fault` in
 log carry `no name server answers: https://1.1.1.1:443/dns-query: ...`, and the services count the resolver as down,
 until a server answers again.
 
-`Ask through the channel` carries the questions the same way whatever they travel in.
+`Through a channel` carries the questions the same way whatever they travel in.
 
 An answer larger than the datagram a client takes, 512 bytes or the size its question names, goes back cut down to
 the question and marked as cut, so the client asks again over TCP and gets it whole.
@@ -103,7 +103,7 @@ ufw whose rules nftables shows only as matches of iptables names nothing.
 The questions leave through the way out of the host until a channel is picked. Where the local network
 answers about a service differently from the network behind the channel, a rule by name fills its set with
 the wrong addresses or with none at all, and the traffic never reaches the channel the rule sends it to.
-`Ask through the channel` puts the mark of that outbound on the questions, the mark its probe already
+`Through a channel` puts the mark of the outbound of `Channel` on the questions, the mark its probe already
 carries, so the answers come from where the traffic is going. `PUT /api/dns` refuses a channel the panel
 does not hold with `unknown-outbound`. The entries of the client templates are resolved the same way.
 
@@ -134,7 +134,7 @@ addresses with the settings it runs with.
 | the menu | item 29, `DNS for Clients`; the status under the menu shows `DNS: on, asks outside encrypted` |
 | the script | `amneziageo-server dns on`, `amneziageo-server dns off`, `amneziageo-server dns` to be asked |
 | the utility | `dns show`, `dns get enabled port upstreams encrypted outbound`, `dns set --enabled on` or `off`, `dns set --upstreams <servers>` or `default` for the ones a fresh panel asks |
-| the panel | `Answer the clients` on the `DNS` page, then `Restart` |
+| the panel | `Enabled` in `DNS server for clients` on the `DNS` page, then `Restart` |
 
 The menu and the commands work the same on a package and in a container: there they go through
 `docker compose exec panel amneziageo-server dns on`. They save the setting and have the running panel start the
