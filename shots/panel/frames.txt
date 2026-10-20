@@ -1,4 +1,4 @@
-# Order of shooting. A frame is docs/assets/img/<language>/<name>.png, its job is frames/<name>.mjs.
+# Order of shooting. A frame is amneziageo-docs/server/assets/img/<language>/<name>.png, its job is frames/<name>.mjs.
 overview         Overview: the host, the services, the load
 interfaces       Interfaces: the list
 interface-form   Interfaces: the form of an interface
