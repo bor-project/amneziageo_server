@@ -125,11 +125,12 @@ public class DnsPlanTests
     [Fact]
     public void AResolverThatIsOffLeavesTheRulesetAsItWas()
     {
-        var text = RouteRuleset.Text(Plan(Rule("youtube.com")));
+        var plan = Plan(Rule("youtube.com"));
+        var text = RouteRuleset.Text(plan);
 
-        Assert.Empty(RouteRuleset.Guard(DnsDefaults.Settings));
+        Assert.Empty(RouteRuleset.Guard(plan));
         Assert.DoesNotContain("chain resolve", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("doh4", text, StringComparison.Ordinal);
+        Assert.Equal("table inet amneziageo_dns\ndelete table inet amneziageo_dns\n", RouteRuleset.Guarding(plan));
     }
 
     [Fact]
@@ -143,39 +144,24 @@ public class DnsPlanTests
     }
 
     [Fact]
-    public void TheQuestionsAreLeftAloneWhenTheInterceptIsOff()
-    {
-        var text = RouteRuleset.Text(Plan(Rule("youtube.com"), On with { Intercept = false }));
-
-        Assert.DoesNotContain("chain resolve", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void TheClientsAreKeptOffTheNameServersOfTheirOwn()
     {
-        var text = RouteRuleset.Text(Plan(Rule("youtube.com"), On));
+        var guard = RouteRuleset.Guarding(Plan(Rule("youtube.com"), On));
 
-        Assert.Contains("meta l4proto { tcp, udp } th dport 853 drop", text, StringComparison.Ordinal);
-        Assert.Contains("ip daddr @doh4 meta l4proto { tcp, udp } th dport 443 drop", text, StringComparison.Ordinal);
-        Assert.Contains("set doh6", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void OnlyWhatIsAskedForIsBlocked()
-    {
-        var lines = RouteRuleset.Guard(On with { BlockDoh = false });
-
-        Assert.Equal(["meta l4proto { tcp, udp } th dport 853 drop"], lines);
+        Assert.Contains("meta nfproto ipv4 meta l4proto { tcp, udp } th dport 853 jump refuse", guard, StringComparison.Ordinal);
+        Assert.Contains("ip daddr @doh4 meta l4proto { tcp, udp } th dport 443 jump refuse", guard, StringComparison.Ordinal);
+        Assert.Contains("add element inet amneziageo_dns doh4 { 1.0.0.1, 1.1.1.1, ", guard, StringComparison.Ordinal);
+        Assert.Contains("set doh6", guard, StringComparison.Ordinal);
     }
 
     [Fact]
     public void AServerWhoseRulesGoByRangesAloneLaysNoGuard()
     {
-        var text = RouteRuleset.Text(Plan(Rule("77.88.8.0/24"), On));
+        var plan = Plan(Rule("77.88.8.0/24"), On);
+        var text = RouteRuleset.Text(plan);
 
-        Assert.DoesNotContain("th dport 853", text, StringComparison.Ordinal);
+        Assert.Empty(RouteRuleset.Guard(plan));
         Assert.DoesNotContain("doh4", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("doh6", text, StringComparison.Ordinal);
         Assert.Contains("chain resolve", text, StringComparison.Ordinal);
     }
 
@@ -183,20 +169,17 @@ public class DnsPlanTests
     public void AServerWithNoRulesLaysNoGuard()
     {
         var plan = RoutePlan.Build([], Ways, GeoIndex.Load([], new MemoryGeoFiles()), ["awg1"], On);
-        var text = RouteRuleset.Text(plan);
 
-        Assert.DoesNotContain("th dport 853", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("set doh", text, StringComparison.Ordinal);
-        Assert.Contains("chain resolve", text, StringComparison.Ordinal);
+        Assert.Empty(RouteRuleset.Guard(plan));
+        Assert.Contains("chain resolve", RouteRuleset.Text(plan), StringComparison.Ordinal);
     }
 
     [Fact]
     public void ARuleByNameThatIsTurnedOffBringsNoGuard()
     {
-        var text = RouteRuleset.Text(Plan(Rule("youtube.com") with { IsEnabled = false }, On));
+        var plan = Plan(Rule("youtube.com") with { IsEnabled = false }, On);
 
-        Assert.DoesNotContain("th dport 853", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("doh4", text, StringComparison.Ordinal);
+        Assert.Empty(RouteRuleset.Guard(plan));
     }
 
     [Fact]
@@ -204,10 +187,9 @@ public class DnsPlanTests
     {
         var basic = new RouteBasic { Block = ["ads.example.com"] };
         var plan = RoutePlan.Build([], Ways, GeoIndex.Load([], new MemoryGeoFiles()), ["awg1"], On, basic: basic);
-        var text = RouteRuleset.Text(plan);
 
-        Assert.Contains("meta l4proto { tcp, udp } th dport 853 drop", text, StringComparison.Ordinal);
-        Assert.Contains("set doh4", text, StringComparison.Ordinal);
+        Assert.Contains("meta nfproto ipv4 meta l4proto { tcp, udp } th dport 853 jump refuse", RouteRuleset.Guard(plan));
+        Assert.Contains("set doh4", RouteRuleset.Guarding(plan), StringComparison.Ordinal);
     }
 
     [Fact]

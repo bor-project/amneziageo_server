@@ -5,7 +5,7 @@ import { useRoles } from "@/api/roles"
 import { fresh, useAddUser, useChangeUser, useUsers } from "@/api/users"
 import { HeadActions } from "@/components/Section"
 import { useTail } from "@/components/crumbs"
-import { Flag, Line, Part, Pick, Regenerate } from "@/components/fields"
+import { Flag, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
@@ -161,6 +161,10 @@ function HeldUser({ name }: { name: string }) {
       </HeadActions>
 
       <Part title={t("users.partMain")}>
+        <div className="sm:col-span-2">
+          <Switch id="edit-enabled" caption={t("users.on")} value={on} onChange={setEnabled} />
+        </div>
+
         <Pick id="edit-role" caption={t("users.role")} value={picked} onChange={setRole}>
           <option value="">{t("role.none")}</option>
           {(catalog.data?.roles ?? []).map((one) => (
@@ -171,10 +175,6 @@ function HeldUser({ name }: { name: string }) {
         </Pick>
 
         <div />
-
-        <div className="sm:col-span-2">
-          <Flag id="edit-enabled" caption={t("users.on")} value={on} onChange={setEnabled} />
-        </div>
 
         {held.hostUser.length > 0 && (
           <div className="sm:col-span-2">

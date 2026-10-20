@@ -30,22 +30,21 @@ turned into one nftables ruleset the host takes at once.
 | Action | `out` to send the traffic through an outbound, `direct` to let it out the way the host sends its own, `block` to drop it |
 | Outbound | the name of the outbound or the balancer the traffic leaves through |
 | Where to | geo keys, domains and address ranges the traffic goes to |
-| Where from | the client addresses and ranges the traffic comes from |
 | Clients | the clients of the panel the traffic comes from, by name |
 | Interfaces | the interfaces of the panel the traffic comes in on |
 | Ports | single ports and ranges written as `443` or `1000-2000` |
 | Source ports | the ports the traffic comes from, written the same way |
 | Protocol | `any`, `tcp` or `udp` |
-| Hold the traffic while the channel is down | whether the rule drops what it matches instead of letting it out through the host |
 | On | whether the rule goes on the host |
 
-A rule that is added holds its traffic and is off unless the request says otherwise, and a change that says
-nothing about either keeps what the rule already carries, so a client written before the settings existed
-neither takes the hold off nor turns the rule off by touching it. The clients, the interfaces and the source ports are kept the same way:
-a change that does not name them leaves them as they are.
+A rule that is added is off unless the request says otherwise, and a change that says nothing about it keeps
+what the rule already carries, so a client written before the setting existed does not turn the rule off by
+touching it. The clients, the interfaces and the source ports are kept the same way: a change that does not name
+them leaves them as they are. A request that still carries `holdsWhenDown` is taken, and the field is passed
+over: a rule whose way out is gone always holds its traffic, see below.
 
-A client named by a rule brings its addresses into the addresses the rule matches by, next to the ones written
-by hand; the names are read without regard to case. The rule is laid on the host again whenever a client is
+A client named by a rule brings its addresses into the addresses the rule matches by; the names are read
+without regard to case. The rule is laid on the host again whenever a client is
 added, changed or removed, so a new address of a named client is matched without touching the rule. A name the
 panel no longer holds is passed over; a rule none of
 whose clients the panel holds stays off the host with `unknown-client`. An interface is the name of a
@@ -54,6 +53,13 @@ of whose interfaces the panel holds stays off the host with `unknown-inbound`. R
 configuration writes the new name into every rule that names it, so the rule goes on matching the same
 traffic; a client added later under a name a rule used to carry is not taken into it. An outbound or a
 balancer renamed is written into the rules the same way, see `outbounds.md` and `balancers.md`.
+
+A rule took client addresses and ranges by hand in `sources` before; the field is gone, and a request that still
+carries addresses in it is refused with `sources-gone`, so that the rule does not quietly take every client. At
+the update the panel moves the addresses of every rule over to the clients standing at them, by name, and turns
+off a rule left without a client or covering more than 64 clients, more than a rule names; a warning in the log
+names every rule it touched. A client added after the
+update does not join such a rule by itself.
 
 A target is read as what it looks like: `geoip:ru` is a country, `geosite:youtube` a category,
 `1.2.3.0/24` and `8.8.8.8` are ranges, and anything else with a dot in it is a domain. A domain is also taken
@@ -104,7 +110,7 @@ host swaps one ruleset for the next in a single step. The table carries:
 - a `decide` chain that carries the basic lists and then the rules themselves.
 
 A rule naming interfaces starts each of its lines with `iifname { ... }`, a rule naming clients matches their
-addresses with `ip saddr` and `ip6 saddr` next to the ranges written by hand, and source ports go into
+addresses with `ip saddr` and `ip6 saddr`, and source ports go into
 `th sport` or `tcp sport` and `udp sport` ahead of the destination ports.
 
 The rules decide once, on the first packet of a connection. A rule that sends traffic out sets the mark of
@@ -141,12 +147,12 @@ otherwise:
 | `unknown-inbound` | the panel holds none of the interfaces the rule names |
 
 The first three say the rule itself is good and only its way out is gone, and a balancer whose members all
-carry nothing says the same with `no-live-member`. `Hold the traffic while the channel
-is down` decides what happens then, and a fresh rule holds: the rule still goes into the ruleset, but it
-drops what it matches instead of marking it, and the panel shows `traffic held` with the reason behind it.
-Turn the holding off and the traffic leaves through the way out of the host, under the address of the server
-itself, which is what a client behind a channel does not expect. `empty-target` is the rule being wrong
-rather than its channel being down, so a rule with it is never held: it simply stays off the host.
+carry nothing says the same with `no-live-member`. Then the rule holds its traffic: it still goes into the
+ruleset, but it drops what it matches instead of marking it, and the panel shows `traffic held` with the reason
+behind it. The traffic of a rule through a channel never leaves through the way out of the host, under the
+address of the server itself, which is what a client behind a channel does not expect; a rule saved with the
+holding off before the setting went holds as well. `empty-target` is the rule being wrong rather than its
+channel being down, so a rule with it is never held: it simply stays off the host.
 
 Rules also need at least one endpoint: without a configuration to arrive on, nothing is marked at all.
 
@@ -159,9 +165,9 @@ the host when the resolver is off. The client is a client of the panel, whose ad
 traffic then carries, or a bare address, whose interface is the configuration its range belongs to. The
 protocol is `tcp` or `udp`, both ports may be left out.
 
-The guards of the resolver come first, while a rule on the host matches by name: with DoT blocked, port 853 is
-dropped, and with DoH blocked, port 443 to a known name server is dropped.
-Next comes the resolver itself: while it intercepts, every question on port
+The guards of the resolver come first, while a rule on the host matches by name and no names are read out of the
+connections: a client of such a rule is refused port 853 and port 443 of a known name server; the tester does not
+know a client the guards let go. Next comes the resolver itself: while it answers, every question on port
 53 that comes in on a client interface is answered by it, and the rules are not read at all. Then each rule is
 read in order: a rule off the host is passed over with its reason, a rule whose interface, client, protocol,
 port or source port does not fit is missed, and a rule

@@ -104,7 +104,7 @@ public static class RouteEndpoints
     {
         var plan = await applier.BuildAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(new RulesetResponse(RouteRuleset.Text(plan)));
+        return Results.Ok(new RulesetResponse(RouteRuleset.Text(plan) + RouteRuleset.Guarding(plan)));
     }
 
     private static async Task<IResult> AddAsync(
@@ -113,6 +113,11 @@ public static class RouteEndpoints
         RouteApplier applier,
         CancellationToken ct)
     {
+        if (RouteAnswers.Dropped(request) is { } dropped)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, dropped.Code, dropped.Message);
+        }
+
         var result = await store.AddAsync(RouteAnswers.Draft(request), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -133,6 +138,11 @@ public static class RouteEndpoints
         RouteApplier applier,
         CancellationToken ct)
     {
+        if (RouteAnswers.Dropped(request) is { } dropped)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, dropped.Code, dropped.Message);
+        }
+
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
         if (held is null)
         {

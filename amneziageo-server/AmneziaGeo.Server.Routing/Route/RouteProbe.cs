@@ -189,29 +189,33 @@ public static class RouteProbe
     // Every question leaving a client interface is turned into the resolver of the panel.
     private static bool Intercepted(RoutePlan plan, RouteQuery query) =>
         plan.Dns.IsEnabled
-        && plan.Dns.Intercept
         && query.Port == 53
         && plan.Inbound.Contains(query.Inbound, StringComparer.Ordinal);
 
+    // Returns the guard that turns the traffic of a client of a rule by name away from a name server of its own, the
+    // client not let go yet.
     private static string? Guard(RoutePlan plan, RouteQuery query)
     {
-        var dns = plan.Dns;
-        if (!dns.IsEnabled || !plan.HasNames)
+        if (!RouteRuleset.Guards(plan)
+            || !plan.Legs.Any(leg => leg.IsOnHost && leg.Domains.Count > 0 && Takes(leg, query)))
         {
             return null;
         }
 
-        if (dns.BlockDot && query.Port == 853)
+        if (query.Port == 853)
         {
             return "dot";
         }
 
         var https = DnsDefaults.Https4.Concat(DnsDefaults.Https6).ToArray();
 
-        return dns.BlockDoh && query.Port == 443 && query.Addresses.Any(address => Within(https, address))
-            ? "doh"
-            : null;
+        return query.Port == 443 && query.Addresses.Any(address => Within(https, address)) ? "doh" : null;
     }
+
+    // Tells whether the traffic comes from a client a rule takes, by its interface and its address.
+    private static bool Takes(RouteLeg leg, RouteQuery query) =>
+        (leg.Rule.Inbounds.Count == 0 || leg.Rule.Inbounds.Contains(query.Inbound, StringComparer.Ordinal))
+        && (!leg.IsBySource || query.Sources.Any(source => Within(leg.Sources4.Concat(leg.Sources6), source)));
 
     private static RouteStep Try(RouteLeg leg, RouteQuery query, HashSet<long> named, Func<long, IPAddress, bool> inSet)
     {

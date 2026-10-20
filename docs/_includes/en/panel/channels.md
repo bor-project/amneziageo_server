@@ -20,6 +20,7 @@ The "Channels" page is split into "Channels" and "Groups". The list of channels 
 
 | Field | What it sets |
 |---|---|
+| Enabled | whether the channel works; the rules through a channel that is off hold their traffic |
 | Name | the name of the interface, up to 15 characters; a group cannot take the name of a channel and the other way round |
 | Address, Port | where to reach the server; for WebSocket, the server behind the proxy and the port the proxy hands the tunnel to |
 | Websocket proxy | the proxy as `proxy.example.net` or `wss://user:secret@proxy.example.net:8443/token`; a bare name takes the port of the server, an address carries the port, the path and the credentials |
@@ -58,12 +59,12 @@ A group is several channels under one name; a rule names it the same way as a ch
 
 | Field | What it sets |
 |---|---|
+| Enabled | whether the group works; the rules through a group that is off hold their traffic |
 | Name | up to 32 characters, in one list of names with the channels |
 | Strategy | "Priority": the first live channel of the list, and when it falls silent the next one; "Round": new connections over the live channels in turn; "By client": a channel by the address of the client, so one client keeps one channel until the set of live ones changes |
 | Channels | up to 16 channels in the order of choice |
-| Enabled | whether the rules of the group go on the host |
 
-Live members are marked "on the host". A group reads the live ones every fifteen seconds and, when the set changes, puts the whole rule set again, so a channel that fell silent is replaced without anyone's help; a change in the panel does not wait for this round. A rule through a group without live members does not go on the host, with the reason "No channel of the group answers", and through a group that is off, "The group is off"; what happens to the traffic then is decided by "Hold the traffic while the channel is down" of the rule. A group a rule or the resolver leaves through is not removed: "A rule or the resolver leaves through the group". The scenario: [Channel group with a fallback](../recipes/channel-group.html).
+Live members are marked "on the host". A group reads the live ones every fifteen seconds and, when the set changes, puts the whole rule set again, so a channel that fell silent is replaced without anyone's help; a change in the panel does not wait for this round. A rule through a group without live members holds its traffic, with the reason "No channel of the group answers", and through a group that is off, "The group is off": the traffic of the rule is dropped until a channel carries again. A group a rule or the resolver leaves through is not removed: "A rule or the resolver leaves through the group". The scenario: [Channel group with a fallback](../recipes/channel-group.html).
 
 ## Refusals
 

@@ -482,11 +482,7 @@ public sealed class RouteRuleEntity
 
     public string Outbound { get; set; } = string.Empty;
 
-    public bool HoldsWhenDown { get; set; }
-
     public string Targets { get; set; } = string.Empty;
-
-    public string Sources { get; set; } = string.Empty;
 
     public string Clients { get; set; } = string.Empty;
 
@@ -571,12 +567,6 @@ public sealed class DnsSettingsEntity
     public int MinTtl { get; set; }
 
     public int MaxTtl { get; set; }
-
-    public bool Intercept { get; set; }
-
-    public bool BlockDot { get; set; }
-
-    public bool BlockDoh { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }
 }

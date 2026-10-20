@@ -132,18 +132,21 @@ public class AccessTests
     }
 
     [Fact]
-    public void TheGuardsOfTheResolverLogWhatTheyDrop()
+    public void TheGuardsOfTheResolverLogWhatTheyTurnAway()
     {
-        var lines = RouteRuleset.Guard(Resolver, Group);
+        var plan = RoutePlan.Build([Out("awgbor") with { Targets = ["geosite:youtube"] }], Ways, Index(), ["awg1"], Resolver);
+
+        var lines = RouteRuleset.Guard(plan with { Journal = Group });
 
         Assert.Equal(
             [
-                "meta l4proto { tcp, udp } th dport 853 log prefix \"ag:g:dot\" group 7317 drop",
-                "ip daddr @doh4 meta l4proto { tcp, udp } th dport 443 log prefix \"ag:g:doh\" group 7317 drop",
-                "ip6 daddr @doh6 meta l4proto { tcp, udp } th dport 443 log prefix \"ag:g:doh\" group 7317 drop",
+                "meta nfproto ipv4 meta l4proto { tcp, udp } th dport 853 log prefix \"ag:g:dot\" group 7317 jump refuse",
+                "ip daddr @doh4 meta l4proto { tcp, udp } th dport 443 log prefix \"ag:g:doh\" group 7317 jump refuse",
+                "meta nfproto ipv6 meta l4proto { tcp, udp } th dport 853 log prefix \"ag:g:dot\" group 7317 jump refuse",
+                "ip6 daddr @doh6 meta l4proto { tcp, udp } th dport 443 log prefix \"ag:g:doh\" group 7317 jump refuse",
             ],
-            lines);
-        Assert.DoesNotContain(RouteRuleset.Guard(Resolver), line => line.Contains("log", StringComparison.Ordinal));
+            lines.Where(line => line.EndsWith("jump refuse", StringComparison.Ordinal)));
+        Assert.DoesNotContain(RouteRuleset.Guard(plan), line => line.Contains("log", StringComparison.Ordinal));
     }
 
     [Theory]

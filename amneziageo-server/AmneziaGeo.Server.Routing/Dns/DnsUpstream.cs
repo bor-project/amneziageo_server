@@ -212,7 +212,7 @@ public sealed class DnsUpstream : IDnsUpstream, IDisposable
         return deepest.Message.Split('\n')[0].Trim();
     }
 
-    private static async Task<byte[]?> PacketAsync(
+    internal static async Task<byte[]?> PacketAsync(
         IPEndPoint server, ReadOnlyMemory<byte> question, uint mark, CancellationToken ct)
     {
         using var socket = new Socket(server.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
@@ -229,7 +229,7 @@ public sealed class DnsUpstream : IDnsUpstream, IDisposable
         return read < DnsMessage.HeaderLength || !Same(question.Span, buffer) ? null : buffer[..read];
     }
 
-    private static async Task<byte[]?> StreamAsync(
+    internal static async Task<byte[]?> StreamAsync(
         IPEndPoint server, ReadOnlyMemory<byte> question, uint mark, CancellationToken ct)
     {
         using var socket = new Socket(server.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
@@ -250,7 +250,9 @@ public sealed class DnsUpstream : IDnsUpstream, IDisposable
 
         var answer = new byte[BinaryPrimitives.ReadUInt16BigEndian(head)];
 
-        return await FillAsync(socket, answer, ct).ConfigureAwait(false) ? answer : null;
+        return answer.Length >= DnsMessage.HeaderLength && await FillAsync(socket, answer, ct).ConfigureAwait(false)
+            ? answer
+            : null;
     }
 
     private static async Task<bool> FillAsync(Socket socket, Memory<byte> buffer, CancellationToken ct)
@@ -267,7 +269,7 @@ public sealed class DnsUpstream : IDnsUpstream, IDisposable
             at += read;
         }
 
-        return buffer.Length >= DnsMessage.HeaderLength;
+        return true;
     }
 
     private static bool Same(ReadOnlySpan<byte> question, ReadOnlySpan<byte> answer) =>

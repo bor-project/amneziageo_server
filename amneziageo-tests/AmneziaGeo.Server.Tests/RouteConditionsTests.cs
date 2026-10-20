@@ -32,12 +32,12 @@ public class RouteConditionsTests
     }
 
     [Fact]
-    public void AnInterfaceGoesAheadOfTheSourcesAndTheTargets()
+    public void AnInterfaceGoesAheadOfTheClientsAndTheTargets()
     {
-        var rule = Out() with { Inbounds = ["awg1", "awg2"], Sources = ["10.8.0.0/24"], Targets = ["1.2.3.0/24"] };
+        var rule = Out() with { Inbounds = ["awg1", "awg2"], Clients = ["guest"], Targets = ["1.2.3.0/24"] };
 
         Assert.Equal(
-            ["iifname { \"awg1\", \"awg2\" } ip saddr { 10.8.0.0/24 } ip daddr @r1v4 meta mark set 0xa602 return"],
+            ["iifname { \"awg1\", \"awg2\" } ip saddr { 10.9.2.5/32 } ip daddr @r1v4 meta mark set 0xa602 return"],
             Lines(rule));
     }
 
@@ -78,13 +78,13 @@ public class RouteConditionsTests
     }
 
     [Fact]
-    public void AClientJoinsTheAddressesTheRuleNamesByHand()
+    public void TheClientsOfARuleBringTheirAddressesTogether()
     {
-        var leg = Leg(Out() with { Clients = ["guest"], Sources = ["10.8.0.0/24"] });
+        var leg = Leg(Out() with { Clients = ["guest", "bor"] });
 
-        Assert.Equal(["10.8.0.0/24", "10.9.2.5/32"], leg.Sources4);
+        Assert.Equal(["10.9.1.12/32", "10.9.2.5/32"], leg.Sources4);
         Assert.Empty(leg.Sources6);
-        Assert.Equal(["ip saddr { 10.8.0.0/24, 10.9.2.5/32 } meta mark set 0xa602 return"], RouteRuleset.Lines(leg));
+        Assert.Equal(["ip saddr { 10.9.1.12/32, 10.9.2.5/32 } meta mark set 0xa602 return"], RouteRuleset.Lines(leg));
     }
 
     [Fact]

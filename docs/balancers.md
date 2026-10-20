@@ -76,8 +76,8 @@ way, so a connection stays on the outbound it was given even when the next packe
 | `no-live-member` | nothing the balancer picks from is enabled and answering |
 
 An outbound the panel no longer holds is passed over, and one that is turned off is not picked. Both codes
-say the way out is gone rather than the rule is wrong, so a rule that holds its traffic drops what it
-matches until a member carries again; see `Hold the traffic while the channel is down` in `rules.md`.
+say the way out is gone rather than the rule is wrong, so the rule drops what it matches until a member
+carries again; see the reasons in `rules.md`.
 
 ## What the panel shows
 

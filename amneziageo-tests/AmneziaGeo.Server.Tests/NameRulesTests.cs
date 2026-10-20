@@ -1,4 +1,5 @@
 using System.Net;
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Access;
@@ -37,6 +38,8 @@ public class NameRulesTests
     private static readonly RouteReading Shown = new(NameDefaults.Queue, null);
 
     private static readonly IPAddress Client = IPAddress.Parse("10.8.0.2");
+
+    private static readonly TunnelClient[] Clients = [new() { Id = 1, ConfigId = 1, Name = "guest", Address = ["10.8.0.2/32"] }];
 
     private static readonly IPAddress Site = IPAddress.Parse("203.0.113.7");
 
@@ -162,7 +165,7 @@ public class NameRulesTests
     public void TheConditionsOfARuleNarrowWhatIsShown()
     {
         var tcp = Rule(1, "youtube.com") with { Protocol = RouteProtocol.Tcp, Ports = ["443", "8443"], Inbounds = ["awg1"] };
-        var udp = Rule(2, "vk.com") with { Protocol = RouteProtocol.Udp, Sources = ["10.8.0.0/25"] };
+        var udp = Rule(2, "vk.com") with { Protocol = RouteProtocol.Udp, Clients = ["guest"] };
         var plan = Plan(Both, tcp, udp);
         var first = RouteRuleset.Reading(plan.Legs[0], Both);
 
@@ -174,7 +177,7 @@ public class NameRulesTests
             first[1]);
         Assert.Empty(RouteRuleset.Asking(plan.Legs[0], Both));
         Assert.Empty(RouteRuleset.Reading(plan.Legs[1], Both));
-        Assert.Equal(["ip saddr { 10.8.0.0/25 } ip " + Asked], RouteRuleset.Asking(plan.Legs[1], Both));
+        Assert.Equal(["ip saddr { 10.8.0.2/32 } ip " + Asked], RouteRuleset.Asking(plan.Legs[1], Both));
     }
 
     [Fact]
@@ -476,5 +479,6 @@ public class NameRulesTests
             Ways,
             GeoIndex.Load([], new MemoryGeoFiles()),
             ["awg1"],
-            DnsDefaults.Settings with { IsEnabled = true }) with { Reading = reading };
+            DnsDefaults.Settings with { IsEnabled = true },
+            clients: Clients) with { Reading = reading };
 }

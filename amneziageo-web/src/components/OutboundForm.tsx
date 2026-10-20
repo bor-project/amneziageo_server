@@ -4,7 +4,7 @@ import type { Obfuscation } from "@/api/configs"
 import { useImportOutbound, useOutboundKeys } from "@/api/outbounds"
 import type { OutboundDraft, OutboundKind } from "@/api/outbounds"
 import { ObfuscationFields } from "@/components/Obfuscation"
-import { Count, Flag, Line, ListLine, Part } from "@/components/fields"
+import { Count, Flag, Line, ListLine, Part, Switch } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -74,6 +74,14 @@ export function OutboundForm({
   return (
     <div className="mt-4 flex flex-col gap-4">
       <Part title={t("outbounds.settings")}>
+        <div className="sm:col-span-2">
+          <Switch
+            id="outbound-enabled"
+            caption={t("outbounds.enabled")}
+            value={draft.isEnabled}
+            onChange={(value) => put({ isEnabled: value })}
+          />
+        </div>
         <Line
           id="outbound-name"
           caption={t("outbounds.name")}
@@ -95,12 +103,6 @@ export function OutboundForm({
             <option value="ws">{t("outbounds.kindWs")}</option>
           </select>
         </div>
-        <Flag
-          id="outbound-enabled"
-          caption={t("outbounds.enabled")}
-          value={draft.isEnabled}
-          onChange={(value) => put({ isEnabled: value })}
-        />
       </Part>
 
       <Part title={t("outbounds.probe")}>

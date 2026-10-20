@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Outbound;
 using AmneziaGeo.Server.Routing.Route;
@@ -113,12 +114,12 @@ public class RouteTests
     [Fact]
     public void ARuleNamesTheConditionThatDoesNotHold()
     {
-        var rule = Block() with { Targets = ["geoip:ru"], Sources = ["not an address"], Ports = ["443"] };
+        var rule = Block() with { Targets = ["geoip:ru"], Clients = ["not a name"], Ports = ["443"] };
 
-        Assert.Equal("bad-source", RouteRules.Check(rule)?.Code);
-        Assert.Equal("bad-target", RouteRules.Check(rule with { Sources = [], Targets = ["what?"] })?.Code);
-        Assert.Equal("bad-port", RouteRules.Check(rule with { Sources = [], Ports = ["nope"] })?.Code);
-        Assert.Equal("bad-protocol", RouteRules.Check(rule with { Sources = [], Protocol = "icmp" })?.Code);
+        Assert.Equal("bad-rule-client", RouteRules.Check(rule)?.Code);
+        Assert.Equal("bad-target", RouteRules.Check(rule with { Clients = [], Targets = ["what?"] })?.Code);
+        Assert.Equal("bad-port", RouteRules.Check(rule with { Clients = [], Ports = ["nope"] })?.Code);
+        Assert.Equal("bad-protocol", RouteRules.Check(rule with { Clients = [], Protocol = "icmp" })?.Code);
     }
 
     private static RouteRule Block() => RouteDefaults.Fresh("rule") with { Action = RouteAction.Block };
@@ -287,16 +288,6 @@ public class RouteTests
     }
 
     [Fact]
-    public void ARuleThatDoesNotHoldLetsItsTrafficOutOfTheHost()
-    {
-        var plan = Plan(Out("awgoff") with { Targets = ["geoip:ru"], HoldsWhenDown = false });
-        var text = RouteRuleset.Text(plan);
-
-        Assert.False(Assert.Single(plan.Legs).IsHeld);
-        Assert.DoesNotContain("r1v4", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void ARuleThatIsWrongItselfIsNotHeld()
     {
         var leg = Assert.Single(Plan(Out("awgbor") with { Targets = ["geosite:nothing"] }).Legs);
@@ -352,16 +343,17 @@ public class RouteTests
     }
 
     [Fact]
-    public void AClientRangeIsMatchedInItsOwnFamilyOnly()
+    public void AClientAddressIsMatchedInItsOwnFamilyOnly()
     {
-        var rule = Out("awgbor") with { Sources = ["10.8.0.0/24"], Targets = ["geoip:ru"] };
+        var rule = Out("awgbor") with { Clients = ["bor"], Targets = ["geoip:ru"] };
+        var clients = new[] { new TunnelClient { Id = 1, ConfigId = 1, Name = "bor", Address = ["10.8.0.2/32"] } };
 
-        var lines = RouteRuleset.Lines(Assert.Single(Plan(rule).Legs));
+        var lines = RouteRuleset.Lines(Assert.Single(RoutePlan.Build([rule], Ways, Index(), ["awg1", "awg2"], clients: clients).Legs));
 
         Assert.Equal(
             [
-                "ip saddr { 10.8.0.0/24 } ip daddr @r1v4 meta mark set 0xa602 return",
-                "ip saddr { 10.8.0.0/24 } ip daddr @n1v4 meta mark set 0xa602 return",
+                "ip saddr { 10.8.0.2/32 } ip daddr @r1v4 meta mark set 0xa602 return",
+                "ip saddr { 10.8.0.2/32 } ip daddr @n1v4 meta mark set 0xa602 return",
             ],
             lines);
     }

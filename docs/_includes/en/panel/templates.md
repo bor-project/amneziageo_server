@@ -46,7 +46,7 @@ The switch works while the resolver of the panel answers the clients on port 53 
 | Will not work: the panel resolver answers on port N, while the clients ask on 53 | set port 53 on the DNS page |
 | Will not work: the server firewall (ufw) keeps the clients of <interfaces> from the panel resolver (port 53) | on the server `sudo amneziageo-server dns open`, menu item 23, sub-item 13, or `sudo ufw allow in on <interface> to any port 53` for each interface |
 
-An application with name servers of its own goes past the stand-ins; the resolver keeps the clients off the known public servers with "Stop DNS over HTTPS" and "Stop DNS over TLS". A name with a stand-in gets no IPv6 answer and no `HTTPS` record, so the client goes to it over IPv4. A stand-in that leads nowhere, after a client came over from another server or for a name nobody asked about for a week, is refused at once, and the client asks for the name again.
+An application with name servers of its own goes past the stand-ins; the guard of the resolver resets the known public servers of DoT and DoH for the clients, see [Questions of the clients](dns.html#questions-of-the-clients). A name with a stand-in gets no IPv6 answer and no `HTTPS` record, so the client goes to it over IPv4. A stand-in that leads nowhere, after a client came over from another server or for a name nobody asked about for a week, is refused at once, and the client asks for the name again.
 
 ## Network
 

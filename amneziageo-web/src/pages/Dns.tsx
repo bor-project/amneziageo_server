@@ -6,7 +6,7 @@ import { useBalancers } from "@/api/balancers"
 import { useFailure } from "@/api/failure"
 import { useOutbounds } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
-import { Box, Count, Flag, ListLine, Part, Pick } from "@/components/fields"
+import { Box, Count, ListLine, Part, Pick, Switch } from "@/components/fields"
 import { ResolverTrouble } from "@/components/ResolverTrouble"
 import { troubleOf } from "@/components/trouble"
 import { footer, primary, secondary } from "@/components/styles"
@@ -117,7 +117,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
     <>
       <Part title={t("dns.serving")}>
         <div className="sm:col-span-2">
-          <Flag id="dns-on" caption={t("dns.enabled")} value={draft.isEnabled} onChange={(v) => set({ isEnabled: v })} />
+          <Switch id="dns-on" caption={t("dns.enabled")} value={draft.isEnabled} onChange={(v) => set({ isEnabled: v })} />
           <ResolverTrouble trouble={trouble?.kind === "kept" ? trouble : null} kept="dns.troubleKept" />
         </div>
         <Count id="dns-port" caption={t("dns.port")} value={draft.port} onChange={(v) => set({ port: v })} />
@@ -177,19 +177,6 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
         <div />
         <Count id="dns-min" caption={t("dns.minTtl")} value={draft.minTtl} onChange={(v) => set({ minTtl: v })} />
         <Count id="dns-max" caption={t("dns.maxTtl")} value={draft.maxTtl} onChange={(v) => set({ maxTtl: v })} />
-      </Part>
-
-      <Part title={t("dns.clients")}>
-        <div className="flex flex-col gap-2 sm:col-span-2">
-          <Flag
-            id="dns-intercept"
-            caption={t("dns.intercept")}
-            value={draft.intercept}
-            onChange={(v) => set({ intercept: v })}
-          />
-          <Flag id="dns-dot" caption={t("dns.blockDot")} value={draft.blockDot} onChange={(v) => set({ blockDot: v })} />
-          <Flag id="dns-doh" caption={t("dns.blockDoh")} value={draft.blockDoh} onChange={(v) => set({ blockDoh: v })} />
-        </div>
       </Part>
 
       {fault && <div className="text-sm text-alarm">{t(fault)}</div>}

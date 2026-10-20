@@ -1,4 +1,5 @@
 using System.Net;
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Outbound;
@@ -15,6 +16,12 @@ public class RouteProbeTests
     private static readonly IPAddress Far = IPAddress.Parse("142.250.1.1");
 
     private static readonly IPAddress Office = IPAddress.Parse("10.9.1.12");
+
+    private static readonly TunnelClient[] Clients =
+    [
+        new() { Id = 1, ConfigId = 1, Name = "office", Address = ["10.9.1.12/32"] },
+        new() { Id = 2, ConfigId = 2, Name = "guest", Address = ["10.9.2.5/32"] },
+    ];
 
     private static readonly OutboundConfig[] Ways =
     [
@@ -73,13 +80,13 @@ public class RouteProbeTests
     {
         var plan = Plan(
             Rule(1, "77.88.8.0/24") with { IsEnabled = false },
-            Rule(2, "77.88.8.0/24") with { Outbound = "nowhere", HoldsWhenDown = false },
+            Rule(2, "77.88.8.0/24") with { Clients = ["nobody"] },
             Rule(3, "77.88.8.0/24"));
 
         var verdict = Test(plan, new RouteQuery { Addresses = [Ru] });
 
         Assert.Equal(3L, verdict.Leg?.Rule.Id);
-        Assert.Equal(["off", "unknown-outbound", "range"], verdict.Steps.Select(step => step.Reason));
+        Assert.Equal(["off", "unknown-client", "range"], verdict.Steps.Select(step => step.Reason));
         Assert.Equal(RouteProbe.Skip, verdict.Steps[0].Outcome);
     }
 
@@ -113,7 +120,7 @@ public class RouteProbeTests
         var rule = reason switch
         {
             "inbound" => Rule(1, "77.88.8.0/24") with { Inbounds = ["awg2"] },
-            "source" => Rule(1, "77.88.8.0/24") with { Sources = ["10.9.2.0/24"] },
+            "source" => Rule(1, "77.88.8.0/24") with { Clients = ["guest"] },
             "protocol" => Rule(1, "77.88.8.0/24") with { Protocol = RouteProtocol.Udp },
             "port" => Rule(1, "77.88.8.0/24") with { Ports = ["80"] },
             _ => Rule(1, "77.88.8.0/24") with { SourcePorts = ["5000-6000"] },
@@ -132,7 +139,7 @@ public class RouteProbeTests
         var rule = Rule(1, "77.88.8.0/24") with
         {
             Inbounds = ["awg1"],
-            Sources = ["10.9.1.0/24"],
+            Clients = ["office"],
             Protocol = RouteProtocol.Tcp,
             Ports = ["400-500"],
             SourcePorts = ["5000-6000"],
@@ -149,7 +156,7 @@ public class RouteProbeTests
     [InlineData(443, "77.88.8.8", "")]
     public void TheGuardsOfTheResolverGoAheadOfTheRules(int port, string address, string guard)
     {
-        var dns = DnsDefaults.Settings with { IsEnabled = true, BlockDot = true, BlockDoh = true };
+        var dns = DnsDefaults.Settings with { IsEnabled = true };
         var plan = RoutePlan.Build([Rule(1, "geosite:youtube"), Rule(2, "0.0.0.0/0")], Ways, Index(), ["awg1"], dns);
 
         var verdict = Test(plan, new RouteQuery { Addresses = [IPAddress.Parse(address)], Port = port });
@@ -163,7 +170,7 @@ public class RouteProbeTests
     [InlineData(443, "1.1.1.1")]
     public void TheGuardsStandAsideWhileNoRuleGoesByName(int port, string address)
     {
-        var dns = DnsDefaults.Settings with { IsEnabled = true, BlockDot = true, BlockDoh = true };
+        var dns = DnsDefaults.Settings with { IsEnabled = true };
         var plan = RoutePlan.Build([Rule(1, "0.0.0.0/0")], Ways, Index(), ["awg1"], dns);
 
         var verdict = Test(plan, new RouteQuery { Addresses = [IPAddress.Parse(address)], Port = port });
@@ -179,7 +186,7 @@ public class RouteProbeTests
     [InlineData(443, "awg1", "out")]
     public void AQuestionFromAClientInterfaceGoesToTheResolver(int port, string inbound, string expected)
     {
-        var dns = DnsDefaults.Settings with { IsEnabled = true, Intercept = true };
+        var dns = DnsDefaults.Settings with { IsEnabled = true };
         var plan = RoutePlan.Build([Rule(1, "0.0.0.0/0")], Ways, Index(), ["awg1"], dns);
 
         var verdict = Test(plan, new RouteQuery
@@ -194,12 +201,11 @@ public class RouteProbeTests
     }
 
     [Theory]
-    [InlineData(true, false, "out")]
-    [InlineData(false, true, "out")]
-    [InlineData(true, true, "dns")]
-    public void TheResolverTakesTheQuestionOnlyWhileItInterceptsThem(bool enabled, bool intercept, string expected)
+    [InlineData(false, "out")]
+    [InlineData(true, "dns")]
+    public void TheResolverTakesTheQuestionOnlyWhileItAnswers(bool enabled, string expected)
     {
-        var dns = DnsDefaults.Settings with { IsEnabled = enabled, Intercept = intercept };
+        var dns = DnsDefaults.Settings with { IsEnabled = enabled };
         var plan = RoutePlan.Build([Rule(1, "0.0.0.0/0")], Ways, Index(), ["awg1"], dns);
 
         var verdict = Test(plan, new RouteQuery { Addresses = [Ru], Port = 53, Inbound = "awg1" });
@@ -220,7 +226,8 @@ public class RouteProbeTests
     private static RouteVerdict Test(RoutePlan plan, RouteQuery query) =>
         RouteProbe.Test(plan, query, (_, _) => false);
 
-    private static RoutePlan Plan(params RouteRule[] rules) => RoutePlan.Build(rules, Ways, Index(), ["awg1", "awg2"]);
+    private static RoutePlan Plan(params RouteRule[] rules) =>
+        RoutePlan.Build(rules, Ways, Index(), ["awg1", "awg2"], clients: Clients);
 
     private static RouteRule Rule(long id, string target) => RouteDefaults.Fresh($"r{id}") with
     {

@@ -24,9 +24,7 @@ public sealed record RouteResponse(
     bool IsEnabled,
     string Action,
     string Outbound,
-    bool HoldsWhenDown,
     IReadOnlyList<string> Targets,
-    IReadOnlyList<string> Sources,
     IReadOnlyList<string> Clients,
     IReadOnlyList<string> Inbounds,
     IReadOnlyList<string> Ports,
@@ -37,21 +35,20 @@ public sealed record RouteResponse(
     DateTimeOffset UpdatedUtc);
 
 /// <summary>
-/// The settings a rule is added or changed with.
+/// The settings a rule is added or changed with, and the client addresses an older client still sends.
 /// </summary>
 public sealed record RouteRequest(
     string? Name,
     bool? IsEnabled,
     string? Action,
     string? Outbound,
-    bool? HoldsWhenDown,
     IReadOnlyList<string>? Targets,
-    IReadOnlyList<string>? Sources,
     IReadOnlyList<string>? Ports,
     string? Protocol,
     IReadOnlyList<string>? Clients = null,
     IReadOnlyList<string>? Inbounds = null,
-    IReadOnlyList<string>? SourcePorts = null);
+    IReadOnlyList<string>? SourcePorts = null,
+    IReadOnlyList<string>? Sources = null);
 
 /// <summary>
 /// Which way a rule moves in the list, or the place it goes to, counting from one.
@@ -138,9 +135,7 @@ public static class RouteAnswers
             rule.IsEnabled,
             rule.Action,
             rule.Outbound,
-            rule.HoldsWhenDown,
             rule.Targets,
-            rule.Sources,
             rule.Clients,
             rule.Inbounds,
             rule.Ports,
@@ -164,15 +159,25 @@ public static class RouteAnswers
             IsEnabled = request.IsEnabled ?? held?.IsEnabled ?? false,
             Action = (request.Action ?? RouteAction.Out).Trim(),
             Outbound = (request.Outbound ?? string.Empty).Trim(),
-            HoldsWhenDown = request.HoldsWhenDown ?? held?.HoldsWhenDown ?? true,
             Targets = Clean(request.Targets),
-            Sources = Clean(request.Sources),
             Clients = request.Clients is null ? held?.Clients ?? [] : Clean(request.Clients),
             Inbounds = request.Inbounds is null ? held?.Inbounds ?? [] : Clean(request.Inbounds),
             Ports = Clean(request.Ports),
             SourcePorts = request.SourcePorts is null ? held?.SourcePorts ?? [] : Clean(request.SourcePorts),
             Protocol = (request.Protocol ?? RouteProtocol.Any).Trim(),
         };
+    }
+
+    /// <summary>
+    /// Returns why a request that names client addresses is refused, or null when it names none.
+    /// </summary>
+    public static RouteFault? Dropped(RouteRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return Clean(request.Sources).Count > 0
+            ? new RouteFault("sources-gone", "a rule takes its clients by name, client addresses are not taken")
+            : null;
     }
 
     /// <summary>

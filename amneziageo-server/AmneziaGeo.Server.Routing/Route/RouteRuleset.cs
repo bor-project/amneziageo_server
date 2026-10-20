@@ -19,6 +19,11 @@ public static class RouteRuleset
     public const string TableName = "amneziageo_rt";
 
     /// <summary>
+    /// The firewall table the guards of the resolver live in, kept apart so that the clients let go stay let go.
+    /// </summary>
+    public const string GuardTable = "amneziageo_dns";
+
+    /// <summary>
     /// The counter of the connections of IPv4 the firewall hands over to the panel.
     /// </summary>
     public const string TakenCounter = "taken";
@@ -88,6 +93,21 @@ public static class RouteRuleset
     public static string HttpsSet(bool six) => six ? "doh6" : "doh4";
 
     /// <summary>
+    /// Returns the name of the set that holds the clients that asked the resolver lately.
+    /// </summary>
+    public static string AskedSet(bool six) => six ? "asked6" : "asked4";
+
+    /// <summary>
+    /// Returns the name of the set that counts the tries of the clients to reach a name server of their own.
+    /// </summary>
+    public static string TriedSet(bool six) => six ? "tried6" : "tried4";
+
+    /// <summary>
+    /// Returns the name of the set that holds the clients the guards let go.
+    /// </summary>
+    public static string FreeSet(bool six) => six ? "free6" : "free4";
+
+    /// <summary>
     /// Returns the ruleset that carries out the rules the panel holds.
     /// </summary>
     public static string Text(RoutePlan plan)
@@ -104,7 +124,6 @@ public static class RouteRuleset
             Sets(text, leg, plan.Dns);
         }
 
-        Https(text, plan);
         Handed(text, plan);
         Stand(text, plan);
         text.Append("\tchain prerouting {\n");
@@ -149,38 +168,107 @@ public static class RouteRuleset
     }
 
     /// <summary>
-    /// Returns the guard lines of a plan, none while no rule on the host matches by name.
+    /// Tells whether the guards of the resolver stand: while it answers, some rule on the host matches by name and the
+    /// panel reads no names out of the connections.
+    /// </summary>
+    public static bool Guards(RoutePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        return plan.Dns.IsEnabled && plan.Inbound.Count > 0 && plan.HasNames && plan.Reading is null;
+    }
+
+    /// <summary>
+    /// Returns the ruleset of the table of the guards: the sets and chains laid anew with the clients let go kept, or
+    /// the table taken away while no guard stands.
+    /// </summary>
+    public static string Guarding(RoutePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!Guards(plan))
+        {
+            return $"table inet {GuardTable}\ndelete table inet {GuardTable}\n";
+        }
+
+        var asked = $"{DnsDefaults.AskedMinutes.ToString(CultureInfo.InvariantCulture)}m";
+        var tried = $"{DnsDefaults.TriedSeconds.ToString(CultureInfo.InvariantCulture)}s";
+        var text = new StringBuilder();
+        text.Append("table inet ").Append(GuardTable).Append(" {\n");
+        foreach (var six in new[] { false, true })
+        {
+            var type = six ? "ipv6_addr" : "ipv4_addr";
+            text.Append("\tset ").Append(HttpsSet(six)).Append(" {\n\t\ttype ").Append(type).Append("\n\t\tflags interval\n\t}\n\n");
+            Kept(text, AskedSet(six), type, "dynamic,timeout", asked);
+            Kept(text, TriedSet(six), type, "dynamic,timeout", tried);
+            Kept(text, FreeSet(six), type, "dynamic,timeout", DnsDefaults.FreeTime);
+        }
+
+        text.Append("\tchain heard {\n\t\ttype filter hook prerouting priority mangle; policy accept;\n\t}\n\n");
+        text.Append("\tchain guard {\n\t\ttype filter hook forward priority filter - 4; policy accept;\n\t}\n\n");
+        text.Append("\tchain refuse {\n\t}\n");
+        text.Append("}\n");
+        foreach (var name in new[] { HttpsSet(false), HttpsSet(true) })
+        {
+            text.Append("flush set inet ").Append(GuardTable).Append(' ').Append(name).Append('\n');
+        }
+
+        foreach (var name in new[] { "heard", "guard", "refuse" })
+        {
+            text.Append("flush chain inet ").Append(GuardTable).Append(' ').Append(name).Append('\n');
+        }
+
+        text.Append("add element inet ").Append(GuardTable).Append(' ').Append(HttpsSet(false));
+        text.Append(" { ").Append(string.Join(", ", DnsDefaults.Https4)).Append(" }\n");
+        text.Append("add element inet ").Append(GuardTable).Append(' ').Append(HttpsSet(true));
+        text.Append(" { ").Append(string.Join(", ", DnsDefaults.Https6)).Append(" }\n");
+        text.Append("table inet ").Append(GuardTable).Append(" {\n");
+        Chain(text, "heard", Heard(plan));
+        text.Append('\n');
+        Chain(text, "guard", Guard(plan));
+        text.Append('\n');
+        Chain(text, "refuse", ["meta l4proto tcp reject with tcp reset", "reject"]);
+        text.Append("}\n");
+
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// Returns the lines of the chain that keeps the clients of the rules by name off the name servers they carry their
+    /// own way and lets go the ones that never ask the resolver, none while no guard stands.
     /// </summary>
     public static IReadOnlyList<string> Guard(RoutePlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
 
-        return plan.HasNames ? Guard(plan.Dns, plan.Journal) : [];
-    }
-
-    /// <summary>
-    /// Returns the lines that keep the clients off the name servers they carry their own way.
-    /// </summary>
-    public static IReadOnlyList<string> Guard(DnsSettings dns, ushort? journal = null)
-    {
-        ArgumentNullException.ThrowIfNull(dns);
-
-        if (!dns.IsEnabled)
+        if (!Guards(plan))
         {
             return [];
         }
 
-        var lines = new List<string>();
-        if (dns.BlockDot)
+        var lines = new List<string>
         {
-            lines.Add("meta l4proto { tcp, udp } th dport 853 " + Log(AccessTag.Dot, journal) + "drop");
-        }
-
-        if (dns.BlockDoh)
+            $"iifname != {{ {Quoted(plan.Inbound)} }} accept",
+            "ct state != new accept",
+            $"ip saddr @{FreeSet(false)} accept",
+            $"ip6 saddr @{FreeSet(true)} accept",
+        };
+        var dot = Log(AccessTag.Dot, plan.Journal);
+        var doh = Log(AccessTag.Doh, plan.Journal);
+        foreach (var six in new[] { false, true })
         {
-            var log = Log(AccessTag.Doh, journal);
-            lines.Add($"ip daddr @{HttpsSet(false)} meta l4proto {{ tcp, udp }} th dport 443 {log}drop");
-            lines.Add($"ip6 daddr @{HttpsSet(true)} meta l4proto {{ tcp, udp }} th dport 443 {log}drop");
+            var family = six ? "ip6" : "ip";
+            var layer = six ? "ipv6" : "ipv4";
+            var https = $"{family} daddr @{HttpsSet(six)} meta l4proto {{ tcp, udp }} th dport 443 ";
+            var release = $"update @{TriedSet(six)} {{ {family} saddr limit rate over {DnsDefaults.TriedRate} }} "
+                + $"add @{FreeSet(six)} {{ {family} saddr }} accept";
+            foreach (var head in Heads(plan, six))
+            {
+                lines.Add($"{head}meta nfproto {layer} {family} saddr != @{AskedSet(six)} meta l4proto {{ tcp, udp }} th dport 853 {release}");
+                lines.Add($"{head}{family} saddr != @{AskedSet(six)} {https}{release}");
+                lines.Add($"{head}meta nfproto {layer} meta l4proto {{ tcp, udp }} th dport 853 {dot}jump refuse");
+                lines.Add($"{head}{https}{doh}jump refuse");
+            }
         }
 
         return lines;
@@ -316,15 +404,10 @@ public static class RouteRuleset
             + (sources.Count > 0 ? $"{(six ? "ip6" : "ip")} saddr {{ {string.Join(", ", sources)} }} " : string.Empty);
     }
 
-    // Returns the lines of the decision chain: the guards of the resolver, then the rules in order, a rule by name
-    // followed by the lines that deal with the TCP connections it may take.
+    // Returns the lines of the decision chain: the rules in order, a rule by name followed by the lines that deal with
+    // the TCP connections it may take.
     private static IEnumerable<string> Decide(RoutePlan plan, IReadOnlyList<RouteLeg> live)
     {
-        foreach (var line in Guard(plan))
-        {
-            yield return line;
-        }
-
         var reading = Handing(plan);
         var handed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var leg in live)
@@ -377,6 +460,39 @@ public static class RouteRuleset
             Kept(text, WaitSet(false), "ipv4_addr . inet_service . ipv4_addr", "dynamic,timeout", wait);
             Kept(text, WaitSet(true), "ipv6_addr . inet_service . ipv6_addr", "dynamic,timeout", wait);
         }
+    }
+
+    // Returns how the lines of the guards start in one family: the clients of each rule by name, or one empty start
+    // while a rule by name takes every client.
+    private static IReadOnlyList<string> Heads(RoutePlan plan, bool six)
+    {
+        var heads = plan.Legs
+            .Where(leg => leg.IsOnHost && leg.Domains.Count > 0)
+            .Select(leg => Head(leg, six))
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return heads.Contains(string.Empty) ? [string.Empty] : heads;
+    }
+
+    // Returns the lines that note the clients asking a name server over port 53.
+    private static IReadOnlyList<string> Heard(RoutePlan plan) =>
+    [
+        $"iifname != {{ {Quoted(plan.Inbound)} }} accept",
+        $"meta nfproto ipv4 ct state new meta l4proto {{ tcp, udp }} th dport 53 update @{AskedSet(false)} {{ ip saddr }}",
+        $"meta nfproto ipv6 ct state new meta l4proto {{ tcp, udp }} th dport 53 update @{AskedSet(true)} {{ ip6 saddr }}",
+    ];
+
+    private static void Chain(StringBuilder text, string name, IReadOnlyList<string> lines)
+    {
+        text.Append("\tchain ").Append(name).Append(" {\n");
+        foreach (var line in lines)
+        {
+            text.Append("\t\t").Append(line).Append('\n');
+        }
+
+        text.Append("\t}\n");
     }
 
     private static void Kept(StringBuilder text, string name, string type, string flags, string life)
@@ -482,20 +598,9 @@ public static class RouteRuleset
         Names(text, NameSet(leg.Rule.Id, true), "ipv6_addr", dns);
     }
 
-    private static void Https(StringBuilder text, RoutePlan plan)
-    {
-        if (!plan.HasNames || !plan.Dns.IsEnabled || !plan.Dns.BlockDoh)
-        {
-            return;
-        }
-
-        Range(text, HttpsSet(false), "ipv4_addr", DnsDefaults.Https4);
-        Range(text, HttpsSet(true), "ipv6_addr", DnsDefaults.Https6);
-    }
-
     private static void Redirect(StringBuilder text, RoutePlan plan)
     {
-        if (!plan.Dns.IsEnabled || !plan.Dns.Intercept || plan.Inbound.Count == 0)
+        if (!plan.Dns.IsEnabled || plan.Inbound.Count == 0)
         {
             return;
         }

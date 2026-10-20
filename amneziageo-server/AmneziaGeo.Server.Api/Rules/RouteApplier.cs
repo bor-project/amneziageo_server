@@ -77,6 +77,10 @@ public sealed class RouteApplier
 
     private readonly StandInBook _book;
 
+    private readonly IHostNetwork _network;
+
+    private readonly ILogger<RouteApplier> _logger;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -97,8 +101,12 @@ public sealed class RouteApplier
         AccessGate gate,
         NameGate names,
         TemplateStore templates,
-        StandInBook book)
+        StandInBook book,
+        IHostNetwork network,
+        ILogger<RouteApplier> logger)
     {
+        _network = network;
+        _logger = logger;
         _names = names;
         _templates = templates;
         _book = book;
@@ -216,6 +224,27 @@ public sealed class RouteApplier
 
     private async Task<RoutePlan> LayAsync(RoutePlan plan, CancellationToken ct)
     {
+        var laid = await RulesAsync(plan, ct).ConfigureAwait(false);
+        await GuardAsync(laid, ct).ConfigureAwait(false);
+
+        return laid;
+    }
+
+    // Puts the guards of the resolver on the host, leaving the rules as they were laid when the host refuses them.
+    private async Task GuardAsync(RoutePlan plan, CancellationToken ct)
+    {
+        try
+        {
+            await _network.FirewallAsync(RouteRuleset.Guarding(plan), ct).ConfigureAwait(false);
+        }
+        catch (HostNetworkException ex)
+        {
+            _logger.LogWarning(ex, "the host did not take the guards of the resolver");
+        }
+    }
+
+    private async Task<RoutePlan> RulesAsync(RoutePlan plan, CancellationToken ct)
+    {
         try
         {
             await _sets.LayAsync(RouteRuleset.Text(plan), plan, ct).ConfigureAwait(false);
@@ -225,7 +254,7 @@ public sealed class RouteApplier
         catch (HostNetworkException) when (plan.Reading is { Port: not null, Queue: not null })
         {
             _names.ClosePort();
-            var laid = await LayAsync(plan with { Reading = plan.Reading with { Port = null } }, ct).ConfigureAwait(false);
+            var laid = await RulesAsync(plan with { Reading = plan.Reading with { Port = null } }, ct).ConfigureAwait(false);
             _plans.Keep(laid);
 
             return laid;
@@ -233,7 +262,7 @@ public sealed class RouteApplier
         catch (HostNetworkException ex) when (plan.Reading is not null)
         {
             var plain = plan with { Reading = null };
-            var laid = await LayAsync(plain, ct).ConfigureAwait(false);
+            var laid = await RulesAsync(plain, ct).ConfigureAwait(false);
             _names.CloseQueue($"the host did not take the rules that show connections to the panel: {ex.Message}");
             _names.ClosePort();
             _plans.Keep(laid);

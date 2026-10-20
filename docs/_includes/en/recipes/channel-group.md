@@ -22,7 +22,7 @@ In the list of the group the live members are marked "on the host".
 
 ## 3. Rule
 
-In a "Through a channel" rule choose the group `europe` in the "Channel" field; in the list of rules such a channel is marked "group". "Hold the traffic while the channel is down" decides what to do when no member carries: checked, drop; cleared, let out through the host.
+In a "Through a channel" rule choose the group `europe` in the "Channel" field; in the list of rules such a channel is marked "group". When no member carries, the traffic of the rule is dropped.
 
 ## What happens on a failure
 

@@ -40,15 +40,14 @@ A fresh panel asks `https://1.1.1.1/dns-query` and `https://8.8.4.4/dns-query`; 
 | Cache size, entries | how many answers are kept in memory, 0 means none |
 | Answer TTL: min, s and max, s | the bounds the lifetime of an answer from the cache is clamped to |
 
-## Clients
+## Questions of the clients
 
-| Field | What it sets |
-|---|---|
-| Take the questions of the clients | whether to turn to the resolver the questions a client sent to another name server on port 53 |
-| Stop DNS over TLS | drop port 853 for the clients while at least one rule compares by name |
-| Stop DNS over HTTPS | drop port 443 to known public name servers while at least one rule compares by name |
+There are no settings here: while the resolver answers, the panel decides where the questions of the clients go.
 
-The resolver does not see a question inside TLS or HTTPS, so the two stops keep the clients on the resolver; they go on the host only while some rule or basic list compares by name. Another AmneziaGeo server that leaves through this one and asks its servers over HTTPS falls under the stop too: the nearer panel then names its upstream server as plain DNS (`1.1.1.1`) and asks through the channel, while the farther one takes the question with its resolver and asks out over HTTPS.
+- A question a client sent to any name server on port 53 is turned to the resolver. A question to a public address the resolver answers itself. A question to a private address (`10.0.0.0/8`, `100.64.0.0/10`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`, `fe80::/10`), such as a router in the network behind the server, the resolver passes on to the server the client asked, as plain DNS through the host, and puts the addresses of the answer into the sets of the rules as its own; such answers stay out of the cache. Only a question to a network the host reaches by a route of its own, not by its default route, is passed on. A question to another private address, and one that server did not answer, the resolver answers itself, and it passes over a server that did not answer for five minutes.
+- The resolver does not see a question inside TLS or HTTPS. While at least one rule or basic list compares by name, a connection of a client of such a rule to port 853, and to port 443 of known public name servers (Cloudflare, Google, Quad9, NextDNS, AdGuard, OpenDNS), is reset at once. A client in an automatic mode (Private DNS of Android, the secure DNS of a browser) then falls back to plain DNS without waiting and reaches the resolver.
+- A client that never comes to the resolver after the resets is let go for a day: after three resets in a short while its DoT and DoH go as they are, past the rules by name. This keeps working a strict Private DNS with a named server, a browser with DoH set strictly and another AmneziaGeo server that leaves through this one and asks its servers over HTTPS.
+- While the panel reads the names out of the connections themselves ([Names from connections](#names-from-connections)), nothing is reset: the name is seen without the resolver.
 
 ## Saving
 
@@ -64,7 +63,7 @@ The resolver also asks the names of the rules itself, without waiting for a clie
 
 An answer that brought an address not yet in the sets goes to the client once the address is in the set, at most half a second later, so the first connection to it already follows the rule. A rule keeps its 128 newest addresses standing: once a minute they are written to the database and after a restart come back into the set before the first question, so a rebooted machine does not leave the rule empty.
 
-An answer larger than the datagram of the client goes out truncated with a flag, and the client asks again over TCP. On the host the resolver adds the `resolve` chain, which turns the questions from the interfaces of the panel to the resolver, and the lines with the stops of 853 and of 443 towards the sets `doh4` and `doh6` of public servers.
+An answer larger than the datagram of the client goes out truncated with a flag, and the client asks again over TCP. On the host the resolver adds the `resolve` chain, which turns the questions from the interfaces of the panel to the resolver. The resets live in a table of their own, `amneziageo_dns`: the sets `doh4` and `doh6` of public servers, `asked4` and `asked6` of the clients that asked port 53 in the last half hour, `free4` and `free6` of the clients let go for a day. The table is not laid anew with the rules, so a client let go stays let go; when no reset is needed, the panel takes it away.
 
 ## Stand-in addresses
 

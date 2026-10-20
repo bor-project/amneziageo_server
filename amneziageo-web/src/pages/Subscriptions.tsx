@@ -9,7 +9,7 @@ import { scopes } from "@/api/scopes"
 import { draftOf, useSaveSubscription, useSubscription } from "@/api/subscription"
 import type { Subscription, SubscriptionDraft } from "@/api/subscription"
 import { KeepQuestion, PortNote } from "@/components/PortNote"
-import { Count, Flag, Line, Multi, Part, Pick } from "@/components/fields"
+import { Count, Flag, Line, Multi, Part, Pick, Switch } from "@/components/fields"
 import { manual, useOpening } from "@/components/opening"
 import { socketFault } from "@/components/ports"
 import { footer, label, primary, secondary } from "@/components/styles"
@@ -125,7 +125,7 @@ function Editor({ settings, may }: { settings: Subscription; may: boolean }) {
     <div className="mt-4 flex flex-col gap-4">
       <Part title={t("subscription.partServing")}>
         <div className="sm:col-span-2">
-          <Flag
+          <Switch
             id="subscription-enabled"
             caption={t("subscription.enabled")}
             value={draft.isEnabled}

@@ -76,8 +76,8 @@ calls among them.
 The switch works while the resolver of the panel answers the clients on port 53 and the firewall of the host lets
 them reach it. The template is saved with the switch on in any case, and the form names what keeps it from working
 with the command that mends it: the resolver off, the resolver on another port, or ufw keeping the clients of an
-interface from it ([dns.md](dns.md)). An application with name servers of its own goes past the stand-ins; the resolver keeps the clients off the known ones
-(`blockDoh`, `blockDot`). A stand-in name answers no IPv6 address and no `HTTPS` record, so the client goes over
+interface from it ([dns.md](dns.md)). An application with name servers of its own goes past the stand-ins; the guards of the resolver refuse the clients
+the known ones ([dns.md](dns.md#what-the-host-gets)). A stand-in name answers no IPv6 address and no `HTTPS` record, so the client goes over
 IPv4. A stand-in that leads nowhere, after a client came over from another server or for a name nobody asked about
 for a week, is refused at once, and the client asks for the name again.
 

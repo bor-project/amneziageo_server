@@ -6,7 +6,7 @@ Routing decides where the traffic of the clients goes after the server: through 
 
 ## How it works
 
-- **Rules** are read top down, and the first that fits applies. A rule compares the first packet of a new connection: where it goes (geo keys, domains, addresses), where it comes from (addresses, clients, interfaces), ports and protocol. A "Through a channel" rule puts the mark of the channel on the connection, and the connection keeps this path while it lives, even if the rules change later.
+- **Rules** are read top down, and the first that fits applies. A rule compares the first packet of a new connection: where it goes (geo keys, domains, addresses), where it comes from (clients, interfaces), ports and protocol. A "Through a channel" rule puts the mark of the channel on the connection, and the connection keeps this path while it lives, even if the rules change later.
 - **Basic lists** stand before the rules: "Block" drops, "Direct" lets out through the host without a mark.
 - **Channels** are the ways out: the host itself, an AmneziaWG tunnel to another server or the same tunnel inside WebSocket; each channel carries its own mark and routing table. A group of channels under one name hands out the traffic by priority, round robin or per client, and a rule names a group the same way as a channel.
 - **Geo lists** are the `geoip.dat` and `geosite.dat` databases from which rules and templates take the ranges of countries and the domains of categories.

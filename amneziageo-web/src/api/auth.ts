@@ -154,7 +154,6 @@ const complaints: Record<string, TextKey> = {
   "bad-rule-name": "error.badRuleName",
   "bad-action": "error.badAction",
   "bad-target": "error.badTarget",
-  "bad-source": "error.badSource",
   "bad-rule-client": "error.badRuleClient",
   "bad-rule-inbound": "error.badRuleInbound",
   "bad-source-port": "error.badSourcePort",

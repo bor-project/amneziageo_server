@@ -574,16 +574,7 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<bool>("BlockDoh")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("BlockDot")
-                        .HasColumnType("INTEGER");
-
                     b.Property<int>("CacheSize")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("Intercept")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsEnabled")
@@ -1035,11 +1026,6 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("HoldsWhenDown")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(true);
-
                     b.Property<string>("Inbounds")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -1070,10 +1056,6 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SourcePorts")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Sources")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

@@ -32,7 +32,7 @@ The filters: "Period" ("Last hour", "Last 6 hours", "Last 24 hours", "Last 7 day
 | direct | let out the way the host sends its own: a "Direct" rule, the "Direct" list, or no rule |
 | block | dropped by a "Block" rule or list |
 | held | dropped while the channel of the rule carries nothing |
-| guard | dropped by the guard of the resolver, DNS over TLS or HTTPS |
+| guard | reset by the guard of the resolver, DNS over TLS or HTTPS |
 | locally, relayed | the path: left through the way out of the host, or handed to another server through the tunnel of a channel |
 
 | Outcome | What it means |

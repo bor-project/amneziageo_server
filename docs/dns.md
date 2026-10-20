@@ -30,9 +30,6 @@ takes a question of the installation, an item of the menu or a command.
 | An address lives | how long an answered address stays in the set of a rule, in minutes |
 | Answers held in memory | how many answers are kept back, zero for none |
 | An answer lives from, to | the bounds the lifetime of a kept answer is clamped to, in seconds |
-| Take the questions of the clients | whether the questions sent elsewhere are redirected to the resolver |
-| Stop DNS over TLS | whether port 853 is dropped for the clients while a rule matches by name |
-| Stop DNS over HTTPS | whether port 443 to the known name servers is dropped for the clients while a rule matches by name |
 
 A port under 1024 needs `CAP_NET_BIND_SERVICE`: under an ordinary account the resolver reports
 `Permission denied` and takes no address. An address that is not on the host is skipped, and the
@@ -149,7 +146,7 @@ there is no address to answer the clients on`, and starts with the first endpoin
 
 ## What the host gets
 
-The ruleset the rules build carries two more things once the resolver runs.
+Once the resolver runs, the host gets two more things.
 
 The chain `resolve` sits on the nat prerouting hook and sends every question that arrives on an interface
 of a configuration to the resolver:
@@ -162,30 +159,63 @@ chain resolve {
 }
 ```
 
-The decision chain starts with the lines that keep a client off the name servers it carries its own way,
-because a question inside TLS or HTTPS is a question the resolver never sees:
+The resolver reads out of the connection tracking of the host where a question turned to it was first sent. A
+question to a private address (`10.0.0.0/8`, `100.64.0.0/10`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`, `fe80::/10`) that is not an address of the host
+goes on to that server as plain DNS through the host, so a router in the network behind the server answers its own
+names; the answer feeds the sets of the rules and the stand-ins the way an answer of the upstreams does, and stays
+out of the cache. Only a network the host reaches by a route of its own goes there: the routes of the host
+(`/proc/net/route`, `/proc/net/ipv6_route`) are read again every half a minute, and an address the host reaches by
+its default route only, or by a route that turns the traffic away, is answered by the resolver itself through the
+upstreams. So is a question the private server gave no answer to in time, and that server is passed over for five
+minutes.
+
+The guards that keep a client off the name servers it carries its own way, since a question inside TLS or HTTPS is
+a question the resolver never sees, live in a table of their own, `amneziageo_dns`, laid after the rules and never
+laid anew with them:
 
 ```
-meta l4proto { tcp, udp } th dport 853 drop
-ip daddr @doh4 meta l4proto { tcp, udp } th dport 443 drop
-ip6 daddr @doh6 meta l4proto { tcp, udp } th dport 443 drop
+chain heard {
+    type filter hook prerouting priority mangle; policy accept;
+    iifname != { "awg1" } accept
+    meta nfproto ipv4 ct state new meta l4proto { tcp, udp } th dport 53 update @asked4 { ip saddr }
+}
+
+chain guard {
+    type filter hook forward priority filter - 4; policy accept;
+    iifname != { "awg1" } accept
+    ct state != new accept
+    ip saddr @free4 accept
+    meta nfproto ipv4 ip saddr != @asked4 meta l4proto { tcp, udp } th dport 853 update @tried4 { ip saddr limit rate over 2/minute burst 3 packets } add @free4 { ip saddr } accept
+    ip saddr != @asked4 ip daddr @doh4 meta l4proto { tcp, udp } th dport 443 update @tried4 { ip saddr limit rate over 2/minute burst 3 packets } add @free4 { ip saddr } accept
+    meta nfproto ipv4 meta l4proto { tcp, udp } th dport 853 jump refuse
+    ip daddr @doh4 meta l4proto { tcp, udp } th dport 443 jump refuse
+}
+
+chain refuse {
+    meta l4proto tcp reject with tcp reset
+    reject
+}
 ```
 
-The sets `doh4` and `doh6` hold the addresses of the public name servers that answer over HTTPS.
+The same lines stand for IPv6 with `asked6`, `tried6`, `free6` and `doh6`. The sets `doh4` and `doh6` hold the
+addresses of the public name servers that answer over HTTPS, `asked4` the clients that asked port 53 in the last
+half hour, `free4` for a day the clients the guards let go. A client is refused at once, so one that falls back to
+plain DNS does it without waiting and lands in `asked4`; one that never asks port 53 and tries a name server of its
+own three times in a short while is let go. The lines take only the clients the rules by name take: a rule limited
+to interfaces or clients puts its conditions in front of them.
 
-These lines and both sets go on the host only while a rule or a basic list on it matches by name, since the answers
-the resolver sees are what such a rule goes by. A server none of whose rules matches by name lays none of them,
-whatever the two switches say: a client that carries its questions inside TLS or HTTPS goes on asking, and so does
-another AmneziaGeo server that leaves through this one and asks its name servers over HTTPS.
+The table stands while the resolver answers, a rule or a basic list on the host matches by name and the panel reads
+no names out of the connections; otherwise the panel takes it away. A host that does not take the table gets a line
+in the log, and the rules stay as they were laid.
 
 ## A server that leaves through another
 
 A panel whose outbound is a tunnel to another AmneziaGeo server is a client of that server, and with `Ask through
 the channel` its questions arrive there like the traffic of any client. The server at the far end passes them on
-while none of its own rules matches by name. Where it does hold such a rule, its guards drop a question carried
-over TLS or HTTPS. The near panel then names its upstream in the open, as `1.1.1.1`, and goes on asking through the
-channel: the tunnel carries the question to the far end, whose resolver takes it, while it takes the questions of
-the clients, and asks outside over HTTPS.
+while none of its own rules matches by name. Where it does hold such a rule, its guards refuse a question carried
+over TLS or HTTPS until the near panel has tried three times in a short while, and then let it go for a day. The
+near panel may also name its upstream in the open, as `1.1.1.1`, and ask through the channel: the tunnel carries
+the question to the far end, whose resolver takes it and asks outside over HTTPS.
 
 ## The sets of the rules
 

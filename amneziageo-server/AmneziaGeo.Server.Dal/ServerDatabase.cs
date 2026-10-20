@@ -88,8 +88,9 @@ public static class ServerDatabase
     }
 
     /// <summary>
-    /// Brings the schema up to date, hides the files of the database from other users, puts the built in role in place
-    /// and parts the endpoints that share the path of their websocket on one TCP port.
+    /// Brings the schema up to date, moves the client addresses of the rules over to the clients, hides the files of
+    /// the database from other users, puts the built in role in place and parts the endpoints that share the path of
+    /// their websocket on one TCP port.
     /// </summary>
     public static async Task PrepareAsync(IServiceProvider services, CancellationToken ct = default)
     {
@@ -98,6 +99,7 @@ public static class ServerDatabase
         var database = db.Database;
         var loggers = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
         await database.MigrateAsync(ct).ConfigureAwait(false);
+        var moves = await db.AloneAsync(() => RuleSources.MoveAsync(db, ct), ct).ConfigureAwait(false);
         DatabaseFiles.Hide(database.GetDbConnection().DataSource, loggers.CreateLogger(typeof(DatabaseFiles).FullName!));
         var roles = scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();
         var geo = scope.ServiceProvider.GetRequiredService<GeoStore>();
@@ -123,6 +125,54 @@ public static class ServerDatabase
                 moved.Name,
                 moved.Keeper,
                 moved.Port);
+        }
+
+        foreach (var move in moves)
+        {
+            Tell(logger, move);
+        }
+    }
+
+    // Names in the log what became of a rule whose client addresses went over to the clients.
+    private static void Tell(ILogger logger, RuleSourcesMove move)
+    {
+        var sources = string.Join(", ", move.Sources);
+        if (move.IsTooMany)
+        {
+            logger.LogWarning(
+                "the rule '{Rule}' matched the client addresses {Sources}, which rules take no more; {Standing} clients stand there, more than one rule names, and the rule is turned off",
+                move.Rule,
+                sources,
+                move.Standing);
+        }
+        else if (move.Added.Count > 0)
+        {
+            logger.LogWarning(
+                "the rule '{Rule}' matched the client addresses {Sources}, which rules take no more; it names the clients standing there instead: {Clients}",
+                move.Rule,
+                sources,
+                string.Join(", ", move.Added));
+        }
+        else if (move.Clients.Count > 0)
+        {
+            logger.LogWarning(
+                "the rule '{Rule}' matched the client addresses {Sources}, which rules take no more; no client of the panel stands there, and the rule keeps the clients it names",
+                move.Rule,
+                sources);
+        }
+        else if (move.WasEnabled)
+        {
+            logger.LogWarning(
+                "the rule '{Rule}' matched the client addresses {Sources}, which rules take no more; no client of the panel stands there, and the rule is turned off rather than taking every client",
+                move.Rule,
+                sources);
+        }
+        else
+        {
+            logger.LogWarning(
+                "the rule '{Rule}' matched the client addresses {Sources}, which rules take no more; no client of the panel stands there, and the rule stays off, as on it would take every client",
+                move.Rule,
+                sources);
         }
     }
 

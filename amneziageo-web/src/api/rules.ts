@@ -22,9 +22,7 @@ export interface Rule {
   isEnabled: boolean
   action: RuleAction
   outbound: string
-  holdsWhenDown: boolean
   targets: string[]
-  sources: string[]
   clients: string[]
   inbounds: string[]
   ports: string[]
@@ -40,9 +38,7 @@ export interface RuleDraft {
   isEnabled: boolean
   action: RuleAction
   outbound: string
-  holdsWhenDown: boolean
   targets: string[]
-  sources: string[]
   clients: string[]
   inbounds: string[]
   ports: string[]
@@ -155,9 +151,7 @@ export function draftOf(rule: Rule): RuleDraft {
     isEnabled: rule.isEnabled,
     action: rule.action,
     outbound: rule.outbound,
-    holdsWhenDown: rule.holdsWhenDown,
     targets: rule.targets,
-    sources: rule.sources,
     clients: rule.clients,
     inbounds: rule.inbounds,
     ports: rule.ports,
@@ -171,9 +165,7 @@ export const freshRule: RuleDraft = {
   isEnabled: true,
   action: "out",
   outbound: "",
-  holdsWhenDown: true,
   targets: [],
-  sources: [],
   clients: [],
   inbounds: [],
   ports: [],

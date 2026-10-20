@@ -5,7 +5,7 @@ import { useClients } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import { useOutbounds } from "@/api/outbounds"
 import type { RuleAction, RuleDraft, RuleProtocol } from "@/api/rules"
-import { Flag, Line, ListArea, ListLine, Multi, Part } from "@/components/fields"
+import { Line, ListArea, ListLine, Multi, Part, Switch } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -41,6 +41,15 @@ export function RuleForm({
   return (
     <div className="mt-4 flex flex-col gap-4">
       <Part title={t("rules.partMain")}>
+        <div className="sm:col-span-2">
+          <Switch
+            id="rule-enabled"
+            caption={t("rules.enabled")}
+            value={draft.isEnabled}
+            onChange={(isEnabled) => put({ isEnabled })}
+          />
+        </div>
+
         <Line id="rule-name" caption={t("rules.name")} value={draft.name} onChange={(name) => put({ name })} />
 
         <div>
@@ -120,23 +129,6 @@ export function RuleForm({
           value={draft.sourcePorts}
           onChange={(sourcePorts) => put({ sourcePorts })}
         />
-
-        <div className="flex flex-col gap-2 sm:col-span-2">
-          <Flag
-            id="rule-enabled"
-            caption={t("rules.enabled")}
-            value={draft.isEnabled}
-            onChange={(isEnabled) => put({ isEnabled })}
-          />
-          {draft.action === "out" && (
-            <Flag
-              id="rule-holds"
-              caption={t("rules.holdsWhenDown")}
-              value={draft.holdsWhenDown}
-              onChange={(holdsWhenDown) => put({ holdsWhenDown })}
-            />
-          )}
-        </div>
       </Part>
 
       <Part title={t("rules.partAddresses")}>
@@ -147,40 +139,35 @@ export function RuleForm({
           onChange={(targets) => put({ targets })}
         />
 
-        <ListArea
-          id="rule-sources"
-          caption={t("rules.sources")}
-          value={draft.sources}
-          onChange={(sources) => put({ sources })}
-        />
-
-        <div>
-          <label className={label} htmlFor="rule-clients">
-            {t("rules.clients")}
-          </label>
-          <div className="mt-1">
-            <Multi
-              id="rule-clients"
-              value={draft.clients}
-              offers={(clients.data ?? []).map((one) => one.name)}
-              placeholder={t("rules.anyone")}
-              onChange={(value) => put({ clients: value })}
-            />
+        <div className="flex flex-col gap-3.5">
+          <div>
+            <label className={label} htmlFor="rule-clients">
+              {t("rules.clients")}
+            </label>
+            <div className="mt-1">
+              <Multi
+                id="rule-clients"
+                value={draft.clients}
+                offers={(clients.data ?? []).map((one) => one.name)}
+                placeholder={t("rules.anyone")}
+                onChange={(value) => put({ clients: value })}
+              />
+            </div>
           </div>
-        </div>
 
-        <div>
-          <label className={label} htmlFor="rule-inbounds">
-            {t("rules.interfaces")}
-          </label>
-          <div className="mt-1">
-            <Multi
-              id="rule-inbounds"
-              value={draft.inbounds}
-              offers={(configs.data ?? []).map((one) => one.name)}
-              placeholder={t("rules.anyInbound")}
-              onChange={(value) => put({ inbounds: value })}
-            />
+          <div>
+            <label className={label} htmlFor="rule-inbounds">
+              {t("rules.interfaces")}
+            </label>
+            <div className="mt-1">
+              <Multi
+                id="rule-inbounds"
+                value={draft.inbounds}
+                offers={(configs.data ?? []).map((one) => one.name)}
+                placeholder={t("rules.anyInbound")}
+                onChange={(value) => put({ inbounds: value })}
+              />
+            </div>
           </div>
         </div>
       </Part>

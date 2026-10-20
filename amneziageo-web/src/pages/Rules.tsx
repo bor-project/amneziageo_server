@@ -131,12 +131,12 @@ export function Rules() {
               cell: (one) => <Some values={one.targets} none={t("rules.anything")} />,
             },
             {
-              key: "sources",
+              key: "clients",
               width: 104,
               wrap: true,
-              caption: t("rules.sources"),
-              sort: (one) => from(one).join(", "),
-              cell: (one) => <Some values={from(one)} none={t("rules.anyone")} />,
+              caption: t("rules.clients"),
+              sort: (one) => one.clients.join(", "),
+              cell: (one) => <Some values={one.clients} none={t("rules.anyone")} />,
             },
             {
               key: "inbounds",
@@ -221,10 +221,6 @@ function way(rule: Rule, t: Text): string {
   return rule.action === "direct" ? t("rules.actionDirect") : rule.outbound
 }
 
-function from(rule: Rule): string[] {
-  return [...rule.clients, ...rule.sources]
-}
-
 function ranked(rule: Rule): number {
   if (rule.state.fault.length > 0) {
     return 1
@@ -272,7 +268,6 @@ function matches(one: Rule, find: string): boolean {
     one.name.toLowerCase().includes(query) ||
     one.outbound.toLowerCase().includes(query) ||
     one.targets.some((target) => target.toLowerCase().includes(query)) ||
-    one.sources.some((source) => source.toLowerCase().includes(query)) ||
     one.clients.some((name) => name.toLowerCase().includes(query)) ||
     one.inbounds.some((name) => name.toLowerCase().includes(query))
   )

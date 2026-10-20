@@ -137,36 +137,13 @@ public class BalanceTests
     }
 
     [Fact]
-    public void AnOutboundThatCarriesNothingKeepsTheRuleOffTheHost()
+    public void ARuleDropsItsTrafficWhileTheOutboundCarriesNothing()
     {
-        var rule = RouteDefaults.Fresh("ru") with
-        {
-            Id = 1,
-            Outbound = "awgbor",
-            Targets = ["geoip:ru"],
-            HoldsWhenDown = false,
-        };
+        var rule = RouteDefaults.Fresh("ru") with { Id = 1, Outbound = "awgbor", Targets = ["geoip:ru"] };
 
         var leg = Assert.Single(Plan([], ["direct"], rule).Legs);
 
         Assert.False(leg.IsLive);
-        Assert.False(leg.IsHeld);
-        Assert.Equal("outbound-down", leg.Fault?.Code);
-    }
-
-    [Fact]
-    public void ARuleThatHoldsItsTrafficDropsItWhileTheOutboundCarriesNothing()
-    {
-        var rule = RouteDefaults.Fresh("ru") with
-        {
-            Id = 1,
-            Outbound = "awgbor",
-            Targets = ["geoip:ru"],
-            HoldsWhenDown = true,
-        };
-
-        var leg = Assert.Single(Plan([], ["direct"], rule).Legs);
-
         Assert.True(leg.IsHeld);
         Assert.True(leg.IsOnHost);
         Assert.Equal("outbound-down", leg.Fault?.Code);

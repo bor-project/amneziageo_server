@@ -31,8 +31,9 @@ A rule by domains works through the resolver of the panel: "Routing" > "DNS", "A
 
 1. "Name" `abroad`, "Action" "Through a channel", "Channel" `awg-de`.
 2. "Where to": the keys and domains that must go through that server, for example `geosite:youtube`, `geoip:ag-youtube`, `geosite:netflix`, `example.com`. What a key carries is shown by "Show what it holds" in the templates and told on [Geo lists](../panel/geo.html).
-3. Leave "Hold the traffic while the channel is down" on: while the tunnel to that server is down, the traffic of the rule is dropped rather than leaving through the host under the address of this server.
-4. "Enabled", "Save".
+3. "Enabled", "Save".
+
+While the tunnel to that server is down, the traffic of the rule is dropped rather than leaving through the host under the address of this server.
 
 In the list the rule shows "on the host" and the number of ranges and names. A rule stands in the order of reading: if a rule above takes the same traffic, move it with the arrows.
 
@@ -44,4 +45,4 @@ In the list the rule shows "on the host" and the number of ranges and names. A r
 
 - The rule shows "traffic held": the channel carries nothing, see its status. While the reachability check does not get through, the groups and the rules count the channel as dead.
 - The site opens through the host: a rule higher in the list took the traffic first, or the name did not get into the sets. "Test" names the rule and what it matched by; "Addresses in the sets" on the DNS page grows with the answers of the resolver.
-- Another AmneziaGeo server with its own rules by name cuts off DNS over HTTPS from this one: name the upstream server here as plain DNS (`1.1.1.1`) and ask through the channel, and that server takes the question with its resolver, see [DNS](../panel/dns.html#clients).
+- Another AmneziaGeo server with its own rules by name resets DNS over HTTPS from this one until it lets this one go after three tries: for the questions to go at once, name the upstream server here as plain DNS (`1.1.1.1`) and ask through the channel, and that server takes the question with its resolver, see [DNS](../panel/dns.html#questions-of-the-clients).

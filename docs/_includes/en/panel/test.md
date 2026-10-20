@@ -12,7 +12,7 @@ The route test tells what the rules on the host will do with a connection. The p
 | Protocol | TCP or UDP |
 | Source port | may be left empty |
 
-"Test" reads the rules the way the set on the host reads them. First comes the guard of the resolver, while at least one rule on the host compares by name: with DNS over TLS forbidden, port 853 is dropped, with DNS over HTTPS forbidden, port 443 to known name servers. Then the resolver itself: while it intercepts queries, it answers every question to port 53 from the interface of a client, and the rules are not read. Then the rules in order: a rule not on the host is skipped with its reason, a rule whose interface, client, protocol, port or source port did not match is missed, and a rule whose targets the traffic falls under matches by range, by name or by an address the resolver put into its set.
+"Test" reads the rules the way the set on the host reads them. First comes the guard of the resolver, while at least one rule on the host compares by name and no names are read out of the connections: a client of such a rule gets port 853 and port 443 of known name servers reset; the test does not know a client let go for a day and shows the reset for it too. Then the resolver itself: while it answers, it takes every question to port 53 from the interface of a client, and the rules are not read. Then the rules in order: a rule not on the host is skipped with its reason, a rule whose interface, client, protocol, port or source port did not match is missed, and a rule whose targets the traffic falls under matches by range, by name or by an address the resolver put into its set.
 
 ## Outcome
 

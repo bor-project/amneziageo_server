@@ -4,7 +4,7 @@ A rule says where traffic goes: it compares what the client asks for and either 
 
 ## List
 
-The list shows the rules in their order with a number, a switch, what the rule compares ("Where to", "Where from", "Ports", "Inbound"), where it sends ("Traffic": a channel or a "group"), how many ranges and names came out ("Ranges"), and the status: "on the host", "off", "traffic held" with the reason, or the reason the rule did not go on the host. A rule is moved with the "Up" and "Down" arrows and by dragging the row, while the list is neither sorted nor filtered. The switch turns a rule on and off; a rule that is off is not in the set.
+The list shows the rules in their order with a number, a switch, what the rule compares ("Where to", "Clients", "Ports", "Inbound"), where it sends ("Traffic": a channel or a "group"), how many ranges and names came out ("Ranges"), and the status: "on the host", "off", "traffic held" with the reason, or the reason the rule did not go on the host. A rule is moved with the "Up" and "Down" arrows and by dragging the row, while the list is neither sorted nor filtered. The switch turns a rule on and off; a rule that is off is not in the set.
 
 ## Form
 
@@ -14,29 +14,29 @@ The list shows the rules in their order with a number, a switch, what the rule c
 
 | Field | What it sets |
 |---|---|
+| Enabled | whether the rule goes on the host |
 | Name | up to 32 characters |
 | Action | "Through a channel", "Direct", "Block" |
 | Channel | the channel or group through which the traffic of a "Through a channel" rule leaves |
 | Protocol | "Any", TCP, UDP |
 | Ports | destination ports: `443`, `1000-2000` |
 | Source ports | the ports the traffic comes from, the same way |
-| Hold the traffic while the channel is down | what to do with the traffic of the rule while its channel carries nothing: checked, drop it; cleared, let it out through the host, see below |
-| Enabled | whether the rule goes on the host |
 
-A new rule holds the traffic and is off until turned on.
+The form of a new rule opens enabled: the rule goes on the host right after saving.
 
 ### Addresses
 
 | Field | What it sets |
 |---|---|
 | Where to | geo keys, domains and address ranges the traffic goes to |
-| Where from | addresses and ranges of the clients the traffic comes from |
-| Clients | clients of the panel by name: their addresses are added to "Where from", and the rule is put on the host again at every change of a client, so a new address of the client is picked up by itself |
+| Clients | clients of the panel by name: the rule compares the traffic from their addresses and is put on the host again at every change of a client, so a new address of the client is picked up by itself |
 | Interfaces | interfaces of the panel by name: the rule compares only traffic that came to one of them |
 
-A target is read by its look: `geoip:ru` is a country, `geosite:youtube` a category, `203.0.113.0/24` and `198.51.100.7` ranges, anything else with a dot a domain. A domain is also taken as `domain:example.com` and a range as `cidr:10.0.0.0/8`, in the form of the lists of the AmneziaGeo client, so a list moves from one side to the other without edits. `keyword:ads` fits every name that has the word in it; a keyword has no addresses of its own, and the addresses of such a rule come only from the answers the resolver sees. Ranges come from `geoip:` and networks in the targets, names from `geosite:`, domains and keywords. A rule without targets fits any address, without "Where from" and "Clients" any client, without "Interfaces" any interface.
+A target is read by its look: `geoip:ru` is a country, `geosite:youtube` a category, `203.0.113.0/24` and `198.51.100.7` ranges, anything else with a dot a domain. A domain is also taken as `domain:example.com` and a range as `cidr:10.0.0.0/8`, in the form of the lists of the AmneziaGeo client, so a list moves from one side to the other without edits. `keyword:ads` fits every name that has the word in it; a keyword has no addresses of its own, and the addresses of such a rule come only from the answers the resolver sees. Ranges come from `geoip:` and networks in the targets, names from `geosite:`, domains and keywords. A rule without targets fits any address, without "Clients" any client, without "Interfaces" any interface.
 
 Renaming a client, interface, channel or group writes the new name into every rule that names it.
+
+The "Where from" field (addresses and ranges of clients) is gone. At the update the panel moves its addresses into "Clients": the rule names every client whose address fell under them. A rule left without a client is turned off so that it does not become a rule for everyone, and so is a rule whose addresses covered more than 64 clients, more than one rule names; the panel names every rule it touched in a warning of its log. A client added after the update does not get into such a rule by itself: add it to "Clients".
 
 ## Order
 
@@ -58,7 +58,7 @@ A rule enters the set only when everything it names is there. Otherwise the list
 | There is no such client | the panel knows none of the clients named |
 | The panel holds none of the interfaces the rule names | the panel knows none of the interfaces named |
 
-The first four reasons say that the rule is fine, but its way out is gone. Then "Hold the traffic while the channel is down" decides: a held rule goes on the host anyway, but drops its traffic instead of marking it, and the list writes "traffic held" with the reason; a rule that is not held lets its traffic out through the host, under the address of the server itself, which a client behind a channel usually does not expect. An empty target is a fault of the rule itself, and such a rule simply does not go on.
+The first four reasons say that the rule is fine, but its way out is gone. Then the rule holds its traffic: it goes on the host anyway, but drops its traffic instead of marking it, and the list writes "traffic held" with the reason. The traffic of a "Through a channel" rule never leaves through the host, under the address of the server itself; a rule that had "Hold the traffic while the channel is down" cleared before holds the same way: the form carries this setting no more. An empty target is a fault of the rule itself, and such a rule simply does not go on.
 
 ## On the host
 
@@ -70,7 +70,7 @@ The rules live in the nftables table `inet amneziageo_rt`, which is written whol
 |---|---|
 | The name is empty or too long | the name |
 | The action is a channel, direct or a block; The rule names no channel | the action |
-| One of the targets is not a geo key, a domain or a range; One of the client addresses is not an address or a range | "Where to", "Where from" |
+| One of the targets is not a geo key, a domain or a range | "Where to" |
 | One of the client names is not a name a client takes; One of the interface names is not a name an interface takes | "Clients", "Interfaces" |
 | The protocol is any, TCP or UDP; A source port is not a port or a range of ports | protocol and ports |
 | The rule carries too many conditions | the rule does not fit into the set |

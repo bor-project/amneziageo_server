@@ -295,9 +295,7 @@ public sealed class RouteStore
         IsEnabled = entity.IsEnabled,
         Action = entity.Action,
         Outbound = entity.Outbound,
-        HoldsWhenDown = entity.HoldsWhenDown,
         Targets = Parts(entity.Targets),
-        Sources = Parts(entity.Sources),
         Clients = Parts(entity.Clients),
         Inbounds = Parts(entity.Inbounds),
         Ports = Parts(entity.Ports),
@@ -321,9 +319,7 @@ public sealed class RouteStore
         entity.IsEnabled = rule.IsEnabled;
         entity.Action = rule.Action;
         entity.Outbound = rule.Outbound.Trim();
-        entity.HoldsWhenDown = rule.HoldsWhenDown;
         entity.Targets = string.Join(", ", rule.Targets);
-        entity.Sources = string.Join(", ", rule.Sources);
         entity.Clients = string.Join(", ", rule.Clients);
         entity.Inbounds = string.Join(", ", rule.Inbounds);
         entity.Ports = string.Join(", ", rule.Ports);

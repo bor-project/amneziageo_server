@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using AmneziaGeo.Server.Api.Rules;
+using AmneziaGeo.Server.Awg.Netlink;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Access;
 using AmneziaGeo.Server.Routing.Dns;
@@ -250,9 +251,10 @@ public sealed class DnsHost : BackgroundService
             LandAsync,
             _names.Hear,
             _standIns,
-            _book.For);
+            _book.For,
+            new DnsRelay(DnsDefaults.Wait));
 
-        var server = new DnsServer(resolver);
+        var server = new DnsServer(resolver, ConntrackOrigin.Find);
         var taken = default(IReadOnlyList<IPAddress>);
         try
         {

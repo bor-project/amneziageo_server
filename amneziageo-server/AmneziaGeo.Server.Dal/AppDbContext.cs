@@ -243,7 +243,6 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(rule => rule.Action).HasMaxLength(16);
             entity.Property(rule => rule.Protocol).HasMaxLength(16);
             entity.Property(rule => rule.Outbound).HasMaxLength(ConfigRules.MaxNameLength);
-            entity.Property(rule => rule.HoldsWhenDown).HasDefaultValue(true);
             entity.HasIndex(rule => rule.Position);
         });
 

@@ -16,8 +16,8 @@ namespace AmneziaGeo.Server.Routing.Route;
 /// <param name="Cidrs4">The IPv4 ranges the rule matches by.</param>
 /// <param name="Cidrs6">The IPv6 ranges the rule matches by.</param>
 /// <param name="Domains">The names the rule matches by.</param>
-/// <param name="Sources4">The IPv4 client ranges the rule matches by, the addresses of the named clients among them.</param>
-/// <param name="Sources6">The IPv6 client ranges the rule matches by, the addresses of the named clients among them.</param>
+/// <param name="Sources4">The IPv4 addresses of the clients the rule names.</param>
+/// <param name="Sources6">The IPv6 addresses of the clients the rule names.</param>
 /// <param name="Fault">Why the rule stays off the host, or null when it goes on.</param>
 public sealed record RouteLeg(
     RouteRule Rule,
@@ -42,7 +42,7 @@ public sealed record RouteLeg(
     /// <summary>
     /// Tells whether the rule drops what it matches while its way out carries nothing.
     /// </summary>
-    public bool IsHeld => Rule.IsEnabled && Rule.HoldsWhenDown && Fault is { IsWayGone: true };
+    public bool IsHeld => Rule.IsEnabled && Fault is { IsWayGone: true };
 
     /// <summary>
     /// Tells whether the rule is written into the ruleset, either sending traffic out or holding it back.
@@ -60,9 +60,9 @@ public sealed record RouteLeg(
     public bool IsDirect => Rule.Action == RouteAction.Direct;
 
     /// <summary>
-    /// Tells whether the rule matches by where the traffic comes from.
+    /// Tells whether the rule matches by the clients the traffic comes from.
     /// </summary>
-    public bool IsBySource => Rule.Sources.Count > 0 || Rule.Clients.Count > 0;
+    public bool IsBySource => Rule.Clients.Count > 0;
 }
 
 /// <summary>
@@ -171,11 +171,7 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
         var found = GeoMaterializer.Materialize(targets, index);
         var cidrs4 = found.Cidrs.Where(cidr => !cidr.Contains(':', StringComparison.Ordinal)).Distinct().ToArray();
         var cidrs6 = found.Cidrs.Where(cidr => cidr.Contains(':', StringComparison.Ordinal)).Distinct().ToArray();
-        var sources = rule.Sources
-            .Select(source => RouteRules.Source(source, out var range) ? range : null)
-            .Concat(known.Addresses(rule.Clients))
-            .OfType<AwgAllowedIp>()
-            .ToArray();
+        var sources = known.Addresses(rule.Clients).OfType<AwgAllowedIp>().ToArray();
 
         var way = Way(rule, ways);
 

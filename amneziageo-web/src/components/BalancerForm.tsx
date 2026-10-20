@@ -2,7 +2,7 @@ import { useState } from "react"
 import { complaint } from "@/api/auth"
 import type { BalanceStrategy, BalancerDraft } from "@/api/balancers"
 import { useOutbounds } from "@/api/outbounds"
-import { Flag, Line, Part } from "@/components/fields"
+import { Line, Part, Switch } from "@/components/fields"
 import { danger, field, footer, label, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -43,6 +43,15 @@ export function BalancerForm({
   return (
     <div className="mt-4 flex flex-col gap-4">
       <Part title={t("balancers.partMain")}>
+        <div className="sm:col-span-2">
+          <Switch
+            id="balancer-enabled"
+            caption={t("balancers.enabled")}
+            value={draft.isEnabled}
+            onChange={(isEnabled) => put({ isEnabled })}
+          />
+        </div>
+
         <Line
           id="balancer-name"
           caption={t("balancers.name")}
@@ -121,15 +130,6 @@ export function BalancerForm({
               </div>
             )}
           </div>
-        </div>
-
-        <div className="sm:col-span-2">
-          <Flag
-            id="balancer-enabled"
-            caption={t("balancers.enabled")}
-            value={draft.isEnabled}
-            onChange={(isEnabled) => put({ isEnabled })}
-          />
         </div>
       </Part>
 

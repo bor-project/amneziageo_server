@@ -6,48 +6,27 @@ namespace AmneziaGeo.Server.Tests;
 public class RouteAnswersTests
 {
     [Fact]
-    public void ARuleThatIsAddedHoldsItsTrafficUnlessTheRequestSaysOtherwise()
-    {
-        Assert.True(RouteAnswers.Draft(Request(null)).HoldsWhenDown);
-        Assert.False(RouteAnswers.Draft(Request(false)).HoldsWhenDown);
-    }
-
-    [Fact]
-    public void ARequestThatStaysSilentKeepsTheHoldTheRuleCarries()
-    {
-        Assert.False(RouteAnswers.Draft(Request(null), Held(false)).HoldsWhenDown);
-        Assert.True(RouteAnswers.Draft(Request(null), Held(true)).HoldsWhenDown);
-    }
-
-    [Fact]
     public void ARuleThatIsAddedStaysOffUnlessTheRequestSaysOtherwise()
     {
-        Assert.False(RouteAnswers.Draft(Request(null) with { IsEnabled = null }).IsEnabled);
-        Assert.True(RouteAnswers.Draft(Request(null) with { IsEnabled = true }).IsEnabled);
-        Assert.False(RouteAnswers.Draft(Request(null) with { IsEnabled = false }).IsEnabled);
+        Assert.False(RouteAnswers.Draft(Request() with { IsEnabled = null }).IsEnabled);
+        Assert.True(RouteAnswers.Draft(Request() with { IsEnabled = true }).IsEnabled);
+        Assert.False(RouteAnswers.Draft(Request() with { IsEnabled = false }).IsEnabled);
     }
 
     [Fact]
     public void ARequestThatStaysSilentKeepsWhetherTheRuleIsOn()
     {
-        var silent = Request(null) with { IsEnabled = null };
+        var silent = Request() with { IsEnabled = null };
 
-        Assert.False(RouteAnswers.Draft(silent, Held(true) with { IsEnabled = false }).IsEnabled);
-        Assert.True(RouteAnswers.Draft(silent, Held(true) with { IsEnabled = true }).IsEnabled);
-        Assert.False(RouteAnswers.Draft(Request(null) with { IsEnabled = false }, Held(true)).IsEnabled);
-    }
-
-    [Fact]
-    public void ARequestThatSaysSoTakesTheHoldOffAndPutsItBack()
-    {
-        Assert.False(RouteAnswers.Draft(Request(false), Held(true)).HoldsWhenDown);
-        Assert.True(RouteAnswers.Draft(Request(true), Held(false)).HoldsWhenDown);
+        Assert.False(RouteAnswers.Draft(silent, Held() with { IsEnabled = false }).IsEnabled);
+        Assert.True(RouteAnswers.Draft(silent, Held() with { IsEnabled = true }).IsEnabled);
+        Assert.False(RouteAnswers.Draft(Request() with { IsEnabled = false }, Held()).IsEnabled);
     }
 
     [Fact]
     public void TheRestOfTheRequestComesThroughAsItIs()
     {
-        var draft = RouteAnswers.Draft(Request(null), Held(false));
+        var draft = RouteAnswers.Draft(Request(), Held());
 
         Assert.Equal("rule", draft.Name);
         Assert.Equal(RouteAction.Out, draft.Action);
@@ -59,9 +38,9 @@ public class RouteAnswersTests
     [Fact]
     public void ARequestThatStaysSilentKeepsTheClientsTheInterfacesAndTheSourcePorts()
     {
-        var held = Held(true) with { Clients = ["bor"], Inbounds = ["awg1"], SourcePorts = ["5000"] };
+        var held = Held() with { Clients = ["bor"], Inbounds = ["awg1"], SourcePorts = ["5000"] };
 
-        var draft = RouteAnswers.Draft(Request(null), held);
+        var draft = RouteAnswers.Draft(Request(), held);
 
         Assert.Equal(["bor"], draft.Clients);
         Assert.Equal(["awg1"], draft.Inbounds);
@@ -71,14 +50,22 @@ public class RouteAnswersTests
     [Fact]
     public void ARequestThatNamesTheClientsTheInterfacesAndTheSourcePortsSetsThem()
     {
-        var held = Held(true) with { Clients = ["bor"], Inbounds = ["awg1"], SourcePorts = ["5000"] };
-        var request = Request(null) with { Clients = ["guest, bor-phone"], Inbounds = [], SourcePorts = ["22"] };
+        var held = Held() with { Clients = ["bor"], Inbounds = ["awg1"], SourcePorts = ["5000"] };
+        var request = Request() with { Clients = ["guest, bor-phone"], Inbounds = [], SourcePorts = ["22"] };
 
         var draft = RouteAnswers.Draft(request, held);
 
         Assert.Equal(["guest", "bor-phone"], draft.Clients);
         Assert.Empty(draft.Inbounds);
         Assert.Equal(["22"], draft.SourcePorts);
+    }
+
+    [Fact]
+    public void ARequestThatStillNamesClientAddressesIsRefused()
+    {
+        Assert.Equal("sources-gone", RouteAnswers.Dropped(Request() with { Sources = ["10.8.0.0/24"] })?.Code);
+        Assert.Null(RouteAnswers.Dropped(Request() with { Sources = [] }));
+        Assert.Null(RouteAnswers.Dropped(Request()));
     }
 
     [Fact]
@@ -92,9 +79,8 @@ public class RouteAnswersTests
         Assert.Equal(["ads.example.com"], basic.Block);
     }
 
-    private static RouteRequest Request(bool? holds) =>
-        new("rule", true, RouteAction.Out, "direct", holds, ["ifconfig.me ipinfo.io"], [], [], RouteProtocol.Any);
+    private static RouteRequest Request() =>
+        new("rule", true, RouteAction.Out, "direct", ["ifconfig.me ipinfo.io"], [], RouteProtocol.Any);
 
-    private static RouteRule Held(bool holds) =>
-        RouteDefaults.Fresh("rule") with { Id = 1, Outbound = "direct", HoldsWhenDown = holds };
+    private static RouteRule Held() => RouteDefaults.Fresh("rule") with { Id = 1, Outbound = "direct" };
 }

@@ -36,19 +36,9 @@ public sealed record RouteRule
     public string Outbound { get; init; } = string.Empty;
 
     /// <summary>
-    /// Whether the traffic is held back while the way out of the rule carries nothing.
-    /// </summary>
-    public bool HoldsWhenDown { get; init; } = true;
-
-    /// <summary>
     /// What the traffic goes to: geo keys, domains and address ranges.
     /// </summary>
     public IReadOnlyList<string> Targets { get; init; } = [];
-
-    /// <summary>
-    /// The client addresses the traffic comes from.
-    /// </summary>
-    public IReadOnlyList<string> Sources { get; init; } = [];
 
     /// <summary>
     /// The clients of the panel the traffic comes from, by name.

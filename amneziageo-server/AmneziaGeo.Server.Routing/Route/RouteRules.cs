@@ -41,7 +41,6 @@ public static class RouteRules
             ?? CheckAction(rule)
             ?? CheckProtocol(rule.Protocol)
             ?? CheckTargets(rule.Targets, MaxConditions)
-            ?? CheckSources(rule.Sources)
             ?? CheckClients(rule.Clients)
             ?? CheckInbounds(rule.Inbounds)
             ?? CheckPorts(rule.Ports, "bad-port", "ports")
@@ -136,11 +135,6 @@ public static class RouteRules
         return low is > 0 and <= 65535 && high is > 0 and <= 65535 && low <= high;
     }
 
-    /// <summary>
-    /// Reads an address range the traffic comes from.
-    /// </summary>
-    public static bool Source(string? value, out AwgAllowedIp range) => AwgAllowedIp.TryParse(value, out range);
-
     private static RouteFault? CheckAction(RouteRule rule)
     {
         if (!RouteAction.Known(rule.Action))
@@ -172,24 +166,6 @@ public static class RouteRules
                 return new RouteFault(
                     "bad-target",
                     $"'{target}' is not a geo key, a domain, a keyword or an address range");
-            }
-        }
-
-        return null;
-    }
-
-    private static RouteFault? CheckSources(IReadOnlyList<string> sources)
-    {
-        if (sources.Count > MaxConditions)
-        {
-            return Many("client addresses");
-        }
-
-        foreach (var source in sources)
-        {
-            if (!Source(source, out _))
-            {
-                return new RouteFault("bad-source", $"'{source}' is not a client address or range");
             }
         }
 

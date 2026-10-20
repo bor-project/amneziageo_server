@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using AmneziaGeo.Server.Routing.Route;
 
 namespace AmneziaGeo.Server.Routing.Dns;
 
@@ -11,16 +13,40 @@ public sealed class DnsServer : IAsyncDisposable
 {
     private const int PacketLimit = 4096;
 
+    private const long HostAddressesMs = 30_000;
+
     private readonly DnsResolver _resolver;
+
+    private readonly Func<IPEndPoint, IPEndPoint, bool, IPAddress?>? _origin;
+
+    private readonly Func<IReadOnlyList<HostRoute>> _routes;
 
     private readonly List<Socket> _sockets = [];
 
+    private readonly Lock _sync = new();
+
     private CancellationTokenSource? _life;
+
+    private IPAddress[] _host = [];
+
+    private long? _hostRead;
+
+    private IReadOnlyList<HostRoute> _held = [];
+
+    private long? _heldRead;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public DnsServer(DnsResolver resolver) => _resolver = resolver;
+    public DnsServer(
+        DnsResolver resolver,
+        Func<IPEndPoint, IPEndPoint, bool, IPAddress?>? origin = null,
+        Func<IReadOnlyList<HostRoute>>? routes = null)
+    {
+        _resolver = resolver;
+        _origin = origin;
+        _routes = routes ?? HostRoutes.Read;
+    }
 
     /// <summary>
     /// Tells whether the resolver holds its sockets.
@@ -146,7 +172,8 @@ public sealed class DnsServer : IAsyncDisposable
     {
         try
         {
-            var answer = await _resolver.AnswerAsync(question, false, (client as IPEndPoint)?.Address, ct)
+            var asked = Asked(client, socket.LocalEndPoint, false);
+            var answer = await _resolver.AnswerAsync(question, false, (client as IPEndPoint)?.Address, asked, ct)
                 .ConfigureAwait(false);
             if (answer is not null)
             {
@@ -188,6 +215,7 @@ public sealed class DnsServer : IAsyncDisposable
         var head = new byte[2];
         try
         {
+            var asked = Asked(held.RemoteEndPoint, held.LocalEndPoint, true);
             while (await FillAsync(held, head, ct).ConfigureAwait(false))
             {
                 var question = new byte[BinaryPrimitives.ReadUInt16BigEndian(head)];
@@ -196,7 +224,7 @@ public sealed class DnsServer : IAsyncDisposable
                     return;
                 }
 
-                var answer = await _resolver.AnswerAsync(question, true, from, ct).ConfigureAwait(false);
+                var answer = await _resolver.AnswerAsync(question, true, from, asked, ct).ConfigureAwait(false);
                 if (answer is null)
                 {
                     return;
@@ -209,6 +237,71 @@ public sealed class DnsServer : IAsyncDisposable
         }
         catch (Exception ex) when (ex is SocketException or ObjectDisposedException or OperationCanceledException)
         {
+        }
+    }
+
+    // Returns the private name server a client asked before its question was turned to the resolver, or null when it
+    // asked the resolver, a public server, the host itself or a network the host reaches by its default route.
+    private IPAddress? Asked(EndPoint? client, EndPoint? local, bool stream)
+    {
+        if (_origin is null || client is not IPEndPoint from || local is not IPEndPoint to)
+        {
+            return null;
+        }
+
+        var asked = _origin(from, to, stream);
+
+        return asked is not null
+            && !asked.Equals(to.Address)
+            && RouteProbe.Within(DnsDefaults.Private, asked)
+            && !HostAddresses().Contains(asked)
+            && HostRoutes.Behind(asked, Routes())
+            ? asked
+            : null;
+    }
+
+    // Returns the routes of the host, read again once they are half a minute old.
+    private IReadOnlyList<HostRoute> Routes()
+    {
+        var now = Environment.TickCount64;
+        lock (_sync)
+        {
+            if (_heldRead is { } read && now - read < HostAddressesMs)
+            {
+                return _held;
+            }
+
+            _held = _routes();
+            _heldRead = now;
+
+            return _held;
+        }
+    }
+
+    // Returns the addresses the host holds, read again once they are half a minute old.
+    private IPAddress[] HostAddresses()
+    {
+        var now = Environment.TickCount64;
+        lock (_sync)
+        {
+            if (_hostRead is { } read && now - read < HostAddressesMs)
+            {
+                return _host;
+            }
+
+            try
+            {
+                _host = [.. NetworkInterface.GetAllNetworkInterfaces()
+                    .SelectMany(face => face.GetIPProperties().UnicastAddresses)
+                    .Select(unicast => unicast.Address)];
+            }
+            catch (NetworkInformationException)
+            {
+            }
+
+            _hostRead = now;
+
+            return _host;
         }
     }
 
