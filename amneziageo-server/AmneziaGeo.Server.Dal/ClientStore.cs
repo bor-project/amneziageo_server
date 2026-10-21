@@ -302,6 +302,42 @@ public sealed class ClientStore
             .ExecuteUpdateAsync(setters => setters.SetProperty(client => client.DisconnectRefused, refused), ct);
 
     /// <summary>
+    /// Keeps which clients were last handed a file that names the resolver of the panel and which a file that does not,
+    /// and tells whether that changed for any of them.
+    /// </summary>
+    public async Task<bool> NoteResolverAsync(
+        IReadOnlyCollection<long> named,
+        IReadOnlyCollection<long> unnamed,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(named);
+        ArgumentNullException.ThrowIfNull(unnamed);
+
+        var changed = 0;
+        if (named.Count > 0)
+        {
+            changed += await _db.Clients.Where(client => named.Contains(client.Id) && !client.ResolverHanded)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(client => client.ResolverHanded, true), ct)
+                .ConfigureAwait(false);
+        }
+
+        if (unnamed.Count > 0)
+        {
+            changed += await _db.Clients.Where(client => unnamed.Contains(client.Id) && client.ResolverHanded)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(client => client.ResolverHanded, false), ct)
+                .ConfigureAwait(false);
+        }
+
+        return changed > 0;
+    }
+
+    /// <summary>
+    /// Returns how many clients that are on hold a file that names the resolver of the panel.
+    /// </summary>
+    public Task<int> ResolverHoldersAsync(CancellationToken ct) =>
+        _db.Clients.CountAsync(client => client.IsEnabled && client.ResolverHanded, ct);
+
+    /// <summary>
     /// Turns clients on or off one by one.
     /// </summary>
     public async Task<ClientBatch> SwitchAllAsync(IReadOnlyList<long> ids, bool on, CancellationToken ct)

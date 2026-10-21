@@ -368,6 +368,32 @@ public class ClientStoreTests
         }
     }
 
+    [Fact]
+    public async Task TheClientsHoldingAFileThatNamesTheResolverAreCountedWhileTheyAreOn()
+    {
+        using var bench = new Bench();
+        var endpoint = await EndpointAsync(bench);
+        var anna = (await bench.Clients.AddAsync(Fresh(endpoint, "anna"), CancellationToken.None)).Record!;
+        var guest = (await bench.Clients.AddAsync(
+            Fresh(endpoint, "guest") with { Address = ["10.8.0.3/32"] },
+            CancellationToken.None)).Record!;
+
+        var first = await bench.Clients.NoteResolverAsync([anna.Id, guest.Id], [], CancellationToken.None);
+        var again = await bench.Clients.NoteResolverAsync([anna.Id], [], CancellationToken.None);
+        var both = await bench.Clients.ResolverHoldersAsync(CancellationToken.None);
+        await bench.Clients.SwitchAsync(guest.Id, false, CancellationToken.None);
+        var on = await bench.Clients.ResolverHoldersAsync(CancellationToken.None);
+        var cleared = await bench.Clients.NoteResolverAsync([], [anna.Id], CancellationToken.None);
+        var none = await bench.Clients.ResolverHoldersAsync(CancellationToken.None);
+
+        Assert.True(first);
+        Assert.False(again);
+        Assert.Equal(2, both);
+        Assert.Equal(1, on);
+        Assert.True(cleared);
+        Assert.Equal(0, none);
+    }
+
     private static async Task<long> EndpointAsync(Bench bench)
     {
         var added = await bench.Configs.AddAsync(

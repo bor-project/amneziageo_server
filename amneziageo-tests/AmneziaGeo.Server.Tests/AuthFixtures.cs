@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Dal;
@@ -86,6 +87,7 @@ public sealed class Bench : IDisposable
         services.AddServerDatabase(_path, Options, _geo);
         services.AddSingleton(new TrafficLedger(Clock));
         services.AddSingleton<DnsState>();
+        services.AddSingleton<DnsHolders>();
         services.AddScoped<SubscriptionFeed>();
         services.AddSingleton(new SubscriptionPage(PagePath));
 

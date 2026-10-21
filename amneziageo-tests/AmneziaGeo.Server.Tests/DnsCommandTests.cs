@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Cli;
 using AmneziaGeo.Server.Cli.Commands;
 using AmneziaGeo.Server.Routing.Dns;
@@ -90,6 +92,50 @@ public sealed class DnsCommandTests : IDisposable
 
         Assert.True(held.IsEnabled);
         Assert.Equal(DnsDefaults.Upstreams, held.Upstreams);
+    }
+
+    [Fact]
+    public async Task TheClientsWhoseFilesNameTheResolverAreCountedAndNamedWhenItIsTurnedOff()
+    {
+        using (var context = Context.Open(Database))
+        {
+            var endpoint = (await context.Configs.AddAsync(
+                ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"] },
+                CancellationToken.None)).Record!.Id;
+            var anna = (await context.Clients.AddAsync(
+                ClientDefaults.Fresh(endpoint, "anna") with { Address = ["10.8.0.2/32"] },
+                CancellationToken.None)).Record!.Id;
+            var guest = (await context.Clients.AddAsync(
+                ClientDefaults.Fresh(endpoint, "guest") with { Address = ["10.8.0.3/32"] },
+                CancellationToken.None)).Record!.Id;
+            await context.Clients.NoteResolverAsync([anna, guest], [], CancellationToken.None);
+        }
+
+        var counted = await Heard("dns", "get", "holders");
+        var shown = await Heard("dns", "show");
+        var off = await Heard("dns", "set", "--enabled", "off");
+
+        Assert.Equal(["2"], counted);
+        Assert.Contains("files        2 clients hold files that name the resolver", shown);
+        Assert.Contains(off, line => line.StartsWith("2 clients hold files that name the resolver: their names go unanswered", StringComparison.Ordinal));
+    }
+
+    // Runs one command and returns the lines it printed.
+    private async Task<IReadOnlyList<string>> Heard(params string[] words)
+    {
+        var before = Console.Out;
+        using var heard = new StringWriter(CultureInfo.InvariantCulture);
+        Console.SetOut(heard);
+        try
+        {
+            Assert.Equal(0, await Run(words));
+        }
+        finally
+        {
+            Console.SetOut(before);
+        }
+
+        return heard.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
     private async Task<int> Run(params string[] words)

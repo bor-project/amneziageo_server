@@ -3738,6 +3738,17 @@ resolver_line() {
   esac
 }
 
+# Prints what turning the resolver off takes from the clients whose files name it, nothing when no file names it.
+resolver_holders() {
+  local held
+  held=$(cli dns get holders 2> /dev/null | tr -d '\r')
+  case $held in
+    '' | 0) ;;
+    1) printf ', and the client whose file names it goes without DNS until it is handed its file anew' ;;
+    *) printf ', and the %s clients whose files name it go without DNS until they are handed their files anew' "$held" ;;
+  esac
+}
+
 # Item 29: lets the resolver of the clients run whenever the routing needs it, or keeps it off; off it holds no port.
 resolver_item() {
   local want=${1:-} state usual=
@@ -3750,7 +3761,7 @@ resolver_item() {
         if [ "$state" != 'automatic, asks outside encrypted' ] && agree "Ask the name servers the panel starts with, over HTTPS?"; then
           want=on
           usual=1
-        elif confirm "Turn the resolver off? The routing by sites stops working"; then
+        elif confirm "Turn the resolver off? The routing by sites stops working$(resolver_holders)"; then
           want=off
         fi
         ;;

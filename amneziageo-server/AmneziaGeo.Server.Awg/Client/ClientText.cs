@@ -143,6 +143,12 @@ public static class ClientText
         return $"{host}:{Number(config.ListenPort)}";
     }
 
+    /// <summary>
+    /// Tells whether the DNS line of a client names the resolver of the panel.
+    /// </summary>
+    public static bool NamesResolver(ClientTemplate? template, IReadOnlyList<string>? resolver) =>
+        resolver is { Count: > 0 } && (template is null || template.StandIns || template.Dns.Count == 0);
+
     private static IReadOnlyList<string> Either(IReadOnlyList<string> own, IReadOnlyList<string> otherwise) =>
         own.Count > 0 ? own : otherwise;
 

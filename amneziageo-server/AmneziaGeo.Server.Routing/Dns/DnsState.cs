@@ -25,6 +25,8 @@ public sealed class DnsState
 
     private bool _needed;
 
+    private int _holders;
+
     /// <summary>
     /// Whether the resolver takes questions.
     /// </summary>
@@ -51,7 +53,8 @@ public sealed class DnsState
     public string? Way => Volatile.Read(ref _way);
 
     /// <summary>
-    /// The settings the resolver runs with, switched on only while the routing needs it, or null before its first start.
+    /// The settings the resolver runs with, switched on only while the routing needs it or clients hold files that name
+    /// it, or null before its first start.
     /// </summary>
     public DnsSettings? Settings => Volatile.Read(ref _settings);
 
@@ -64,6 +67,17 @@ public sealed class DnsState
     /// Whether a rule on the host matches by name or a template answers with stand-in addresses.
     /// </summary>
     public bool Needed => Volatile.Read(ref _needed);
+
+    /// <summary>
+    /// How many clients that are on hold a file that names the resolver.
+    /// </summary>
+    public int Holders => Volatile.Read(ref _holders);
+
+    /// <summary>
+    /// The settings the files of the clients are written with: the resolver named only while the routing needs it, or
+    /// null before its first start.
+    /// </summary>
+    public DnsSettings? Handing => Settings is { } running ? running with { IsEnabled = running.IsEnabled && Needed } : null;
 
     /// <summary>
     /// The interfaces whose clients the firewall of the host keeps from the resolver.
@@ -103,6 +117,11 @@ public sealed class DnsState
     /// Keeps whether the routing needs the resolver.
     /// </summary>
     public void Need(bool needed) => Volatile.Write(ref _needed, needed);
+
+    /// <summary>
+    /// Keeps how many clients that are on hold a file that names the resolver.
+    /// </summary>
+    public void Hold(int holders) => Volatile.Write(ref _holders, holders);
 
     /// <summary>
     /// Keeps the interfaces whose clients the firewall of the host keeps from the resolver.

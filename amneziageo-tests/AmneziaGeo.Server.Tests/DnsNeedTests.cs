@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Dns;
+using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Dns;
@@ -101,6 +102,53 @@ public class DnsNeedTests
             (_, _) => false);
 
         Assert.Equal(expected, verdict.Verdict);
+    }
+
+    [Theory]
+    [InlineData(true, 0, true)]
+    [InlineData(false, 2, true)]
+    [InlineData(false, 0, false)]
+    public void TheResolverIsKeptWhileTheRoutingNeedsItOrClientsHoldFilesThatNameIt(bool needed, int holders, bool kept) =>
+        Assert.Equal(kept, DnsNeed.Kept(needed, holders));
+
+    [Fact]
+    public void ClientsAreHandedTheResolverOnlyWhileTheRoutingNeedsIt()
+    {
+        var state = new DnsState();
+        state.Took(On, On);
+        state.Hold(3);
+
+        state.Need(false);
+        var spare = DnsHandout.For(Endpoint, state.Handing!);
+        state.Need(true);
+        var needed = DnsHandout.For(Endpoint, state.Handing!);
+
+        Assert.Empty(spare);
+        Assert.Equal(["10.8.0.1", "fd00::1"], needed);
+        Assert.True(state.Settings!.IsEnabled);
+    }
+
+    [Fact]
+    public void AFileNamesTheResolverUnlessItsTemplateNamesServersOfItsOwn()
+    {
+        IReadOnlyList<string> resolver = ["10.8.0.1"];
+        var client = ClientDefaults.Fresh(1, "anna") with { Address = ["10.8.0.2/32"] };
+        ClientTemplate?[] templates =
+        [
+            null,
+            new ClientTemplate { Name = "bare" },
+            new ClientTemplate { Name = "own", Dns = ["9.9.9.9"] },
+            new ClientTemplate { Name = "names", Dns = ["9.9.9.9"], StandIns = true },
+        ];
+
+        var written = templates
+            .Select(template => ClientText.Text(Endpoint, client, template, resolver).Contains("DNS = 10.8.0.1", StringComparison.Ordinal))
+            .ToArray();
+        var told = templates.Select(template => ClientText.NamesResolver(template, resolver)).ToArray();
+
+        Assert.Equal([true, true, false, true], written);
+        Assert.Equal(written, told);
+        Assert.False(ClientText.NamesResolver(null, []));
     }
 
     private static string Chain(string text, string name)

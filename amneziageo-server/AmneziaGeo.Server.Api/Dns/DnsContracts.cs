@@ -18,7 +18,8 @@ public sealed record DnsStateBody(
     int Names,
     DateTimeOffset? StartedUtc,
     IReadOnlyList<string> KeptOut,
-    bool Needed);
+    bool Needed,
+    int Holders);
 
 /// <summary>
 /// What the reading of names out of the connections themselves has done since the panel started.
@@ -121,7 +122,8 @@ public static class DnsAnswers
                 DnsNames.Build(plan).Count,
                 state.StartedUtc,
                 keptOut ?? [],
-                state.Needed),
+                state.Needed,
+                state.Holders),
             reading ?? new DnsReadingBody(false, false, 0, 0, 0, 0, 0, 0, 0));
     }
 

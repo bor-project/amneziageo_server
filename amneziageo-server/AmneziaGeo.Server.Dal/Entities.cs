@@ -658,6 +658,8 @@ public sealed class ClientEntity
 
     public bool DisconnectRefused { get; set; }
 
+    public bool ResolverHanded { get; set; }
+
     public DateTimeOffset CreatedUtc { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }

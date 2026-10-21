@@ -7,8 +7,9 @@ and the answer of the resolver is where the addresses come from. It also keeps w
 leaving the server in the open.
 
 The resolver runs while the routing needs it: a rule or a basic list on the host matches by name, or a template
-answers with stand-in addresses. Until then the clients are handed the name servers of their configuration and ask
-them through the tunnel, and those questions leave the server as plain DNS. A fresh panel and an updated one are
+answers with stand-in addresses. It also runs while a client that is on holds a file that names it, see
+[Files that name the resolver](#files-that-name-the-resolver). Until then the clients are handed the name servers of
+their configuration and ask them through the tunnel, and those questions leave the server as plain DNS. A fresh panel and an updated one are
 automatic; [keeping it off](#turning-the-resolver-on) takes the menu, a command or the panel.
 
 ## Rights
@@ -79,8 +80,8 @@ rule added later fills its own set without waiting for the others. Names of rule
 are forgotten. Keywords and regular expressions of a
 category are left alone: there is nothing to ask about.
 
-While the resolver runs on port 53 and answers on the addresses of the configurations, the `DNS` line of every
-client carries the address of its own configuration instead of public name servers, and the same goes for the
+While the routing needs the resolver and it runs on port 53 and answers on the addresses of the configurations, the
+`DNS` line of every client carries the address of its own configuration instead of public name servers, and the same goes for the
 links a subscription hands out. A template with name servers of its own outweighs it; a template without them
 takes the resolver. When the resolver is off, answers on another port, or listens only on addresses outside the
 tunnel of that configuration, the client takes what the configuration or the template names. Taking the
@@ -126,8 +127,27 @@ panel over when its own settings wait too. `Cancel` drops what is not saved yet,
 stays while other pages are opened. `GET /api/dns` carries `pending`, true while the saved settings differ
 from the ones the resolver runs with. A change of the configurations starts the resolver over on their
 addresses with the settings it runs with. In the automatic mode the resolver starts and stops by itself, without
-`Restart`, as a rule by name or a template with stand-in addresses comes or goes; `GET /api/dns` carries `needed` in
-its `state`.
+`Restart`, as a rule by name or a template with stand-in addresses comes or goes and as the clients holding a file
+that names it take new ones; `GET /api/dns` carries `needed` and `holders` in its `state`.
+
+## Files that name the resolver
+
+A file, a QR code or a subscription handed out while the routing needs the resolver carries its address in the `DNS`
+line, and a device keeps asking that address until it takes a new file. The panel notes for every client whether the
+file it was handed last names the resolver: `GET /api/clients/{id}/config` notes it for that client, and a
+subscription for the clients it carries each time it is read. In the automatic mode the resolver keeps running while
+a client that is on holds such a file, so the routing can stop needing it without those clients losing their names.
+While it runs for those files only, the files handed out name the name servers of the configuration or the template
+again, and the resolver stops by itself once every such client took a new one.
+
+`GET /api/dns` carries their number in `holders` of its `state`; `amneziageo-server dns show` and
+`amneziageo-server dns get holders` print it. `Off` stops the resolver whatever the files name: the clients that hold
+a file naming it get no answer to a name until they are handed their files anew, and the command that turns it off
+and item 29 of the menu say how many they are.
+
+The update that brought this counts every client of a panel whose resolver answered on port 53 before as holding a
+file that names it, except a client whose template names name servers of its own and answers with no stand-in
+addresses.
 
 ## Turning the resolver on
 
@@ -136,7 +156,7 @@ its `state`.
 | the installation | no question: a fresh panel is automatic; `resolver` set to `no` in a file of answers keeps it off, see [install.md](install.md#the-menu) |
 | the menu | item 29, `DNS for Clients`; the status under the menu shows `DNS: automatic, asks outside encrypted` |
 | the script | `amneziageo-server dns on`, `amneziageo-server dns off`, `amneziageo-server dns` to be asked |
-| the utility | `dns show`, `dns get enabled port upstreams encrypted outbound`, `dns set --enabled auto` (or `on`) or `off`, `dns set --upstreams <servers>` or `default` for the ones a fresh panel asks |
+| the utility | `dns show`, `dns get enabled port upstreams encrypted outbound holders`, `dns set --enabled auto` (or `on`) or `off`, `dns set --upstreams <servers>` or `default` for the ones a fresh panel asks |
 | the panel | `Mode` in `DNS server for clients` on the `DNS` page, then `Restart` |
 
 The menu and the commands work the same on a package and in a container: there they go through

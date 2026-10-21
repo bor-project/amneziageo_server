@@ -1,5 +1,6 @@
 using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Traffic;
@@ -23,6 +24,8 @@ public sealed class SubscriptionFeed
 
     private readonly DnsState _resolver;
 
+    private readonly DnsHolders _holders;
+
     private readonly PanelStore _panels;
 
     /// <summary>
@@ -35,6 +38,7 @@ public sealed class SubscriptionFeed
         TrafficLedger ledger,
         DnsStore dns,
         DnsState resolver,
+        DnsHolders holders,
         PanelStore panels)
     {
         _clients = clients;
@@ -43,6 +47,7 @@ public sealed class SubscriptionFeed
         _ledger = ledger;
         _dns = dns;
         _resolver = resolver;
+        _holders = holders;
         _panels = panels;
     }
 
@@ -59,17 +64,44 @@ public sealed class SubscriptionFeed
         }
 
         var endpoints = await _configs.ListAsync(ct).ConfigureAwait(false);
-        var templates = await _templates.ListAsync(ct).ConfigureAwait(false);
-        var settings = _resolver.Settings ?? (await _dns.ReadAsync(ct).ConfigureAwait(false)) with { IsEnabled = false };
+        var templates = (await _templates.ListAsync(ct).ConfigureAwait(false)).ToDictionary(one => one.Id);
+        var handing = _resolver.Handing ?? (await _dns.ReadAsync(ct).ConfigureAwait(false)) with { IsEnabled = false };
         var keptOut = _resolver.KeptOut;
         var naming = (await _panels.ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
 
-        return ClientFeed.Of(
+        var feed = ClientFeed.Of(
             endpoints,
             members,
-            templates.ToDictionary(one => one.Id),
+            templates,
             _ledger.Used,
-            endpoint => DnsHandout.For(endpoint, settings, keptOut),
+            endpoint => DnsHandout.For(endpoint, handing, keptOut),
             (endpoint, member) => ClientText.Title(endpoint, member, naming, host));
+        await KeepAsync(endpoints, members, templates, endpoint => DnsHandout.For(endpoint, handing, keptOut), ct)
+            .ConfigureAwait(false);
+
+        return feed;
+    }
+
+    // Keeps which of the clients the subscription hands out were handed a file that names the resolver.
+    private Task KeepAsync(
+        IReadOnlyList<ServerConfig> endpoints,
+        IReadOnlyList<TunnelClient> members,
+        IReadOnlyDictionary<long, ClientTemplate> templates,
+        Func<ServerConfig, IReadOnlyList<string>> resolver,
+        CancellationToken ct)
+    {
+        var named = new List<long>();
+        var unnamed = new List<long>();
+        foreach (var endpoint in endpoints.Where(one => one.IsEnabled))
+        {
+            var names = resolver(endpoint);
+            foreach (var member in members.Where(one => one.ConfigId == endpoint.Id && one.IsEnabled && one.PrivateKey.Length > 0))
+            {
+                var template = member.TemplateId is { } chosen ? templates.GetValueOrDefault(chosen) : null;
+                (ClientText.NamesResolver(template, names) ? named : unnamed).Add(member.Id);
+            }
+        }
+
+        return _holders.HandedAsync(_clients, named, unnamed, ct);
     }
 }

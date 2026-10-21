@@ -180,6 +180,7 @@ public static class ClientEndpoints
         TemplateStore templates,
         DnsStore dns,
         DnsState resolver,
+        DnsHolders holders,
         SubscriptionState subscriptions,
         PanelSettings panel,
         PanelStore panels,
@@ -202,8 +203,12 @@ public static class ClientEndpoints
             ? await templates.FindAsync(chosen, ct).ConfigureAwait(false)
             : null;
 
-        var running = resolver.Settings ?? (await dns.ReadAsync(ct).ConfigureAwait(false)) with { IsEnabled = false };
-        var names = DnsHandout.For(endpoint, running, resolver.KeptOut);
+        var handing = resolver.Handing ?? (await dns.ReadAsync(ct).ConfigureAwait(false)) with { IsEnabled = false };
+        var names = DnsHandout.For(endpoint, handing, resolver.KeptOut);
+        long[] handed = [client.Id];
+        await (ClientText.NamesResolver(template, names)
+            ? holders.HandedAsync(store, handed, [], ct)
+            : holders.HandedAsync(store, [], handed, ct)).ConfigureAwait(false);
         var naming = (await panels.ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
         var host = context.Request.Host.Host;
 

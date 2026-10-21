@@ -10,7 +10,6 @@ namespace AmneziaGeo.Server.Dal.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql("UPDATE Resolver SET IsEnabled = 1;");
         }
 
         /// <inheritdoc />

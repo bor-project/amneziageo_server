@@ -360,6 +360,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("ResolverHanded")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("SubscriptionId")
                         .IsRequired()
                         .HasMaxLength(64)

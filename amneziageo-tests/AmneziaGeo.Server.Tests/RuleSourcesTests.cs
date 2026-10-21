@@ -32,14 +32,13 @@ public sealed class RuleSourcesTests : IDisposable
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await db.GetService<IMigrator>().MigrateAsync("DropRuleHold");
             var configs = scope.ServiceProvider.GetRequiredService<ConfigStore>();
-            var clients = scope.ServiceProvider.GetRequiredService<ClientStore>();
             var office = (await configs.AddAsync(ConfigDefaults.Fresh("awg1") with { Address = ["10.9.1.1/24"] }, default)).Record!.Id;
             var guests = (await configs.AddAsync(
                 ConfigDefaults.Fresh("awg2") with { ListenPort = 51821, Address = ["10.9.2.1/24", "fd00::9:1/112"] },
                 default)).Record!.Id;
-            await AddAsync(clients, office, "bor", "10.9.1.12/32");
-            await AddAsync(clients, office, "bor-phone", "10.9.1.13/32");
-            await AddAsync(clients, guests, "guest", "10.9.2.5/32", "fd00::9:5/128");
+            await AddAsync(db, office, "bor", "10.9.1.12/32");
+            await AddAsync(db, office, "bor-phone", "10.9.1.13/32");
+            await AddAsync(db, guests, "guest", "10.9.2.5/32", "fd00::9:5/128");
             await RuleAsync(db, 1, "one", true, "10.9.1.12", string.Empty);
             await RuleAsync(db, 2, "office", true, "10.9.1.0/24", string.Empty);
             await RuleAsync(db, 3, "nobody", true, "10.7.0.0/24", string.Empty);
@@ -108,11 +107,14 @@ public sealed class RuleSourcesTests : IDisposable
         Assert.Equal(on, rule.IsEnabled);
     }
 
-    private static async Task AddAsync(ClientStore clients, long config, string name, params string[] address)
-    {
-        var added = await clients.AddAsync(ClientDefaults.Fresh(config, name) with { Address = address }, default);
-        Assert.True(added.IsOk, added.Message);
-    }
+    private static Task AddAsync(AppDbContext db, long config, string name, params string[] address) =>
+        db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO Clients (Address, ConfigId, CreatedUtc, DailyLimit, Inbound, IsEnabled, Name, Note, PresharedKey, PrivateKey, PublicKey, SubscriptionId, TemplateId, UpdatedUtc) "
+            + "VALUES ({0}, {1}, '2026-10-19 10:00:00+00:00', 0, 0, 1, {2}, '', '', '', {3}, '', NULL, '2026-10-19 10:00:00+00:00')",
+            string.Join(", ", address),
+            config,
+            name,
+            "key-" + name);
 
     private static Task RuleAsync(AppDbContext db, int position, string name, bool on, string sources, string clients) =>
         db.Database.ExecuteSqlRawAsync(

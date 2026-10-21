@@ -40,6 +40,8 @@ public sealed class DnsHost : BackgroundService
 
     private readonly StandInBook _book;
 
+    private readonly DnsHolders _holders;
+
     private readonly DnsStandIns _standIns;
 
     private readonly TimeProvider _time;
@@ -82,6 +84,7 @@ public sealed class DnsHost : BackgroundService
         DnsState state,
         AccessNames names,
         StandInBook book,
+        DnsHolders holders,
         DnsStandIns standIns,
         TimeProvider time,
         ILogger<DnsHost> logger)
@@ -92,11 +95,13 @@ public sealed class DnsHost : BackgroundService
         _state = state;
         _names = names;
         _book = book;
+        _holders = holders;
         _standIns = standIns;
         _time = time;
         _logger = logger;
         _plans.Kept += Poke;
         _book.Stirred += Poke;
+        _holders.Stirred += Poke;
     }
 
     /// <summary>
@@ -139,7 +144,7 @@ public sealed class DnsHost : BackgroundService
             }
 
             Volatile.Write(ref _settings, _settings with { Outbound = anew });
-            _state.Took(_settings, DnsNeed.Running(_settings, _state.Needed));
+            _state.Took(_settings, DnsNeed.Running(_settings, DnsNeed.Kept(_state.Needed, _state.Holders)));
         }
         finally
         {
@@ -171,6 +176,7 @@ public sealed class DnsHost : BackgroundService
     {
         _plans.Kept -= Poke;
         _book.Stirred -= Poke;
+        _holders.Stirred -= Poke;
         _poke.Dispose();
         _turn.Dispose();
         base.Dispose();
@@ -212,12 +218,16 @@ public sealed class DnsHost : BackgroundService
                 ? await scope.ServiceProvider.GetRequiredService<DnsStore>().ReadAsync(ct).ConfigureAwait(false)
                 : _state.Chosen;
             await _book.RefreshAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
+            await _holders.RefreshAsync(scope.ServiceProvider.GetRequiredService<ClientStore>(), ct).ConfigureAwait(false);
             var plan = _plans.Held
                 ?? await scope.ServiceProvider.GetRequiredService<RouteApplier>().BuildAsync(ct).ConfigureAwait(false);
             var needed = DnsNeed.Of(plan, _book.Holds);
+            var holders = _holders.Count;
+            var kept = DnsNeed.Kept(needed, holders);
             _state.Need(needed);
-            _state.Took(_settings, DnsNeed.Running(_settings, needed));
-            if (!_settings.IsEnabled || !needed)
+            _state.Hold(holders);
+            _state.Took(_settings, DnsNeed.Running(_settings, kept));
+            if (!_settings.IsEnabled || !kept)
             {
                 _state.Stopped();
                 return;
@@ -318,8 +328,9 @@ public sealed class DnsHost : BackgroundService
         }
     }
 
-    // Starts the resolver when the routing comes to need it and stops it when the routing no longer does, and lays the
-    // rules and the firewall anew when that or the interfaces the firewall keeps from the resolver changed.
+    // Starts the resolver when the routing comes to need it or a client holds a file that names it and stops it when
+    // neither is left, and lays the rules and the firewall anew when that or the interfaces the firewall keeps from the
+    // resolver changed.
     private async Task MindAsync(CancellationToken ct)
     {
         if (_plans.Held is not { } plan || _state.Chosen is null)
@@ -330,17 +341,33 @@ public sealed class DnsHost : BackgroundService
         try
         {
             var needed = DnsNeed.Of(plan, _book.Holds);
-            var turned = needed != _state.Needed;
+            var holders = _holders.Count;
+            var kept = DnsNeed.Kept(needed, holders);
+            var turned = kept != DnsNeed.Kept(_state.Needed, _state.Holders);
+            var spare = _settings.IsEnabled && kept && !needed && (turned || _state.Needed);
             if (turned)
             {
                 await StartAsync(false, ct).ConfigureAwait(false);
-                if (_settings.IsEnabled)
+                if (_settings.IsEnabled && needed)
                 {
-                    _logger.LogInformation(
-                        needed
-                            ? "the routing needs the resolver: it answers the clients"
-                            : "the routing does not need the resolver any more: it stopped");
+                    _logger.LogInformation("the routing needs the resolver: it answers the clients");
                 }
+                else if (_settings.IsEnabled && !kept)
+                {
+                    _logger.LogInformation("the routing does not need the resolver any more and no file names it: it stopped");
+                }
+            }
+            else if (needed != _state.Needed || holders != _state.Holders)
+            {
+                _state.Need(needed);
+                _state.Hold(holders);
+            }
+
+            if (spare)
+            {
+                _logger.LogInformation(
+                    "the routing does not need the resolver: it answers the clients whose files name it ({Holders})",
+                    holders);
             }
 
             using var scope = _scopes.CreateScope();
@@ -411,6 +438,7 @@ public sealed class DnsHost : BackgroundService
         {
             using var scope = _scopes.CreateScope();
             await _book.RefreshAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
+            await _holders.RefreshAsync(scope.ServiceProvider.GetRequiredService<ClientStore>(), ct).ConfigureAwait(false);
             _standIns.Sweep();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

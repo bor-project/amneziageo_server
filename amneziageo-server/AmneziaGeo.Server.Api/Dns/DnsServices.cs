@@ -18,6 +18,7 @@ public static class DnsServices
         services.AddSingleton<DnsState>();
         services.AddSingleton(provider => new DnsStandIns(provider.GetRequiredService<TimeProvider>()));
         services.AddSingleton<StandInBook>();
+        services.AddSingleton<DnsHolders>();
         services.AddSingleton<ResolverDoors>();
         services.AddSingleton(provider => new DnsSets(
             provider.GetRequiredService<IHostNetwork>(),

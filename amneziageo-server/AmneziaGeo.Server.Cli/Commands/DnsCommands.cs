@@ -15,6 +15,8 @@ public static class DnsCommands
     /// </summary>
     public const string Usual = "default";
 
+    private const string Holders = "holders";
+
     private static readonly char[] Breaks = [',', ' '];
 
     /// <summary>
@@ -47,6 +49,11 @@ public static class DnsCommands
         Terminal.Say($"asks         {string.Join(", ", held.Upstreams)}");
         Terminal.Say($"encrypted    {Encrypted(held)}");
         Terminal.Say($"through      {(held.Outbound.Length == 0 ? "the way out of the host" : held.Outbound)}");
+        var holders = await context.Clients.ResolverHoldersAsync(ct).ConfigureAwait(false);
+        if (holders > 0)
+        {
+            Terminal.Say($"files        {Holding(holders)}");
+        }
 
         return 0;
     }
@@ -61,10 +68,15 @@ public static class DnsCommands
 
         var held = await context.Dns.ReadAsync(ct).ConfigureAwait(false);
         var names = args.Positional.Skip(2).ToList();
-        var values = names.Select(name => Setting(held, name)).ToList();
+        var holders = names.Contains(Holders, StringComparer.Ordinal)
+            ? await context.Clients.ResolverHoldersAsync(ct).ConfigureAwait(false)
+            : 0;
+        var values = names
+            .Select(name => name == Holders ? holders.ToString(CultureInfo.InvariantCulture) : Setting(held, name))
+            .ToList();
         if (names.Count == 0 || values.Any(value => value is null))
         {
-            return Refuse("dns get enabled | port | upstreams | encrypted | outbound ...");
+            return Refuse("dns get enabled | port | upstreams | encrypted | outbound | holders ...");
         }
 
         foreach (var value in values)
@@ -96,6 +108,13 @@ public static class DnsCommands
         }
 
         Terminal.Say($"saved: the resolver {(saved.Record.IsEnabled ? "runs while the routing needs it" : "is off")} and asks {string.Join(", ", saved.Record.Upstreams)}");
+        var holders = saved.Record.IsEnabled ? 0 : await context.Clients.ResolverHoldersAsync(ct).ConfigureAwait(false);
+        if (holders > 0)
+        {
+            Terminal.Say(holders == 1
+                ? $"{Holding(holders)}: its names go unanswered until it is handed its file anew"
+                : $"{Holding(holders)}: their names go unanswered until they are handed their files anew");
+        }
 
         return await TakeAsync(context, ct).ConfigureAwait(false);
     }
@@ -179,6 +198,12 @@ public static class DnsCommands
 
         return $"the panel answers the clients on {listening} port {PanelCall.Number(body, "port").ToString(CultureInfo.InvariantCulture)}";
     }
+
+    // Tells how many clients hold a file that names the resolver.
+    private static string Holding(int holders) =>
+        holders == 1
+            ? "1 client holds a file that names the resolver"
+            : $"{holders.ToString(CultureInfo.InvariantCulture)} clients hold files that name the resolver";
 
     // Returns one setting as a script reads it, null for a name the resolver does not hold.
     private static string? Setting(DnsSettings held, string name) => name switch
