@@ -193,7 +193,10 @@ clients it touches, each with where its name servers were picked and what they a
 (`client`, `template`, `config`, `rule` or `dns`, with `id` for one the panel holds) and answers what it would
 contradict, so a form shows it before the save. For a client it also returns `line`, the name servers its file would
 name and where they were picked, and the hint `outside` when they lie outside its tunnel and no rule by name takes
-it; for a template or an endpoint, the line of a client with nothing of its own there. A template draft keeps the
+it; for an endpoint, the line of a client with nothing of its own there. For a template `lines` holds such a line at
+every endpoint that is on where its clients are, or at every endpoint that is on while it has none there, and `line`
+is the first of them that keeps the resolver. Every line names its `endpoint` and `lost`, whether the file wants the
+resolver and loses it to the port, its addresses or the firewall. A template draft keeps the
 ranges of the template it changes while its entries stay the same; other entries are worked out as the preview does.
 A save is never refused for a contradiction.
 

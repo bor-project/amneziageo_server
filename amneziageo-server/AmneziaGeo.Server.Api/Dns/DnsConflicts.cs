@@ -168,6 +168,25 @@ public static class DnsConflicts
     }
 
     /// <summary>
+    /// Returns whether the file of a client wants the resolver of the panel and loses it to the port, the addresses it listens on or the firewall.
+    /// </summary>
+    public static bool Loses(DnsWorld world, TunnelClient client)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(client);
+
+        var config = world.Configs.FirstOrDefault(one => one.Id == client.ConfigId);
+        if (config is null)
+        {
+            return false;
+        }
+
+        var template = client.TemplateId is { } id ? world.Templates.FirstOrDefault(one => one.Id == id) : null;
+
+        return Wants(world, config, client, template) && !Written(world, config, client, template).IsPanel;
+    }
+
+    /// <summary>
     /// Returns where the name servers of a file were picked, as the panel reads it.
     /// </summary>
     public static string From(DnsFrom from) => from switch
@@ -274,13 +293,20 @@ public static class DnsConflicts
 
             var template = client.TemplateId is { } id ? templates.GetValueOrDefault(id) : null;
             var line = Written(world, config, client, template);
-            var own = DnsHandout.For(config, DnsDefaults.Settings with { IsEnabled = true });
-            var wanted = ClientText.Dns(config, client, template, world.Needed ? own : null, own).IsPanel;
+            var wanted = Wants(world, config, client, template);
             var outside = Beyond(line.Servers, ClientText.Routed(config, client, template, line));
             seen.Add(new Seen(client, config, template, line, wanted, ClientText.Picks(config, client, template), outside));
         }
 
         return seen;
+    }
+
+    // Returns whether the file of a client would name the resolver were it on at port 53 on every address.
+    private static bool Wants(DnsWorld world, ServerConfig config, TunnelClient client, ClientTemplate? template)
+    {
+        var own = DnsHandout.For(config, DnsDefaults.Settings with { IsEnabled = true });
+
+        return ClientText.Dns(config, client, template, world.Needed ? own : null, own).IsPanel;
     }
 
     // Returns the name servers the file of a client names with the settings of the world.

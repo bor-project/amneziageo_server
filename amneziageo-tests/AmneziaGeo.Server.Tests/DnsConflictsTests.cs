@@ -224,7 +224,35 @@ public class DnsConflictsTests
         Assert.Empty(widened.Findings);
     }
 
+    [Fact]
+    public void ATemplateCheckNamesTheLineAtEachEndpointOfItsClientsAndThoseThatLoseTheResolver()
+    {
+        var open = new DnsWorld
+        {
+            Settings = On,
+            Configs = [Config(1, "awg1", "10.8.0.1/24"), Config(2, "awg2", "10.8.1.1/24"), Config(3, "awg3", "10.8.2.1/24")],
+            Templates = [new ClientTemplate { Id = 2, Name = "names", StandIns = true }],
+            Clients = [Client(1, 2, "guest") with { TemplateId = 2 }, Client(2, 1, "anna") with { TemplateId = 2 }],
+        };
+        var kept = open with { KeptOut = ["awg2"] };
+        var shut = open with { KeptOut = ["awg1", "awg2"] };
+        var draft = new TemplateRequest("names", ["youtube.com"], [], null, null, StandIns: true);
+        var held = new DnsCheckRequest(2, Template: draft);
+
+        Assert.Equal(["awg1 10.8.0.1 standins", "awg2 10.8.1.1 standins"], Lines(DnsChecks.Check(open, held)));
+        Assert.Equal(["awg1 10.8.0.1 standins", "awg2 1.1.1.1,1.0.0.1 lost"], Lines(DnsChecks.Check(kept, held)));
+        Assert.Equal("awg1", DnsChecks.Check(kept, held).Line!.Endpoint);
+        Assert.Equal(["kept:warning:dns0,config2:guest"], Said(DnsChecks.Check(kept, held).Findings));
+        Assert.Equal(["awg1 1.1.1.1,1.0.0.1 lost", "awg2 1.1.1.1,1.0.0.1 lost"], Lines(DnsChecks.Check(shut, held)));
+        Assert.Equal(
+            ["awg1 10.8.0.1 standins", "awg2 10.8.1.1 standins", "awg3 10.8.2.1 standins"],
+            Lines(DnsChecks.Check(open, new DnsCheckRequest(null, Template: draft))));
+    }
+
     private static IReadOnlyList<string> Said(DnsReport report) => Said(report.Findings);
+
+    private static IReadOnlyList<string> Lines(DnsCheckResponse check) =>
+        [.. check.Lines.Select(one => $"{one.Endpoint} {string.Join(",", one.Servers)} {(one.Lost ? "lost" : one.From)}")];
 
     private static IReadOnlyList<string> Said(IEnumerable<DnsFinding> findings) =>
         [

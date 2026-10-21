@@ -88,15 +88,43 @@ export function fewNames(t: Text, names: string[], shown = 3): string {
 // The line of a file in a form: what DNS it names and why the resolver is there.
 export function lineText(t: Text, line: DnsLine, caption: TextKey): string {
   const told = t(caption, { servers: line.servers.join(", ") })
+  const said = why(t, line)
+
+  return said === "" ? told : `${told} ${said}`
+}
+
+// The lines of the files at several endpoints, less those that lose the resolver: one line, the endpoint at each address.
+export function linesText(t: Text, lines: DnsLine[], caption: TextKey): string {
+  const kept = lines.filter((one) => !one.lost)
+  const shown = kept.length > 0 ? kept : lines
+  const first = shown[0]
+  if (shown.length === lines.length && shown.every((one) => one.servers.join(", ") === first.servers.join(", "))) {
+    return lineText(t, first, caption)
+  }
+
+  const whys = shown.map((one) => why(t, one))
+  const shared = whys.every((one) => one === whys[0])
+  const parts = shown.map((one, at) => {
+    const named = t("dnsCheck.at", { servers: one.servers.join(", "), endpoint: one.endpoint })
+
+    return shared || whys[at] === "" ? named : `${named} ${whys[at]}`
+  })
+  const told = t(caption, { servers: parts.join(", ") })
+
+  return shared && whys[0] !== "" ? `${told} ${whys[0]}` : told
+}
+
+// Why the resolver of the panel is in a file, empty when it is not.
+function why(t: Text, line: DnsLine): string {
   if (!line.isPanel) {
-    return told
+    return ""
   }
 
   if (line.from === "standins") {
-    return `${told} ${t("dnsCheck.whyStandIns")}`
+    return t("dnsCheck.whyStandIns")
   }
 
-  return `${told} ${t(line.choice === "auto" ? "dnsCheck.whyRouting" : "dnsCheck.whyPanel")}`
+  return t(line.choice === "auto" ? "dnsCheck.whyRouting" : "dnsCheck.whyPanel")
 }
 
 // The colour of a level.

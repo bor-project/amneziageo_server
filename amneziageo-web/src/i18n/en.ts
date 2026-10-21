@@ -83,6 +83,7 @@ export const en = {
   "dnsCheck.lineClient": "In the configuration: DNS = {servers}",
   "dnsCheck.lineTemplate": "In the configurations of the template clients: DNS = {servers}",
   "dnsCheck.lineConfig": "Now in the configurations of the clients: DNS = {servers}",
+  "dnsCheck.at": "{servers} on {endpoint}",
   "dnsCheck.whyPanel": "(the panel DNS server)",
   "dnsCheck.whyRouting": "(routing needs the panel DNS server)",
   "dnsCheck.whyStandIns": "(the panel DNS server: route by name)",

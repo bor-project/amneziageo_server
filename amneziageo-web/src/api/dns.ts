@@ -57,12 +57,15 @@ export interface DnsLine {
   from: DnsFrom
   choice: DnsMode
   isPanel: boolean
+  endpoint: string
+  lost: boolean
 }
 
 export interface DnsCheck {
   line: DnsLine | null
   endpoint: string
   findings: DnsFinding[]
+  lines: DnsLine[]
 }
 
 export interface DnsCheckRequest {

@@ -85,6 +85,7 @@ export const ru: Dictionary = {
   "dnsCheck.lineClient": "В конфигурации: DNS = {servers}",
   "dnsCheck.lineTemplate": "В конфигурации клиентов шаблона: DNS = {servers}",
   "dnsCheck.lineConfig": "Сейчас в конфигурации клиентов: DNS = {servers}",
+  "dnsCheck.at": "{servers} на {endpoint}",
   "dnsCheck.whyPanel": "(DNS-сервер панели)",
   "dnsCheck.whyRouting": "(DNS-сервер панели нужен маршрутизации)",
   "dnsCheck.whyStandIns": "(DNS-сервер панели: маршрутизация по именам)",

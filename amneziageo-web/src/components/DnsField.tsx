@@ -1,6 +1,6 @@
 import type { DnsCheck, DnsMode } from "@/api/dns"
 import { DnsNotes } from "@/components/DnsMark"
-import { lacksServers, lineText } from "@/components/dnsWords"
+import { lacksServers, linesText } from "@/components/dnsWords"
 import type { DnsView } from "@/components/dnsWords"
 import { ListLine, Pick } from "@/components/fields"
 import { useText } from "@/i18n"
@@ -80,7 +80,7 @@ export function DnsOutcome({
 
   return (
     <>
-      {check.line !== null && <div className="text-sm text-muted sm:col-span-2">{lineText(t, check.line, caption)}</div>}
+      {check.lines.length > 0 && <div className="text-sm text-muted sm:col-span-2">{linesText(t, check.lines, caption)}</div>}
       <DnsNotes findings={check.findings} view={view} skip={skip} />
     </>
   )

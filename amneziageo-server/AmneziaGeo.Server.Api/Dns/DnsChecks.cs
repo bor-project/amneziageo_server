@@ -35,7 +35,9 @@ public sealed record DnsCheckRequest(
 /// <param name="From">`client`, `template`, `endpoint` or `standins`.</param>
 /// <param name="Choice">`auto`, `panel` or `own`, as picked there.</param>
 /// <param name="IsPanel">Whether the servers are the resolver of the panel.</param>
-public sealed record DnsLineBody(IReadOnlyList<string> Servers, string From, string Choice, bool IsPanel);
+/// <param name="Endpoint">The endpoint the file is at.</param>
+/// <param name="Lost">Whether the file wants the resolver and loses it to the port, its addresses or the firewall.</param>
+public sealed record DnsLineBody(IReadOnlyList<string> Servers, string From, string Choice, bool IsPanel, string Endpoint, bool Lost);
 
 /// <summary>
 /// What a draft contradicts and the name servers it gives a file.
@@ -43,7 +45,8 @@ public sealed record DnsLineBody(IReadOnlyList<string> Servers, string From, str
 /// <param name="Line">The name servers a file of the draft names, null for a rule or the resolver.</param>
 /// <param name="Endpoint">The endpoint the line was worked out at.</param>
 /// <param name="Findings">What the draft contradicts.</param>
-public sealed record DnsCheckResponse(DnsLineBody? Line, string Endpoint, IReadOnlyList<DnsFinding> Findings);
+/// <param name="Lines">The name servers a file of the draft names at each endpoint of its clients.</param>
+public sealed record DnsCheckResponse(DnsLineBody? Line, string Endpoint, IReadOnlyList<DnsFinding> Findings, IReadOnlyList<DnsLineBody> Lines);
 
 /// <summary>
 /// Reads who needs the resolver and what contradicts, in what the panel holds and in drafts.
@@ -155,11 +158,11 @@ public static class DnsChecks
             var draft = TemplateAnswers.Draft(template) with { Id = id, AllowedIps = ranges ?? held?.AllowedIps ?? [] };
             var after = world with { Templates = [.. world.Templates.Where(one => one.Id != id), draft] };
             var members = id > 0 ? after.Clients.Where(one => one.TemplateId == id).ToArray() : [];
-            var at = members.FirstOrDefault()?.ConfigId ?? after.Configs.FirstOrDefault(one => one.IsEnabled)?.Id;
 
-            return Answer(
+            return Spread(
                 after,
-                at is { } config ? Probe(config) with { TemplateId = id } : null,
+                id,
+                Reached(after, members),
                 DnsConflicts.Of(after).Findings.Where(one =>
                     Names(one, "template", id) || one.Clients.Any(affected => members.Any(member => member.Id == affected.Id))));
         }
@@ -199,7 +202,7 @@ public static class DnsChecks
             return Answer(settled, null, DnsConflicts.Of(settled).Findings.Where(one => Names(one, "dns", 0)));
         }
 
-        return new DnsCheckResponse(null, string.Empty, []);
+        return new DnsCheckResponse(null, string.Empty, [], []);
     }
 
     // Reads what the panel holds that decides the name servers of the clients.
@@ -231,13 +234,38 @@ public static class DnsChecks
 
     private static DnsCheckResponse Answer(DnsWorld world, TunnelClient? probe, IEnumerable<DnsFinding> findings)
     {
-        var line = probe is null ? null : DnsConflicts.Line(world, probe);
-        var endpoint = probe is null ? string.Empty : world.Configs.FirstOrDefault(one => one.Id == probe.ConfigId)?.Name ?? string.Empty;
+        var body = probe is null ? null : Body(world, probe);
 
-        return new DnsCheckResponse(
-            line is null ? null : new DnsLineBody(line.Servers, DnsConflicts.From(line.From), DnsChoiceName.Of(line.Choice), line.IsPanel),
-            endpoint,
-            [.. findings]);
+        return new DnsCheckResponse(body, body?.Endpoint ?? string.Empty, [.. findings], body is null ? [] : [body]);
+    }
+
+    // Answers a template draft with the line at each endpoint, the first that keeps the resolver as the line.
+    private static DnsCheckResponse Spread(DnsWorld world, long template, IReadOnlyList<ServerConfig> endpoints, IEnumerable<DnsFinding> findings)
+    {
+        var lines = endpoints.Select(config => Body(world, Probe(config.Id) with { TemplateId = template })).OfType<DnsLineBody>().ToArray();
+        var first = lines.FirstOrDefault(one => !one.Lost) ?? lines.FirstOrDefault();
+
+        return new DnsCheckResponse(first, first?.Endpoint ?? string.Empty, [.. findings], lines);
+    }
+
+    // Returns the endpoints that are on where the clients of a template are, or all that are on when it has none there.
+    private static IReadOnlyList<ServerConfig> Reached(DnsWorld world, IReadOnlyList<TunnelClient> members)
+    {
+        var on = world.Configs.Where(one => one.IsEnabled).OrderBy(one => one.Name, StringComparer.Ordinal).ToArray();
+        var used = on.Where(config => members.Any(member => member.IsEnabled && member.ConfigId == config.Id)).ToArray();
+
+        return used.Length > 0 ? used : on;
+    }
+
+    // Returns the name servers the file of a client names at its endpoint, null when the panel holds no such endpoint.
+    private static DnsLineBody? Body(DnsWorld world, TunnelClient probe)
+    {
+        var line = DnsConflicts.Line(world, probe);
+        var endpoint = world.Configs.FirstOrDefault(one => one.Id == probe.ConfigId)?.Name ?? string.Empty;
+
+        return line is null
+            ? null
+            : new DnsLineBody(line.Servers, DnsConflicts.From(line.From), DnsChoiceName.Of(line.Choice), line.IsPanel, endpoint, DnsConflicts.Loses(world, probe));
     }
 
     // Returns a client with nothing of its own at an endpoint, to read what a file there names.
