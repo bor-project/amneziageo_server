@@ -1880,7 +1880,7 @@ ask_installation() {
       answer_yes qr "Show its configuration as a QR code, putting qrencode on?" yes || true
     fi
 
-    answer_yes resolver "Answer the DNS of its clients on this server, asking outside over HTTPS?" yes || true
+    [ -n "${given[resolver]+set}" ] || given[resolver]=yes
     if [ -n "${seen[ipv6]:-}" ] && [ -z "${given[ipv6_range]+set}" ]; then
       given[ipv6_range]=$(ula_range)
     fi
@@ -1974,7 +1974,9 @@ plan() {
 
   if [ "${given[endpoint]}" = yes ]; then
     if [ "${given[resolver]:-no}" = yes ]; then
-      say "- answer the DNS of the clients on the server, which asks outside over HTTPS"
+      say "- run the resolver of the clients whenever the routing needs it, asking outside over HTTPS"
+    else
+      say "- keep the resolver of the clients off"
     fi
 
     say "- make the interface ${given[endpoint_name]} on UDP ${given[endpoint_port]} for ${given[endpoint_host]}$([ "${given[websocket]}" = yes ] && printf ', with a websocket')"
@@ -2206,13 +2208,13 @@ first_endpoint() {
   return "$rc"
 }
 
-# Turns the resolver of the clients on when the answers ask for it, once the first interface gives it an address.
+# Turns the resolver of the clients off when the answers ask for it; a fresh panel runs it whenever the routing needs it.
 first_resolver() {
-  if [ "${given[resolver]:-no}" != yes ]; then
+  if [ "${given[resolver]:-yes}" != no ]; then
     return 0
   fi
 
-  cli dns set --enabled on || bad "the resolver was not turned on: item 29 of the menu turns it on"
+  cli dns set --enabled off || bad "the resolver was not turned off: item 29 of the menu turns it off"
 }
 
 # Tells whether ufw already lets a port in, like 8443/tcp.
@@ -3727,16 +3729,16 @@ resolver_line() {
   case ${values[0]:-} in
     on)
       case ${values[1]:-} in
-        all) printf 'on, asks outside encrypted' ;;
-        none) printf 'on, asks outside in the open' ;;
-        *) printf 'on, asks outside partly in the open' ;;
+        all) printf 'automatic, asks outside encrypted' ;;
+        none) printf 'automatic, asks outside in the open' ;;
+        *) printf 'automatic, asks outside partly in the open' ;;
       esac
       ;;
     off) printf 'off' ;;
   esac
 }
 
-# Item 29: turns the resolver of the clients on or off; turned off it does not run and holds no port.
+# Item 29: lets the resolver of the clients run whenever the routing needs it, or keeps it off; off it holds no port.
 resolver_item() {
   local want=${1:-} state usual=
   need_panel || return 1
@@ -3744,16 +3746,16 @@ resolver_item() {
   state=$(reading resolver_line)
   if [ -z "$want" ]; then
     case $state in
-      on*)
-        if [ "$state" != 'on, asks outside encrypted' ] && agree "Ask the name servers the panel starts with, over HTTPS?"; then
+      automatic*)
+        if [ "$state" != 'automatic, asks outside encrypted' ] && agree "Ask the name servers the panel starts with, over HTTPS?"; then
           want=on
           usual=1
-        elif confirm "Turn the resolver off?"; then
+        elif confirm "Turn the resolver off? The routing by sites stops working"; then
           want=off
         fi
         ;;
       *)
-        if agree "Turn the resolver on?"; then
+        if agree "Let the resolver run whenever the routing needs it?"; then
           want=on
           if [ "$(cli dns get encrypted 2> /dev/null | tr -d '\r')" != all ] \
             && agree "Its name servers are asked in the open: ask the ones the panel starts with, over HTTPS?"; then
@@ -4014,7 +4016,7 @@ usage:
   amneziageo-server log                follow the log of the panel
   amneziageo-server enable | disable   start the panel with the host or not
   amneziageo-server bbr [on | off]     BBR with the fq queue for TCP
-  amneziageo-server dns [on | off]     the resolver of the clients, which asks outside over HTTPS
+  amneziageo-server dns [on | off]     the resolver of the clients: on runs it whenever the routing needs it
   amneziageo-server dns open           let the clients of the endpoints reach the resolver through ufw
   amneziageo-server <command>          a command of the utility: user, role, token, panel, endpoint,
                                        import, device, family, geo, dns, init, login, whoami, update status

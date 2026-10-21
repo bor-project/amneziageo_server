@@ -42,7 +42,7 @@ public static class DnsCommands
         ArgumentNullException.ThrowIfNull(context);
 
         var held = await context.Dns.ReadAsync(ct).ConfigureAwait(false);
-        Terminal.Say($"answering    {Switch(held.IsEnabled)}");
+        Terminal.Say($"answering    {(held.IsEnabled ? "while the routing needs it" : "off")}");
         Terminal.Say($"port         {held.Port.ToString(CultureInfo.InvariantCulture)}");
         Terminal.Say($"asks         {string.Join(", ", held.Upstreams)}");
         Terminal.Say($"encrypted    {Encrypted(held)}");
@@ -86,7 +86,7 @@ public static class DnsCommands
         var held = await context.Dns.ReadAsync(ct).ConfigureAwait(false);
         if (Draft(held, args) is not { } draft)
         {
-            return Refuse($"dns set --enabled on | off [--upstreams <servers> | {Usual}]");
+            return Refuse($"dns set --enabled auto | off [--upstreams <servers> | {Usual}]");
         }
 
         var saved = await context.Dns.SaveAsync(draft, ct).ConfigureAwait(false);
@@ -95,7 +95,7 @@ public static class DnsCommands
             return Refuse(saved.Message);
         }
 
-        Terminal.Say($"saved: the resolver is {Switch(saved.Record.IsEnabled)} and asks {string.Join(", ", saved.Record.Upstreams)}");
+        Terminal.Say($"saved: the resolver {(saved.Record.IsEnabled ? "runs while the routing needs it" : "is off")} and asks {string.Join(", ", saved.Record.Upstreams)}");
 
         return await TakeAsync(context, ct).ConfigureAwait(false);
     }
@@ -103,7 +103,7 @@ public static class DnsCommands
     // Returns the settings a command asks for, null when it names nothing to change or names it wrong.
     private static DnsSettings? Draft(DnsSettings held, Arguments args)
     {
-        var enabled = args.Value("enabled") is { } word ? PanelEdit.SwitchOf(word) : held.IsEnabled;
+        var enabled = args.Value("enabled") is { } word ? Mode(word) : held.IsEnabled;
         var upstreams = args.Value("upstreams") is { } list ? Servers(list) : held.Upstreams;
         if (enabled is null || !(args.Has("enabled") || args.Has("upstreams")))
         {
@@ -112,6 +112,10 @@ public static class DnsCommands
 
         return held with { IsEnabled = enabled.Value, Upstreams = upstreams };
     }
+
+    // Reads the word the resolver is set with: auto and on let it run while the routing needs it, off keeps it off.
+    private static bool? Mode(string word) =>
+        string.Equals(word.Trim(), "auto", StringComparison.OrdinalIgnoreCase) ? true : PanelEdit.SwitchOf(word);
 
     private static IReadOnlyList<string> Servers(string list) =>
         string.Equals(list.Trim(), Usual, StringComparison.OrdinalIgnoreCase)
@@ -161,7 +165,12 @@ public static class DnsCommands
             && runs.ValueKind == JsonValueKind.True;
         if (!running)
         {
-            return $"the resolver does not run yet: {PanelCall.Text(state, "fault")}";
+            var needed = state.ValueKind == JsonValueKind.Object && state.TryGetProperty("needed", out var need)
+                && need.ValueKind == JsonValueKind.True;
+
+            return needed
+                ? $"the resolver does not run yet: {PanelCall.Text(state, "fault")}"
+                : "the resolver waits until the routing needs it: no rule goes by name";
         }
 
         var listening = state.TryGetProperty("listening", out var taken) && taken.ValueKind == JsonValueKind.Array
@@ -204,5 +213,5 @@ public static class DnsCommands
     }
 
     private static int Usage() => Refuse(
-        $"usage: amneziageo-server dns show | get <name>... | set --enabled on | off [--upstreams <servers> | {Usual}]");
+        $"usage: amneziageo-server dns show | get <name>... | set --enabled auto | off [--upstreams <servers> | {Usual}]");
 }

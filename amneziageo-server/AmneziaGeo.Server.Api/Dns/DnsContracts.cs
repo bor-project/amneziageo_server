@@ -17,7 +17,8 @@ public sealed record DnsStateBody(
     int Waiting,
     int Names,
     DateTimeOffset? StartedUtc,
-    IReadOnlyList<string> KeptOut);
+    IReadOnlyList<string> KeptOut,
+    bool Needed);
 
 /// <summary>
 /// What the reading of names out of the connections themselves has done since the panel started.
@@ -107,7 +108,7 @@ public static class DnsAnswers
             settings.CacheSize,
             settings.MinTtl,
             settings.MaxTtl,
-            state.Settings is { } running && settings.Differs(running),
+            state.Chosen is { } running && settings.Differs(running),
             new DnsStateBody(
                 state.IsRunning,
                 state.Listening,
@@ -119,7 +120,8 @@ public static class DnsAnswers
                 sets.Waiting,
                 DnsNames.Build(plan).Count,
                 state.StartedUtc,
-                keptOut ?? []),
+                keptOut ?? [],
+                state.Needed),
             reading ?? new DnsReadingBody(false, false, 0, 0, 0, 0, 0, 0, 0));
     }
 

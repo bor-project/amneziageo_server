@@ -202,7 +202,8 @@ public static class ClientEndpoints
             ? await templates.FindAsync(chosen, ct).ConfigureAwait(false)
             : null;
 
-        var names = DnsHandout.For(endpoint, resolver.Settings ?? await dns.ReadAsync(ct).ConfigureAwait(false));
+        var running = resolver.Settings ?? (await dns.ReadAsync(ct).ConfigureAwait(false)) with { IsEnabled = false };
+        var names = DnsHandout.For(endpoint, running, resolver.KeptOut);
         var naming = (await panels.ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
         var host = context.Request.Host.Host;
 

@@ -19,6 +19,12 @@ public sealed class DnsState
 
     private DnsSettings? _settings;
 
+    private DnsSettings? _chosen;
+
+    private string[] _keptOut = [];
+
+    private bool _needed;
+
     /// <summary>
     /// Whether the resolver takes questions.
     /// </summary>
@@ -45,9 +51,24 @@ public sealed class DnsState
     public string? Way => Volatile.Read(ref _way);
 
     /// <summary>
-    /// The settings the resolver was last started with, or null before its first start.
+    /// The settings the resolver runs with, switched on only while the routing needs it, or null before its first start.
     /// </summary>
     public DnsSettings? Settings => Volatile.Read(ref _settings);
+
+    /// <summary>
+    /// The settings the resolver was last started with as the panel holds them, or null before its first start.
+    /// </summary>
+    public DnsSettings? Chosen => Volatile.Read(ref _chosen);
+
+    /// <summary>
+    /// Whether a rule on the host matches by name or a template answers with stand-in addresses.
+    /// </summary>
+    public bool Needed => Volatile.Read(ref _needed);
+
+    /// <summary>
+    /// The interfaces whose clients the firewall of the host keeps from the resolver.
+    /// </summary>
+    public IReadOnlyList<string> KeptOut => Volatile.Read(ref _keptOut);
 
     /// <summary>
     /// How many questions the clients asked.
@@ -67,7 +88,26 @@ public sealed class DnsState
     /// <summary>
     /// Keeps the settings the resolver starts with.
     /// </summary>
-    public void Took(DnsSettings settings) => Volatile.Write(ref _settings, settings);
+    public void Took(DnsSettings settings) => Took(settings, settings);
+
+    /// <summary>
+    /// Keeps the settings the resolver starts with as the panel holds them and as it runs with them.
+    /// </summary>
+    public void Took(DnsSettings chosen, DnsSettings running)
+    {
+        Volatile.Write(ref _chosen, chosen);
+        Volatile.Write(ref _settings, running);
+    }
+
+    /// <summary>
+    /// Keeps whether the routing needs the resolver.
+    /// </summary>
+    public void Need(bool needed) => Volatile.Write(ref _needed, needed);
+
+    /// <summary>
+    /// Keeps the interfaces whose clients the firewall of the host keeps from the resolver.
+    /// </summary>
+    public void Shut(IReadOnlyList<string> keptOut) => Volatile.Write(ref _keptOut, [.. keptOut]);
 
     /// <summary>
     /// Marks the resolver as running on the addresses it took.

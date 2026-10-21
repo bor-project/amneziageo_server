@@ -6,7 +6,7 @@ import { useBalancers } from "@/api/balancers"
 import { useFailure } from "@/api/failure"
 import { useOutbounds } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
-import { Box, Count, ListLine, Part, Pick, Switch } from "@/components/fields"
+import { Box, Count, ListLine, Part, Pick } from "@/components/fields"
 import { ResolverTrouble } from "@/components/ResolverTrouble"
 import { troubleOf } from "@/components/trouble"
 import { footer, primary, secondary } from "@/components/styles"
@@ -122,10 +122,33 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
   return (
     <>
       <Part title={t("dns.serving")}>
-        <div className="sm:col-span-2">
-          <Switch id="dns-on" caption={t("dns.enabled")} value={draft.isEnabled} onChange={(v) => set({ isEnabled: v })} />
-          <ResolverTrouble trouble={trouble?.kind === "kept" ? trouble : null} kept="dns.troubleKept" />
+        <div className="text-sm text-muted sm:col-span-2">{t("dns.about")}</div>
+        <Pick
+          id="dns-mode"
+          caption={t("dns.mode")}
+          value={draft.isEnabled ? "auto" : "off"}
+          onChange={(v) => set({ isEnabled: v === "auto" })}
+        >
+          <option value="auto">{t("dns.modeAuto")}</option>
+          <option value="off">{t("dns.modeOff")}</option>
+        </Pick>
+        <div className="flex items-end pb-2.5 text-sm">
+          {settings.isEnabled && (
+            <span className={settings.state.needed ? "text-good" : "text-muted"}>
+              {t(settings.state.needed ? "dns.needed" : "dns.idle")}
+            </span>
+          )}
         </div>
+        {!settings.isEnabled && settings.state.needed && (
+          <div role="alert" className="text-sm text-alarm sm:col-span-2">
+            {t("dns.offNeeded")}
+          </div>
+        )}
+        {trouble?.kind === "kept" && (
+          <div className="sm:col-span-2">
+            <ResolverTrouble trouble={trouble} kept="dns.troubleKept" />
+          </div>
+        )}
         <Count id="dns-port" caption={t("dns.port")} value={draft.port} onChange={(v) => set({ port: v })} />
         <Count
           id="dns-life"

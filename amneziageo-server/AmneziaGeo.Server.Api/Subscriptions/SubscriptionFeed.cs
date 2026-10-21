@@ -60,7 +60,8 @@ public sealed class SubscriptionFeed
 
         var endpoints = await _configs.ListAsync(ct).ConfigureAwait(false);
         var templates = await _templates.ListAsync(ct).ConfigureAwait(false);
-        var settings = _resolver.Settings ?? await _dns.ReadAsync(ct).ConfigureAwait(false);
+        var settings = _resolver.Settings ?? (await _dns.ReadAsync(ct).ConfigureAwait(false)) with { IsEnabled = false };
+        var keptOut = _resolver.KeptOut;
         var naming = (await _panels.ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
 
         return ClientFeed.Of(
@@ -68,7 +69,7 @@ public sealed class SubscriptionFeed
             members,
             templates.ToDictionary(one => one.Id),
             _ledger.Used,
-            endpoint => DnsHandout.For(endpoint, settings),
+            endpoint => DnsHandout.For(endpoint, settings, keptOut),
             (endpoint, member) => ClientText.Title(endpoint, member, naming, host));
     }
 }

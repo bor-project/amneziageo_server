@@ -27,12 +27,14 @@ public sealed class ResolverDoors
     }
 
     /// <summary>
-    /// Returns the interfaces whose clients cannot reach the resolver through the firewall of the host.
+    /// Returns the interfaces whose clients cannot reach the resolver through the firewall of the host, read anew when
+    /// asked fresh.
     /// </summary>
     public async Task<IReadOnlyList<string>> KeptOutAsync(
         DnsSettings resolver,
         IReadOnlyList<ServerConfig> configs,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool fresh = false)
     {
         ArgumentNullException.ThrowIfNull(resolver);
         ArgumentNullException.ThrowIfNull(configs);
@@ -50,7 +52,7 @@ public sealed class ResolverDoors
             .ToArray();
         var key = $"{resolver.Port}:{string.Join(",", names)}";
         var now = _time.GetUtcNow();
-        if (Volatile.Read(ref _seen) is { } seen && seen.Key == key && now - seen.At < Kept)
+        if (!fresh && Volatile.Read(ref _seen) is { } seen && seen.Key == key && now - seen.At < Kept)
         {
             return seen.Out;
         }

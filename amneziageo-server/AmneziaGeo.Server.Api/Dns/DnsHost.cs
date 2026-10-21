@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Awg.Netlink;
 using AmneziaGeo.Server.Dal;
@@ -20,6 +21,8 @@ public sealed class DnsHost : BackgroundService
     private static readonly TimeSpan Saving = TimeSpan.FromMinutes(1);
 
     private static readonly TimeSpan StandSaving = TimeSpan.FromSeconds(10);
+
+    private static readonly TimeSpan Doors = TimeSpan.FromMinutes(1);
 
     private const int WarmPerTick = 16;
 
@@ -64,6 +67,8 @@ public sealed class DnsHost : BackgroundService
     private DateTimeOffset _standSaving;
 
     private DateTimeOffset _warmAt = DateTimeOffset.MaxValue;
+
+    private DateTimeOffset _doorsAt;
 
     private bool _restored;
 
@@ -134,7 +139,7 @@ public sealed class DnsHost : BackgroundService
             }
 
             Volatile.Write(ref _settings, _settings with { Outbound = anew });
-            _state.Took(_settings);
+            _state.Took(_settings, DnsNeed.Running(_settings, _state.Needed));
         }
         finally
         {
@@ -181,6 +186,7 @@ public sealed class DnsHost : BackgroundService
             {
                 await RestAsync(stopping).ConfigureAwait(false);
                 await BookAsync(stopping).ConfigureAwait(false);
+                await MindAsync(stopping).ConfigureAwait(false);
                 Look();
                 await WarmAsync(stopping).ConfigureAwait(false);
                 await FlushAsync(stopping).ConfigureAwait(false);
@@ -202,23 +208,22 @@ public sealed class DnsHost : BackgroundService
             _server = null;
             Hush();
             using var scope = _scopes.CreateScope();
-            _settings = anew || _state.Settings is null
+            _settings = anew || _state.Chosen is null
                 ? await scope.ServiceProvider.GetRequiredService<DnsStore>().ReadAsync(ct).ConfigureAwait(false)
-                : _state.Settings;
-            _state.Took(_settings);
-            if (!_settings.IsEnabled)
+                : _state.Chosen;
+            await _book.RefreshAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
+            var plan = _plans.Held
+                ?? await scope.ServiceProvider.GetRequiredService<RouteApplier>().BuildAsync(ct).ConfigureAwait(false);
+            var needed = DnsNeed.Of(plan, _book.Holds);
+            _state.Need(needed);
+            _state.Took(_settings, DnsNeed.Running(_settings, needed));
+            if (!_settings.IsEnabled || !needed)
             {
                 _state.Stopped();
                 return;
             }
 
             await RestoreAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
-            await _book.RefreshAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
-            if (_plans.Held is null)
-            {
-                await scope.ServiceProvider.GetRequiredService<RouteApplier>().BuildAsync(ct).ConfigureAwait(false);
-            }
-
             var addresses = await AddressesAsync(scope.ServiceProvider, _settings, ct).ConfigureAwait(false);
             if (addresses.Count == 0)
             {
@@ -311,6 +316,87 @@ public sealed class DnsHost : BackgroundService
         catch (Exception ex) when (ex is SemaphoreFullException or ObjectDisposedException)
         {
         }
+    }
+
+    // Starts the resolver when the routing comes to need it and stops it when the routing no longer does, and lays the
+    // rules and the firewall anew when that or the interfaces the firewall keeps from the resolver changed.
+    private async Task MindAsync(CancellationToken ct)
+    {
+        if (_plans.Held is not { } plan || _state.Chosen is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var needed = DnsNeed.Of(plan, _book.Holds);
+            var turned = needed != _state.Needed;
+            if (turned)
+            {
+                await StartAsync(false, ct).ConfigureAwait(false);
+                if (_settings.IsEnabled)
+                {
+                    _logger.LogInformation(
+                        needed
+                            ? "the routing needs the resolver: it answers the clients"
+                            : "the routing does not need the resolver any more: it stopped");
+                }
+            }
+
+            using var scope = _scopes.CreateScope();
+            var running = _state.Settings ?? _settings with { IsEnabled = false };
+            var lagging = turned || plan.Dns.IsEnabled != running.IsEnabled;
+            if (lagging)
+            {
+                await scope.ServiceProvider.GetRequiredService<FirewallApplier>().SettleAsync(ct).ConfigureAwait(false);
+            }
+
+            var shut = await KeptOutAsync(scope.ServiceProvider, running, lagging, ct).ConfigureAwait(false);
+            var moved = !shut.SequenceEqual(_state.KeptOut, StringComparer.Ordinal);
+            if (moved)
+            {
+                _state.Shut(shut);
+                if (shut.Count > 0)
+                {
+                    _logger.LogWarning(
+                        "the firewall keeps the clients of {Interfaces} from the resolver: they keep their own name servers and the rules by name miss them",
+                        string.Join(", ", shut));
+                }
+            }
+
+            if (lagging || moved || !plan.Unanswered.SequenceEqual(_state.KeptOut, StringComparer.Ordinal))
+            {
+                await scope.ServiceProvider.GetRequiredService<RouteApplier>().SettleAsync(ct).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "the resolver did not follow what the routing needs");
+        }
+    }
+
+    // Returns the interfaces the firewall keeps from the running resolver, read at most once a minute unless asked fresh.
+    private async Task<IReadOnlyList<string>> KeptOutAsync(
+        IServiceProvider services,
+        DnsSettings running,
+        bool fresh,
+        CancellationToken ct)
+    {
+        if (!running.IsEnabled)
+        {
+            return [];
+        }
+
+        var now = _time.GetUtcNow();
+        if (!fresh && now < _doorsAt)
+        {
+            return _state.KeptOut;
+        }
+
+        _doorsAt = now + Doors;
+        var configs = await services.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false);
+
+        return await services.GetRequiredService<ResolverDoors>().KeptOutAsync(running, configs, ct, fresh).ConfigureAwait(false);
     }
 
     // Takes anew the clients and the templates the stand-in addresses go by when they are due.

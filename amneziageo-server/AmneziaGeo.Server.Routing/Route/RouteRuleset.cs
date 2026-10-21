@@ -175,7 +175,7 @@ public static class RouteRuleset
     {
         ArgumentNullException.ThrowIfNull(plan);
 
-        return plan.Dns.IsEnabled && plan.Inbound.Count > 0 && plan.HasNames && plan.Reading is null;
+        return plan.Dns.IsEnabled && plan.Answered.Count > 0 && plan.HasNames && plan.Reading is null;
     }
 
     /// <summary>
@@ -248,7 +248,7 @@ public static class RouteRuleset
 
         var lines = new List<string>
         {
-            $"iifname != {{ {Quoted(plan.Inbound)} }} accept",
+            $"iifname != {{ {Quoted(plan.Answered)} }} accept",
             "ct state != new accept",
             $"ip saddr @{FreeSet(false)} accept",
             $"ip6 saddr @{FreeSet(true)} accept",
@@ -479,7 +479,7 @@ public static class RouteRuleset
     // Returns the lines that note the clients asking a name server over port 53.
     private static IReadOnlyList<string> Heard(RoutePlan plan) =>
     [
-        $"iifname != {{ {Quoted(plan.Inbound)} }} accept",
+        $"iifname != {{ {Quoted(plan.Answered)} }} accept",
         $"meta nfproto ipv4 ct state new meta l4proto {{ tcp, udp }} th dport 53 update @{AskedSet(false)} {{ ip saddr }}",
         $"meta nfproto ipv6 ct state new meta l4proto {{ tcp, udp }} th dport 53 update @{AskedSet(true)} {{ ip6 saddr }}",
     ];
@@ -600,14 +600,14 @@ public static class RouteRuleset
 
     private static void Redirect(StringBuilder text, RoutePlan plan)
     {
-        if (!plan.Dns.IsEnabled || plan.Inbound.Count == 0)
+        if (!plan.Dns.IsEnabled || plan.Answered.Count == 0)
         {
             return;
         }
 
         text.Append("\n\tchain resolve {\n");
         text.Append("\t\ttype nat hook prerouting priority dstnat; policy accept;\n");
-        text.Append("\t\tiifname != { ").Append(Quoted(plan.Inbound)).Append(" } accept\n");
+        text.Append("\t\tiifname != { ").Append(Quoted(plan.Answered)).Append(" } accept\n");
         text.Append("\t\tmeta l4proto { tcp, udp } th dport 53 redirect to :");
         text.Append(plan.Dns.Port.ToString(CultureInfo.InvariantCulture)).Append('\n');
         text.Append("\t}\n");

@@ -132,6 +132,16 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
     public bool StandIns { get; init; }
 
     /// <summary>
+    /// The interfaces whose clients the firewall of the host keeps from the resolver.
+    /// </summary>
+    public IReadOnlyList<string> Unanswered { get; init; } = [];
+
+    /// <summary>
+    /// The interfaces whose clients the resolver answers.
+    /// </summary>
+    public IReadOnlyList<string> Answered => [.. Inbound.Where(name => !Unanswered.Contains(name, StringComparer.Ordinal))];
+
+    /// <summary>
     /// Tells whether a rule on the host matches by name.
     /// </summary>
     public bool HasNames => Legs.Any(leg => leg.IsOnHost && leg.Domains.Count > 0);

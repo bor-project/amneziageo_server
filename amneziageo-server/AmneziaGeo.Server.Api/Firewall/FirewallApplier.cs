@@ -53,7 +53,7 @@ public sealed class FirewallApplier
             await _configs.ListAsync(ct).ConfigureAwait(false),
             await _panel.ReadAsync(ct).ConfigureAwait(false),
             await _subscriptions.ReadAsync(ct).ConfigureAwait(false),
-            _resolver.Settings ?? await _dns.ReadAsync(ct).ConfigureAwait(false));
+            _resolver.Settings ?? (await _dns.ReadAsync(ct).ConfigureAwait(false)) with { IsEnabled = false });
 
     /// <summary>
     /// Opens the ports the panel keeps open and closes the rest of what it opened before.

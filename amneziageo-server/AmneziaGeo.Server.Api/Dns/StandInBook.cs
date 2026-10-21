@@ -44,6 +44,11 @@ public sealed class StandInBook
     public event Action? Stirred;
 
     /// <summary>
+    /// Tells whether some template answers its clients with stand-in addresses.
+    /// </summary>
+    public bool Holds => Volatile.Read(ref _matchers).Count > 0;
+
+    /// <summary>
     /// Tells whether the clients and the templates are due to be taken anew.
     /// </summary>
     public bool Due => _time.GetUtcNow().UtcTicks >= Interlocked.Read(ref _next);

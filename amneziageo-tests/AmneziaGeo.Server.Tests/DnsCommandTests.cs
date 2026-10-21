@@ -28,14 +28,14 @@ public sealed class DnsCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task AFreshPanelHoldsTheResolverOff()
+    public async Task AFreshPanelRunsTheResolverWhileTheRoutingNeedsIt()
     {
         Assert.Equal(0, await Run("dns", "show"));
         Assert.Equal(0, await Run("dns", "get", "enabled", "encrypted", "upstreams"));
 
         var held = await Held();
 
-        Assert.False(held.IsEnabled);
+        Assert.True(held.IsEnabled);
         Assert.Equal(DnsDefaults.Upstreams, held.Upstreams);
     }
 
@@ -88,7 +88,7 @@ public sealed class DnsCommandTests : IDisposable
 
         var held = await Held();
 
-        Assert.False(held.IsEnabled);
+        Assert.True(held.IsEnabled);
         Assert.Equal(DnsDefaults.Upstreams, held.Upstreams);
     }
 

@@ -43,9 +43,15 @@ export const en = {
   "table.resize": "Drag to change the width, double-click to bring it back",
 
   "dns.serving": "DNS server for clients",
+  "dns.about": "Gets the addresses of the sites that routing uses",
+  "dns.mode": "Mode",
+  "dns.modeAuto": "Automatic",
+  "dns.modeOff": "Off",
+  "dns.needed": "Routing needs it",
+  "dns.idle": "Not needed: routing goes by no sites",
+  "dns.offNeeded": "Routing by sites does not work: the DNS server is off",
   "dns.memory": "Cache",
-  "dns.enabled": "Enabled",
-  "dns.troubleKept": "The server firewall (ufw) keeps the clients of {names} from the panel DNS server (port 53). Run on the server:",
+  "dns.troubleKept": "Routing does not work for the clients of {names}: the server firewall keeps them from the DNS server of the panel. To mend it, run on the server:",
   "dns.troubleKeptMenu": "or in the amneziageo-server menu: 23 Firewall Management → 13 Let the clients reach the resolver",
   "dns.troubleKeptHand": "or by hand:",
   "dns.troubleOffMenu": "or in the amneziageo-server menu: 29 DNS for Clients",
@@ -222,11 +228,11 @@ export const en = {
   "templates.pickPresets": "Pick presets",
   "templates.noPresets": "No presets: add them in the tab Routing presets",
   "templates.standIns": "Route by name",
-  "templates.troubleOff": "Will not work: the panel DNS server is off. Turn it on in the DNS section or on the server:",
+  "templates.troubleOff": "Will not work: the DNS server is off. Set it to Automatic in the DNS section or run on the server:",
   "templates.troublePort":
     "Will not work: the panel DNS server answers on port {port}, while the clients ask on 53. Set port 53 in the DNS section.",
   "templates.troubleKept":
-    "Will not work: the server firewall (ufw) keeps the clients of {names} from the panel DNS server (port 53). Run on the server:",
+    "Routing by name does not work for the clients of {names}: the server firewall keeps them from the DNS server of the panel. To mend it, run on the server:",
   "templates.standInsHint":
     "The names of the list go into the tunnel whatever address they get: the panel DNS server answers with its own addresses out of 198.19.0.0/16, the server leads the connections to the real ones",
   "templates.standIn": "by name",

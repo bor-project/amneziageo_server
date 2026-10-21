@@ -6,9 +6,10 @@ of the routing rules that match the name. This is what makes a rule by domain wo
 and the answer of the resolver is where the addresses come from. It also keeps what the clients ask about from
 leaving the server in the open.
 
-A fresh panel holds the resolver off: the clients are handed the name servers of their configuration and ask them
-through the tunnel, and those questions leave the server as plain DNS. [Turning it on](#turning-the-resolver-on)
-takes a question of the installation, an item of the menu or a command.
+The resolver runs while the routing needs it: a rule or a basic list on the host matches by name, or a template
+answers with stand-in addresses. Until then the clients are handed the name servers of their configuration and ask
+them through the tunnel, and those questions leave the server as plain DNS. A fresh panel and an updated one are
+automatic; [keeping it off](#turning-the-resolver-on) takes the menu, a command or the panel.
 
 ## Rights
 
@@ -22,7 +23,7 @@ takes a question of the installation, an item of the menu or a command.
 
 | Setting | Holds |
 |---|---|
-| Enabled | whether the resolver runs |
+| Mode | `Automatic` runs the resolver while the routing needs it, `Off` keeps it off |
 | Port | the port questions are taken on, 53 by default |
 | Listen on | the addresses questions are taken on, empty for the addresses of the configurations |
 | Upstream servers | the name servers questions are passed to and the way each is asked, see [How the name servers are asked](#how-the-name-servers-are-asked) |
@@ -124,22 +125,25 @@ shows in the header while saved settings wait for it. It calls `POST /api/dns/re
 panel over when its own settings wait too. `Cancel` drops what is not saved yet, and an edit left unsaved
 stays while other pages are opened. `GET /api/dns` carries `pending`, true while the saved settings differ
 from the ones the resolver runs with. A change of the configurations starts the resolver over on their
-addresses with the settings it runs with.
+addresses with the settings it runs with. In the automatic mode the resolver starts and stops by itself, without
+`Restart`, as a rule by name or a template with stand-in addresses comes or goes; `GET /api/dns` carries `needed` in
+its `state`.
 
 ## Turning the resolver on
 
 | Where | How |
 |---|---|
-| the installation | `Answer the DNS of its clients on this server, asking outside over HTTPS?`, asked with the first endpoint, `resolver` in a file of answers, see [install.md](install.md#the-menu) |
-| the menu | item 29, `DNS for Clients`; the status under the menu shows `DNS: on, asks outside encrypted` |
+| the installation | no question: a fresh panel is automatic; `resolver` set to `no` in a file of answers keeps it off, see [install.md](install.md#the-menu) |
+| the menu | item 29, `DNS for Clients`; the status under the menu shows `DNS: automatic, asks outside encrypted` |
 | the script | `amneziageo-server dns on`, `amneziageo-server dns off`, `amneziageo-server dns` to be asked |
-| the utility | `dns show`, `dns get enabled port upstreams encrypted outbound`, `dns set --enabled on` or `off`, `dns set --upstreams <servers>` or `default` for the ones a fresh panel asks |
-| the panel | `Enabled` in `DNS server for clients` on the `DNS` page, then `Restart` |
+| the utility | `dns show`, `dns get enabled port upstreams encrypted outbound`, `dns set --enabled auto` (or `on`) or `off`, `dns set --upstreams <servers>` or `default` for the ones a fresh panel asks |
+| the panel | `Mode` in `DNS server for clients` on the `DNS` page, then `Restart` |
 
 The menu and the commands work the same on a package and in a container: there they go through
 `docker compose exec panel amneziageo-server dns on`. They save the setting and have the running panel start the
 resolver over at once; a panel that is stopped takes it when it starts. Turned off, the resolver does not run, holds
-no port and keeps no connection to a name server. An update leaves the switch where it was.
+no port and keeps no connection to a name server. The update that brought the automatic mode moved every panel to it;
+later updates leave the mode where it was.
 
 A panel that has no endpoint yet has no address to answer on: the resolver waits, `the resolver does not run yet:
 there is no address to answer the clients on`, and starts with the first endpoint.

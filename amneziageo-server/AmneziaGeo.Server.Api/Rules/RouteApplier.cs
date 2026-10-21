@@ -136,7 +136,7 @@ public sealed class RouteApplier
         var balancers = await _balancers.ListAsync(ct).ConfigureAwait(false);
         var configs = await _configs.ListAsync(ct).ConfigureAwait(false);
         var sources = await _geo.ListAsync(ct).ConfigureAwait(false);
-        var resolver = _resolver.Settings ?? await _dns.ReadAsync(ct).ConfigureAwait(false);
+        var resolver = _resolver.Settings ?? (await _dns.ReadAsync(ct).ConfigureAwait(false)) with { IsEnabled = false };
         var clients = await _clients.ListAsync(ct).ConfigureAwait(false);
         var basic = await _rules.ReadBasicAsync(ct).ConfigureAwait(false);
         var standIns = await StandInsAsync(resolver, ct).ConfigureAwait(false);
@@ -150,7 +150,7 @@ public sealed class RouteApplier
             balancers,
             _live.Alive,
             clients,
-            basic) with { Journal = _gate.Group, Reading = _names.Offer, StandIns = standIns };
+            basic) with { Journal = _gate.Group, Reading = _names.Offer, StandIns = standIns, Unanswered = _resolver.KeptOut };
 
         _plans.Keep(plan);
 

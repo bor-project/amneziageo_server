@@ -38,7 +38,7 @@ the clients past the drop Docker puts on forwarding, checks the release against 
 with and puts it on as a package or a container, makes the first administrator with a temporary
 password, gets a certificate of Let's Encrypt for the name of the server or takes the one the host holds for it, opens
 the panel on every address, makes the first endpoint, with a range of unique local IPv6 addresses for its clients
-on a host that carries a global IPv6 address, turns the resolver of the clients on when asked and makes the
+on a host that carries a global IPv6 address, keeps the resolver of the clients off when the answers ask for it and makes the
 first client through the API, opens the ports in ufw or turns ufw on with ssh and what already listens kept open,
 for a container letting the clients of the first endpoint and their DNS to the server through ufw as well, since
 the panel gives ufw no rules from a container, offers to let in the clients of any endpoint that ufw still keeps from
@@ -76,7 +76,7 @@ every key the installation runs without a question:
 | `endpoint` | `yes` makes the first endpoint of `endpoint_name`, `endpoint_port`, `endpoint_host` and `websocket` |
 | `endpoint_host` | the address clients reach the endpoint at; without it the name of the server, or the address of the host when it is public, and a question when there is neither |
 | `client`, `qr` | the name of the first client, empty for none; `yes` shows its configuration as a QR code |
-| `resolver` | `yes` turns the resolver on with the first endpoint: its clients ask the server about names and the server asks outside over HTTPS, see [dns.md](dns.md#turning-the-resolver-on) |
+| `resolver` | `no` keeps the resolver off; without it or with `yes` the resolver runs whenever the routing needs it, see [dns.md](dns.md#turning-the-resolver-on) |
 | `ipv6_range` | the range of IPv6 of the clients of the first endpoint, its first address the endpoint's, like `fd3a:4b5c:6d7e::1/64`; empty for none; without it a range of its own on a host with a global IPv6 address |
 | `ufw` | `yes` opens the ports in an active ufw or turns ufw on |
 | `resolver_ufw` | `yes` lets the clients of the endpoints that ufw keeps from the resolver reach it, `no` leaves ufw as it is |
@@ -100,7 +100,7 @@ firewall, endpoints, websocket fronts, BBR and the resolver of the clients. Its 
 | `start`, `stop`, `restart`, `status`, `log` | the service |
 | `enable`, `disable` | whether the panel starts with the host |
 | `bbr on`, `bbr off` | BBR with the `fq` queue for TCP, now and at boot |
-| `dns on`, `dns off` | the resolver of the clients, which asks outside over HTTPS; `dns` alone shows it and asks |
+| `dns on`, `dns off` | the resolver of the clients: on runs it whenever the routing needs it; `dns` alone shows it and asks |
 | `dns open` | lets the clients of the endpoints that ufw keeps from the resolver reach it |
 
 Any other command goes to the console of the panel, as in `amneziageo-server user list` or

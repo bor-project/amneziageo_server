@@ -132,4 +132,9 @@ public static class DnsDefaults
     /// The settings the panel starts with.
     /// </summary>
     public static DnsSettings Settings => new();
+
+    /// <summary>
+    /// The settings a fresh panel holds: the resolver runs while the routing needs it.
+    /// </summary>
+    public static DnsSettings Fresh => new() { IsEnabled = true };
 }

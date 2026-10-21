@@ -38,7 +38,7 @@ checks at once; both take `state:read`. The answer lists what should run:
 |---|---|---|
 | `subscription` | the subscriptions are turned on | on a port of their own: the host refused the port (`port-refused`) or the firewall keeps it closed (`port-closed`); on the ports of the endpoints: none of those ports answers (`no-endpoint`) |
 | `endpoint` | the endpoint is turned on | it names no host, so the files of its clients carry no `Endpoint` (`no-host`), its interface is not on the host (`interface-down`, with `no-module` when the module is not loaded), the host refused its TCP port (`port-refused`), its websocket front does not run (`front-down`), fell over since the check before (`front-fell`) or does not listen on its loopback port (`front-deaf`), the firewall keeps its UDP or TCP port closed (`port-closed`) |
-| `dns` | the resolver of the clients is turned on | it does not run (`resolver-down`) or its way out is broken (`resolver-way`) |
+| `dns` | the resolver of the clients runs: it is automatic and the routing needs it | it does not run (`resolver-down`) or its way out is broken (`resolver-way`) |
 | `certificate` | the panel or the subscriptions on a port of their own answer under a certificate file | the file does not read (`certificate-unreadable`) or the certificate ran out (`certificate-expired`) |
 
 Each service carries its ports, whether it answers on the port of the panel, what the TCP port of an endpoint

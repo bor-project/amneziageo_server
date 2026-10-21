@@ -12,7 +12,7 @@ public class DnsStoreTests
 
         var held = await bench.Resolver.ReadAsync(CancellationToken.None);
 
-        Assert.False(held.IsEnabled);
+        Assert.True(held.IsEnabled);
         Assert.Equal(DnsDefaults.Port, held.Port);
         Assert.Equal(DnsDefaults.Upstreams, held.Upstreams);
         Assert.Empty(held.Listen);

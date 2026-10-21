@@ -9,14 +9,17 @@ namespace AmneziaGeo.Server.Api.Dns;
 public static class DnsHandout
 {
     /// <summary>
-    /// Returns the addresses of the resolver inside the tunnel of a configuration, none when it answers elsewhere.
+    /// Returns the addresses of the resolver inside the tunnel of a configuration, none when it answers elsewhere or the
+    /// firewall of the host keeps the clients of the configuration from it.
     /// </summary>
-    public static IReadOnlyList<string> For(ServerConfig config, DnsSettings settings)
+    public static IReadOnlyList<string> For(ServerConfig config, DnsSettings settings, IReadOnlyList<string>? keptOut = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (!settings.IsEnabled || settings.Port != DnsDefaults.Port)
+        if (!settings.IsEnabled
+            || settings.Port != DnsDefaults.Port
+            || (keptOut ?? []).Contains(config.Name, StringComparer.Ordinal))
         {
             return [];
         }

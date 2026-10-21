@@ -190,13 +190,14 @@ public static class RouteProbe
     private static bool Intercepted(RoutePlan plan, RouteQuery query) =>
         plan.Dns.IsEnabled
         && query.Port == 53
-        && plan.Inbound.Contains(query.Inbound, StringComparer.Ordinal);
+        && plan.Answered.Contains(query.Inbound, StringComparer.Ordinal);
 
     // Returns the guard that turns the traffic of a client of a rule by name away from a name server of its own, the
     // client not let go yet.
     private static string? Guard(RoutePlan plan, RouteQuery query)
     {
         if (!RouteRuleset.Guards(plan)
+            || plan.Unanswered.Contains(query.Inbound, StringComparer.Ordinal)
             || !plan.Legs.Any(leg => leg.IsOnHost && leg.Domains.Count > 0 && Takes(leg, query)))
         {
             return null;

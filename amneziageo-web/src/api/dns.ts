@@ -13,6 +13,7 @@ export interface DnsState {
   names: number
   startedUtc: string | null
   keptOut: string[]
+  needed: boolean
 }
 
 export interface DnsDraft {

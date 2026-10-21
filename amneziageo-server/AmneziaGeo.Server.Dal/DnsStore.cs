@@ -63,7 +63,7 @@ public sealed class DnsStore
         var held = await _db.Set<DnsSettingsEntity>().AsNoTracking().FirstOrDefaultAsync(row => row.Id == Row, ct)
             .ConfigureAwait(false);
 
-        return held is null ? DnsDefaults.Settings : Read(held);
+        return held is null ? DnsDefaults.Fresh : Read(held);
     }
 
     /// <summary>
