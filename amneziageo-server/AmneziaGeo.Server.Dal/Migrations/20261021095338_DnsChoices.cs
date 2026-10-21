@@ -39,6 +39,21 @@ namespace AmneziaGeo.Server.Dal.Migrations
                 defaultValue: 0);
 
             migrationBuilder.Sql("UPDATE Templates SET DnsMode = 2 WHERE TRIM(Dns) <> '';");
+            migrationBuilder.Sql(
+                "UPDATE Configs SET DnsMode = 1 "
+                + "WHERE EXISTS (SELECT 1 FROM Resolver WHERE IsEnabled = 1 AND Port = 53) "
+                + "AND NOT EXISTS (SELECT 1 FROM Templates WHERE StandIns = 1) "
+                + "AND NOT EXISTS ("
+                + "WITH RECURSIVE lists(rest) AS ("
+                + "SELECT Targets FROM Rules WHERE IsEnabled = 1 "
+                + "UNION ALL SELECT Direct FROM RouteBasics "
+                + "UNION ALL SELECT Block FROM RouteBasics), "
+                + "split(token, rest) AS ("
+                + "SELECT '', LOWER(REPLACE(REPLACE(REPLACE(REPLACE(rest, CHAR(10), ','), CHAR(13), ','), CHAR(9), ','), ' ', ',')) || ',' FROM lists "
+                + "UNION ALL SELECT SUBSTR(rest, 1, INSTR(rest, ',') - 1), SUBSTR(rest, INSTR(rest, ',') + 1) FROM split WHERE rest <> '') "
+                + "SELECT 1 FROM split WHERE token LIKE 'geosite:%' OR token LIKE 'domain:%' OR token LIKE 'keyword:%' "
+                + "OR (token <> '' AND INSTR(token, ':') = 0 AND token GLOB '*[a-z]*'));");
+            migrationBuilder.Sql("UPDATE Resolver SET IsEnabled = 1;");
         }
 
         /// <inheritdoc />

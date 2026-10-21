@@ -21,7 +21,6 @@ namespace AmneziaGeo.Server.Dal.Migrations
                 "UPDATE Clients SET ResolverHanded = 1 "
                 + "WHERE EXISTS (SELECT 1 FROM Resolver WHERE IsEnabled = 1 AND Port = 53) "
                 + "AND (TemplateId IS NULL OR TemplateId NOT IN (SELECT Id FROM Templates WHERE StandIns = 0 AND TRIM(Dns) <> ''));");
-            migrationBuilder.Sql("UPDATE Resolver SET IsEnabled = 1;");
         }
 
         /// <inheritdoc />

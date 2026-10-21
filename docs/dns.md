@@ -148,8 +148,10 @@ A template with Route by name names the resolver whatever is picked. The resolve
 in the automatic mode, on port 53, on an address of the configuration, and while the firewall of the host lets the
 clients of the configuration in; otherwise the file takes the name servers of the endpoint, and a client of a
 template `1.1.1.1` and `1.0.0.1` where the endpoint lists none. A new client, template and endpoint are `auto`. The
-update that brought the choice made every template that listed name servers `own` and left the rest `auto`; the
-template a fresh panel starts with is `own` with `1.1.1.1` and `1.0.0.1`.
+update that brought the choice made every template that listed name servers `own`, made every endpoint `panel` where
+the resolver answered on port 53 while no rule, basic list or template matched by name, and left the rest `auto`, so
+the files handed out before the update do not change; the template a fresh panel starts with is `own` with `1.1.1.1`
+and `1.0.0.1`.
 
 ## Files that name the resolver
 
