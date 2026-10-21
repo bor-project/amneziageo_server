@@ -33,6 +33,7 @@ export interface BalancerDraft {
   isEnabled: boolean
   strategy: BalanceStrategy
   members: string[]
+  rules?: number[]
 }
 
 export function useBalancers() {

@@ -14,6 +14,7 @@ export interface Preset {
   templates: number
   createdUtc: string
   updatedUtc: string
+  templateIds: number[]
 }
 
 export interface PresetDraft {
@@ -24,6 +25,7 @@ export interface PresetDraft {
   allUdp: boolean
   full: boolean
   isDefault: boolean
+  templates: number[]
 }
 
 export function usePresets() {
@@ -56,6 +58,7 @@ export function draftOf(preset: Preset): PresetDraft {
     allUdp: preset.allUdp,
     full: preset.full,
     isDefault: preset.isDefault,
+    templates: preset.templateIds,
   }
 }
 
@@ -67,6 +70,7 @@ export const freshPreset: PresetDraft = {
   allUdp: false,
   full: false,
   isDefault: false,
+  templates: [],
 }
 
 function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) {

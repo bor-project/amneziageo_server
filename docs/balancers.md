@@ -29,7 +29,9 @@ a balancer cannot take a name an outbound already carries.
 Renaming a balancer writes the new name into the rules that name it and into the settings of the resolver, the
 saved and the running ones alike. A balancer that a rule or the resolver leaves through is not removed: the
 panel answers `balancer-in-use`, and the one the resolver asks through until it is restarted is held the same
-way as the one its saved settings name.
+way as the one its saved settings name. The page that removes a balancer names what holds it. The settings name the
+outbounds of a balancer as links and, under `Use`, the rules that leave through it, which `PUT /api/balancers/{id}`
+takes in `rules` the way an outbound does, see [outbounds.md](outbounds.md).
 
 ## The strategies
 

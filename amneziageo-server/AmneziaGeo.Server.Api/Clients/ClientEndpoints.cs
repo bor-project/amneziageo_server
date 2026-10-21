@@ -237,8 +237,10 @@ public static class ClientEndpoints
 
     private static async Task<IResult> AddAsync(
         ClientRequest request,
+        HttpContext http,
         ConfigStore configs,
         ClientStore store,
+        RouteStore rules,
         ClientHost host,
         EndpointHost endpoints,
         ClientGuard guard,
@@ -252,6 +254,12 @@ public static class ClientEndpoints
             return Missing(draft.ConfigId);
         }
 
+        var listed = await RuleNaming.AddedAsync(rules, RuleSide.Clients, settled.Name, request.Rules, ct).ConfigureAwait(false);
+        if (await RuleNaming.RefuseAsync(http, rules, RuleSide.Clients, settled.Name, listed, ct).ConfigureAwait(false) is { } refused)
+        {
+            return refused;
+        }
+
         var result = await store.AddAsync(settled, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -261,7 +269,10 @@ public static class ClientEndpoints
         var endpoint = await SettleAsync(result.Record!.ConfigId, [], configs, store, host, endpoints, ct)
             .ConfigureAwait(false);
 
-        await routes.FollowClientsAsync(ct).ConfigureAwait(false);
+        await FollowAsync(
+            await RuleNaming.NameAsync(rules, RuleSide.Clients, result.Record.Name, listed, ct).ConfigureAwait(false),
+            routes,
+            ct).ConfigureAwait(false);
 
         return Results.Created(
             $"/api/clients/{result.Record.Id}",
@@ -271,8 +282,10 @@ public static class ClientEndpoints
     private static async Task<IResult> ChangeAsync(
         long id,
         ClientRequest request,
+        HttpContext http,
         ConfigStore configs,
         ClientStore store,
+        RouteStore rules,
         ClientHost host,
         EndpointHost endpoints,
         ClientGuard guard,
@@ -285,6 +298,11 @@ public static class ClientEndpoints
         if (held is null)
         {
             return Refuse(StatusCodes.Status404NotFound, "unknown-client", $"there is no client under the number {id}");
+        }
+
+        if (await RuleNaming.RefuseAsync(http, rules, RuleSide.Clients, held.Name, request.Rules, ct).ConfigureAwait(false) is { } refused)
+        {
+            return refused;
         }
 
         if (held.IsEnabled && request.IsEnabled is false)
@@ -309,7 +327,10 @@ public static class ClientEndpoints
         var endpoint = await SettleAsync(result.Record.ConfigId, gone, configs, store, host, endpoints, ct)
             .ConfigureAwait(false);
 
-        await routes.FollowClientsAsync(ct).ConfigureAwait(false);
+        await FollowAsync(
+            await RuleNaming.NameAsync(rules, RuleSide.Clients, result.Record.Name, request.Rules, ct).ConfigureAwait(false),
+            routes,
+            ct).ConfigureAwait(false);
 
         return Results.Ok(Told(Answer(result.Record, endpoint, host, guard, ledger, true), signals));
     }
@@ -359,12 +380,14 @@ public static class ClientEndpoints
         long id,
         ConfigStore configs,
         ClientStore store,
+        RouteStore rules,
         ClientHost host,
         EndpointHost endpoints,
         RouteApplier routes,
         ClientSignals signals,
         CancellationToken ct)
     {
+        var before = await rules.ListAsync(ct).ConfigureAwait(false);
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -376,7 +399,7 @@ public static class ClientEndpoints
         await SettleAsync(result.Record!.ConfigId, [result.Record.PublicKey], configs, store, host, endpoints, ct)
             .ConfigureAwait(false);
 
-        await routes.FollowClientsAsync(ct).ConfigureAwait(false);
+        await FollowAsync(RuleNaming.Names(before, RuleSide.Clients, [result.Record.Name]), routes, ct).ConfigureAwait(false);
 
         return Results.NoContent();
     }
@@ -420,6 +443,7 @@ public static class ClientEndpoints
         ClientBatchRequest request,
         ConfigStore configs,
         ClientStore store,
+        RouteStore rules,
         ClientHost host,
         EndpointHost endpoints,
         RouteApplier routes,
@@ -433,6 +457,7 @@ public static class ClientEndpoints
             return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a removal of many clients needs the ids");
         }
 
+        var before = await rules.ListAsync(ct).ConfigureAwait(false);
         var batch = await store.RemoveAllAsync(ids, ct).ConfigureAwait(false);
         foreach (var client in batch.Done)
         {
@@ -442,10 +467,24 @@ public static class ClientEndpoints
         var unsynced = await SettleAllAsync(batch.Done, batch.Done, configs, store, host, endpoints, ct).ConfigureAwait(false);
         if (batch.Done.Count > 0)
         {
-            await routes.FollowClientsAsync(ct).ConfigureAwait(false);
+            await FollowAsync(RuleNaming.Names(before, RuleSide.Clients, batch.Done.Select(client => client.Name)), routes, ct)
+                .ConfigureAwait(false);
         }
 
         return Results.Ok(new ClientBatchBody([.. batch.Done.Select(client => client.Id)], batch.Failed, unsynced));
+    }
+
+    // Puts the rules on the host anew when they changed, and when the rules that match by clients may have.
+    private static async Task FollowAsync(bool changed, RouteApplier routes, CancellationToken ct)
+    {
+        if (changed)
+        {
+            await routes.SettleAsync(ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        await routes.FollowClientsAsync(ct).ConfigureAwait(false);
     }
 
     private static async Task<IResult> ImportAsync(

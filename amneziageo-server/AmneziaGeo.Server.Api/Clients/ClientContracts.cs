@@ -76,7 +76,8 @@ public sealed record ClientRequest(
     string? Inbound = null,
     bool? Disconnect = null,
     string? DnsMode = null,
-    IReadOnlyList<string>? Dns = null);
+    IReadOnlyList<string>? Dns = null,
+    IReadOnlyList<long>? Rules = null);
 
 /// <summary>
 /// Whether a client is on.

@@ -1,6 +1,8 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { complaint, reason } from "@/api/auth"
 import { useBalancers } from "@/api/balancers"
+import { useClients } from "@/api/clients"
+import { useConfigs } from "@/api/configs"
 import { findingsOf, useDnsConflicts } from "@/api/dns"
 import { useFailure } from "@/api/failure"
 import { useMoveRule, usePlaceRule, useRules, useSwitchRule } from "@/api/rules"
@@ -8,6 +10,7 @@ import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
 import { DnsMark } from "@/components/DnsMark"
 import { Find, Knob } from "@/components/fields"
+import { clientTo, configTo } from "@/components/members"
 import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
@@ -25,6 +28,8 @@ export function Rules() {
   const rules = useRules()
   const failed = useFailure(rules)
   const balancers = useBalancers()
+  const clients = useClients().data ?? []
+  const configs = useConfigs().data ?? []
   const move = useMoveRule()
   const place = usePlaceRule()
   const turn = useSwitchRule()
@@ -143,7 +148,9 @@ export function Rules() {
               wrap: true,
               caption: t("rules.clients"),
               sort: (one) => one.clients.join(", "),
-              cell: (one) => <Some values={one.clients} none={t("rules.anyone")} />,
+              cell: (one) => (
+                <Some values={one.clients} none={t("rules.anyone")} to={(name) => clientTo(name, clients)} />
+              ),
             },
             {
               key: "inbounds",
@@ -151,7 +158,9 @@ export function Rules() {
               wrap: true,
               caption: t("rules.inbounds"),
               sort: (one) => one.inbounds.join(", "),
-              cell: (one) => <Some values={one.inbounds} none={t("rules.anyInbound")} />,
+              cell: (one) => (
+                <Some values={one.inbounds} none={t("rules.anyInbound")} to={(name) => configTo(name, configs)} />
+              ),
             },
             {
               key: "traffic",
@@ -205,14 +214,30 @@ export function Rules() {
   )
 }
 
-function Some({ values, none }: { values: string[]; none: string }) {
+function Some({
+  values,
+  none,
+  to,
+}: {
+  values: string[]
+  none: string
+  to?: (value: string) => string | undefined
+}) {
   if (values.length === 0) {
     return <span className="text-muted">{none}</span>
   }
 
+  const link = to?.(values[0])
+
   return (
     <span className="flex min-w-0 items-center gap-1.5" title={values.join("\n")}>
-      <span className="truncate">{values[0]}</span>
+      {link === undefined ? (
+        <span className="truncate">{values[0]}</span>
+      ) : (
+        <Link to={link} className="truncate text-brand-ink hover:text-brand-lit">
+          {values[0]}
+        </Link>
+      )}
       {values.length > 1 && (
         <span className="shrink-0 rounded bg-chip px-1.5 py-0.5 text-xs text-chip-ink">+{values.length - 1}</span>
       )}

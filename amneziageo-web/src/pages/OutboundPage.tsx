@@ -93,6 +93,7 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
       <OutboundForm
         start={draftOf(held)}
         publicKey={held.publicKey}
+        self={held.name}
         pending={change.isPending}
         error={change.error}
         onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}

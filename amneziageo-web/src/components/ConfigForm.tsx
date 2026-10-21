@@ -1,24 +1,30 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { span } from "@/address"
 import { complaint } from "@/api/auth"
 import { downedOf, failure, useConfigs, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
+import { useClients } from "@/api/clients"
 import type { Inbound } from "@/api/clients"
 import { useDnsCheck } from "@/api/dns"
 import { usePortState } from "@/api/firewall"
+import { useRules } from "@/api/rules"
 import type { Holding } from "@/api/firewall"
 import { scopes } from "@/api/scopes"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { lacksServers } from "@/components/dnsWords"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { KeepQuestion, PortNote } from "@/components/PortNote"
-import { Count, Flag, Help, Hinted, Line, ListLine, Part, Pick, Regenerate, Switch } from "@/components/fields"
+import { Count, Flag, Help, Hinted, Line, LinkLine, Links, ListLine, Part, Pick, Regenerate, Switch } from "@/components/fields"
+import { clientItems, few, names, ruleItems } from "@/components/members"
 import { manual, useOpening } from "@/components/opening"
 import { pathFault, portFault, usePathHolders, usePortHolders, useServicesHolders, useSocketHolders } from "@/components/ports"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
+import { holds } from "@/store/authSlice"
 import { same } from "@/store/draftSlice"
+import { useAppSelector } from "@/store/hooks"
 
 export function ConfigForm({
   start,
@@ -49,6 +55,17 @@ export function ConfigForm({
   const keys = useKeyPair()
   const shared = usePresharedKey()
   const configs = useConfigs().data ?? []
+  const user = useAppSelector((s) => s.auth.user)
+  const members = clientItems((useClients().data ?? []).filter((one) => one.configId === self))
+  const rules = useRules().data ?? []
+  const mayRoute = holds(user, scopes.manageRouting)
+  const naming = start.name.length === 0 ? [] : rules.filter((one) => names(one, "inbounds", start.name))
+  const lastOnes = naming.filter((one) => one.inbounds.length === 1).map((one) => String(one.id))
+  const ruled = ruleItems(
+    rules.filter((one) => one.inbounds.length > 0),
+    (one) => few(one.inbounds, (count) => t("templates.more", { count: String(count) })),
+  )
+  const anywhere = rules.filter((one) => one.inbounds.length === 0)
   const others = configs.filter((one) => one.id !== self)
   const saved = configs.find((one) => one.id === self)
   const opened = saved?.opened ?? false
@@ -269,6 +286,26 @@ export function ConfigForm({
       </Part>
 
       <Part title={t("configs.clients")}>
+        {self !== undefined && (
+          <div className="sm:col-span-2">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className={label}>{t("configs.members")}</span>
+              {holds(user, scopes.manageClients) && (
+                <Link to={`/clients/new?config=${self}`} className="text-sm text-brand-ink hover:text-brand-lit">
+                  {t("configs.newClient")}
+                </Link>
+              )}
+            </div>
+            <div className="mt-1">
+              <Links
+                id="config-members"
+                value={members.map((one) => one.key)}
+                items={members}
+                placeholder={t("clients.dash")}
+              />
+            </div>
+          </div>
+        )}
         <ListLine
           id="config-allowed"
           caption={t("configs.allowed")}
@@ -299,6 +336,30 @@ export function ConfigForm({
           onChange={(blocked) => put({ blocked })}
           wide
         />
+      </Part>
+
+      <Part title={t("configs.routing")}>
+        <div className="sm:col-span-2">
+          <span className={label}>{t("configs.rules")}</span>
+          <div className="mt-1">
+            <Links
+              id="config-rules"
+              value={(draft.rules ?? naming.map((one) => one.id)).map(String)}
+              items={ruled}
+              placeholder={t(mayRoute ? "clients.addRule" : "clients.dash")}
+              fixed={lastOnes}
+              onChange={mayRoute ? (keys) => put({ rules: keys.map(Number) }) : undefined}
+            />
+          </div>
+        </div>
+        {anywhere.length > 0 && (
+          <div className="sm:col-span-2">
+            <span className={label}>{t("configs.rulesForAll")}</span>
+            <div className="mt-1 text-sm text-ink">
+              <LinkLine items={ruleItems(anywhere)} />
+            </div>
+          </div>
+        )}
       </Part>
 
       <Part title={t("configs.keys")}>

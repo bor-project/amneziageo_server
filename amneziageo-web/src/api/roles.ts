@@ -18,11 +18,13 @@ export interface RoleDraft {
   name: string
   title: string
   scopes: string[]
+  users?: string[]
 }
 
 export interface RoleChange {
   title?: string
   scopes?: string[]
+  users?: string[]
 }
 
 export function useRoles(enabled = true) {

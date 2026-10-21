@@ -8,9 +8,14 @@ A fresh database starts with the client template `default`. A template no client
 template a client takes is refused with `template-in-use` (409).
 
 The panel holds the templates in the tab `Templates` of `Clients`, next to the tab `Configs` with the clients
-themselves. The list names the template and how many clients take it; the name and the menu of the row lead into
-the settings, where the template is changed and removed. The settings of a client carry the choice of its template
-and a link to it.
+themselves. The list starts with the row `Default` for the clients without a template and names each template and
+how many clients take it; the number leads to the list of those clients, the name and the menu of the row lead into
+the settings, where the template is changed and removed. The settings name the clients of the template under
+`Clients`, each a link to the client: a client added there leaves the template it took, with that template named
+beside it among the offers, and a client taken off is left without a template; both are kept by `Save` with the rest
+of the settings. The page `Default` names the clients without a template and takes others in, which takes their
+templates off; a client leaves it only for a template, in the settings of that template. The settings of a client
+carry the choice of its template and a link to it.
 
 ## What a template names
 
@@ -81,8 +86,8 @@ the known ones ([dns.md](dns.md#what-the-host-gets)). A stand-in name answers no
 IPv4. A stand-in that leads nowhere, after a client came over from another server or for a name nobody asked about
 for a week, is refused at once, and the client asks for the name again.
 
-A template a client takes cannot be removed (`template-in-use`): pick another template for those clients
-first.
+A template a client takes cannot be removed (`template-in-use`): the page that removes it names those clients,
+take them off in the settings of the template first.
 
 | Setting | Holds |
 |---|---|
@@ -94,13 +99,24 @@ first.
 | Route by name | on or off (`standIns`); works while the resolver of the panel answers its clients on port 53 |
 
 `GET /api/templates` lists the templates with their entries, the ranges they gave, the entries that gave
-nothing, the time of the last pass and the number of clients that take each; `GET /api/templates/{id}` returns
-one; `GET /api/templates/defaults` returns what an empty field gives, `::/0` among the ranges when an interface
-carries IPv6; all three need `state:read`. `POST /api/templates`, `PUT /api/templates/{id}`,
+nothing, the time of the last pass, the number of clients that take each and their numbers (`clientIds`);
+`GET /api/templates/{id}` returns one; `GET /api/templates/defaults` returns what an empty field gives, `::/0` among
+the ranges when an interface carries IPv6, and the numbers of the clients without a template (`clientIds`); all three
+need `state:read`. `POST /api/templates`, `PUT /api/templates/{id}`,
 `POST /api/templates/{id}/refresh`, `POST /api/templates/preview` and `DELETE /api/templates/{id}` need
 `clients:write`. A request writes
 `entries`, never `allowedIps`. A client names its template in `templateId`; a number the panel does not hold is
 refused with `unknown-template`.
+
+`POST /api/templates` and `PUT /api/templates/{id}` take the clients of the template in `clients`, the numbers of
+every client that takes it after the request: a client on the list leaves the template it took, a client of the
+template missing from the list is left without a template, and a request without the field keeps the clients as they
+are. A number the panel does not hold is refused with `unknown-client` (400), and nothing is written.
+`PUT /api/templates/default/clients` with `clients`, the numbers of every client without a template after the
+request, takes the templates off the clients on the list; a client without a template missing from the list is
+refused with `default-keeps-clients` (400), because it leaves the default only for a template. It needs
+`clients:write` and answers like `GET /api/templates/defaults`. The check of a template draft
+(`POST /api/dns/check`) counts the clients the draft names in `clients`.
 
 `POST /api/templates/preview` tells what a list of entries gives before a template is kept: how many ranges
 came out, the first 1000 of them, the entries that gave nothing, and per entry how many ranges it gave and the
@@ -152,8 +168,13 @@ The hello hands out the geo sources of the panel next to the presets. The client
 at the address, and moves a source it holds under the same name and of the same kind to the address of the panel,
 once per address, so the keys of a preset name lists the client has.
 
-A preset a template names cannot be removed (`preset-in-use`): take it out of those templates first. A template
-naming a preset the panel does not hold is refused with `unknown-preset`.
+The settings of a preset name the templates that hand it out under `Templates`, each a link to the template: a
+template added there takes the preset last among its presets, with its present presets named beside it among the
+offers, and a template taken off drops the preset; both are kept by `Save` with the rest of the settings. The
+number of templates in the list leads to the list of templates with that preset picked, and a template names its
+presets as links. A preset a template names cannot be removed (`preset-in-use`): the page that removes it names
+those templates, take them off in the settings of the preset first. A template naming a preset the panel does not
+hold is refused with `unknown-preset`.
 
 | Setting | Holds |
 |---|---|
@@ -163,10 +184,15 @@ naming a preset the panel does not hold is refused with `unknown-preset`.
 | Everything through the VPN | off by default |
 | On by default | off by default; the application puts the list in use when it adds it and routes by none |
 
-`GET /api/templates/routing` lists the presets with the number of templates that name each, and
+`GET /api/templates/routing` lists the presets with the number of templates that name each and their numbers
+(`templateIds`), and
 `GET /api/templates/routing/{id}` returns one; both need `state:read`. `POST /api/templates/routing`,
 `PUT /api/templates/routing/{id}` and `DELETE /api/templates/routing/{id}` need `clients:write`. A request writes
 `name`, `proxy`, `direct`, `block`, `allUdp`, `full` and `isDefault`; the answer adds `uid`, the identifier, and
 `updatedUtc`, the time the list was last changed: a change of `isDefault` alone leaves it as it stands, and a
 change that leaves `isDefault` out keeps the mark. A client template names its presets in `presets`, by number.
+`POST` and `PUT` take the templates of the preset in `templates`, the numbers of every template that names it after
+the request: a template on the list that does not name it takes it last, a template missing from the list drops it,
+and a request without the field leaves the templates as they are. A number the panel does not hold is refused with
+`unknown-template` (400), and nothing is written.
 

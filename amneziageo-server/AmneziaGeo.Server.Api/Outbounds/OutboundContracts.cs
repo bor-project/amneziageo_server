@@ -74,7 +74,9 @@ public sealed record OutboundRequest(
     string? Probe,
     int ProbeEvery,
     bool? ClosePrivate,
-    ObfuscationBody? Obfuscation);
+    ObfuscationBody? Obfuscation,
+    IReadOnlyList<long>? Balancers = null,
+    IReadOnlyList<long>? Rules = null);
 
 /// <summary>
 /// A client configuration the interface sends to be read into an outbound.

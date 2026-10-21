@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { draftOf, findingsOf, useDnsCheck, useDnsConflicts, useResolver, useSaveResolver } from "@/api/dns"
 import type { DnsDraft, DnsFinding, DnsReport, DnsState, DnsSubject, Resolver as ResolverSettings } from "@/api/dns"
@@ -10,6 +11,7 @@ import { scopes } from "@/api/scopes"
 import { DnsMark } from "@/components/DnsMark"
 import { clientsOfWords, clientWords, counted, fewNames, levelOf, ruleWords, templateWords } from "@/components/dnsWords"
 import { Box, Count, ListLine, Part, Pick } from "@/components/fields"
+import { wayTo } from "@/components/members"
 import { ResolverTrouble } from "@/components/ResolverTrouble"
 import { troubleOf } from "@/components/trouble"
 import { footer, primary, secondary } from "@/components/styles"
@@ -190,36 +192,48 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
           </option>
         </Pick>
         {via === "out" && (
-          <Pick
-            id="dns-outbound"
-            caption={t("rules.outbound")}
-            value={draft.outbound}
-            onChange={(v) => {
-              setWay("out")
-              set({ outbound: v })
-            }}
-          >
-            <option value="">{t("rules.pick")}</option>
-            {draft.outbound !== "" && !ways.includes(draft.outbound) && (
-              <option value={draft.outbound}>{draft.outbound}</option>
-            )}
-            <optgroup label={t("rules.outbounds")}>
-              {(outbounds.data ?? []).map((one) => (
-                <option key={one.id} value={one.name}>
-                  {one.name}
-                </option>
-              ))}
-            </optgroup>
-            {(balancers.data ?? []).length > 0 && (
-              <optgroup label={t("rules.balancers")}>
-                {(balancers.data ?? []).map((one) => (
+          <div>
+            <Pick
+              id="dns-outbound"
+              caption={t("rules.outbound")}
+              value={draft.outbound}
+              onChange={(v) => {
+                setWay("out")
+                set({ outbound: v })
+              }}
+            >
+              <option value="">{t("rules.pick")}</option>
+              {draft.outbound !== "" && !ways.includes(draft.outbound) && (
+                <option value={draft.outbound}>{draft.outbound}</option>
+              )}
+              <optgroup label={t("rules.outbounds")}>
+                {(outbounds.data ?? []).map((one) => (
                   <option key={one.id} value={one.name}>
                     {one.name}
                   </option>
                 ))}
               </optgroup>
+              {(balancers.data ?? []).length > 0 && (
+                <optgroup label={t("rules.balancers")}>
+                  {(balancers.data ?? []).map((one) => (
+                    <option key={one.id} value={one.name}>
+                      {one.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </Pick>
+            {wayTo(draft.outbound, outbounds.data ?? [], balancers.data ?? []) !== undefined && (
+              <div className="mt-1 flex justify-end">
+                <Link
+                  to={wayTo(draft.outbound, outbounds.data ?? [], balancers.data ?? []) ?? ""}
+                  className="text-sm text-brand-ink hover:text-brand-lit"
+                >
+                  {t("action.goTo")}
+                </Link>
+              </div>
             )}
-          </Pick>
+          </div>
         )}
       </Part>
 

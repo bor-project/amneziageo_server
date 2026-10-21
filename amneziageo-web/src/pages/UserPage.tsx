@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Navigate, useNavigate, useParams } from "react-router-dom"
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { useRoles } from "@/api/roles"
 import { fresh, useAddUser, useChangeUser, useUsers } from "@/api/users"
@@ -69,7 +69,15 @@ function NewUser() {
           ))}
         </Pick>
 
-        <div />
+        {role.length > 0 ? (
+          <div className="flex items-end pb-2.5">
+            <Link to={`/settings/users/roles/${role}/edit`} className="text-sm text-brand-ink hover:text-brand-lit">
+              {t("action.goTo")}
+            </Link>
+          </div>
+        ) : (
+          <div />
+        )}
 
         <Secret id="new-password" value={password} onChange={setPassword} />
 
@@ -174,7 +182,15 @@ function HeldUser({ name }: { name: string }) {
           ))}
         </Pick>
 
-        <div />
+        {picked.length > 0 ? (
+          <div className="flex items-end pb-2.5">
+            <Link to={`/settings/users/roles/${picked}/edit`} className="text-sm text-brand-ink hover:text-brand-lit">
+              {t("action.goTo")}
+            </Link>
+          </div>
+        ) : (
+          <div />
+        )}
 
         {held.hostUser.length > 0 && (
           <div className="sm:col-span-2">

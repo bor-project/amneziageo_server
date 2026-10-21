@@ -37,6 +37,7 @@ public static class TemplateEndpoints
         writing.MapPost("/", AddAsync);
         writing.MapPost("/preview", PreviewAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
+        writing.MapPut("/default/clients", FreeAsync);
         writing.MapPost("/{id:long}/refresh", RefreshAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
     }
@@ -44,9 +45,9 @@ public static class TemplateEndpoints
     private static async Task<IResult> ListAsync(TemplateStore store, CancellationToken ct)
     {
         var found = await store.ListAsync(ct).ConfigureAwait(false);
-        var uses = await store.UsesAsync(ct).ConfigureAwait(false);
+        var members = await store.MembersAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(found.Select(one => TemplateAnswers.Template(one, uses.GetValueOrDefault(one.Id))).ToArray());
+        return Results.Ok(found.Select(one => TemplateAnswers.Template(one, Of(members, one.Id))).ToArray());
     }
 
     private static async Task<IResult> FindAsync(long id, TemplateStore store, CancellationToken ct)
@@ -57,16 +58,17 @@ public static class TemplateEndpoints
             return Missing(id);
         }
 
-        var uses = await store.UsesAsync(ct).ConfigureAwait(false);
+        var members = await store.MembersAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(TemplateAnswers.Template(found, uses.GetValueOrDefault(found.Id)));
+        return Results.Ok(TemplateAnswers.Template(found, Of(members, found.Id)));
     }
 
-    private static async Task<IResult> DefaultsAsync(ConfigStore configs, CancellationToken ct)
+    private static async Task<IResult> DefaultsAsync(ConfigStore configs, TemplateStore store, CancellationToken ct)
     {
         var found = await configs.ListAsync(ct).ConfigureAwait(false);
+        var plain = await store.PlainAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(TemplateAnswers.Defaults(found.SelectMany(config => config.Address)));
+        return Results.Ok(TemplateAnswers.Defaults(found.SelectMany(config => config.Address), plain));
     }
 
     private static async Task<IResult> AddAsync(
@@ -83,15 +85,18 @@ public static class TemplateEndpoints
         }
 
         var full = await refresher.ResolveAsync(draft, ct).ConfigureAwait(false);
-        var result = await store.AddAsync(full, ct).ConfigureAwait(false);
+        var result = await store.AddAsync(full, TemplateAnswers.Members(request), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
         await routes.FollowStandInsAsync(ct).ConfigureAwait(false);
+        var members = await store.MembersAsync(ct).ConfigureAwait(false);
 
-        return Results.Created($"/api/templates/{result.Record!.Id}", TemplateAnswers.Template(result.Record, 0));
+        return Results.Created(
+            $"/api/templates/{result.Record!.Id}",
+            TemplateAnswers.Template(result.Record, Of(members, result.Record.Id)));
     }
 
     private static async Task<IResult> ChangeAsync(
@@ -116,7 +121,31 @@ public static class TemplateEndpoints
 
         var full = await refresher.ResolveAsync(draft, ct).ConfigureAwait(false);
 
-        return await KeepAsync(id, full, store, routes, ct).ConfigureAwait(false);
+        return await KeepAsync(id, full, TemplateAnswers.Members(request), store, routes, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> FreeAsync(
+        TemplateClientsRequest request,
+        TemplateStore store,
+        ConfigStore configs,
+        RouteApplier routes,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.Clients is not { } clients)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, "incomplete", "the clients without a template need the clients field");
+        }
+
+        if (await store.FreeAsync(clients, ct).ConfigureAwait(false) is { } refusal)
+        {
+            return Explain(refusal);
+        }
+
+        await routes.FollowStandInsAsync(ct).ConfigureAwait(false);
+
+        return await DefaultsAsync(configs, store, ct).ConfigureAwait(false);
     }
 
     private static async Task<IResult> RefreshAsync(
@@ -134,7 +163,7 @@ public static class TemplateEndpoints
 
         var full = await refresher.ResolveAsync(held, ct).ConfigureAwait(false);
 
-        return await KeepAsync(id, full, store, routes, ct).ConfigureAwait(false);
+        return await KeepAsync(id, full, null, store, routes, ct).ConfigureAwait(false);
     }
 
     private static async Task<IResult> PreviewAsync(
@@ -169,21 +198,25 @@ public static class TemplateEndpoints
     private static async Task<IResult> KeepAsync(
         long id,
         ClientTemplate template,
+        IReadOnlyList<long>? clients,
         TemplateStore store,
         RouteApplier routes,
         CancellationToken ct)
     {
-        var result = await store.ChangeAsync(id, template, ct).ConfigureAwait(false);
+        var result = await store.ChangeAsync(id, template, clients, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
         await routes.FollowStandInsAsync(ct).ConfigureAwait(false);
-        var uses = await store.UsesAsync(ct).ConfigureAwait(false);
+        var members = await store.MembersAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(TemplateAnswers.Template(result.Record!, uses.GetValueOrDefault(id)));
+        return Results.Ok(TemplateAnswers.Template(result.Record!, Of(members, id)));
     }
+
+    private static IReadOnlyList<long> Of(IReadOnlyDictionary<long, IReadOnlyList<long>> members, long id) =>
+        members.GetValueOrDefault(id) ?? [];
 
     private static IResult Missing(long id) =>
         Refuse(StatusCodes.Status404NotFound, "unknown-template", $"there is no template under the number {id}");

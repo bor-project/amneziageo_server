@@ -3,6 +3,7 @@ import { complaint } from "@/api/auth"
 import type { Obfuscation } from "@/api/configs"
 import { useImportOutbound, useOutboundKeys } from "@/api/outbounds"
 import type { OutboundDraft, OutboundKind } from "@/api/outbounds"
+import { WayUse } from "@/components/Holders"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { Count, Flag, Line, ListLine, Part, Switch } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
@@ -13,6 +14,7 @@ import { same } from "@/store/draftSlice"
 export function OutboundForm({
   start,
   publicKey,
+  self,
   pending,
   error,
   onSave,
@@ -21,6 +23,7 @@ export function OutboundForm({
 }: {
   start: OutboundDraft
   publicKey: string
+  self?: string
   pending: boolean
   error: unknown
   onSave: (draft: OutboundDraft) => void
@@ -104,6 +107,16 @@ export function OutboundForm({
           </select>
         </div>
       </Part>
+
+      {self !== undefined && (
+        <WayUse
+          name={self}
+          rules={draft.rules}
+          balancers={draft.balancers}
+          onRules={(rules) => put({ rules })}
+          onBalancers={(balancers) => put({ balancers })}
+        />
+      )}
 
       <Part title={t("outbounds.probe")}>
         <Line

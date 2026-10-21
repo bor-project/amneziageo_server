@@ -1,9 +1,12 @@
 import { useState } from "react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
+import { useApiTokens } from "@/api/apiTokens"
 import { complaint } from "@/api/auth"
 import { useAddRole, useChangeRole, useRoles } from "@/api/roles"
+import { useUsers } from "@/api/users"
 import { useTail } from "@/components/crumbs"
-import { Line, Part } from "@/components/fields"
+import { Line, LinkLine, Links, Part } from "@/components/fields"
+import { tokenItems, userItems } from "@/components/members"
 import { danger, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -25,12 +28,19 @@ function NewRole() {
   const [name, setName] = useState("")
   const [title, setTitle] = useState("")
   const [held, setHeld] = useState<string[]>([])
-  const edited = name.length > 0 || title.length > 0 || held.length > 0
+  const users = useUsers(true).data ?? []
+  const [members, setMembers] = useState<string[]>([])
+  const edited = name.length > 0 || title.length > 0 || held.length > 0 || members.length > 0
 
   useTail([{ label: t("roles.newTitle") }])
 
   async function save() {
-    await add.mutateAsync({ name: name.trim(), title: title.trim(), scopes: held })
+    await add.mutateAsync({
+      name: name.trim(),
+      title: title.trim(),
+      scopes: held,
+      ...(members.length > 0 ? { users: members } : {}),
+    })
     navigate(back)
   }
 
@@ -40,6 +50,18 @@ function NewRole() {
         <Line id="new-role-name" caption={t("roles.name")} value={name} onChange={setName} />
         <Line id="new-role-title" caption={t("roles.label")} value={title} onChange={setTitle} />
         <Rights all={catalog.data?.scopes ?? []} held={held} onChange={setHeld} />
+      </Part>
+
+      <Part title={t("roles.users")}>
+        <div className="sm:col-span-2">
+          <Links
+            id="new-role-users"
+            value={members}
+            items={userItems(users, catalog.data?.roles ?? [], t("role.none"))}
+            placeholder={t("roles.addUser")}
+            onChange={setMembers}
+          />
+        </div>
       </Part>
 
       {add.error !== null && <div className="text-sm text-alarm">{t(complaint(add.error))}</div>}
@@ -70,6 +92,9 @@ function HeldRole({ name }: { name: string }) {
   const held = catalog.data?.roles.find((one) => one.name === name)
   const [title, setTitle] = useState<string | null>(null)
   const [scopes, setScopes] = useState<string[] | null>(null)
+  const users = useUsers(true).data ?? []
+  const tokens = useApiTokens().data ?? []
+  const [members, setMembers] = useState<string[] | null>(null)
 
   useTail([{ label: name }])
 
@@ -84,12 +109,21 @@ function HeldRole({ name }: { name: string }) {
   const shown = title ?? held.title
   const rights = scopes ?? held.scopes
   const builtin = held.builtin
-  const edited = shown.trim() !== held.title || (!builtin && !same(rights, held.scopes))
+  const holding = users.filter((one) => one.role === name).map((one) => one.name)
+  const team = members ?? holding
+  const mine = tokens.filter((one) => one.role === name)
+  const edited =
+    shown.trim() !== held.title ||
+    (!builtin && !same(rights, held.scopes)) ||
+    (members !== null && !same(members, holding))
 
   async function save() {
     await change.mutateAsync({
       name,
-      change: builtin ? { title: shown.trim() } : { title: shown.trim(), scopes: rights },
+      change: {
+        ...(builtin ? { title: shown.trim() } : { title: shown.trim(), scopes: rights }),
+        ...(members === null ? {} : { users: members }),
+      },
     })
     navigate(back)
   }
@@ -100,6 +134,25 @@ function HeldRole({ name }: { name: string }) {
         <Line id="edit-role-title" caption={t("roles.label")} value={shown} onChange={setTitle} />
         <div />
         <Rights all={catalog.data?.scopes ?? []} held={rights} onChange={setScopes} locked={builtin} />
+      </Part>
+
+      <Part title={t("roles.users")}>
+        <div className="sm:col-span-2">
+          <Links
+            id="role-users"
+            value={team}
+            items={userItems(users, catalog.data?.roles ?? [], t("role.none"))}
+            placeholder={t("roles.addUser")}
+            fixed={holding}
+            onChange={setMembers}
+          />
+        </div>
+      </Part>
+
+      <Part title={t("roles.tokens")}>
+        <div className="text-sm text-ink sm:col-span-2">
+          {mine.length === 0 ? t("clients.dash") : <LinkLine items={tokenItems(mine)} />}
+        </div>
       </Part>
 
       {change.error !== null && <div className="text-sm text-alarm">{t(complaint(change.error))}</div>}

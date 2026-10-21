@@ -17,7 +17,8 @@ public sealed record PresetResponse(
     bool IsDefault,
     int Templates,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    IReadOnlyList<long>? TemplateIds = null);
 
 /// <summary>
 /// The lists a routing preset is added or changed with.
@@ -29,7 +30,8 @@ public sealed record PresetRequest(
     IReadOnlyList<string>? Block,
     bool? AllUdp = null,
     bool? Full = null,
-    bool? IsDefault = null);
+    bool? IsDefault = null,
+    IReadOnlyList<long>? Templates = null);
 
 /// <summary>
 /// Turns routing presets into what the panel reads and back.
@@ -37,11 +39,12 @@ public sealed record PresetRequest(
 public static class PresetAnswers
 {
     /// <summary>
-    /// Returns one preset with the number of templates that name it.
+    /// Returns one preset with the templates that name it.
     /// </summary>
-    public static PresetResponse Preset(RoutingPreset preset, int templates)
+    public static PresetResponse Preset(RoutingPreset preset, IReadOnlyList<long> templates)
     {
         ArgumentNullException.ThrowIfNull(preset);
+        ArgumentNullException.ThrowIfNull(templates);
 
         return new PresetResponse(
             preset.Id,
@@ -53,9 +56,10 @@ public static class PresetAnswers
             preset.AllUdp,
             preset.Full,
             preset.IsDefault,
-            templates,
+            templates.Count,
             preset.CreatedUtc,
-            preset.UpdatedUtc);
+            preset.UpdatedUtc,
+            templates);
     }
 
     /// <summary>
@@ -75,5 +79,15 @@ public static class PresetAnswers
             Full = request.Full ?? false,
             IsDefault = request.IsDefault ?? held?.IsDefault ?? false,
         };
+    }
+
+    /// <summary>
+    /// Returns the templates a request hands the preset to, null when it leaves them as they are.
+    /// </summary>
+    public static IReadOnlyList<long>? Holders(PresetRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return request.Templates is null ? null : [.. request.Templates.Distinct()];
     }
 }

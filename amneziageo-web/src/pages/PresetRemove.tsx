@@ -1,7 +1,10 @@
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { usePresets, useRemovePreset } from "@/api/presets"
+import { useTemplates } from "@/api/templates"
 import { useTail } from "@/components/crumbs"
+import { LinkLine } from "@/components/fields"
+import { templateItems } from "@/components/members"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
@@ -12,6 +15,7 @@ export function PresetRemove() {
   const back = useSpot("/clients/presets")
   const { presetId } = useParams()
   const presets = usePresets()
+  const templates = useTemplates()
   const remove = useRemovePreset()
   const held = presets.data?.find((one) => one.id === Number(presetId))
 
@@ -36,6 +40,12 @@ export function PresetRemove() {
       <div className={`border-alarm-line p-4 ${card}`}>
         <div className="text-[13px] font-semibold text-alarm">{t("action.forever")}</div>
         <div className="mt-1 text-[13px] text-muted">{t("presets.removeNote")}</div>
+        {held.templateIds.length > 0 && (
+          <div className="text-[13px] text-muted">
+            {`${t("presets.partTemplates")}: `}
+            <LinkLine items={templateItems((templates.data ?? []).filter((one) => held.templateIds.includes(one.id)))} />
+          </div>
+        )}
       </div>
 
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}

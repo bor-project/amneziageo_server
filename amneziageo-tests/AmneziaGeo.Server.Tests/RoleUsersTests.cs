@@ -1,0 +1,94 @@
+using AmneziaGeo.Server.Auth;
+
+namespace AmneziaGeo.Server.Tests;
+
+public class RoleUsersTests
+{
+    [Fact]
+    public async Task ARoleIsHandedToTheAccountsOnTheList()
+    {
+        using var bench = new Bench();
+        await bench.RoleAsync("viewer", Scopes.ReadState);
+        await bench.UserAsync("one", "long-enough", "viewer");
+        var me = await bench.UserAsync("two", "long-enough");
+        await bench.UserAsync("three", "long-enough");
+
+        var handed = await bench.Accounts.HandRoleAsync("viewer", ["one", "three"], me.Id, CancellationToken.None);
+        var view = await bench.Accounts.FindAsync("three", CancellationToken.None);
+
+        Assert.Null(handed.Refusal);
+        Assert.Equal(["three"], handed.Moved.Select(user => user.UserName));
+        Assert.Equal("viewer", view!.Role);
+    }
+
+    [Fact]
+    public async Task AnAccountHoldingTheRoleStaysOnTheList()
+    {
+        using var bench = new Bench();
+        await bench.RoleAsync("viewer", Scopes.ReadState);
+        await bench.UserAsync("one", "long-enough", "viewer");
+        var me = await bench.UserAsync("two", "long-enough");
+        await bench.UserAsync("three", "long-enough");
+
+        var handed = await bench.Accounts.HandRoleAsync("viewer", ["three"], me.Id, CancellationToken.None);
+
+        Assert.Equal(AccountOutcome.KeepsUsers, handed.Refusal!.Outcome);
+        Assert.Empty(handed.Moved);
+        Assert.Equal(Roles.Admin, (await bench.Accounts.FindAsync("three", CancellationToken.None))!.Role);
+    }
+
+    [Fact]
+    public async Task TheCallerDoesNotTakeTheirOwnRightsAway()
+    {
+        using var bench = new Bench();
+        await bench.RoleAsync("viewer", Scopes.ReadState);
+        var me = await bench.UserAsync("two", "long-enough");
+        await bench.UserAsync("three", "long-enough");
+        await bench.UserAsync("four", "long-enough");
+
+        var handed = await bench.Accounts.HandRoleAsync("viewer", ["three", "two"], me.Id, CancellationToken.None);
+
+        Assert.Equal(AccountOutcome.Self, handed.Refusal!.Outcome);
+        Assert.Equal(Roles.Admin, (await bench.Accounts.FindAsync("three", CancellationToken.None))!.Role);
+    }
+
+    [Fact]
+    public async Task TheLastAdministratorsAreKept()
+    {
+        using var bench = new Bench();
+        await bench.RoleAsync("viewer", Scopes.ReadState);
+        await bench.UserAsync("two", "long-enough");
+        await bench.UserAsync("three", "long-enough");
+
+        var handed = await bench.Accounts.HandRoleAsync("viewer", ["two", "three"], actorId: 0, CancellationToken.None);
+
+        Assert.Equal(AccountOutcome.LastAdmin, handed.Refusal!.Outcome);
+        Assert.Equal(Roles.Admin, (await bench.Accounts.FindAsync("two", CancellationToken.None))!.Role);
+        Assert.Equal(Roles.Admin, (await bench.Accounts.FindAsync("three", CancellationToken.None))!.Role);
+    }
+
+    [Fact]
+    public async Task AnUnknownAccountIsRefusedAndNothingChanges()
+    {
+        using var bench = new Bench();
+        await bench.RoleAsync("viewer", Scopes.ReadState);
+        var me = await bench.UserAsync("two", "long-enough");
+        await bench.UserAsync("three", "long-enough");
+
+        var handed = await bench.Accounts.HandRoleAsync("viewer", ["three", "nobody"], me.Id, CancellationToken.None);
+
+        Assert.Equal(AccountOutcome.Unknown, handed.Refusal!.Outcome);
+        Assert.Equal(Roles.Admin, (await bench.Accounts.FindAsync("three", CancellationToken.None))!.Role);
+    }
+
+    [Fact]
+    public async Task AnUnknownRoleIsRefused()
+    {
+        using var bench = new Bench();
+        var me = await bench.UserAsync("two", "long-enough");
+
+        var handed = await bench.Accounts.HandRoleAsync("nobody", ["two"], me.Id, CancellationToken.None);
+
+        Assert.Equal(AccountOutcome.UnknownRole, handed.Refusal!.Outcome);
+    }
+}

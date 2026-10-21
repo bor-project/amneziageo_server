@@ -34,7 +34,8 @@ public sealed record BalanceRequest(
     string? Name,
     bool IsEnabled,
     string? Strategy,
-    IReadOnlyList<string>? Members);
+    IReadOnlyList<string>? Members,
+    IReadOnlyList<long>? Rules = null);
 
 /// <summary>
 /// Whether a balancer is on.

@@ -144,7 +144,11 @@ public static class DnsChecks
         {
             var held = id > 0 ? world.Clients.FirstOrDefault(one => one.Id == id) : null;
             var draft = ClientAnswers.Draft(client, held) with { Id = id, IsEnabled = true };
-            var after = world with { Clients = [.. world.Clients.Where(one => one.Id != id), draft] };
+            var after = world with
+            {
+                Clients = [.. world.Clients.Where(one => one.Id != id), draft],
+                Rules = Listed(world.Rules, RuleSide.Clients, held?.Name, draft.Name, client.Rules),
+            };
 
             return Answer(
                 after,
@@ -156,8 +160,13 @@ public static class DnsChecks
         {
             var held = id > 0 ? world.Templates.FirstOrDefault(one => one.Id == id) : null;
             var draft = TemplateAnswers.Draft(template) with { Id = id, AllowedIps = ranges ?? held?.AllowedIps ?? [] };
-            var after = world with { Templates = [.. world.Templates.Where(one => one.Id != id), draft] };
-            var members = id > 0 ? after.Clients.Where(one => one.TemplateId == id).ToArray() : [];
+            var handed = TemplateAnswers.Members(template);
+            var after = world with
+            {
+                Templates = [.. world.Templates.Where(one => one.Id != id), draft],
+                Clients = Handed(world.Clients, id, handed),
+            };
+            var members = id > 0 || handed is not null ? after.Clients.Where(one => one.TemplateId == id).ToArray() : [];
 
             return Spread(
                 after,
@@ -171,7 +180,11 @@ public static class DnsChecks
         {
             var held = id > 0 ? world.Configs.FirstOrDefault(one => one.Id == id) : null;
             var draft = ConfigAnswers.Draft(endpoint, held) with { Id = id };
-            var after = world with { Configs = [.. world.Configs.Where(one => one.Id != id), draft] };
+            var after = world with
+            {
+                Configs = [.. world.Configs.Where(one => one.Id != id), draft],
+                Rules = Listed(world.Rules, RuleSide.Inbounds, held?.Name, draft.Name, endpoint.Rules),
+            };
             var members = id > 0 ? after.Clients.Where(one => one.ConfigId == id).Select(one => one.Id).ToHashSet() : [];
 
             return Answer(
@@ -203,6 +216,51 @@ public static class DnsChecks
         }
 
         return new DnsCheckResponse(null, string.Empty, [], []);
+    }
+
+    // Returns the rules with the client or the endpoint named in the rules a draft lists, as they are when it lists none.
+    private static IReadOnlyList<RouteRule> Listed(
+        IReadOnlyList<RouteRule> rules,
+        RuleSide side,
+        string? held,
+        string name,
+        IReadOnlyList<long>? listed)
+    {
+        if (listed is null)
+        {
+            return rules;
+        }
+
+        var comparer = side.Comparer();
+
+        return [.. rules.Select(rule =>
+        {
+            var names = rule.Of(side)
+                .Where(one => !comparer.Equals(one, name) && (held is null || !comparer.Equals(one, held)))
+                .ToList();
+            if (listed.Contains(rule.Id))
+            {
+                names.Add(name);
+            }
+
+            return side == RuleSide.Clients ? rule with { Clients = names } : rule with { Inbounds = names };
+        })];
+    }
+
+    // Returns the clients with the template a draft hands them, as they are when the draft names none.
+    private static IReadOnlyList<TunnelClient> Handed(IReadOnlyList<TunnelClient> clients, long template, IReadOnlyList<long>? members)
+    {
+        if (members is null)
+        {
+            return clients;
+        }
+
+        return
+        [
+            .. clients.Select(one => members.Contains(one.Id)
+                ? one with { TemplateId = template }
+                : one.TemplateId == template ? one with { TemplateId = null } : one),
+        ];
     }
 
     // Reads what the panel holds that decides the name servers of the clients.

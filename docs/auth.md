@@ -235,10 +235,19 @@ Roles live on the `Roles` tab of the same page, and these routes ask for `access
 | Route | What it does |
 |---|---|
 | `GET /api/roles` | every role with its rights and the number of accounts, and the rights the server knows |
-| `POST /api/roles` | adds a role carrying the rights it is given |
-| `PATCH /api/roles/{name}` | replaces the name shown, the rights, or both |
+| `POST /api/roles` | adds a role carrying the rights it is given and gives it to the accounts in `users` |
+| `PATCH /api/roles/{name}` | replaces the name shown, the rights, the accounts of the role, or some of them |
 | `DELETE /api/roles/{name}` | removes a role no account and no token holds |
 
 `RoleCatalog` holds the rules: a name of the wrong shape (`bad-name`), a name already taken (`name-taken`),
 a right the server does not know (`unknown-scope`), the built in role (`builtin-role`), and a role that is
 still given to accounts (`role-in-use`) or carried by tokens (`role-has-tokens`).
+
+`users` names every account that holds the role after the request. An account on the list takes the role in place
+of the one it held, the way the settings of the account give it, and an account of a host user is carried to the
+host. An account that holds the role and is missing from the list is refused with `role-keeps-users` (400): it
+leaves the role only for another role. An account the panel does not hold (`unknown-user`), the caller taking
+their own rights away (`self`) and the last administrator (`last-admin`) are refused before anything is changed;
+a new role refused this way is not kept. The settings of a role name its accounts, which take the role there, and
+its tokens; the list of roles counts both, the page that removes a role names both, and the role of an account and
+of a token is a link to it.

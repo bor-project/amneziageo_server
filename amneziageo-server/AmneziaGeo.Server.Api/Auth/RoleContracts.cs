@@ -15,12 +15,12 @@ public sealed record RoleListResponse(RoleResponse[] Roles, string[] Scopes);
 /// <summary>
 /// A new role as the interface sends it.
 /// </summary>
-public sealed record RoleCreateRequest(string? Name, string? Title, string[]? Scopes);
+public sealed record RoleCreateRequest(string? Name, string? Title, string[]? Scopes, string[]? Users = null);
 
 /// <summary>
 /// The parts of a role the interface changes.
 /// </summary>
-public sealed record RolePatchRequest(string? Title, string[]? Scopes);
+public sealed record RolePatchRequest(string? Title, string[]? Scopes, string[]? Users = null);
 
 /// <summary>
 /// Builds the role answers of the management routes.

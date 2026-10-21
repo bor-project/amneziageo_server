@@ -39,14 +39,20 @@ export function Clients() {
   const may = holds(user, scopes.manageClients)
   const report = useDnsConflicts().data
   const picked = Number(params.get("config") ?? 0)
+  const kind = params.get("template") ?? ""
+  const mayInterfaces = holds(user, scopes.manageInterfaces)
   const find = params.get("find") ?? ""
   const online = params.get("online") === "1"
   const all = clients.data ?? []
   const shown = all.filter(
-    (one) => (picked === 0 || one.configId === picked) && (!online || one.state.isOnline) && matches(one, find),
+    (one) =>
+      (picked === 0 || one.configId === picked) &&
+      takes(one, kind) &&
+      (!online || one.state.isOnline) &&
+      matches(one, find),
   )
   const names = new Map((templates.data ?? []).map((one): [number, string] => [one.id, one.name]))
-  const view = `${picked}|${find}|${online ? 1 : 0}`
+  const view = `${picked}|${kind}|${find}|${online ? 1 : 0}`
   const [choice, setChoice] = useState({ view, keys: nothing })
   const [note, setNote] = useState({ view, told: quiet })
   const chosen = choice.view === view ? choice.keys : nothing
@@ -168,6 +174,22 @@ export function Clients() {
                 ))}
               </select>
 
+              <select
+                id="client-template"
+                aria-label={t("clients.template")}
+                value={kind}
+                onChange={(e) => put("template", e.target.value)}
+                className={`w-full wide:w-56 ${fieldBox}`}
+              >
+                <option value="">{t("clients.everyTemplate")}</option>
+                <option value="none">{t("clients.noTemplate")}</option>
+                {(templates.data ?? []).map((one) => (
+                  <option key={one.id} value={one.id}>
+                    {one.name}
+                  </option>
+                ))}
+              </select>
+
               <Find value={find} onChange={(value) => put("find", value)} className="w-full wide:w-64" />
 
               <div className="wide:ml-2">
@@ -226,7 +248,14 @@ export function Clients() {
               caption: t("clients.endpointName"),
               width: 112,
               sort: (one) => one.config,
-              cell: (one) => one.config,
+              cell: (one) =>
+                mayInterfaces ? (
+                  <Link to={`/interfaces/${one.configId}/edit`} className="text-brand-ink hover:text-brand-lit">
+                    {one.config}
+                  </Link>
+                ) : (
+                  one.config
+                ),
             },
             {
               key: "template",
@@ -289,6 +318,14 @@ export function Clients() {
       )}
     </div>
   )
+}
+
+function takes(one: Client, kind: string): boolean {
+  if (kind === "") {
+    return true
+  }
+
+  return kind === "none" ? one.templateId === null : one.templateId === Number(kind)
 }
 
 function matches(one: Client, find: string): boolean {

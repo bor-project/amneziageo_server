@@ -86,6 +86,7 @@ export interface ConfigDraft {
   privateKey: string
   presharedKey: string
   obfuscation: Obfuscation
+  rules?: number[]
 }
 
 export interface ConfigSync {
@@ -225,6 +226,7 @@ function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) 
       await queryClient.invalidateQueries({ queryKey: ["configs"] })
       await queryClient.invalidateQueries({ queryKey: ["firewall", "port"] })
       await queryClient.invalidateQueries({ queryKey: ["dns-conflicts"] })
+      await queryClient.invalidateQueries({ queryKey: ["rules"] })
     },
   })
 }

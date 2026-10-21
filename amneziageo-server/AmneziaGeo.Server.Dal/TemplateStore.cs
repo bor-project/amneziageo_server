@@ -101,6 +101,33 @@ public sealed class TemplateStore
     }
 
     /// <summary>
+    /// Returns the clients that take each template, by number.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<long, IReadOnlyList<long>>> MembersAsync(CancellationToken ct)
+    {
+        var found = await _db.Clients.AsNoTracking()
+            .Where(client => client.TemplateId != null)
+            .OrderBy(client => client.Id)
+            .Select(client => new { client.Id, client.TemplateId })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return found.GroupBy(client => client.TemplateId!.Value)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<long>)group.Select(client => client.Id).ToArray());
+    }
+
+    /// <summary>
+    /// Returns the clients that take no template, by number.
+    /// </summary>
+    public async Task<IReadOnlyList<long>> PlainAsync(CancellationToken ct) =>
+        await _db.Clients.AsNoTracking()
+            .Where(client => client.TemplateId == null)
+            .OrderBy(client => client.Id)
+            .Select(client => client.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+    /// <summary>
     /// Puts the built in template in place, once, in a fresh database.
     /// </summary>
     public Task SeedAsync(CancellationToken ct) => _db.AloneAsync(() => AddBuiltInAsync(ct), ct);
@@ -134,7 +161,12 @@ public sealed class TemplateStore
     /// <summary>
     /// Adds a template with the settings it carries.
     /// </summary>
-    public async Task<TemplateResult> AddAsync(ClientTemplate draft, CancellationToken ct)
+    public Task<TemplateResult> AddAsync(ClientTemplate draft, CancellationToken ct) => AddAsync(draft, null, ct);
+
+    /// <summary>
+    /// Adds a template with the settings it carries and hands it to the clients, none to hand it to nobody.
+    /// </summary>
+    public async Task<TemplateResult> AddAsync(ClientTemplate draft, IReadOnlyCollection<long>? clients, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
@@ -144,12 +176,24 @@ public sealed class TemplateStore
             return refusal;
         }
 
+        if (await StrangerAsync(clients, ct).ConfigureAwait(false) is { } stranger)
+        {
+            return stranger;
+        }
+
         var now = _time.GetUtcNow();
         var entity = new TemplateEntity { CreatedUtc = now, UpdatedUtc = now };
         Write(entity, wanted);
 
-        _db.Templates.Add(entity);
-        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await _db.AloneAsync(
+            async () =>
+            {
+                _db.Templates.Add(entity);
+                await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+                await HandAsync(entity.Id, clients, now, ct).ConfigureAwait(false);
+                await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+            },
+            ct).ConfigureAwait(false);
 
         return TemplateResult.Done(Read(entity));
     }
@@ -157,7 +201,17 @@ public sealed class TemplateStore
     /// <summary>
     /// Replaces the settings of a template.
     /// </summary>
-    public async Task<TemplateResult> ChangeAsync(long id, ClientTemplate draft, CancellationToken ct)
+    public Task<TemplateResult> ChangeAsync(long id, ClientTemplate draft, CancellationToken ct) =>
+        ChangeAsync(id, draft, null, ct);
+
+    /// <summary>
+    /// Replaces the settings of a template and the clients that take it, none to leave the clients as they are.
+    /// </summary>
+    public async Task<TemplateResult> ChangeAsync(
+        long id,
+        ClientTemplate draft,
+        IReadOnlyCollection<long>? clients,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
@@ -173,8 +227,15 @@ public sealed class TemplateStore
             return refusal;
         }
 
+        if (await StrangerAsync(clients, ct).ConfigureAwait(false) is { } stranger)
+        {
+            return stranger;
+        }
+
+        var now = _time.GetUtcNow();
         Write(entity, wanted);
-        entity.UpdatedUtc = _time.GetUtcNow();
+        entity.UpdatedUtc = now;
+        await HandAsync(id, clients, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return TemplateResult.Done(Read(entity));
@@ -202,6 +263,49 @@ public sealed class TemplateStore
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return true;
+    }
+
+    /// <summary>
+    /// Takes the templates off the clients and returns why it refused, or null when it went through.
+    /// </summary>
+    public async Task<TemplateResult?> FreeAsync(IReadOnlyCollection<long> clients, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(clients);
+
+        if (await StrangerAsync(clients, ct).ConfigureAwait(false) is { } stranger)
+        {
+            return stranger;
+        }
+
+        var wanted = clients.Distinct().ToArray();
+        var kept = await _db.Clients.AsNoTracking()
+            .Where(client => client.TemplateId == null && !wanted.Contains(client.Id))
+            .OrderBy(client => client.Id)
+            .Select(client => client.Name)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        if (kept is not null)
+        {
+            return TemplateResult.No(
+                TemplateOutcome.Invalid,
+                "default-keeps-clients",
+                $"the client '{kept}' takes no template and gets one in the form of that template");
+        }
+
+        var now = _time.GetUtcNow();
+        var moved = await _db.Clients
+            .Where(client => client.TemplateId != null && wanted.Contains(client.Id))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        foreach (var client in moved)
+        {
+            client.TemplateId = null;
+            client.UpdatedUtc = now;
+        }
+
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return null;
     }
 
     /// <summary>
@@ -271,6 +375,51 @@ public sealed class TemplateStore
             .ConfigureAwait(false);
 
         return named.Where(id => !held.Contains(id)).Select(id => (long?)id).FirstOrDefault();
+    }
+
+    // Returns the refusal of a list that names a client the panel does not hold, or null when it holds them all.
+    private async Task<TemplateResult?> StrangerAsync(IReadOnlyCollection<long>? clients, CancellationToken ct)
+    {
+        if (clients is null || clients.Count == 0)
+        {
+            return null;
+        }
+
+        var wanted = clients.Distinct().ToArray();
+        var held = await _db.Clients.AsNoTracking()
+            .Where(client => wanted.Contains(client.Id))
+            .Select(client => client.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var missing = wanted.Except(held).ToArray();
+
+        return missing.Length == 0
+            ? null
+            : TemplateResult.No(TemplateOutcome.Invalid, "unknown-client", $"there is no client under the number {missing[0]}");
+    }
+
+    // Hands the template to the clients on the list and takes it off the other clients that took it.
+    private async Task HandAsync(long id, IReadOnlyCollection<long>? clients, DateTimeOffset now, CancellationToken ct)
+    {
+        if (clients is null)
+        {
+            return;
+        }
+
+        var wanted = clients.Distinct().ToArray();
+        var touched = await _db.Clients
+            .Where(client => client.TemplateId == id || wanted.Contains(client.Id))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        foreach (var client in touched)
+        {
+            var takes = wanted.Contains(client.Id) ? id : (long?)null;
+            if (client.TemplateId != takes)
+            {
+                client.TemplateId = takes;
+                client.UpdatedUtc = now;
+            }
+        }
     }
 
     private static TemplateResult Missing(long id) =>

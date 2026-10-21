@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Clients;
+using AmneziaGeo.Server.Api.Configs;
 using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Awg.Client;
@@ -247,6 +248,60 @@ public class DnsConflictsTests
         Assert.Equal(
             ["awg1 10.8.0.1 standins", "awg2 10.8.1.1 standins", "awg3 10.8.2.1 standins"],
             Lines(DnsChecks.Check(open, new DnsCheckRequest(null, Template: draft))));
+    }
+
+    [Fact]
+    public void ATemplateCheckTakesTheClientsTheDraftNames()
+    {
+        var world = new DnsWorld
+        {
+            Settings = On,
+            Configs = [Config(1, "awg1", "10.8.0.1/24"), Config(2, "awg2", "10.8.1.1/24")],
+            Templates = [new ClientTemplate { Id = 2, Name = "names", StandIns = true }],
+            Clients = [Client(1, 2, "guest") with { TemplateId = 2 }, Client(2, 1, "anna")],
+        };
+        var draft = new TemplateRequest("names", ["youtube.com"], [], null, null, StandIns: true, Clients: [2]);
+
+        Assert.Equal(["awg1 10.8.0.1 standins"], Lines(DnsChecks.Check(world, new DnsCheckRequest(2, Template: draft))));
+        Assert.Equal(["awg1 10.8.0.1 standins"], Lines(DnsChecks.Check(world, new DnsCheckRequest(null, Template: draft))));
+        Assert.Equal(
+            ["awg2 10.8.1.1 standins"],
+            Lines(DnsChecks.Check(world, new DnsCheckRequest(2, Template: draft with { Clients = null }))));
+    }
+
+    [Fact]
+    public void AClientCheckTakesTheRulesTheDraftNames()
+    {
+        var world = new DnsWorld
+        {
+            Settings = Off,
+            Configs = [Config(1, "awg1", "10.8.0.1/24")],
+            Clients = [Client(1, 1, "anna"), Client(2, 1, "bob")],
+            Rules = [Rule(1, "yt", "anna")],
+        };
+        var draft = new ClientRequest(1, "bob", null, null, null, null, null, null, Rules: [1]);
+
+        Assert.Equal(["rule-off:error:dns0,rule1:anna,bob"], Said(DnsChecks.Check(world, new DnsCheckRequest(2, Client: draft)).Findings));
+        Assert.Empty(DnsChecks.Check(world, new DnsCheckRequest(2, Client: draft with { Rules = null })).Findings);
+    }
+
+    [Fact]
+    public void AnEndpointCheckTakesTheRulesTheDraftNames()
+    {
+        var world = new DnsWorld
+        {
+            Settings = Off,
+            Configs = [Config(1, "awg1", "10.8.0.1/24"), Config(2, "awg2", "10.8.1.1/24")],
+            Clients = [Client(1, 1, "anna"), Client(3, 2, "carl")],
+            Rules = [Rule(1, "yt") with { Inbounds = ["awg1"] }],
+        };
+        var draft = new ConfigRequest("awg2", null, 0, ["10.8.1.1/24"], null, ["0.0.0.0/0"], 0, 0, true, null, null, null, null, null, null, Rules: [1]);
+
+        var named = DnsChecks.Check(world, new DnsCheckRequest(2, Config: draft));
+        var kept = DnsChecks.Check(world, new DnsCheckRequest(2, Config: draft with { Rules = null }));
+
+        Assert.Contains(named.Findings, one => one.Clients.Any(client => client.Name == "carl"));
+        Assert.DoesNotContain(kept.Findings, one => one.Clients.Any(client => client.Name == "carl"));
     }
 
     private static IReadOnlyList<string> Said(DnsReport report) => Said(report.Findings);

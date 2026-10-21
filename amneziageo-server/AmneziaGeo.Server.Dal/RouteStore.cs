@@ -37,6 +37,43 @@ public sealed record RouteResult(RouteOutcome Outcome, string Code, string Messa
 }
 
 /// <summary>
+/// The list of a rule a client or an endpoint is named in.
+/// </summary>
+public enum RuleSide
+{
+    Clients = 0,
+    Inbounds = 1,
+}
+
+/// <summary>
+/// Reads the names a rule matches by on one side.
+/// </summary>
+public static class RuleSides
+{
+    /// <summary>
+    /// Returns the names on the side of a rule.
+    /// </summary>
+    public static IReadOnlyList<string> Of(this RouteRule rule, RuleSide side)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        return side == RuleSide.Clients ? rule.Clients : rule.Inbounds;
+    }
+
+    /// <summary>
+    /// Returns how the names of a side are told apart: clients whatever the case, endpoints exactly.
+    /// </summary>
+    public static StringComparer Comparer(this RuleSide side) =>
+        side == RuleSide.Clients ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    /// <summary>
+    /// Returns the rules that name the client or the endpoint, by number.
+    /// </summary>
+    public static IReadOnlyList<long> Naming(IEnumerable<RouteRule> rules, RuleSide side, string name) =>
+        [.. rules.Where(rule => rule.Of(side).Contains(name, side.Comparer())).Select(rule => rule.Id)];
+}
+
+/// <summary>
 /// Adds, changes and removes the routing rules the panel holds.
 /// </summary>
 public sealed class RouteStore
@@ -279,6 +316,140 @@ public sealed class RouteStore
         var last = await _db.Rules.MaxAsync(rule => (int?)rule.Position, ct).ConfigureAwait(false);
 
         return (last ?? 0) + 1;
+    }
+
+    /// <summary>
+    /// Returns why the client or the endpoint under the name cannot be named by the rules on the list and by no other,
+    /// or null when it can.
+    /// </summary>
+    public async Task<RouteResult?> RefuseNamingAsync(RuleSide side, string name, IReadOnlyCollection<long> rules, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var held = await ListAsync(ct).ConfigureAwait(false);
+        var known = held.Select(rule => rule.Id).ToHashSet();
+        var stranger = rules.FirstOrDefault(id => !known.Contains(id));
+        if (stranger > 0)
+        {
+            return Missing(stranger);
+        }
+
+        foreach (var rule in held)
+        {
+            var names = rule.Of(side);
+            var named = names.Contains(name, side.Comparer());
+            var takes = rules.Contains(rule.Id);
+            if (takes && !named && names.Count == 0)
+            {
+                return RouteResult.No(
+                    RouteOutcome.Invalid,
+                    "rule-for-everyone",
+                    $"the rule '{rule.Name}' matches every one, naming '{name}' in it would narrow it");
+            }
+
+            if (!takes && named && names.Count == 1)
+            {
+                return RouteResult.No(
+                    RouteOutcome.Invalid,
+                    "rule-keeps-last",
+                    $"'{name}' is the last one the rule '{rule.Name}' names, without it the rule would match every one");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Names the client or the endpoint in the rules on the list and takes the name off the other rules.
+    /// </summary>
+    public async Task NameInAsync(RuleSide side, string name, IReadOnlyCollection<long> rules, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var now = _time.GetUtcNow();
+        var comparer = side.Comparer();
+        foreach (var entity in await _db.Rules.ToListAsync(ct).ConfigureAwait(false))
+        {
+            var names = Read(entity).Of(side);
+            var takes = rules.Contains(entity.Id);
+            if (names.Contains(name, comparer) == takes)
+            {
+                continue;
+            }
+
+            var next = string.Join(", ", takes ? names.Append(name) : names.Where(one => !comparer.Equals(one, name)));
+            if (side == RuleSide.Clients)
+            {
+                entity.Clients = next;
+            }
+            else
+            {
+                entity.Inbounds = next;
+            }
+
+            entity.UpdatedUtc = now;
+        }
+
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Returns why the rules on the list cannot leave through the outbound or the balancer under the name while the
+    /// rules that leave through it keep doing so, or null when they can.
+    /// </summary>
+    public async Task<RouteResult?> RefuseLeavingAsync(string way, IReadOnlyCollection<long> rules, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var held = await ListAsync(ct).ConfigureAwait(false);
+        var known = held.Select(rule => rule.Id).ToHashSet();
+        var stranger = rules.FirstOrDefault(id => !known.Contains(id));
+        if (stranger > 0)
+        {
+            return Missing(stranger);
+        }
+
+        foreach (var rule in held)
+        {
+            var outward = rule.Action == RouteAction.Out;
+            var takes = rules.Contains(rule.Id);
+            if (outward && !takes && string.Equals(rule.Outbound, way, StringComparison.Ordinal))
+            {
+                return RouteResult.No(
+                    RouteOutcome.Invalid,
+                    "way-keeps-rules",
+                    $"the rule '{rule.Name}' leaves through '{way}', another way out is picked in the rule");
+            }
+
+            if (takes && !outward)
+            {
+                return RouteResult.No(
+                    RouteOutcome.Invalid,
+                    "rule-not-out",
+                    $"the rule '{rule.Name}' sends its traffic through no outbound");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Sends the rules on the list out through the outbound or the balancer under the name.
+    /// </summary>
+    public async Task LeaveThroughAsync(string way, IReadOnlyCollection<long> rules, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var now = _time.GetUtcNow();
+        var wanted = rules.Distinct().ToList();
+        var found = await _db.Rules.Where(rule => wanted.Contains(rule.Id)).ToListAsync(ct).ConfigureAwait(false);
+        foreach (var entity in found.Where(entity => !string.Equals(entity.Outbound, way, StringComparison.Ordinal)))
+        {
+            entity.Outbound = way;
+            entity.UpdatedUtc = now;
+        }
+
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     private static RouteResult Missing(long id) =>

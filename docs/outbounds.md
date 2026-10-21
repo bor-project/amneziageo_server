@@ -160,7 +160,14 @@ Adding, changing, turning on and off, and removing an outbound each put it on th
 Renaming an outbound writes the new name into the rules and the balancers that name it and into the settings of
 the resolver, the saved and the running ones alike, so nothing that left through the outbound loses it. An
 outbound that a rule, a balancer or the resolver leaves through is not removed: the panel answers
-`outbound-in-use` and names what holds it. The resolver holds both the outbound its settings name and the one
+`outbound-in-use` and names what holds it, and the page that removes it names every rule, balancer and the
+resolver at once. The part `Use` of the settings names the rules that leave through the outbound and the balancers
+it is in, each a link: a rule leaving through another way is moved onto the outbound there, a rule is not taken
+off it (another way is picked in the rule, `way-keeps-rules`), and only a rule that leaves through a way can be
+moved (`rule-not-out`); a balancer added there takes the outbound last, one taken off drops it, and the last
+outbound of a balancer stays (`no-members`). `PUT /api/outbounds/{id}` takes them in `rules` and `balancers`, the
+numbers of every rule and balancer that holds the outbound after the request; a request without a field leaves
+that side as it is. The resolver holds both the outbound its settings name and the one
 it asks through right now: while the two differ, that is while `pending` stands, neither of them is removed,
 and the refusal of the running one ends with `until it is restarted`.
 `POST /api/outbounds/apply` goes over every outbound, rewrites the firewall table and lays the rules again;

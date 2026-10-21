@@ -2,6 +2,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { findingsOf, useDnsConflicts } from "@/api/dns"
 import { useFailure } from "@/api/failure"
+import { usePresets } from "@/api/presets"
 import { scopes } from "@/api/scopes"
 import { useTemplateDefaults, useTemplates } from "@/api/templates"
 import type { Template } from "@/api/templates"
@@ -10,7 +11,7 @@ import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { DnsMark } from "@/components/DnsMark"
 import { Find } from "@/components/fields"
-import { alarmBar, alarmLine, card } from "@/components/styles"
+import { alarmBar, alarmLine, card, fieldBox } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { Text } from "@/i18n"
 import { holds } from "@/store/authSlice"
@@ -27,10 +28,33 @@ export function Templates() {
   const defaults = useTemplateDefaults().data
   const may = holds(user, scopes.manageClients)
   const report = useDnsConflicts().data
+  const presets = usePresets().data ?? []
   const find = params.get("find") ?? ""
+  const preset = params.get("preset") ?? ""
   const all = templates.data ?? []
-  const list = all.filter((one) => matches(one, find))
+  const list = all.filter((one) => matches(one, find) && (preset === "" || one.presets.includes(Number(preset))))
   const allowed = defaults?.allowedIps.join(", ") ?? ""
+  const plain: Template | null =
+    defaults === undefined
+      ? null
+      : {
+          id: 0,
+          name: t("clients.noTemplate"),
+          entries: [],
+          allowedIps: defaults.allowedIps,
+          missed: [],
+          dnsMode: "auto",
+          dns: defaults.dns,
+          mtu: defaults.mtu,
+          keepalive: defaults.keepalive,
+          presets: [],
+          standIns: false,
+          clients: defaults.clientIds.length,
+          clientIds: defaults.clientIds,
+          refreshedUtc: null,
+          createdUtc: "",
+          updatedUtc: "",
+        }
 
   function put(key: string, value: string) {
     const kept = new URLSearchParams(params)
@@ -45,7 +69,7 @@ export function Templates() {
   }
 
   function actions(one: Template): RowAction[] {
-    return [{ label: t("action.settings"), onPick: () => navigate(`/clients/templates/${one.id}/edit`) }]
+    return [{ label: t("action.settings"), onPick: () => navigate(pageOf(one)) }]
   }
 
   function resolved(one: Template) {
@@ -81,9 +105,27 @@ export function Templates() {
         {all.length > 0 && (
           <Rows
             items={list}
+            pinned={plain !== null && preset === "" && matches(plain, find) ? [plain] : []}
             keyOf={(one) => one.id}
             tools={
-              <Find value={find} onChange={(value) => put("find", value)} className="w-full wide:w-72" />
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  id="template-preset"
+                  aria-label={t("templates.presets")}
+                  value={preset}
+                  onChange={(e) => put("preset", e.target.value)}
+                  className={`w-full wide:w-56 ${fieldBox}`}
+                >
+                  <option value="">{t("templates.everyPreset")}</option>
+                  {presets.map((one) => (
+                    <option key={one.id} value={one.id}>
+                      {one.name}
+                    </option>
+                  ))}
+                </select>
+
+                <Find value={find} onChange={(value) => put("find", value)} className="w-full wide:w-72" />
+              </div>
             }
             columns={[
               {
@@ -96,13 +138,16 @@ export function Templates() {
                 cell: (one) => (
                   <span className="flex min-w-0 items-center gap-2">
                     {may ? (
-                      <Link to={`/clients/templates/${one.id}/edit`} className="truncate hover:text-brand-ink">
+                      <Link
+                        to={pageOf(one)}
+                        className={`truncate hover:text-brand-ink ${one.id === 0 ? "font-normal text-muted" : ""}`}
+                      >
                         {one.name}
                       </Link>
                     ) : (
-                      <span className="truncate">{one.name}</span>
+                      <span className={`truncate ${one.id === 0 ? "font-normal text-muted" : ""}`}>{one.name}</span>
                     )}
-                    <DnsMark findings={findingsOf(report, "template", one.id)} view="template" />
+                    {one.id > 0 && <DnsMark findings={findingsOf(report, "template", one.id)} view="template" />}
                   </span>
                 ),
               },
@@ -139,7 +184,14 @@ export function Templates() {
                 width: 120,
                 caption: t("templates.clients"),
                 sort: (one) => one.clients,
-                cell: (one) => one.clients,
+                cell: (one) => (
+                  <Link
+                    to={`/clients?template=${one.id === 0 ? "none" : one.id}`}
+                    className="text-brand-ink hover:text-brand-lit"
+                  >
+                    {one.clients}
+                  </Link>
+                ),
               },
               {
                 key: "actions",
@@ -154,6 +206,10 @@ export function Templates() {
       </div>
     </div>
   )
+}
+
+function pageOf(one: Template): string {
+  return one.id === 0 ? "/clients/templates/default" : `/clients/templates/${one.id}/edit`
 }
 
 function matches(one: Template, find: string): boolean {

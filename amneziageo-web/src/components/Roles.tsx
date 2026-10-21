@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom"
+import { useApiTokens } from "@/api/apiTokens"
 import { useRoles } from "@/api/roles"
 import type { Role } from "@/api/roles"
 import { RowActions } from "@/components/RowActions"
@@ -11,6 +12,7 @@ export function Roles() {
   const t = useText()
   const navigate = useNavigate()
   const catalog = useRoles()
+  const tokens = useApiTokens().data ?? []
 
   return (
     <div className={card}>
@@ -63,6 +65,13 @@ export function Roles() {
               caption: t("roles.users"),
               sort: (one) => one.users,
               cell: (one) => one.users,
+            },
+            {
+              key: "tokens",
+              width: 120,
+              caption: t("roles.tokens"),
+              sort: (one) => tokens.filter((token) => token.role === one.name).length,
+              cell: (one) => tokens.filter((token) => token.role === one.name).length,
             },
             {
               key: "actions",

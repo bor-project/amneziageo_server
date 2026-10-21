@@ -47,7 +47,11 @@ export function ApiTokens() {
               width: 144,
               caption: t("apiTokens.role"),
               sort: (one) => titleOf(catalog.data?.roles ?? [], one.role),
-              cell: (one) => titleOf(catalog.data?.roles ?? [], one.role),
+              cell: (one) => (
+                <Link to={`/settings/users/roles/${one.role}/edit`} className="hover:text-brand-ink">
+                  {titleOf(catalog.data?.roles ?? [], one.role)}
+                </Link>
+              ),
             },
             {
               key: "created",

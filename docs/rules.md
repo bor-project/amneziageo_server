@@ -54,6 +54,14 @@ configuration writes the new name into every rule that names it, so the rule goe
 traffic; a client added later under a name a rule used to carry is not taken into it. An outbound or a
 balancer renamed is written into the rules the same way, see `outbounds.md` and `balancers.md`.
 
+The settings of a client and of an interface name the rules that name them, under `Routing`, and the rules that
+match everyone on that side; a rule is added there and taken off there as well as in the rule itself, see
+`clients.md` and `configs.md`. Neither of them narrows a rule that matches everyone (`rule-for-everyone`) or takes
+the last name off a rule (`rule-keeps-last`), since a rule without names would match everyone. Removing a client or
+an interface takes its name off the rules that name others too and turns off a rule it was the last one of, keeping
+the name in it; removing an interface does the same for each of its clients. The page that removes them names both
+kinds of rules. The clients and the interfaces of a rule are links in the list and in its settings.
+
 A rule took client addresses and ranges by hand in `sources` before; the field is gone, and a request that still
 carries addresses in it is refused with `sources-gone`, so that the rule does not quietly take every client. At
 the update the panel moves the addresses of every rule over to the clients standing at them, by name, and turns

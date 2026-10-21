@@ -18,6 +18,7 @@ public enum AccountOutcome
     Self = 8,
     Failed = 9,
     BadKey = 10,
+    KeepsUsers = 11,
 }
 
 /// <summary>
@@ -45,6 +46,11 @@ public sealed record AccountResult(AccountOutcome Outcome, string Message, AppUs
 /// An account with the facts the panel shows beside it.
 /// </summary>
 public sealed record AccountView(AppUser Record, string Role, IReadOnlySet<string> Scopes, bool HasPassword);
+
+/// <summary>
+/// The accounts a role was handed to, and why handing it stopped.
+/// </summary>
+public sealed record RoleHanding(AccountResult? Refusal, IReadOnlyList<AppUser> Moved);
 
 /// <summary>
 /// Adds, changes and removes accounts of the panel by one set of rules.
@@ -244,6 +250,87 @@ public sealed class AccountManager
         }
 
         return AccountResult.Done(user);
+    }
+
+    /// <summary>
+    /// Gives the role to every account on the list, refusing before any change when an account that holds the role is
+    /// missing from the list or one on it cannot take the role.
+    /// </summary>
+    public async Task<RoleHanding> HandRoleAsync(string role, IReadOnlyCollection<string> names, long actorId, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+
+        if (await WhyNotHandAsync(role, names, actorId, ct).ConfigureAwait(false) is { } refusal)
+        {
+            return new RoleHanding(refusal, []);
+        }
+
+        var moved = new List<AppUser>();
+        foreach (var name in names.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var user = await _users.FindByNameAsync(name).ConfigureAwait(false);
+            var held = await _users.GetRolesAsync(user!).ConfigureAwait(false);
+            if (held.Count == 1 && string.Equals(held[0], role, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var given = await SetRoleAsync(name, role, actorId, ct).ConfigureAwait(false);
+            if (!given.IsOk)
+            {
+                return new RoleHanding(given, moved);
+            }
+
+            moved.Add(given.Record!);
+        }
+
+        return new RoleHanding(null, moved);
+    }
+
+    /// <summary>
+    /// Returns why the role cannot be handed to the accounts on the list, or null when it can.
+    /// </summary>
+    public async Task<AccountResult?> WhyNotHandAsync(string role, IReadOnlyCollection<string> names, long actorId, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+
+        var found = await _roles.FindByNameAsync(role).ConfigureAwait(false);
+        if (found is null)
+        {
+            return UnknownRole(role);
+        }
+
+        var listed = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+        var holders = await _users.GetUsersInRoleAsync(found.Name!).ConfigureAwait(false);
+        if (holders.FirstOrDefault(user => !listed.Contains(user.UserName!)) is { } kept)
+        {
+            return AccountResult.No(
+                AccountOutcome.KeepsUsers,
+                $"the account '{kept.UserName}' leaves the role '{found.Name}' only for another role");
+        }
+
+        var keeps = await Keeps(found.Name, ct).ConfigureAwait(false);
+        var losing = new List<long>();
+        foreach (var name in listed)
+        {
+            var user = await _users.FindByNameAsync(name).ConfigureAwait(false);
+            if (user is null)
+            {
+                return Missing(name);
+            }
+
+            if (!keeps && await KeepsAccessAsync(user).ConfigureAwait(false))
+            {
+                losing.Add(user.Id);
+            }
+        }
+
+        if (losing.Contains(actorId))
+        {
+            return AccountResult.No(AccountOutcome.Self, "an administrator does not take their own rights away");
+        }
+
+        return losing.Count > 0 && !await KeeperBesidesAsync(losing, ct).ConfigureAwait(false) ? LastAdmin() : null;
     }
 
     /// <summary>
@@ -483,7 +570,9 @@ public sealed class AccountManager
         return found is not null && (await _access.ScopesAsync(found).ConfigureAwait(false)).Contains(Scopes.ManageAccess);
     }
 
-    private async Task<bool> AnotherKeeperAsync(long id, CancellationToken ct)
+    private Task<bool> AnotherKeeperAsync(long id, CancellationToken ct) => KeeperBesidesAsync([id], ct);
+
+    private async Task<bool> KeeperBesidesAsync(IReadOnlyCollection<long> ids, CancellationToken ct)
     {
         foreach (var role in _roles.Roles.ToList())
         {
@@ -493,7 +582,7 @@ public sealed class AccountManager
             }
 
             var held = await _users.GetUsersInRoleAsync(role.Name!).ConfigureAwait(false);
-            if (held.Any(user => user.Id != id && user.IsEnabled))
+            if (held.Any(user => !ids.Contains(user.Id) && user.IsEnabled))
             {
                 return true;
             }

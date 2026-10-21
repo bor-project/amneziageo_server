@@ -2,6 +2,7 @@ import { Link, Navigate, useNavigate, useParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { useClients, useRemoveClient } from "@/api/clients"
 import { useTail } from "@/components/crumbs"
+import { RuleLeave } from "@/components/Holders"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
@@ -37,6 +38,7 @@ export function ClientRemove() {
       <div className={`border-alarm-line p-4 ${card}`}>
         <div className="text-[13px] font-semibold text-alarm">{t("action.forever")}</div>
         <div className="mt-1 text-[13px] text-muted">{held.address.join(", ")}</div>
+        <RuleLeave clients={[held.name]} inbounds={[]} />
       </div>
 
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}

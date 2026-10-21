@@ -52,6 +52,7 @@ function HeldBalancer({ balancerId }: { balancerId: number }) {
   return (
     <BalancerForm
       start={draftOf(held)}
+      self={held.name}
       pending={change.isPending}
       error={change.error}
       onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}

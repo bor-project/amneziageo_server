@@ -1,7 +1,11 @@
 import { Link, useNavigate, useParams } from "react-router-dom"
+import { useApiTokens } from "@/api/apiTokens"
 import { complaint } from "@/api/auth"
 import { useRemoveRole, useRoles } from "@/api/roles"
+import { useUsers } from "@/api/users"
 import { useTail } from "@/components/crumbs"
+import { LinkLine } from "@/components/fields"
+import { tokenItems, userItems } from "@/components/members"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
@@ -13,7 +17,8 @@ export function RoleRemove() {
   const { name = "" } = useParams()
   const catalog = useRoles()
   const remove = useRemoveRole()
-  const held = catalog.data?.roles.find((one) => one.name === name)
+  const team = (useUsers(true).data ?? []).filter((one) => one.role === name)
+  const mine = (useApiTokens().data ?? []).filter((one) => one.role === name)
 
   useTail([{ label: name, to: `/settings/users/roles/${name}/edit` }, { label: t("roles.remove") }])
 
@@ -23,9 +28,18 @@ export function RoleRemove() {
 
       <div className={`border-alarm-line p-4 ${card}`}>
         <div className="text-[13px] font-semibold text-alarm">{t("action.forever")}</div>
-        {held !== undefined && (
-          <div className="mt-1 text-[13px] text-muted">{`${t("roles.users")}: ${held.users}`}</div>
-        )}
+        <div className="mt-1 text-[13px] text-muted">
+          {`${t("roles.users")}: `}
+          {team.length === 0 ? (
+            t("clients.dash")
+          ) : (
+            <LinkLine items={userItems(team, catalog.data?.roles ?? [], t("role.none"))} />
+          )}
+        </div>
+        <div className="text-[13px] text-muted">
+          {`${t("roles.tokens")}: `}
+          {mine.length === 0 ? t("clients.dash") : <LinkLine items={tokenItems(mine)} />}
+        </div>
       </div>
 
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}

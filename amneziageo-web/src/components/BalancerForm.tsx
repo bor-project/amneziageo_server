@@ -1,8 +1,11 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import type { BalanceStrategy, BalancerDraft } from "@/api/balancers"
 import { useOutbounds } from "@/api/outbounds"
 import { Line, Part, Switch } from "@/components/fields"
+import { WayUse } from "@/components/Holders"
+import { wayTo } from "@/components/members"
 import { danger, field, footer, label, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -10,6 +13,7 @@ import { same } from "@/store/draftSlice"
 
 export function BalancerForm({
   start,
+  self,
   pending,
   error,
   onSave,
@@ -17,6 +21,7 @@ export function BalancerForm({
   onRemove,
 }: {
   start: BalancerDraft
+  self?: string
   pending: boolean
   error: unknown
   onSave: (draft: BalancerDraft) => void
@@ -83,7 +88,13 @@ export function BalancerForm({
                 key={name}
                 className="flex items-center justify-between border-b border-line px-3 py-2 text-sm text-ink last:border-b-0"
               >
-                <span>{name}</span>
+                {wayTo(name, outbounds.data ?? [], []) === undefined ? (
+                  <span>{name}</span>
+                ) : (
+                  <Link to={wayTo(name, outbounds.data ?? [], []) ?? ""} className="text-brand-ink hover:text-brand-lit">
+                    {name}
+                  </Link>
+                )}
                 <span className="flex gap-1">
                   <button
                     type="button"
@@ -132,6 +143,8 @@ export function BalancerForm({
           </div>
         </div>
       </Part>
+
+      {self !== undefined && <WayUse name={self} rules={draft.rules} onRules={(rules) => put({ rules })} />}
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>

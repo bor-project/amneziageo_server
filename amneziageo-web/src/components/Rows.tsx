@@ -56,6 +56,7 @@ export function Rows<T>({
   drag,
   choice,
   empty,
+  pinned = [],
 }: {
   items: T[]
   columns: Column<T>[]
@@ -65,6 +66,7 @@ export function Rows<T>({
   drag?: Drag<T>
   choice?: Choice
   empty?: string
+  pinned?: T[]
 }) {
   const t = useText()
   const wide = useAbove(wideQuery)
@@ -75,7 +77,7 @@ export function Rows<T>({
   const [pulled, setPulled] = useState<string | null>(null)
   const { order, toggle, choose, direct } = useOrder(name)
   const chosen = columns.find((column) => column.key === order?.key)
-  const sorted = useSorted(items, chosen?.sort, order)
+  const sorted = [...pinned.map((item, at) => ({ item, at })), ...useSorted(items, chosen?.sort, order)]
   const sortable = columns.filter((column) => column.sort && !column.tail)
   const picking = !wide && sortable.length > 0
   const moving = drag !== undefined && order === null

@@ -97,16 +97,29 @@ public static class BalanceEndpoints
         BalanceRequest request,
         BalanceStore store,
         OutboundStore outbounds,
+        RouteStore rules,
         OutboundHost host,
         RouteApplier applier,
         DnsHost resolver,
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
+        if (held is not null
+            && request.Rules is { } leaving
+            && await rules.RefuseLeavingAsync(held.Name, leaving, ct).ConfigureAwait(false) is { } refused)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, refused.Code, refused.Message);
+        }
+
         var result = await store.ChangeAsync(id, BalanceAnswers.Draft(request), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
+        }
+
+        if (request.Rules is not null)
+        {
+            await rules.LeaveThroughAsync(result.Record!.Name, request.Rules, ct).ConfigureAwait(false);
         }
 
         var body = await AnswerAsync(result.Record!, outbounds, host, applier, ct).ConfigureAwait(false);

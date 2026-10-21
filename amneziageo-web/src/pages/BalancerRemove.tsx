@@ -2,6 +2,7 @@ import { Link, Navigate, useNavigate, useParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { useBalancers, useRemoveBalancer } from "@/api/balancers"
 import { useTail } from "@/components/crumbs"
+import { WayHolders } from "@/components/Holders"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
@@ -37,6 +38,7 @@ export function BalancerRemove() {
       <div className={`border-alarm-line p-4 ${card}`}>
         <div className="text-[13px] font-semibold text-alarm">{t("action.forever")}</div>
         <div className="mt-1 text-[13px] text-muted">{held.members.join(", ")}</div>
+        <WayHolders name={held.name} />
       </div>
 
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}

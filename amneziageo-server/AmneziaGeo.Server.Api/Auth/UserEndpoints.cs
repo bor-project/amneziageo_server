@@ -115,16 +115,9 @@ public static class UserEndpoints
             }
         }
 
-        if (result?.Record is { HostUserName: { Length: > 0 } host } record)
+        if (result?.Record is { } record && await HostAsync(record, accounts, roles, hosts, ct).ConfigureAwait(false) is { } refused)
         {
-            var known = await NamesAsync(roles, ct).ConfigureAwait(false);
-            var sync = record.IsEnabled
-                ? await hosts.CarryAsync(host, await RoleOfAsync(accounts, record, ct).ConfigureAwait(false), record.HostKey, known, ct).ConfigureAwait(false)
-                : await hosts.ShutAsync(host, known, ct).ConfigureAwait(false);
-            if (!sync.IsDone)
-            {
-                return Refuse(StatusCodes.Status400BadRequest, "host-refused", sync.Message);
-            }
+            return refused;
         }
 
         if (result is null)
@@ -178,6 +171,29 @@ public static class UserEndpoints
         return Results.NoContent();
     }
 
+    /// <summary>
+    /// Carries an account of a host user to the host as it stands, returning the refusal of the host or null.
+    /// </summary>
+    internal static async Task<IResult?> HostAsync(
+        AppUser record,
+        AccountManager accounts,
+        RoleCatalog roles,
+        HostUsers hosts,
+        CancellationToken ct)
+    {
+        if (record.HostUserName is not { Length: > 0 } host)
+        {
+            return null;
+        }
+
+        var known = await NamesAsync(roles, ct).ConfigureAwait(false);
+        var sync = record.IsEnabled
+            ? await hosts.CarryAsync(host, await RoleOfAsync(accounts, record, ct).ConfigureAwait(false), record.HostKey, known, ct).ConfigureAwait(false)
+            : await hosts.ShutAsync(host, known, ct).ConfigureAwait(false);
+
+        return sync.IsDone ? null : Refuse(StatusCodes.Status400BadRequest, "host-refused", sync.Message);
+    }
+
     private static async Task<IReadOnlyList<string>> NamesAsync(RoleCatalog roles, CancellationToken ct) =>
         [.. (await roles.ListAsync(ct).ConfigureAwait(false)).Select(role => role.Record.Name ?? string.Empty)];
 
@@ -187,7 +203,10 @@ public static class UserEndpoints
     private static async Task<UserResponse> AnswerAsync(AppUser user, AccountManager accounts) =>
         UserAnswers.User(await accounts.ViewAsync(user).ConfigureAwait(false));
 
-    private static IResult Explain(AccountResult result) => result.Outcome switch
+    /// <summary>
+    /// Returns the refusal of an account command as the panel reads it.
+    /// </summary>
+    internal static IResult Explain(AccountResult result) => result.Outcome switch
     {
         AccountOutcome.Unknown => Refuse(StatusCodes.Status404NotFound, "unknown-user", result.Message),
         AccountOutcome.NameTaken => Refuse(StatusCodes.Status409Conflict, "name-taken", result.Message),
@@ -198,6 +217,7 @@ public static class UserEndpoints
         AccountOutcome.BadKey => Refuse(StatusCodes.Status400BadRequest, "bad-host-key", result.Message),
         AccountOutcome.LastAdmin => Refuse(StatusCodes.Status409Conflict, "last-admin", result.Message),
         AccountOutcome.Self => Refuse(StatusCodes.Status409Conflict, "self", result.Message),
+        AccountOutcome.KeepsUsers => Refuse(StatusCodes.Status400BadRequest, "role-keeps-users", result.Message),
         _ => Refuse(StatusCodes.Status400BadRequest, "refused", result.Message),
     };
 

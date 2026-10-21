@@ -55,7 +55,7 @@ export function TemplatePage() {
           type="button"
           onClick={() =>
             void add
-              .mutateAsync({ ...draftOf(held), name: t("templates.copyName", { name: held.name }) })
+              .mutateAsync({ ...draftOf(held), name: t("templates.copyName", { name: held.name }), clients: [] })
               .then((made) => navigate(`/clients/templates/${made.id}/edit`))
           }
           disabled={add.isPending}

@@ -147,6 +147,8 @@ public static class OutboundEndpoints
         long id,
         OutboundRequest request,
         OutboundStore store,
+        BalanceStore balancers,
+        RouteStore rules,
         OutboundHost host,
         RouteApplier routes,
         DnsHost resolver,
@@ -154,10 +156,34 @@ public static class OutboundEndpoints
     {
         using var hold = await host.HoldAsync(ct).ConfigureAwait(false);
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
+        if (held is not null
+            && request.Balancers is { } holders
+            && await balancers.RefuseHoldersAsync(held.Name, holders, ct).ConfigureAwait(false) is { } refusal)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, refusal.Code, refusal.Message);
+        }
+
+        if (held is not null
+            && request.Rules is { } leaving
+            && await rules.RefuseLeavingAsync(held.Name, leaving, ct).ConfigureAwait(false) is { } refused)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, refused.Code, refused.Message);
+        }
+
         var result = await store.ChangeAsync(id, OutboundAnswers.Draft(request), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
+        }
+
+        if (request.Balancers is not null)
+        {
+            await balancers.HoldAsync(result.Record!.Name, request.Balancers, ct).ConfigureAwait(false);
+        }
+
+        if (request.Rules is not null)
+        {
+            await rules.LeaveThroughAsync(result.Record!.Name, request.Rules, ct).ConfigureAwait(false);
         }
 
         if (held is not null && held.Name != result.Record!.Name)

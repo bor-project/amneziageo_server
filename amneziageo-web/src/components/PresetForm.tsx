@@ -1,8 +1,11 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
+import { usePresets } from "@/api/presets"
 import type { PresetDraft } from "@/api/presets"
+import { useTemplates } from "@/api/templates"
 import { EntryList } from "@/components/EntryList"
-import { Flag, Hinted, Line, Part } from "@/components/fields"
+import { Flag, Hinted, Line, Links, Part } from "@/components/fields"
+import { templateItems } from "@/components/members"
 import { danger, footer, label, primary, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -37,6 +40,11 @@ export function PresetForm({
 }) {
   const t = useText()
   const language = useLanguage()
+  const presets = usePresets().data ?? []
+  const titles = new Map(presets.map((one): [number, string] => [one.id, one.name]))
+  const holders = templateItems(useTemplates().data ?? [], (one) =>
+    one.presets.length === 0 ? t("presets.noPresets") : one.presets.map((id) => titles.get(id) ?? "").join(", "),
+  )
   const [draft, setDraft] = useState(start)
   const edited = !same(draft, start)
 
@@ -77,6 +85,18 @@ export function PresetForm({
           />
         </div>
         <div className="text-xs text-muted sm:col-span-2">{t("presets.about")}</div>
+      </Part>
+
+      <Part title={t("presets.partTemplates")}>
+        <div className="sm:col-span-2">
+          <Links
+            id="preset-templates"
+            value={draft.templates.map(String)}
+            items={holders}
+            placeholder={t("presets.addTemplate")}
+            onChange={(keys) => put({ templates: keys.map(Number) })}
+          />
+        </div>
       </Part>
 
       <Part title={t("presets.partLists")}>

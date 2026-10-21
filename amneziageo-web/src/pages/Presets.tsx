@@ -107,7 +107,11 @@ export function Presets() {
                 width: 120,
                 caption: t("presets.templates"),
                 sort: (one) => one.templates,
-                cell: (one) => one.templates,
+                cell: (one) => (
+                  <Link to={`/clients/templates?preset=${one.id}`} className="text-brand-ink hover:text-brand-lit">
+                    {one.templates}
+                  </Link>
+                ),
               },
               {
                 key: "actions",

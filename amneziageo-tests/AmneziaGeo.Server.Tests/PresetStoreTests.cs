@@ -209,7 +209,7 @@ public class PresetStoreTests
     public void ARequestCarriesTheDefaultFlagAndTheAnswerTheIdentifier()
     {
         var draft = PresetAnswers.Draft(new PresetRequest("blocked", ["geosite:youtube"], null, null, IsDefault: true));
-        var answer = PresetAnswers.Preset(draft with { Id = 7, Uid = "0f8fad5b-d9cb-469f-a165-70867728950e" }, 2);
+        var answer = PresetAnswers.Preset(draft with { Id = 7, Uid = "0f8fad5b-d9cb-469f-a165-70867728950e" }, [3, 4]);
 
         Assert.True(draft.IsDefault);
         Assert.False(PresetAnswers.Draft(new PresetRequest("blocked", null, null, null)).IsDefault);

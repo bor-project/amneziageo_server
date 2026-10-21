@@ -68,6 +68,8 @@ export interface OutboundDraft {
   probeEvery: number
   closePrivate: boolean
   obfuscation: Obfuscation
+  balancers?: number[]
+  rules?: number[]
 }
 
 export function useOutbounds() {
@@ -158,6 +160,8 @@ function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
     mutationFn: call,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["outbounds"] })
+      await queryClient.invalidateQueries({ queryKey: ["balancers"] })
+      await queryClient.invalidateQueries({ queryKey: ["rules"] })
     },
   })
 }

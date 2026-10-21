@@ -64,7 +64,14 @@ export function Users() {
               width: 144,
               caption: t("users.role"),
               sort: (one) => role(one),
-              cell: (one) => role(one),
+              cell: (one) =>
+                one.role.length > 0 ? (
+                  <Link to={`/settings/users/roles/${one.role}/edit`} className="hover:text-brand-ink">
+                    {role(one)}
+                  </Link>
+                ) : (
+                  role(one)
+                ),
             },
             {
               key: "state",

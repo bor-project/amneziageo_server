@@ -104,8 +104,10 @@ public static class ConfigEndpoints
 
     private static async Task<IResult> AddAsync(
         ConfigRequest request,
+        HttpContext http,
         ConfigStore store,
         ClientStore clients,
+        RouteStore rules,
         EndpointHost host,
         EndpointKeeper keeper,
         RouteApplier routes,
@@ -120,6 +122,12 @@ public static class ConfigEndpoints
             return Refuse(StatusCodes.Status400BadRequest, unreached.Code, unreached.Message);
         }
 
+        var listed = await RuleNaming.AddedAsync(rules, RuleSide.Inbounds, draft.Name, request.Rules, ct).ConfigureAwait(false);
+        if (await RuleNaming.RefuseAsync(http, rules, RuleSide.Inbounds, draft.Name, listed, ct).ConfigureAwait(false) is { } refused)
+        {
+            return refused;
+        }
+
         using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
         var result = await store.AddAsync(draft, ct).ConfigureAwait(false);
         if (!result.IsOk)
@@ -127,6 +135,7 @@ public static class ConfigEndpoints
             return Explain(result);
         }
 
+        await RuleNaming.NameAsync(rules, RuleSide.Inbounds, result.Record!.Name, listed, ct).ConfigureAwait(false);
         var raised = await RaiseAsync(store, clients, host, keeper, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
@@ -143,8 +152,10 @@ public static class ConfigEndpoints
     private static async Task<IResult> ChangeAsync(
         long id,
         ConfigRequest request,
+        HttpContext http,
         ConfigStore store,
         ClientStore clients,
+        RouteStore rules,
         EndpointHost host,
         EndpointKeeper keeper,
         RouteApplier routes,
@@ -161,6 +172,12 @@ public static class ConfigEndpoints
             return Refuse(StatusCodes.Status400BadRequest, unreached.Code, unreached.Message);
         }
 
+        if (held is not null
+            && await RuleNaming.RefuseAsync(http, rules, RuleSide.Inbounds, held.Name, request.Rules, ct).ConfigureAwait(false) is { } refused)
+        {
+            return refused;
+        }
+
         var previous = request.Keep == true ? await firewall.PlanAsync(ct).ConfigureAwait(false) : null;
         var result = await store.ChangeAsync(id, draft, ct).ConfigureAwait(false);
         if (!result.IsOk)
@@ -173,6 +190,7 @@ public static class ConfigEndpoints
             await host.WithdrawAsync(held.Name, ct).ConfigureAwait(false);
         }
 
+        await RuleNaming.NameAsync(rules, RuleSide.Inbounds, result.Record!.Name, request.Rules, ct).ConfigureAwait(false);
         var raised = await RaiseAsync(store, clients, host, keeper, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);

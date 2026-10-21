@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { useBalancers } from "@/api/balancers"
 import { useClients } from "@/api/clients"
@@ -8,6 +9,7 @@ import { useOutbounds } from "@/api/outbounds"
 import type { RuleAction, RuleDraft, RuleProtocol } from "@/api/rules"
 import { DnsNotes } from "@/components/DnsMark"
 import { Line, ListArea, ListLine, Multi, Part, Switch } from "@/components/fields"
+import { clientTo, configTo, wayTo } from "@/components/members"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -38,6 +40,7 @@ export function RuleForm({
   const [draft, setDraft] = useState(start)
   const edited = !same(draft, start)
   const check = useDnsCheck({ id: self, rule: draft })
+  const way = wayTo(draft.outbound, outbounds.data ?? [], balancers.data ?? [])
 
   function put(change: Partial<RuleDraft>) {
     setDraft({ ...draft, ...change })
@@ -102,6 +105,13 @@ export function RuleForm({
                 </optgroup>
               )}
             </select>
+            {way !== undefined && (
+              <div className="mt-1 flex justify-end">
+                <Link to={way} className="text-sm text-brand-ink hover:text-brand-lit">
+                  {t("action.goTo")}
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
@@ -155,6 +165,7 @@ export function RuleForm({
                 value={draft.clients}
                 offers={(clients.data ?? []).map((one) => one.name)}
                 placeholder={t("rules.anyone")}
+                linkOf={(name) => clientTo(name, clients.data ?? [])}
                 onChange={(value) => put({ clients: value })}
               />
             </div>
@@ -170,6 +181,7 @@ export function RuleForm({
                 value={draft.inbounds}
                 offers={(configs.data ?? []).map((one) => one.name)}
                 placeholder={t("rules.anyInbound")}
+                linkOf={(name) => configTo(name, configs.data ?? [])}
                 onChange={(value) => put({ inbounds: value })}
               />
             </div>

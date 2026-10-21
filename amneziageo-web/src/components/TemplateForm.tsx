@@ -1,13 +1,15 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
+import { useClients } from "@/api/clients"
 import { useDnsCheck, useResolver } from "@/api/dns"
 import { usePresets } from "@/api/presets"
-import { useTemplateDefaults, useTemplatePreview } from "@/api/templates"
+import { useTemplateDefaults, useTemplatePreview, useTemplates } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { lacksServers } from "@/components/dnsWords"
 import { EntryList } from "@/components/EntryList"
-import { Hinted, Line, Multi, Part, Switch } from "@/components/fields"
+import { Hinted, Line, Links, Part, Switch } from "@/components/fields"
+import { clientItems, presetItems } from "@/components/members"
 import { ResolverTrouble } from "@/components/ResolverTrouble"
 import { troubleOf } from "@/components/trouble"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
@@ -38,6 +40,11 @@ export function TemplateForm({
   const t = useText()
   const defaults = useTemplateDefaults().data
   const presets = usePresets().data ?? []
+  const templates = useTemplates().data ?? []
+  const titles = new Map(templates.map((one): [number, string] => [one.id, one.name]))
+  const members = clientItems(useClients().data ?? [], (one) =>
+    one.templateId === null ? t("clients.noTemplate") : (titles.get(one.templateId) ?? ""),
+  )
   const resolver = useResolver(false).data
   const [draft, setDraft] = useState(start)
   const [touched, setTouched] = useState(false)
@@ -73,6 +80,18 @@ export function TemplateForm({
           onChange={(name) => put({ name })}
           wide
         />
+      </Part>
+
+      <Part title={t("templates.partClients")}>
+        <div className="sm:col-span-2">
+          <Links
+            id="template-clients"
+            value={draft.clients.map(String)}
+            items={members}
+            placeholder={t("templates.addClient")}
+            onChange={(keys) => put({ clients: keys.map(Number) })}
+          />
+        </div>
       </Part>
 
       <Part title={t("templates.partRouting")}>
@@ -129,14 +148,12 @@ export function TemplateForm({
             <Hinted caption={t("templates.presets")} text={t("templates.presetsHint")} />
           </label>
           <div className="mt-1">
-            <Multi
+            <Links
               id="template-presets"
-              value={draft.presets.flatMap((id) => presets.filter((one) => one.id === id).map((one) => one.name))}
-              offers={presets.map((one) => one.name)}
+              value={draft.presets.map(String)}
+              items={presetItems(presets)}
               placeholder={t(presets.length === 0 ? "templates.noPresets" : "templates.pickPresets")}
-              onChange={(names) =>
-                put({ presets: names.flatMap((name) => presets.filter((one) => one.name === name).map((one) => one.id)) })
-              }
+              onChange={(keys) => put({ presets: keys.map(Number) })}
             />
           </div>
         </div>

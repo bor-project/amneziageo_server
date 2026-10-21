@@ -3,6 +3,9 @@ import { complaint } from "@/api/auth"
 import { useClients } from "@/api/clients"
 import { useConfigs, useRemoveConfig } from "@/api/configs"
 import { useTail } from "@/components/crumbs"
+import { RuleLeave } from "@/components/Holders"
+import { LinkLine } from "@/components/fields"
+import { clientItems } from "@/components/members"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
@@ -41,7 +44,11 @@ export function ConfigRemove() {
       <div className={`border-alarm-line p-4 ${card}`}>
         <div className="text-[13px] font-semibold text-alarm">{t("action.forever")}</div>
         <div className="mt-1 text-[13px] text-muted">{held.address.join(", ")}</div>
-        <div className="text-[13px] text-muted">{`${t("configs.count")}: ${mine.length}`}</div>
+        <div className="text-[13px] text-muted">
+          {`${t("configs.clients")}: `}
+          {mine.length === 0 ? t("clients.dash") : <LinkLine items={clientItems(mine)} />}
+        </div>
+        <RuleLeave clients={mine.map((one) => one.name)} inbounds={[held.name]} />
       </div>
 
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}

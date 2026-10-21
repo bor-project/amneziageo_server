@@ -289,6 +289,7 @@ public sealed class ClientStore
         }
 
         var gone = Read(entity);
+        await NameFollow.GoneAsync(_db, RuleSide.Clients, [entity.Name], _time.GetUtcNow(), ct).ConfigureAwait(false);
         _db.Clients.Remove(entity);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 

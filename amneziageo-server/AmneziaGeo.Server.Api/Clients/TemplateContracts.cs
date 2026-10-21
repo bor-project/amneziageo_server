@@ -22,7 +22,8 @@ public sealed record TemplateResponse(
     DateTimeOffset? RefreshedUtc,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc,
-    string DnsMode = DnsChoiceName.Auto);
+    string DnsMode = DnsChoiceName.Auto,
+    IReadOnlyList<long>? ClientIds = null);
 
 /// <summary>
 /// The settings a client template is added or changed with.
@@ -35,7 +36,8 @@ public sealed record TemplateRequest(
     int? Keepalive,
     IReadOnlyList<long>? Presets = null,
     bool? StandIns = null,
-    string? DnsMode = null);
+    string? DnsMode = null,
+    IReadOnlyList<long>? Clients = null);
 
 /// <summary>
 /// The entries the panel asks what they come out as.
@@ -63,7 +65,13 @@ public sealed record TemplateDefaultsResponse(
     IReadOnlyList<string> AllowedIps,
     IReadOnlyList<string> Dns,
     int Mtu,
-    int Keepalive);
+    int Keepalive,
+    IReadOnlyList<long>? ClientIds = null);
+
+/// <summary>
+/// The clients that take no template.
+/// </summary>
+public sealed record TemplateClientsRequest(IReadOnlyList<long>? Clients);
 
 /// <summary>
 /// Turns client templates into what the panel reads and back.
@@ -83,11 +91,12 @@ public static class TemplateAnswers
     private static readonly char[] Breaks = [',', ' ', '\t', '\n', '\r'];
 
     /// <summary>
-    /// Returns one template with the number of clients that take it.
+    /// Returns one template with the clients that take it.
     /// </summary>
-    public static TemplateResponse Template(ClientTemplate template, int clients)
+    public static TemplateResponse Template(ClientTemplate template, IReadOnlyList<long> clients)
     {
         ArgumentNullException.ThrowIfNull(template);
+        ArgumentNullException.ThrowIfNull(clients);
 
         return new TemplateResponse(
             template.Id,
@@ -100,22 +109,34 @@ public static class TemplateAnswers
             template.Keepalive,
             template.Presets,
             template.StandIns,
-            clients,
+            clients.Count,
             template.RefreshedUtc,
             template.CreatedUtc,
             template.UpdatedUtc,
-            DnsChoiceName.Of(template.DnsMode));
+            DnsChoiceName.Of(template.DnsMode),
+            clients);
     }
 
     /// <summary>
-    /// Returns the values a template gives where it names none.
+    /// Returns the values a template gives where it names none, with the clients that take no template.
     /// </summary>
-    public static TemplateDefaultsResponse Defaults(IEnumerable<string> address) =>
+    public static TemplateDefaultsResponse Defaults(IEnumerable<string> address, IReadOnlyList<long> plain) =>
         new(
             TemplateDefaults.AllowedIps(address),
             TemplateDefaults.Dns,
             TemplateDefaults.Mtu,
-            TemplateDefaults.Keepalive);
+            TemplateDefaults.Keepalive,
+            plain);
+
+    /// <summary>
+    /// Returns the clients a request hands the template to, null when it leaves them as they are.
+    /// </summary>
+    public static IReadOnlyList<long>? Members(TemplateRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return request.Clients is null ? null : [.. request.Clients.Distinct()];
+    }
 
     /// <summary>
     /// Returns what a request asks a template to become.

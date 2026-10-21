@@ -36,9 +36,9 @@ public static class PresetEndpoints
     private static async Task<IResult> ListAsync(PresetStore store, CancellationToken ct)
     {
         var found = await store.ListAsync(ct).ConfigureAwait(false);
-        var uses = await store.UsesAsync(ct).ConfigureAwait(false);
+        var holders = await store.HoldersAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(found.Select(one => PresetAnswers.Preset(one, uses.GetValueOrDefault(one.Id))).ToArray());
+        return Results.Ok(found.Select(one => PresetAnswers.Preset(one, Of(holders, one.Id))).ToArray());
     }
 
     private static async Task<IResult> FindAsync(long id, PresetStore store, CancellationToken ct)
@@ -49,34 +49,40 @@ public static class PresetEndpoints
             return Missing(id);
         }
 
-        var uses = await store.UsesAsync(ct).ConfigureAwait(false);
+        var holders = await store.HoldersAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(PresetAnswers.Preset(found, uses.GetValueOrDefault(found.Id)));
+        return Results.Ok(PresetAnswers.Preset(found, Of(holders, found.Id)));
     }
 
     private static async Task<IResult> AddAsync(PresetRequest request, PresetStore store, CancellationToken ct)
     {
-        var result = await store.AddAsync(PresetAnswers.Draft(request), ct).ConfigureAwait(false);
+        var result = await store.AddAsync(PresetAnswers.Draft(request), PresetAnswers.Holders(request), ct)
+            .ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
-        return Results.Created($"{Prefix}/{result.Record!.Id}", PresetAnswers.Preset(result.Record, 0));
+        var holders = await store.HoldersAsync(ct).ConfigureAwait(false);
+
+        return Results.Created(
+            $"{Prefix}/{result.Record!.Id}",
+            PresetAnswers.Preset(result.Record, Of(holders, result.Record.Id)));
     }
 
     private static async Task<IResult> ChangeAsync(long id, PresetRequest request, PresetStore store, CancellationToken ct)
     {
         var held = request.IsDefault is null ? await store.FindAsync(id, ct).ConfigureAwait(false) : null;
-        var result = await store.ChangeAsync(id, PresetAnswers.Draft(request, held), ct).ConfigureAwait(false);
+        var result = await store.ChangeAsync(id, PresetAnswers.Draft(request, held), PresetAnswers.Holders(request), ct)
+            .ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
-        var uses = await store.UsesAsync(ct).ConfigureAwait(false);
+        var holders = await store.HoldersAsync(ct).ConfigureAwait(false);
 
-        return Results.Ok(PresetAnswers.Preset(result.Record!, uses.GetValueOrDefault(id)));
+        return Results.Ok(PresetAnswers.Preset(result.Record!, Of(holders, id)));
     }
 
     private static async Task<IResult> RemoveAsync(long id, PresetStore store, CancellationToken ct)
@@ -85,6 +91,9 @@ public static class PresetEndpoints
 
         return result.IsOk ? Results.NoContent() : Explain(result);
     }
+
+    private static IReadOnlyList<long> Of(IReadOnlyDictionary<long, IReadOnlyList<long>> holders, long id) =>
+        holders.GetValueOrDefault(id) ?? [];
 
     private static IResult Missing(long id) =>
         Refuse(StatusCodes.Status404NotFound, "unknown-preset", $"there is no routing preset under the number {id}");

@@ -2,6 +2,7 @@ import { Link, Navigate, useNavigate, useParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { useOutbounds, useRemoveOutbound } from "@/api/outbounds"
 import { useTail } from "@/components/crumbs"
+import { WayHolders } from "@/components/Holders"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
@@ -39,6 +40,7 @@ export function OutboundRemove() {
         <div className="mt-1 text-[13px] text-muted">
           {held.kind === "local" ? t("outbounds.kindLocal") : `${held.host}:${held.port}`}
         </div>
+        <WayHolders name={held.name} />
       </div>
 
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}

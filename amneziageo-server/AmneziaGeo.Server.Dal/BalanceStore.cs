@@ -217,6 +217,72 @@ public sealed class BalanceStore
         return BalanceResult.Done(gone);
     }
 
+    /// <summary>
+    /// Returns why the outbound cannot be held by the balancers on the list and by no other, or null when it can.
+    /// </summary>
+    public async Task<BalanceResult?> RefuseHoldersAsync(string outbound, IReadOnlyCollection<long> balancers, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(balancers);
+
+        var held = await _db.Balancers.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
+        var known = held.Select(one => one.Id).ToHashSet();
+        var stranger = balancers.FirstOrDefault(id => !known.Contains(id));
+        if (stranger > 0)
+        {
+            return Missing(stranger);
+        }
+
+        foreach (var entity in held)
+        {
+            var members = Parts(entity.Members);
+            var holds = members.Contains(outbound, StringComparer.Ordinal);
+            var takes = balancers.Contains(entity.Id);
+            if (holds && !takes && members.Count == 1)
+            {
+                return BalanceResult.No(
+                    BalanceOutcome.Invalid,
+                    "no-members",
+                    $"'{outbound}' is the last outbound of the balancer '{entity.Name}'");
+            }
+
+            if (!holds && takes && members.Count >= BalanceRules.MaxMembers)
+            {
+                return BalanceResult.No(
+                    BalanceOutcome.Invalid,
+                    "too-many-members",
+                    $"the balancer '{entity.Name}' picks from at most {BalanceRules.MaxMembers} outbounds");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Puts the outbound last in the balancers on the list and takes it out of the other balancers.
+    /// </summary>
+    public async Task HoldAsync(string outbound, IReadOnlyCollection<long> balancers, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(balancers);
+
+        var now = _time.GetUtcNow();
+        var held = await _db.Balancers.ToListAsync(ct).ConfigureAwait(false);
+        foreach (var entity in held)
+        {
+            var members = Parts(entity.Members);
+            var takes = balancers.Contains(entity.Id);
+            if (members.Contains(outbound, StringComparer.Ordinal) == takes)
+            {
+                continue;
+            }
+
+            var next = takes ? members.Append(outbound) : members.Where(member => member != outbound);
+            entity.Members = string.Join(", ", next);
+            entity.UpdatedUtc = now;
+        }
+
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
     private async Task<bool> TakenAsync(string name, long id, CancellationToken ct)
     {
         var body = name.Trim();

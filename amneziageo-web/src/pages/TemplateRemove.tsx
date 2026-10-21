@@ -1,7 +1,10 @@
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
+import { useClients } from "@/api/clients"
 import { useRemoveTemplate, useTemplates } from "@/api/templates"
 import { useTail } from "@/components/crumbs"
+import { LinkLine } from "@/components/fields"
+import { clientItems } from "@/components/members"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
@@ -12,6 +15,7 @@ export function TemplateRemove() {
   const back = useSpot("/clients/templates")
   const { templateId } = useParams()
   const templates = useTemplates()
+  const clients = useClients()
   const remove = useRemoveTemplate()
   const held = templates.data?.find((one) => one.id === Number(templateId))
 
@@ -38,6 +42,12 @@ export function TemplateRemove() {
         <div className="mt-1 text-[13px] text-muted">
           {t("templates.addressesCount", { count: String(held.allowedIps.length) })}
         </div>
+        {held.clients > 0 && (
+          <div className="text-[13px] text-muted">
+            {`${t("templates.partClients")}: `}
+            <LinkLine items={clientItems((clients.data ?? []).filter((one) => one.templateId === held.id))} />
+          </div>
+        )}
       </div>
 
       {remove.error !== null && <div className="text-sm text-alarm">{t(complaint(remove.error))}</div>}

@@ -8,15 +8,21 @@ import type { Client, ClientDraft, Inbound } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useDnsCheck } from "@/api/dns"
+import { useRules } from "@/api/rules"
+import type { Rule } from "@/api/rules"
+import { scopes } from "@/api/scopes"
 import { useTemplates } from "@/api/templates"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { lacksServers } from "@/components/dnsWords"
-import { Help, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
+import { Help, Line, LinkLine, Links, Part, Pick, Regenerate, Switch } from "@/components/fields"
+import { few, names, ruleItems } from "@/components/members"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
 import { randomId, randomKey } from "@/keys"
+import { holds } from "@/store/authSlice"
 import { same } from "@/store/draftSlice"
+import { useAppSelector } from "@/store/hooks"
 
 export function ClientForm({
   start,
@@ -62,6 +68,20 @@ export function ClientForm({
   const misnamed = !/^[A-Za-z0-9_-]{0,64}$/.test(draft.subscriptionId)
   const allowed = allowanceOf(limit)
   const check = useDnsCheck(draft.configId > 0 ? { id: self, client: draft } : null)
+  const user = useAppSelector((s) => s.auth.user)
+  const rules = useRules().data ?? []
+  const mayRoute = holds(user, scopes.manageRouting)
+  const endpoint = configs.find((one) => one.id === draft.configId)?.name ?? ""
+  const naming = start.name.length === 0 ? [] : rules.filter((one) => names(one, "clients", start.name))
+  const picked = draft.rules ?? naming.map((one) => one.id)
+  const lastOnes = naming.filter((one) => one.clients.length === 1).map((one) => String(one.id))
+  const elsewhere = (one: Rule) => endpoint.length > 0 && one.inbounds.length > 0 && !one.inbounds.includes(endpoint)
+  const ruled = ruleItems(
+    rules.filter((one) => one.clients.length > 0),
+    (one) => few(one.clients, (count) => t("templates.more", { count: String(count) })),
+    (one) => (elsewhere(one) ? t("clients.ruleElsewhere", { name: endpoint }) : undefined),
+  )
+  const everyone = rules.filter((one) => one.clients.length === 0 && !elsewhere(one))
   const edited =
     !same(draft, start) ||
     shown !== base ||
@@ -106,21 +126,30 @@ export function ClientForm({
             onChange={(isEnabled) => put({ isEnabled })}
           />
         </div>
-        <Pick
-          id="client-interface"
-          caption={t("clients.endpointName")}
-          value={draft.configId === 0 ? "" : String(draft.configId)}
-          onChange={(value) => pick(Number(value))}
-          disabled={self !== undefined}
-          wide
-        >
-          <option value="">{t("clients.noConfig")}</option>
-          {configs.map((one) => (
-            <option key={one.id} value={one.id}>
-              {one.name}
-            </option>
-          ))}
-        </Pick>
+        <div className="sm:col-span-2">
+          <Pick
+            id="client-interface"
+            caption={t("clients.endpointName")}
+            value={draft.configId === 0 ? "" : String(draft.configId)}
+            onChange={(value) => pick(Number(value))}
+            disabled={self !== undefined}
+          >
+            <option value="">{t("clients.noConfig")}</option>
+            {configs.map((one) => (
+              <option key={one.id} value={one.id}>
+                {one.name}
+              </option>
+            ))}
+          </Pick>
+
+          {draft.configId > 0 && (
+            <div className="mt-1 flex justify-end">
+              <Link to={`/interfaces/${draft.configId}/edit`} className="text-sm text-brand-ink hover:text-brand-lit">
+                {t("action.goTo")}
+              </Link>
+            </div>
+          )}
+        </div>
 
         <Line
           id="client-name"
@@ -206,6 +235,30 @@ export function ClientForm({
         )}
 
         <DnsOutcome check={check.data} caption="dnsCheck.lineClient" view="client" />
+      </Part>
+
+      <Part title={t("clients.partRouting")}>
+        <div className="sm:col-span-2">
+          <span className={label}>{t("clients.rules")}</span>
+          <div className="mt-1">
+            <Links
+              id="client-rules"
+              value={picked.map(String)}
+              items={ruled}
+              placeholder={t(mayRoute ? "clients.addRule" : "clients.dash")}
+              fixed={lastOnes}
+              onChange={mayRoute ? (keys) => put({ rules: keys.map(Number) }) : undefined}
+            />
+          </div>
+        </div>
+        {everyone.length > 0 && (
+          <div className="sm:col-span-2">
+            <span className={label}>{t("clients.rulesForAll")}</span>
+            <div className="mt-1 text-sm text-ink">
+              <LinkLine items={ruleItems(everyone)} />
+            </div>
+          </div>
+        )}
       </Part>
 
       <Part title={t("clients.partAccess")}>

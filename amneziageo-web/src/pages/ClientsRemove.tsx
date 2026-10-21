@@ -5,6 +5,7 @@ import { useClients, useRemoveClients } from "@/api/clients"
 import { summary } from "@/components/batch"
 import type { Summary } from "@/components/batch"
 import { useTail } from "@/components/crumbs"
+import { RuleLeave } from "@/components/Holders"
 import { card, danger, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
@@ -63,6 +64,7 @@ export function ClientsRemove() {
             <span className="ml-2 text-muted">{one.address.join(", ")}</span>
           </div>
         ))}
+        <RuleLeave clients={held.map((one) => one.name)} inbounds={[]} />
       </div>
 
       {fault !== null && (

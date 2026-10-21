@@ -124,6 +124,18 @@ the endpoint, the preshared key, the ranges the client routes into the tunnel, t
 answers at and the keepalive. A client without a preshared key of its own takes the one of the endpoint.
 A client with a template takes the ranges, the name servers, the packet size and the keepalive from the
 template instead, and the defaults of the panel where the template names none, see [templates.md](templates.md).
+
+The part `Routing` of the settings names the rules that name the client, each a link to the rule, and under `For
+every client` the rules that name no client and come in on its interface or on any. A rule added there takes the
+name of the client, a rule taken off drops it; a rule ruled to another interface carries a grey mark, and the last
+client of a rule has no cross. An account without `routing:write` reads the part only. `POST /api/clients` and
+`PUT /api/clients/{id}` take the rules in `rules`, the numbers of every rule that names the client after the
+request; a request without the field leaves the rules as they are, a list that changes them needs
+`routing:write` too (`forbidden`, 403) and is refused with `unknown-rule`, `rule-for-everyone` or
+`rule-keeps-last` before anything is written. Removing a client takes its name off the rules, see
+[rules.md](rules.md); the page that removes it names them. The list of clients picks them by template next to the
+interface, `Default` for the clients without one; the interface and the template of a row lead to their settings,
+and so do `Open` under the interface and under the template in the settings of a client.
 The obfuscation goes over whole: the junk sizes, the packet types with their spans, the special packets,
 the header protection key, the padding and the timings, so a client of a 3.1 endpoint carries the same
 lines the interface does.

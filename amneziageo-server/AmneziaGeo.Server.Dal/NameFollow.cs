@@ -3,7 +3,8 @@ using Microsoft.EntityFrameworkCore;
 namespace AmneziaGeo.Server.Dal;
 
 /// <summary>
-/// Carries a new name of an outbound, a balancer, an endpoint or a client into what names it.
+/// Carries a new name of an outbound, a balancer, an endpoint or a client into what names it, and takes the name of a
+/// removed client or endpoint off the rules.
 /// </summary>
 internal static class NameFollow
 {
@@ -104,6 +105,49 @@ internal static class NameFollow
     /// Tells whether a list the database holds carries a name.
     /// </summary>
     public static bool Names(string list, string name, StringComparer comparer) => Parts(list).Contains(name, comparer);
+
+    /// <summary>
+    /// Takes the names of removed clients or endpoints off the rules, turning off a rule that named none but them.
+    /// </summary>
+    public static async Task GoneAsync(
+        AppDbContext db,
+        RuleSide side,
+        IReadOnlyCollection<string> names,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        if (names.Count == 0)
+        {
+            return;
+        }
+
+        var comparer = side.Comparer();
+        var rules = await db.Rules.ToListAsync(ct).ConfigureAwait(false);
+        foreach (var rule in rules)
+        {
+            var held = Parts(side == RuleSide.Clients ? rule.Clients : rule.Inbounds).ToList();
+            var left = held.Where(one => !names.Contains(one, comparer)).ToList();
+            if (left.Count == held.Count)
+            {
+                continue;
+            }
+
+            if (left.Count == 0)
+            {
+                rule.IsEnabled = false;
+            }
+            else if (side == RuleSide.Clients)
+            {
+                rule.Clients = string.Join(", ", left);
+            }
+            else
+            {
+                rule.Inbounds = string.Join(", ", left);
+            }
+
+            rule.UpdatedUtc = now;
+        }
+    }
 
     private static string Swap(string list, string old, string anew, StringComparer comparer) =>
         string.Join(", ", Parts(list).Select(name => comparer.Equals(name, old) ? anew : name).Distinct(comparer));

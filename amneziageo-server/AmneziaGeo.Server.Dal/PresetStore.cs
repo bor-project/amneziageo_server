@@ -107,6 +107,22 @@ public sealed class PresetStore
     }
 
     /// <summary>
+    /// Returns the templates that name each preset, by number.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<long, IReadOnlyList<long>>> HoldersAsync(CancellationToken ct)
+    {
+        var found = await _db.Templates.AsNoTracking()
+            .OrderBy(template => template.Id)
+            .Select(template => new { template.Id, template.Presets })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return found.SelectMany(template => Numbers(template.Presets).Distinct().Select(preset => (Preset: preset, Template: template.Id)))
+            .GroupBy(pair => pair.Preset)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<long>)group.Select(pair => pair.Template).ToArray());
+    }
+
+    /// <summary>
     /// Returns how many templates name each preset.
     /// </summary>
     public async Task<IReadOnlyDictionary<long, int>> UsesAsync(CancellationToken ct)
@@ -124,7 +140,12 @@ public sealed class PresetStore
     /// <summary>
     /// Adds a preset with the lists it carries.
     /// </summary>
-    public async Task<PresetResult> AddAsync(RoutingPreset draft, CancellationToken ct)
+    public Task<PresetResult> AddAsync(RoutingPreset draft, CancellationToken ct) => AddAsync(draft, null, ct);
+
+    /// <summary>
+    /// Adds a preset with the lists it carries and puts it last in the presets of the templates, none for no template.
+    /// </summary>
+    public async Task<PresetResult> AddAsync(RoutingPreset draft, IReadOnlyCollection<long>? templates, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
@@ -134,12 +155,24 @@ public sealed class PresetStore
             return refusal;
         }
 
+        if (await StrangerAsync(templates, ct).ConfigureAwait(false) is { } stranger)
+        {
+            return stranger;
+        }
+
         var now = _time.GetUtcNow();
         var entity = new RoutingPresetEntity { Uid = PresetRules.FreshUid(), CreatedUtc = now, UpdatedUtc = now };
         Write(entity, wanted);
 
-        _db.RoutingPresets.Add(entity);
-        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await _db.AloneAsync(
+            async () =>
+            {
+                _db.RoutingPresets.Add(entity);
+                await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+                await HandAsync(entity.Id, templates, now, ct).ConfigureAwait(false);
+                await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+            },
+            ct).ConfigureAwait(false);
 
         return PresetResult.Done(Read(entity));
     }
@@ -147,7 +180,17 @@ public sealed class PresetStore
     /// <summary>
     /// Replaces the lists of a preset, moving its time when the list it hands out changes.
     /// </summary>
-    public async Task<PresetResult> ChangeAsync(long id, RoutingPreset draft, CancellationToken ct)
+    public Task<PresetResult> ChangeAsync(long id, RoutingPreset draft, CancellationToken ct) =>
+        ChangeAsync(id, draft, null, ct);
+
+    /// <summary>
+    /// Replaces the lists of a preset and the templates that name it, none to leave the templates as they are.
+    /// </summary>
+    public async Task<PresetResult> ChangeAsync(
+        long id,
+        RoutingPreset draft,
+        IReadOnlyCollection<long>? templates,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
@@ -163,13 +206,20 @@ public sealed class PresetStore
             return refusal;
         }
 
+        if (await StrangerAsync(templates, ct).ConfigureAwait(false) is { } stranger)
+        {
+            return stranger;
+        }
+
+        var now = _time.GetUtcNow();
         var held = Read(entity);
         Write(entity, wanted);
         if (!PresetRules.SameList(held, Read(entity)))
         {
-            entity.UpdatedUtc = _time.GetUtcNow();
+            entity.UpdatedUtc = now;
         }
 
+        await HandAsync(id, templates, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return PresetResult.Done(Read(entity));
@@ -218,6 +268,52 @@ public sealed class PresetStore
         }
 
         return null;
+    }
+
+    // Returns the refusal of a list that names a template the panel does not hold, or null when it holds them all.
+    private async Task<PresetResult?> StrangerAsync(IReadOnlyCollection<long>? templates, CancellationToken ct)
+    {
+        if (templates is null || templates.Count == 0)
+        {
+            return null;
+        }
+
+        var wanted = templates.Distinct().ToArray();
+        var held = await _db.Templates.AsNoTracking()
+            .Where(template => wanted.Contains(template.Id))
+            .Select(template => template.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var missing = wanted.Except(held).ToArray();
+
+        return missing.Length == 0
+            ? null
+            : PresetResult.No(PresetOutcome.Invalid, "unknown-template", $"there is no template under the number {missing[0]}");
+    }
+
+    // Puts the preset last in the presets of the templates on the list and takes it off the other templates that name it.
+    private async Task HandAsync(long id, IReadOnlyCollection<long>? templates, DateTimeOffset now, CancellationToken ct)
+    {
+        if (templates is null)
+        {
+            return;
+        }
+
+        var wanted = templates.Distinct().ToArray();
+        var held = await _db.Templates.ToListAsync(ct).ConfigureAwait(false);
+        foreach (var template in held)
+        {
+            var presets = Numbers(template.Presets);
+            var takes = wanted.Contains(template.Id);
+            if (presets.Contains(id) == takes)
+            {
+                continue;
+            }
+
+            var next = takes ? presets.Append(id) : presets.Where(preset => preset != id);
+            template.Presets = string.Join(", ", next);
+            template.UpdatedUtc = now;
+        }
     }
 
     private static PresetResult Missing(long id) =>

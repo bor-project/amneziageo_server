@@ -1,9 +1,17 @@
+import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { useTemplateDefaults } from "@/api/templates"
+import { complaint } from "@/api/auth"
+import { useClients } from "@/api/clients"
+import { scopes } from "@/api/scopes"
+import { useFreeClients, useTemplateDefaults, useTemplates } from "@/api/templates"
+import type { TemplateDefaults } from "@/api/templates"
 import { useTail } from "@/components/crumbs"
-import { Part } from "@/components/fields"
-import { field, footer, label, secondary } from "@/components/styles"
+import { Links, Part } from "@/components/fields"
+import { clientItems } from "@/components/members"
+import { field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
+import { holds } from "@/store/authSlice"
+import { useAppSelector } from "@/store/hooks"
 import { useSpot } from "@/store/spots"
 
 export function DefaultTemplate() {
@@ -18,10 +26,40 @@ export function DefaultTemplate() {
     return <div className="mt-4 text-sm text-muted">{t("templates.loading")}</div>
   }
 
+  return <DefaultForm defaults={defaults} onClose={() => navigate(back)} />
+}
+
+function DefaultForm({ defaults, onClose }: { defaults: TemplateDefaults; onClose: () => void }) {
+  const t = useText()
+  const user = useAppSelector((s) => s.auth.user)
+  const may = holds(user, scopes.manageClients)
+  const templates = useTemplates().data ?? []
+  const titles = new Map(templates.map((one): [number, string] => [one.id, one.name]))
+  const members = clientItems(useClients().data ?? [], (one) =>
+    one.templateId === null ? t("clients.noTemplate") : (titles.get(one.templateId) ?? ""),
+  )
+  const free = useFreeClients()
+  const start = defaults.clientIds.map(String)
+  const [picked, setPicked] = useState(start)
+  const edited = picked.join(",") !== start.join(",")
+
   return (
     <div className="mt-4 flex flex-col gap-4">
       <Part title={t("templates.partMain")}>
         <Shown id="template-name" caption={t("templates.name")} value={t("clients.noTemplate")} wide />
+      </Part>
+
+      <Part title={t("templates.partClients")}>
+        <div className="sm:col-span-2">
+          <Links
+            id="template-clients"
+            value={picked}
+            items={members}
+            placeholder={may ? t("templates.addClient") : t("clients.dash")}
+            fixed={start}
+            onChange={may ? setPicked : undefined}
+          />
+        </div>
       </Part>
 
       <Part title={t("templates.partRouting")}>
@@ -34,10 +72,28 @@ export function DefaultTemplate() {
         <Shown id="template-keepalive" caption={t("templates.keepalive")} value={String(defaults.keepalive)} />
       </Part>
 
+      {free.error !== null && <div className="text-sm text-alarm">{t(complaint(free.error))}</div>}
+
       <div className={footer}>
-        <button type="button" onClick={() => navigate(back)} className={secondary}>
-          {t("action.backToList")}
-        </button>
+        {may ? (
+          <>
+            <button type="button" onClick={onClose} disabled={!edited || free.isPending} className={secondary}>
+              {t("templates.cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void free.mutateAsync(picked.map(Number)).then(onClose)}
+              disabled={!edited || free.isPending}
+              className={primary}
+            >
+              {free.isPending ? t("templates.busy") : t("templates.save")}
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={onClose} className={secondary}>
+            {t("action.backToList")}
+          </button>
+        )}
       </div>
     </div>
   )

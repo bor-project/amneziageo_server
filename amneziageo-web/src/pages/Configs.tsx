@@ -143,7 +143,11 @@ export function Configs() {
               width: 120,
               caption: t("configs.count"),
               sort: (one) => count(one),
-              cell: (one) => count(one),
+              cell: (one) => (
+                <Link to={`/clients?config=${one.id}`} className="text-brand-ink hover:text-brand-lit">
+                  {count(one)}
+                </Link>
+              ),
             },
             {
               key: "actions",

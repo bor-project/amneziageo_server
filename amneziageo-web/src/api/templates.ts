@@ -15,6 +15,7 @@ export interface Template {
   presets: number[]
   standIns: boolean
   clients: number
+  clientIds: number[]
   refreshedUtc: string | null
   createdUtc: string
   updatedUtc: string
@@ -29,6 +30,7 @@ export interface TemplateDraft {
   keepalive: number | null
   presets: number[]
   standIns: boolean
+  clients: number[]
 }
 
 export interface TemplatePart {
@@ -49,6 +51,7 @@ export interface TemplateDefaults {
   dns: string[]
   mtu: number
   keepalive: number
+  clientIds: number[]
 }
 
 const slow = { timeout: 120000 }
@@ -94,6 +97,10 @@ export function useRemoveTemplate() {
   return useRefreshing((id: number) => client.delete(`/templates/${id}`))
 }
 
+export function useFreeClients() {
+  return useRefreshing((clients: number[]) => client.put("/templates/default/clients", { clients }))
+}
+
 export function draftOf(template: Template): TemplateDraft {
   return {
     name: template.name,
@@ -104,6 +111,7 @@ export function draftOf(template: Template): TemplateDraft {
     keepalive: template.keepalive,
     presets: template.presets,
     standIns: template.standIns,
+    clients: template.clientIds,
   }
 }
 
@@ -116,6 +124,7 @@ export const freshTemplate: TemplateDraft = {
   keepalive: null,
   presets: [],
   standIns: false,
+  clients: [],
 }
 
 function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) {
@@ -125,6 +134,8 @@ function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) 
     mutationFn: call,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["templates"] })
+      await queryClient.invalidateQueries({ queryKey: ["template-defaults"] })
+      await queryClient.invalidateQueries({ queryKey: ["clients"] })
       await queryClient.invalidateQueries({ queryKey: ["presets"] })
       await queryClient.invalidateQueries({ queryKey: ["client-config"] })
       await queryClient.invalidateQueries({ queryKey: ["dns-conflicts"] })

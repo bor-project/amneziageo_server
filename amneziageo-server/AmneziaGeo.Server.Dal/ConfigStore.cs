@@ -363,6 +363,14 @@ public sealed class ConfigStore
         }
 
         var gone = Read(entity);
+        var now = _time.GetUtcNow();
+        var clients = await _db.Clients
+            .Where(client => client.ConfigId == id)
+            .Select(client => client.Name)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        await NameFollow.GoneAsync(_db, RuleSide.Clients, clients, now, ct).ConfigureAwait(false);
+        await NameFollow.GoneAsync(_db, RuleSide.Inbounds, [entity.Name], now, ct).ConfigureAwait(false);
         _db.Configs.Remove(entity);
         if (entity.IsDefault
             && await _db.Configs.Where(config => config.Id != id).OrderBy(config => config.Id).FirstOrDefaultAsync(ct).ConfigureAwait(false)

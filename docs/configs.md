@@ -10,6 +10,16 @@ silence after which a device counts as gone, the ranges kept away from clients, 
 tunnel, the masquerade, the open port, the keys and the whole obfuscation. A client template changes what the
 file of a client takes, see [templates.md](templates.md).
 
+The part `Clients` of the settings starts with the clients of the endpoint, each a link to the client, and `New
+client` opens the form of a new client on the endpoint. They are not added or taken off there: the endpoint of a
+client does not change after it is added. The number of clients in the list leads to the list of those clients,
+and the page that removes an endpoint names the clients that go with it.
+
+The part `Routing` names the rules that match by the interface and, under `For any interface`, the rules that name
+none; a rule is added and taken off there the way the settings of a client do it, see [clients.md](clients.md).
+`POST /api/configs` and `PUT /api/configs/{id}` take the rules in `rules` the same way. Removing an interface takes
+its name and the names of its clients off the rules, see [rules.md](rules.md).
+
 ## Rights
 
 | Route | Right |

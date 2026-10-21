@@ -1,5 +1,6 @@
 import { useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
+import { Link } from "react-router-dom"
 import { card, field, label, note as noteText } from "@/components/styles"
 import { parts } from "@/format"
 import { useText } from "@/i18n"
@@ -391,12 +392,14 @@ export function Multi({
   value,
   offers,
   placeholder,
+  linkOf,
   onChange,
 }: {
   id: string
   value: string[]
   offers: string[]
   placeholder: string
+  linkOf?: (item: string) => string | undefined
   onChange: (value: string[]) => void
 }) {
   const [text, setText] = useState("")
@@ -433,19 +436,29 @@ export function Multi({
   return (
     <div className="relative">
       <div className={`flex flex-wrap items-center gap-1 ${field}`}>
-        {value.map((item) => (
-          <span key={item} className="flex items-center gap-1 rounded bg-hover px-2 py-0.5 text-sm text-ink">
-            {item}
-            <button
-              type="button"
-              className="text-muted hover:text-alarm"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => onChange(value.filter((one) => one !== item))}
-            >
-              &times;
-            </button>
-          </span>
-        ))}
+        {value.map((item) => {
+          const to = linkOf?.(item)
+
+          return (
+            <span key={item} className="flex items-center gap-1 rounded bg-hover px-2 py-0.5 text-sm text-ink">
+              {to === undefined ? (
+                item
+              ) : (
+                <Link to={to} className="text-brand-ink hover:text-brand-lit">
+                  {item}
+                </Link>
+              )}
+              <button
+                type="button"
+                className="text-muted hover:text-alarm"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onChange(value.filter((one) => one !== item))}
+              >
+                &times;
+              </button>
+            </span>
+          )
+        })}
         <input
           id={id}
           className="min-w-32 flex-1 bg-transparent text-sm text-ink outline-none"
@@ -477,6 +490,162 @@ export function Multi({
         </>
       )}
     </div>
+  )
+}
+
+// One entity a list of links names.
+export interface LinkItem {
+  key: string
+  name: string
+  note?: string
+  mark?: string
+  to?: string
+}
+
+// Names of entities as links: the field adds one, the cross takes off one not in fixed; without onChange it only reads.
+export function Links({
+  id,
+  value,
+  items,
+  placeholder,
+  fixed = [],
+  onChange,
+}: {
+  id: string
+  value: string[]
+  items: LinkItem[]
+  placeholder: string
+  fixed?: string[]
+  onChange?: (value: string[]) => void
+}) {
+  const [text, setText] = useState("")
+  const [open, setOpen] = useState(false)
+  const known = new Map(items.map((item): [string, LinkItem] => [item.key, item]))
+  const query = text.trim().toLowerCase()
+  const left = items.filter((item) => !value.includes(item.key) && item.name.toLowerCase().includes(query))
+  const last = value.at(-1)
+
+  function add(key: string) {
+    setText("")
+    if (onChange !== undefined && !value.includes(key)) {
+      onChange([...value, key])
+    }
+  }
+
+  function press(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault()
+      const exact = left.find((item) => item.name.toLowerCase() === query) ?? (left.length === 1 ? left[0] : undefined)
+      if (exact !== undefined) {
+        add(exact.key)
+      }
+
+      return
+    }
+
+    if (event.key === "Backspace" && text.length === 0 && last !== undefined && !fixed.includes(last)) {
+      onChange?.(value.slice(0, -1))
+    }
+  }
+
+  return (
+    <div className="relative">
+      <div className={`flex min-h-10 flex-wrap items-center gap-1 ${field} ${onChange === undefined ? "bg-hover/40" : ""}`}>
+        {value.map((key) => {
+          const item = known.get(key)
+
+          return (
+            <span key={key} className="flex items-center gap-1 rounded bg-hover px-2 py-0.5 text-sm text-ink">
+              {item?.to === undefined ? (
+                (item?.name ?? key)
+              ) : (
+                <Link to={item.to} className="text-brand-ink hover:text-brand-lit">
+                  {item.name}
+                </Link>
+              )}
+              {item?.mark !== undefined && <span className="text-xs text-muted">{item.mark}</span>}
+              {onChange !== undefined && !fixed.includes(key) && (
+                <button
+                  type="button"
+                  className="text-muted hover:text-alarm"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => onChange(value.filter((one) => one !== key))}
+                >
+                  &times;
+                </button>
+              )}
+            </span>
+          )
+        })}
+        {onChange === undefined ? (
+          value.length === 0 && (
+            <span id={id} className="text-sm text-muted">
+              {placeholder}
+            </span>
+          )
+        ) : (
+          <input
+            id={id}
+            className="min-w-32 flex-1 bg-transparent text-sm text-ink outline-none"
+            value={text}
+            placeholder={value.length === 0 ? placeholder : ""}
+            onChange={(e) => {
+              setText(e.target.value)
+              setOpen(true)
+            }}
+            onKeyDown={press}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setText("")}
+          />
+        )}
+      </div>
+
+      {onChange !== undefined && open && left.length > 0 && (
+        <>
+          <div
+            className="fixed inset-0 z-30"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              setOpen(false)
+            }}
+          />
+          <div className={`absolute z-40 mt-1 flex max-h-64 w-full flex-col overflow-y-auto py-1 shadow-lg ${card}`}>
+            {left.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className="flex items-center justify-between gap-3 px-3 py-2 text-left text-sm text-ink hover:bg-hover hover:text-brand-ink"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => add(item.key)}
+              >
+                <span className="truncate">{item.name}</span>
+                {item.note !== undefined && <span className="shrink-0 text-xs text-muted">{item.note}</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Names of entities as links in one line.
+export function LinkLine({ items }: { items: LinkItem[] }) {
+  return (
+    <>
+      {items.map((item, at) => (
+        <span key={item.key}>
+          {at > 0 && ", "}
+          {item.to === undefined ? (
+            item.name
+          ) : (
+            <Link to={item.to} className="text-brand-ink hover:text-brand-lit">
+              {item.name}
+            </Link>
+          )}
+        </span>
+      ))}
+    </>
   )
 }
 

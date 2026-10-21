@@ -91,7 +91,8 @@ public sealed record ConfigRequest(
     string? WebSocketPath = null,
     bool? Keep = null,
     bool? IsDefault = null,
-    string? DnsMode = null);
+    string? DnsMode = null,
+    IReadOnlyList<long>? Rules = null);
 
 /// <summary>
 /// What a request to turn an endpoint on or off carries.
