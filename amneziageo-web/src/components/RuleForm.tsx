@@ -3,8 +3,10 @@ import { complaint } from "@/api/auth"
 import { useBalancers } from "@/api/balancers"
 import { useClients } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
+import { useDnsCheck } from "@/api/dns"
 import { useOutbounds } from "@/api/outbounds"
 import type { RuleAction, RuleDraft, RuleProtocol } from "@/api/rules"
+import { DnsNotes } from "@/components/DnsMark"
 import { Line, ListArea, ListLine, Multi, Part, Switch } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
@@ -13,6 +15,7 @@ import { same } from "@/store/draftSlice"
 
 export function RuleForm({
   start,
+  self,
   pending,
   error,
   onSave,
@@ -20,6 +23,7 @@ export function RuleForm({
   onRemove,
 }: {
   start: RuleDraft
+  self?: number
   pending: boolean
   error: unknown
   onSave: (draft: RuleDraft) => void
@@ -33,6 +37,7 @@ export function RuleForm({
   const configs = useConfigs()
   const [draft, setDraft] = useState(start)
   const edited = !same(draft, start)
+  const check = useDnsCheck({ id: self, rule: draft })
 
   function put(change: Partial<RuleDraft>) {
     setDraft({ ...draft, ...change })
@@ -171,6 +176,8 @@ export function RuleForm({
           </div>
         </div>
       </Part>
+
+      <DnsNotes findings={check.data?.findings ?? []} view="rule" />
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>

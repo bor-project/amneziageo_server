@@ -20,7 +20,10 @@ public static class DnsEndpoints
     {
         ArgumentNullException.ThrowIfNull(routes);
 
-        routes.MapGroup("/api/dns").RequireScope(Scopes.ReadState).MapGet("/", ReadAsync);
+        var reading = routes.MapGroup("/api/dns").RequireScope(Scopes.ReadState);
+        reading.MapGet("/", ReadAsync);
+        reading.MapGet("/conflicts", DnsChecks.ConflictsAsync);
+        reading.MapPost("/check", DnsChecks.CheckAsync);
 
         var writing = routes.MapGroup("/api/dns").RequireScope(Scopes.ManageRouting);
         writing.MapPut("/", SaveAsync);

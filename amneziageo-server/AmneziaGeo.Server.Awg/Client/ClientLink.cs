@@ -32,14 +32,15 @@ public static class ClientLink
         TunnelClient client,
         ClientTemplate? template = null,
         IReadOnlyList<string>? resolver = null,
-        string? title = null)
+        string? title = null,
+        IReadOnlyList<string>? panel = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
         var last = new JsonObject
         {
-            ["config"] = ClientText.Text(config, client, template, resolver),
+            ["config"] = ClientText.Text(config, client, template, resolver, panel),
             ["hostName"] = config.Host,
             ["port"] = config.ListenPort,
         };

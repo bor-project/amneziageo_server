@@ -1,3 +1,5 @@
+using AmneziaGeo.Server.Awg.Config;
+
 namespace AmneziaGeo.Server.Awg.Client;
 
 /// <summary>
@@ -34,6 +36,11 @@ public sealed record ClientTemplate
     /// The name servers the client asks.
     /// </summary>
     public IReadOnlyList<string> Dns { get; init; } = [];
+
+    /// <summary>
+    /// Where the name servers of the files of the clients come from.
+    /// </summary>
+    public DnsChoice DnsMode { get; init; }
 
     /// <summary>
     /// The packet size the client takes.

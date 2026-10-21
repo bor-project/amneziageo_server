@@ -1,3 +1,5 @@
+using AmneziaGeo.Server.Awg.Config;
+
 namespace AmneziaGeo.Server.Awg.Client;
 
 /// <summary>
@@ -54,6 +56,16 @@ public sealed record TunnelClient
     /// The template the file of the client takes settings from.
     /// </summary>
     public long? TemplateId { get; init; }
+
+    /// <summary>
+    /// Where the name servers of the file of the client come from.
+    /// </summary>
+    public DnsChoice DnsMode { get; init; }
+
+    /// <summary>
+    /// The name servers the file of the client names when it picks its own.
+    /// </summary>
+    public IReadOnlyList<string> Dns { get; init; } = [];
 
     /// <summary>
     /// The subscription that hands the client out, empty for none.

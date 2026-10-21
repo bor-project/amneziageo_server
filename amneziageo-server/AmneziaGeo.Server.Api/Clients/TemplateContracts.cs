@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Routing.Template;
 
 namespace AmneziaGeo.Server.Api.Clients;
@@ -20,7 +21,8 @@ public sealed record TemplateResponse(
     int Clients,
     DateTimeOffset? RefreshedUtc,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    string DnsMode = DnsChoiceName.Auto);
 
 /// <summary>
 /// The settings a client template is added or changed with.
@@ -32,7 +34,8 @@ public sealed record TemplateRequest(
     int? Mtu,
     int? Keepalive,
     IReadOnlyList<long>? Presets = null,
-    bool? StandIns = null);
+    bool? StandIns = null,
+    string? DnsMode = null);
 
 /// <summary>
 /// The entries the panel asks what they come out as.
@@ -100,7 +103,8 @@ public static class TemplateAnswers
             clients,
             template.RefreshedUtc,
             template.CreatedUtc,
-            template.UpdatedUtc);
+            template.UpdatedUtc,
+            DnsChoiceName.Of(template.DnsMode));
     }
 
     /// <summary>
@@ -120,11 +124,14 @@ public static class TemplateAnswers
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var dns = Clean(request.Dns);
+
         return new ClientTemplate
         {
             Name = (request.Name ?? string.Empty).Trim(),
             Entries = Entries(request.Entries),
-            Dns = Clean(request.Dns),
+            Dns = dns,
+            DnsMode = DnsChoiceName.Read(request.DnsMode, dns.Count > 0 ? DnsChoice.Own : DnsChoice.Auto),
             Mtu = request.Mtu,
             Keepalive = request.Keepalive,
             Presets = [.. (request.Presets ?? []).Distinct()],

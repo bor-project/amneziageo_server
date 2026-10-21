@@ -3,10 +3,12 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { useClients } from "@/api/clients"
 import { failure, useConfigs, useSwitchConfig } from "@/api/configs"
+import { findingsOf, useDnsConflicts } from "@/api/dns"
 import type { Config } from "@/api/configs"
 import { useFailure } from "@/api/failure"
 import { useOpenPort, usePortState } from "@/api/firewall"
 import { scopes } from "@/api/scopes"
+import { DnsMark } from "@/components/DnsMark"
 import { RowActions } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
 import { Find, Knob } from "@/components/fields"
@@ -27,6 +29,7 @@ export function Configs() {
   const turn = useSwitchConfig()
   const [faults, setFaults] = useState<Record<number, string>>({})
   const may = holds(user, scopes.manageInterfaces)
+  const report = useDnsConflicts().data
   const find = params.get("find") ?? ""
   const all = configs.data ?? []
   const shown = all.filter((one) => matches(one, find))
@@ -111,6 +114,7 @@ export function Configs() {
                       {t("configs.default").toLowerCase()}
                     </span>
                   )}
+                  <DnsMark findings={findingsOf(report, "config", one.id)} view="config" />
                 </span>
               ),
             },

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
+import type { DnsMode } from "./dns"
 
 export interface Template {
   id: number
@@ -7,6 +8,7 @@ export interface Template {
   entries: string[]
   allowedIps: string[]
   missed: string[]
+  dnsMode: DnsMode
   dns: string[]
   mtu: number | null
   keepalive: number | null
@@ -21,6 +23,7 @@ export interface Template {
 export interface TemplateDraft {
   name: string
   entries: string[]
+  dnsMode: DnsMode
   dns: string[]
   mtu: number | null
   keepalive: number | null
@@ -95,6 +98,7 @@ export function draftOf(template: Template): TemplateDraft {
   return {
     name: template.name,
     entries: template.entries,
+    dnsMode: template.dnsMode,
     dns: template.dns,
     mtu: template.mtu,
     keepalive: template.keepalive,
@@ -106,6 +110,7 @@ export function draftOf(template: Template): TemplateDraft {
 export const freshTemplate: TemplateDraft = {
   name: "",
   entries: [],
+  dnsMode: "auto",
   dns: [],
   mtu: null,
   keepalive: null,
@@ -122,6 +127,7 @@ function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) 
       await queryClient.invalidateQueries({ queryKey: ["templates"] })
       await queryClient.invalidateQueries({ queryKey: ["presets"] })
       await queryClient.invalidateQueries({ queryKey: ["client-config"] })
+      await queryClient.invalidateQueries({ queryKey: ["dns-conflicts"] })
     },
   })
 }

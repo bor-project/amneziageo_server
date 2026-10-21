@@ -180,6 +180,7 @@ function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
     mutationFn: call,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["rules"] })
+      await queryClient.invalidateQueries({ queryKey: ["dns-conflicts"] })
     },
   })
 }

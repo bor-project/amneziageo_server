@@ -332,6 +332,13 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<bool>("DisconnectRefused")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Dns")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DnsMode")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Inbound")
                         .HasColumnType("INTEGER");
 
@@ -420,6 +427,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<string>("Dns")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("DnsMode")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("H1")
                         .IsRequired()
@@ -1290,6 +1300,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<string>("Dns")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("DnsMode")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Entries")
                         .IsRequired()

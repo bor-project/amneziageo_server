@@ -1,10 +1,12 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { complaint, reason } from "@/api/auth"
 import { useBalancers } from "@/api/balancers"
+import { findingsOf, useDnsConflicts } from "@/api/dns"
 import { useFailure } from "@/api/failure"
 import { useMoveRule, usePlaceRule, useRules, useSwitchRule } from "@/api/rules"
 import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
+import { DnsMark } from "@/components/DnsMark"
 import { Find, Knob } from "@/components/fields"
 import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
@@ -26,6 +28,7 @@ export function Rules() {
   const move = useMoveRule()
   const place = usePlaceRule()
   const turn = useSwitchRule()
+  const report = useDnsConflicts().data
   const may = holds(user, scopes.manageRouting)
   const find = params.get("find") ?? ""
   const all = rules.data ?? []
@@ -98,14 +101,18 @@ export function Rules() {
               sort: (one) => one.name,
               lead: true,
               body: "font-semibold text-ink",
-              cell: (one) =>
-                may ? (
-                  <Link to={`/routing/rules/${one.id}/edit`} className="hover:text-brand-ink">
-                    {one.name}
-                  </Link>
-                ) : (
-                  one.name
-                ),
+              cell: (one) => (
+                <span className="flex min-w-0 items-center gap-2">
+                  {may ? (
+                    <Link to={`/routing/rules/${one.id}/edit`} className="truncate hover:text-brand-ink">
+                      {one.name}
+                    </Link>
+                  ) : (
+                    <span className="truncate">{one.name}</span>
+                  )}
+                  <DnsMark findings={findingsOf(report, "rule", one.id)} view="rule" />
+                </span>
+              ),
             },
             {
               key: "action",

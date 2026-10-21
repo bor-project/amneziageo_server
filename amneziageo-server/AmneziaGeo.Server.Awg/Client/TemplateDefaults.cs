@@ -52,6 +52,7 @@ public static class TemplateDefaults
         Name = Name,
         AllowedIps = [AnyFour, AnySix],
         Dns = [.. Dns],
+        DnsMode = DnsChoice.Own,
         Mtu = Mtu,
         Keepalive = Keepalive,
     };

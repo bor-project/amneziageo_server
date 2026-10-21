@@ -144,7 +144,7 @@ public sealed class DnsHost : BackgroundService
             }
 
             Volatile.Write(ref _settings, _settings with { Outbound = anew });
-            _state.Took(_settings, DnsNeed.Running(_settings, DnsNeed.Kept(_state.Needed, _state.Holders)));
+            _state.Took(_settings, DnsNeed.Running(_settings, DnsNeed.Kept(_state.Needed, _state.Holders, _state.Picked)));
         }
         finally
         {
@@ -218,14 +218,16 @@ public sealed class DnsHost : BackgroundService
                 ? await scope.ServiceProvider.GetRequiredService<DnsStore>().ReadAsync(ct).ConfigureAwait(false)
                 : _state.Chosen;
             await _book.RefreshAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
-            await _holders.RefreshAsync(scope.ServiceProvider.GetRequiredService<ClientStore>(), ct).ConfigureAwait(false);
+            await _holders.RefreshAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
             var plan = _plans.Held
                 ?? await scope.ServiceProvider.GetRequiredService<RouteApplier>().BuildAsync(ct).ConfigureAwait(false);
             var needed = DnsNeed.Of(plan, _book.Holds);
             var holders = _holders.Count;
-            var kept = DnsNeed.Kept(needed, holders);
+            var picked = _holders.Picked;
+            var kept = DnsNeed.Kept(needed, holders, picked);
             _state.Need(needed);
             _state.Hold(holders);
+            _state.Pick(picked);
             _state.Took(_settings, DnsNeed.Running(_settings, kept));
             if (!_settings.IsEnabled || !kept)
             {
@@ -328,9 +330,9 @@ public sealed class DnsHost : BackgroundService
         }
     }
 
-    // Starts the resolver when the routing comes to need it or a client holds a file that names it and stops it when
-    // neither is left, and lays the rules and the firewall anew when that or the interfaces the firewall keeps from the
-    // resolver changed.
+    // Starts the resolver when the routing comes to need it or a client picks it or holds a file that names it and stops
+    // it when none is left, and lays the rules and the firewall anew when that or the interfaces the firewall keeps from
+    // the resolver changed.
     private async Task MindAsync(CancellationToken ct)
     {
         if (_plans.Held is not { } plan || _state.Chosen is null)
@@ -342,8 +344,9 @@ public sealed class DnsHost : BackgroundService
         {
             var needed = DnsNeed.Of(plan, _book.Holds);
             var holders = _holders.Count;
-            var kept = DnsNeed.Kept(needed, holders);
-            var turned = kept != DnsNeed.Kept(_state.Needed, _state.Holders);
+            var picked = _holders.Picked;
+            var kept = DnsNeed.Kept(needed, holders, picked);
+            var turned = kept != DnsNeed.Kept(_state.Needed, _state.Holders, _state.Picked);
             var spare = _settings.IsEnabled && kept && !needed && (turned || _state.Needed);
             if (turned)
             {
@@ -354,19 +357,22 @@ public sealed class DnsHost : BackgroundService
                 }
                 else if (_settings.IsEnabled && !kept)
                 {
-                    _logger.LogInformation("the routing does not need the resolver any more and no file names it: it stopped");
+                    _logger.LogInformation(
+                        "the routing does not need the resolver any more, and no client picks it or holds a file that names it: it stopped");
                 }
             }
-            else if (needed != _state.Needed || holders != _state.Holders)
+            else if (needed != _state.Needed || holders != _state.Holders || picked != _state.Picked)
             {
                 _state.Need(needed);
                 _state.Hold(holders);
+                _state.Pick(picked);
             }
 
             if (spare)
             {
                 _logger.LogInformation(
-                    "the routing does not need the resolver: it answers the clients whose files name it ({Holders})",
+                    "the routing does not need the resolver: it answers the clients that pick it ({Picked}) and whose files name it ({Holders})",
+                    picked,
                     holders);
             }
 
@@ -438,7 +444,7 @@ public sealed class DnsHost : BackgroundService
         {
             using var scope = _scopes.CreateScope();
             await _book.RefreshAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
-            await _holders.RefreshAsync(scope.ServiceProvider.GetRequiredService<ClientStore>(), ct).ConfigureAwait(false);
+            await _holders.RefreshAsync(scope.ServiceProvider, ct).ConfigureAwait(false);
             _standIns.Sweep();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

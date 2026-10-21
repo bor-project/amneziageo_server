@@ -20,16 +20,17 @@ public static class ClientText
         ServerConfig config,
         TunnelClient client,
         ClientTemplate? template = null,
-        IReadOnlyList<string>? resolver = null)
+        IReadOnlyList<string>? resolver = null,
+        IReadOnlyList<string>? panel = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
-        var stood = template is { StandIns: true } && resolver is { Count: > 0 } ? resolver : null;
+        var line = Dns(config, client, template, resolver, panel);
 
         // A field the template leaves empty takes what the endpoint holds, and only then the built in value.
-        var dns = stood ?? Names(config, template, resolver);
-        var ranges = Reaching(Carried(config, client, template, stood is not null), dns, config.Address);
+        var dns = line.Servers;
+        var ranges = Routed(config, client, template, line);
         var mtu = template?.Mtu ?? config.Mtu;
         var keepalive = template?.Keepalive ?? config.Keepalive;
 
@@ -144,10 +145,76 @@ public static class ClientText
     }
 
     /// <summary>
-    /// Tells whether the DNS line of a client names the resolver of the panel.
+    /// Returns the name servers the file of a client names: the resolver of the panel while the routing needs it, or for
+    /// a client, template or endpoint that picks it, what is picked otherwise.
     /// </summary>
-    public static bool NamesResolver(ClientTemplate? template, IReadOnlyList<string>? resolver) =>
-        resolver is { Count: > 0 } && (template is null || template.StandIns || template.Dns.Count == 0);
+    public static ClientDns Dns(
+        ServerConfig config,
+        TunnelClient client,
+        ClientTemplate? template = null,
+        IReadOnlyList<string>? resolver = null,
+        IReadOnlyList<string>? panel = null)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(client);
+
+        var needed = resolver is { Count: > 0 } ? resolver : null;
+        var offered = (panel ?? resolver) is { Count: > 0 } answered ? answered : null;
+        if (template is { StandIns: true } && offered is not null)
+        {
+            return new ClientDns(offered, DnsFrom.StandIns, DnsChoice.Panel, true);
+        }
+
+        var (from, choice, servers) = Chosen(config, client, template);
+        var otherwise = template is null ? config.Dns : Either(config.Dns, TemplateDefaults.Dns);
+
+        return choice switch
+        {
+            DnsChoice.Panel when offered is not null => new ClientDns(offered, from, choice, true),
+            DnsChoice.Own when servers.Count > 0 => new ClientDns(servers, from, choice, false),
+            DnsChoice.Auto when needed is not null => new ClientDns(needed, from, choice, true),
+            _ => new ClientDns(otherwise, from, choice, false),
+        };
+    }
+
+    /// <summary>
+    /// Returns where the name servers of a client are picked, what is picked there and the servers written with it.
+    /// </summary>
+    public static (DnsFrom From, DnsChoice Choice, IReadOnlyList<string> Servers) Chosen(
+        ServerConfig config,
+        TunnelClient client,
+        ClientTemplate? template)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(client);
+
+        if (client.DnsMode != DnsChoice.Auto)
+        {
+            return (DnsFrom.Client, client.DnsMode, client.Dns);
+        }
+
+        return template is { DnsMode: not DnsChoice.Auto }
+            ? (DnsFrom.Template, template.DnsMode, template.Dns)
+            : (DnsFrom.Endpoint, config.DnsMode, config.Dns);
+    }
+
+    /// <summary>
+    /// Tells whether a client picks the resolver of the panel, itself or through its template or endpoint.
+    /// </summary>
+    public static bool Picks(ServerConfig config, TunnelClient client, ClientTemplate? template) =>
+        template is not { StandIns: true } && Chosen(config, client, template).Choice == DnsChoice.Panel;
+
+    /// <summary>
+    /// Returns the ranges a client routes into the tunnel with the name servers its file names.
+    /// </summary>
+    public static IReadOnlyList<string> Routed(ServerConfig config, TunnelClient client, ClientTemplate? template, ClientDns line)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(line);
+
+        return Reaching(Carried(config, client, template, line.From == DnsFrom.StandIns), line.Servers, config.Address);
+    }
 
     private static IReadOnlyList<string> Either(IReadOnlyList<string> own, IReadOnlyList<string> otherwise) =>
         own.Count > 0 ? own : otherwise;
@@ -187,15 +254,6 @@ public static class ClientText
 
     private static List<AwgAllowedIp> Ranges(IEnumerable<string> texts) =>
         [.. texts.Select(text => AwgAllowedIp.TryParse(text, out var range) ? range : null).OfType<AwgAllowedIp>()];
-
-    private static IReadOnlyList<string> Names(ServerConfig config, ClientTemplate? template, IReadOnlyList<string>? resolver)
-    {
-        var own = resolver is { Count: > 0 } ? resolver : null;
-
-        return template is null
-            ? own ?? config.Dns
-            : Either(template.Dns, own ?? Either(config.Dns, TemplateDefaults.Dns));
-    }
 
     private static void Obfuscation(StringBuilder text, ObfuscationSettings obfuscation)
     {

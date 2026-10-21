@@ -1,17 +1,20 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
-import { draftOf, useResolver, useSaveResolver } from "@/api/dns"
-import type { DnsDraft, DnsState, Resolver as ResolverSettings } from "@/api/dns"
+import { draftOf, findingsOf, useDnsCheck, useDnsConflicts, useResolver, useSaveResolver } from "@/api/dns"
+import type { DnsDraft, DnsFinding, DnsReport, DnsState, DnsSubject, Resolver as ResolverSettings } from "@/api/dns"
 import { useBalancers } from "@/api/balancers"
 import { useFailure } from "@/api/failure"
 import { useOutbounds } from "@/api/outbounds"
+import { useRules } from "@/api/rules"
 import { scopes } from "@/api/scopes"
+import { DnsMark } from "@/components/DnsMark"
+import { clientsOfWords, clientWords, counted, fewNames, levelOf, ruleWords, templateWords } from "@/components/dnsWords"
 import { Box, Count, ListLine, Part, Pick } from "@/components/fields"
 import { ResolverTrouble } from "@/components/ResolverTrouble"
 import { troubleOf } from "@/components/trouble"
 import { footer, primary, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
-import type { TextKey } from "@/i18n"
+import type { Text, TextKey } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { dnsDrafted, same } from "@/store/draftSlice"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
@@ -96,6 +99,9 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
   const via = way ?? (draft.outbound === "" ? "direct" : "out")
   const unpicked = via === "out" && draft.outbound === ""
   const trouble = troubleOf(settings)
+  const report = useDnsConflicts()
+  const check = useDnsCheck(kept === null ? null : { dns: draft })
+  const findings = kept === null ? findingsOf(report.data, "dns", 0) : (check.data?.findings ?? [])
 
   function set(part: Partial<DnsDraft>) {
     const next = { ...draft, ...part }
@@ -133,17 +139,14 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
           <option value="off">{t("dns.modeOff")}</option>
         </Pick>
         <div className="flex items-end pb-2.5 text-sm">
-          {settings.isEnabled && (
-            <span className={settings.state.needed ? "text-good" : "text-muted"}>
-              {t(settings.state.needed ? "dns.needed" : "dns.idle")}
-            </span>
-          )}
+          <Need
+            findings={findings}
+            report={report.data}
+            state={settings.state}
+            on={draft.isEnabled}
+            known={report.isSuccess}
+          />
         </div>
-        {!settings.isEnabled && settings.state.needed && (
-          <div role="alert" className="text-sm text-alarm sm:col-span-2">
-            {t("dns.offNeeded")}
-          </div>
-        )}
         {trouble?.kind === "kept" && (
           <div className="sm:col-span-2">
             <ResolverTrouble trouble={trouble} kept="dns.troubleKept" />
@@ -251,4 +254,89 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
       )}
     </>
   )
+}
+
+// Who needs the resolver, or what stops working or misses the files with the mode picked.
+function Need({
+  findings,
+  report,
+  state,
+  on,
+  known,
+}: {
+  findings: DnsFinding[]
+  report: DnsReport | undefined
+  state: DnsState
+  on: boolean
+  known: boolean
+}) {
+  const t = useText()
+  const language = useLanguage()
+  const rules = useRules().data ?? []
+  const level = levelOf(findings)
+
+  function everyone(subject: DnsSubject): boolean {
+    const rule = rules.find((one) => one.id === subject.id)
+
+    return rule !== undefined && rule.clients.length === 0 && rule.inbounds.length === 0
+  }
+
+  if (level !== null) {
+    const broken = level === "error"
+
+    return (
+      <span className={`flex items-center gap-1.5 ${broken ? "text-alarm" : "text-warn"}`}>
+        <DnsMark
+          findings={findings}
+          view="dns"
+          title={broken && !on ? t("dnsCheck.offTitle") : undefined}
+          everyone={everyone}
+        />
+        {broken ? brokenText(t, language, findings) : missedText(t, language, findings)}
+      </span>
+    )
+  }
+
+  if (!on) {
+    return null
+  }
+
+  if (!known || report === undefined) {
+    return (
+      <span className={state.needed ? "text-good" : "text-muted"}>{t(state.needed ? "dns.needed" : "dns.idle")}</span>
+    )
+  }
+
+  if (report.needs.rules.length > 0 || report.needs.templates.length > 0) {
+    return <span className="text-good">{t("dns.needed")}</span>
+  }
+
+  const names = [...new Set([...report.needs.picked, ...report.needs.holders].map((one) => one.name))]
+
+  return names.length > 0 ? (
+    <span className="text-good">{t("dnsCheck.neededBy", { names: fewNames(t, names) })}</span>
+  ) : (
+    <span className="text-muted">{t("dns.idle")}</span>
+  )
+}
+
+// What stops working without the resolver: the rules, the templates and the clients counted.
+function brokenText(t: Text, language: string, findings: DnsFinding[]): string {
+  const rules = findings.filter((one) => one.code === "rule-off").length
+  const templates = findings.filter((one) => one.code === "standins-off").length
+  const clients = new Set(findings.filter((one) => one.code === "holders-off").flatMap((one) => one.clients.map((c) => c.id))).size
+  const parts = [
+    ...(rules > 0 ? [counted(t, language, ruleWords, rules)] : []),
+    ...(templates > 0 ? [counted(t, language, templateWords, templates)] : []),
+    ...(clients > 0 ? [counted(t, language, clientWords, clients)] : []),
+  ]
+
+  return t("dnsCheck.offBroken", { parts: parts.join(", ") })
+}
+
+// How many clients the resolver does not reach.
+function missedText(t: Text, language: string, findings: DnsFinding[]): string {
+  const clients = new Set(findings.flatMap((one) => one.clients.map((c) => c.id))).size
+
+  return t("dnsCheck.notHanded", { clients: counted(t, language, clientsOfWords, clients) })
 }

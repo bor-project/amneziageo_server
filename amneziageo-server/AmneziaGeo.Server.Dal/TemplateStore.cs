@@ -1,5 +1,6 @@
 using System.Globalization;
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Routing.Template;
 using Microsoft.EntityFrameworkCore;
 
@@ -283,6 +284,7 @@ public sealed class TemplateStore
         AllowedIps = Parts(entity.AllowedIps),
         Missed = Parts(entity.Missed),
         Dns = Parts(entity.Dns),
+        DnsMode = (DnsChoice)entity.DnsMode,
         Mtu = entity.Mtu,
         Keepalive = entity.Keepalive,
         StandIns = entity.StandIns,
@@ -299,6 +301,7 @@ public sealed class TemplateStore
         entity.AllowedIps = string.Join(", ", template.AllowedIps);
         entity.Missed = string.Join(", ", template.Missed);
         entity.Dns = string.Join(", ", template.Dns);
+        entity.DnsMode = (int)template.DnsMode;
         entity.Mtu = template.Mtu;
         entity.Keepalive = template.Keepalive;
         entity.StandIns = template.StandIns;

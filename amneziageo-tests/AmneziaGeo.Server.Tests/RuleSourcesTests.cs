@@ -31,11 +31,10 @@ public sealed class RuleSourcesTests : IDisposable
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await db.GetService<IMigrator>().MigrateAsync("DropRuleHold");
-            var configs = scope.ServiceProvider.GetRequiredService<ConfigStore>();
-            var office = (await configs.AddAsync(ConfigDefaults.Fresh("awg1") with { Address = ["10.9.1.1/24"] }, default)).Record!.Id;
-            var guests = (await configs.AddAsync(
-                ConfigDefaults.Fresh("awg2") with { ListenPort = 51821, Address = ["10.9.2.1/24", "fd00::9:1/112"] },
-                default)).Record!.Id;
+            await db.Database.OpenConnectionAsync();
+            await db.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys = OFF");
+            const long office = 1;
+            const long guests = 2;
             await AddAsync(db, office, "bor", "10.9.1.12/32");
             await AddAsync(db, office, "bor-phone", "10.9.1.13/32");
             await AddAsync(db, guests, "guest", "10.9.2.5/32", "fd00::9:5/128");

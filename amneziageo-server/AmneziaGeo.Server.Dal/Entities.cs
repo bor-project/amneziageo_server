@@ -242,6 +242,8 @@ public sealed class ConfigEntity : IObfuscated
 
     public string Dns { get; set; } = string.Empty;
 
+    public int DnsMode { get; set; }
+
     public string AllowedIps { get; set; } = string.Empty;
 
     public int Mtu { get; set; }
@@ -660,6 +662,10 @@ public sealed class ClientEntity
 
     public bool ResolverHanded { get; set; }
 
+    public int DnsMode { get; set; }
+
+    public string Dns { get; set; } = string.Empty;
+
     public DateTimeOffset CreatedUtc { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }
@@ -739,6 +745,8 @@ public sealed class TemplateEntity
     public int? Keepalive { get; set; }
 
     public bool StandIns { get; set; }
+
+    public int DnsMode { get; set; }
 
     public string Presets { get; set; } = string.Empty;
 

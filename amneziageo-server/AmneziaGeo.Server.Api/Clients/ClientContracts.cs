@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Traffic;
 
@@ -53,7 +54,9 @@ public sealed record ClientResponse(
     ClientStateBody State,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc,
-    ClientSignalBody? Signal = null);
+    ClientSignalBody? Signal = null,
+    string DnsMode = DnsChoiceName.Auto,
+    IReadOnlyList<string>? Dns = null);
 
 /// <summary>
 /// The settings a client is added or changed with.
@@ -71,7 +74,9 @@ public sealed record ClientRequest(
     string? SubscriptionId = null,
     long? DailyLimit = null,
     string? Inbound = null,
-    bool? Disconnect = null);
+    bool? Disconnect = null,
+    string? DnsMode = null,
+    IReadOnlyList<string>? Dns = null);
 
 /// <summary>
 /// Whether a client is on.
@@ -169,7 +174,9 @@ public static class ClientAnswers
                 traffic.Used.Total,
                 traffic.IsSpent),
             client.CreatedUtc,
-            client.UpdatedUtc);
+            client.UpdatedUtc,
+            DnsMode: DnsChoiceName.Of(client.DnsMode),
+            Dns: client.Dns);
     }
 
     /// <summary>
@@ -190,6 +197,8 @@ public static class ClientAnswers
             IsEnabled = request.IsEnabled ?? held?.IsEnabled ?? true,
             Note = (request.Note ?? string.Empty).Trim(),
             TemplateId = request.TemplateId,
+            DnsMode = DnsChoiceName.Read(request.DnsMode, held?.DnsMode ?? DnsChoice.Auto),
+            Dns = request.Dns is null ? held?.Dns ?? [] : Clean(request.Dns),
             SubscriptionId = request.SubscriptionId?.Trim() ?? held?.SubscriptionId ?? ClientDefaults.SubscriptionId(),
             DailyLimit = request.DailyLimit ?? held?.DailyLimit ?? 0,
             Inbound = InboundName.Read(request.Inbound, held?.Inbound ?? ClientInbound.Endpoint),

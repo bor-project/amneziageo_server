@@ -1,4 +1,6 @@
+using System.Net;
 using System.Text.RegularExpressions;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Crypto;
 
@@ -48,7 +50,8 @@ public static partial class ClientRules
             ?? CheckNote(client.Note)
             ?? CheckSubscription(client.SubscriptionId)
             ?? CheckLimit(client.DailyLimit)
-            ?? CheckInbound(client.Inbound);
+            ?? CheckInbound(client.Inbound)
+            ?? CheckDns(client.DnsMode, client.Dns);
     }
 
     /// <summary>
@@ -114,6 +117,30 @@ public static partial class ClientRules
             : Fault(
                 "bad-client-inbound",
                 $"the access to the client is '{InboundName.Off}', '{InboundName.Server}', '{InboundName.Network}' or '{InboundName.Endpoint}'");
+
+    /// <summary>
+    /// Returns why the name servers a client picks are unusable, or null when they hold.
+    /// </summary>
+    public static ClientFault? CheckDns(DnsChoice choice, IReadOnlyList<string> servers)
+    {
+        ArgumentNullException.ThrowIfNull(servers);
+
+        if (!DnsChoiceName.IsKnown(choice))
+        {
+            return Fault(
+                "bad-client-dns",
+                $"the name servers are '{DnsChoiceName.Auto}', '{DnsChoiceName.Panel}' or '{DnsChoiceName.Own}'");
+        }
+
+        if (choice == DnsChoice.Own && servers.Count == 0)
+        {
+            return Fault("bad-client-dns", "the client picks name servers of its own and names none");
+        }
+
+        var odd = servers.FirstOrDefault(server => !IPAddress.TryParse(server, out _));
+
+        return odd is null ? null : Fault("bad-client-dns", $"'{odd}' is not a name server address");
+    }
 
     private static ClientFault? CheckKey(string? privateKey, string? publicKey)
     {

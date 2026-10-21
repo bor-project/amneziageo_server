@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
+import type { DnsMode } from "./dns"
 
 export interface ClientState {
   isOnline: boolean
@@ -43,6 +44,8 @@ export interface Client {
   dailyLimit: number
   inbound: Inbound
   disconnect: boolean
+  dnsMode: DnsMode
+  dns: string[]
   disconnectRefused: boolean
   state: ClientState
   signal: ClientSignal | null
@@ -64,6 +67,8 @@ export interface ClientDraft {
   dailyLimit: number
   inbound: Inbound
   disconnect: boolean
+  dnsMode: DnsMode
+  dns: string[]
 }
 
 export type Miss = "off" | "no-id" | "no-key"
@@ -149,6 +154,8 @@ export function draftOf(one: Client): ClientDraft {
     dailyLimit: one.dailyLimit,
     inbound: one.inbound,
     disconnect: one.disconnect,
+    dnsMode: one.dnsMode,
+    dns: one.dns,
   }
 }
 
@@ -161,6 +168,7 @@ function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) 
       await queryClient.invalidateQueries({ queryKey: ["clients"] })
       await queryClient.invalidateQueries({ queryKey: ["templates"] })
       await queryClient.invalidateQueries({ queryKey: ["client-config"] })
+      await queryClient.invalidateQueries({ queryKey: ["dns-conflicts"] })
     },
   })
 }

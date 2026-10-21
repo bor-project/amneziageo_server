@@ -7,7 +7,8 @@ and the answer of the resolver is where the addresses come from. It also keeps w
 leaving the server in the open.
 
 The resolver runs while the routing needs it: a rule or a basic list on the host matches by name, or a template
-answers with stand-in addresses. It also runs while a client that is on holds a file that names it, see
+answers with stand-in addresses. It also runs while a client that is on picks it, see
+[The name servers of a file](#the-name-servers-of-a-file), or holds a file that names it, see
 [Files that name the resolver](#files-that-name-the-resolver). Until then the clients are handed the name servers of
 their configuration and ask them through the tunnel, and those questions leave the server as plain DNS. A fresh panel and an updated one are
 automatic; [keeping it off](#turning-the-resolver-on) takes the menu, a command or the panel.
@@ -17,6 +18,8 @@ automatic; [keeping it off](#turning-the-resolver-on) takes the menu, a command 
 | Route | Right |
 |---|---|
 | `GET /api/dns` | `state:read` |
+| `GET /api/dns/conflicts` | `state:read` |
+| `POST /api/dns/check` | `state:read` |
 | `PUT /api/dns` | `routing:write` |
 | `POST /api/dns/restart` | `routing:write` |
 
@@ -128,7 +131,25 @@ stays while other pages are opened. `GET /api/dns` carries `pending`, true while
 from the ones the resolver runs with. A change of the configurations starts the resolver over on their
 addresses with the settings it runs with. In the automatic mode the resolver starts and stops by itself, without
 `Restart`, as a rule by name or a template with stand-in addresses comes or goes and as the clients holding a file
-that names it take new ones; `GET /api/dns` carries `needed` and `holders` in its `state`.
+that names it take new ones, and as clients come to pick it or stop; `GET /api/dns` carries `needed`, `holders` and
+`picked` in its `state`.
+
+## The name servers of a file
+
+A client, its template and its endpoint each pick where the `DNS` line of the file comes from (`dnsMode`):
+
+| Choice | The file names |
+|---|---|
+| `auto` | what the level above picks: a client takes the choice of its template, a template the one of the endpoint, and an endpoint the resolver while the routing needs it and the name servers it lists otherwise |
+| `panel` | the resolver, whether the routing needs it or not; the resolver runs while a client that is on picks it so, itself or through its template or endpoint |
+| `own` | the name servers written next to the choice (`dns`), never the resolver |
+
+A template with Route by name names the resolver whatever is picked. The resolver is named only where it answers:
+in the automatic mode, on port 53, on an address of the configuration, and while the firewall of the host lets the
+clients of the configuration in; otherwise the file takes the name servers of the endpoint, and a client of a
+template `1.1.1.1` and `1.0.0.1` where the endpoint lists none. A new client, template and endpoint are `auto`. The
+update that brought the choice made every template that listed name servers `own` and left the rest `auto`; the
+template a fresh panel starts with is `own` with `1.1.1.1` and `1.0.0.1`.
 
 ## Files that name the resolver
 
@@ -148,6 +169,33 @@ and item 29 of the menu say how many they are.
 The update that brought this counts every client of a panel whose resolver answered on port 53 before as holding a
 file that names it, except a client whose template names name servers of its own and answers with no stand-in
 addresses.
+
+## What contradicts
+
+`GET /api/dns/conflicts` says who needs the resolver (`needs`: the rules and basic lists by name, the templates with
+Route by name, the clients that pick it and the clients that hold a file naming it) and what the settings that decide
+the `DNS` line of the clients contradict (`findings`). A finding carries a `code`, a `level`, the settings that bring
+it (`subjects`: `dns`, `rule`, `basic`, `template`, `config` or `client`, with the number and the name) and the
+clients it touches, each with where its name servers were picked and what they are:
+
+| Code | Level | When |
+|---|---|---|
+| `rule-off` | `error` | a rule or a basic list by name while the resolver is off: it does not work |
+| `standins-off` | `error` | a template with Route by name while the resolver is off |
+| `holders-off` | `error` | clients hold a file that names the resolver while it is off: they get no answer to a name |
+| `panel-off` | `warning` | a client, a template or an endpoint picks the resolver while it is off: the files take other name servers |
+| `port` | `warning` | the resolver answers on a port other than 53: no file names it |
+| `listen` | `warning` | the resolver does not listen on an address of a configuration: its files do not name it |
+| `kept` | `warning` | the firewall of the host keeps the clients of a configuration from the resolver: their files do not name it |
+| `rule-outside` | `warning` | a client a rule by name takes asks name servers outside its tunnel: the resolver does not see its questions, and the rule takes only the names the resolver asks about itself |
+
+`POST /api/dns/check` takes the draft of a client, a template, an endpoint, a rule or the settings of the resolver
+(`client`, `template`, `config`, `rule` or `dns`, with `id` for one the panel holds) and answers what it would
+contradict, so a form shows it before the save. For a client it also returns `line`, the name servers its file would
+name and where they were picked, and the hint `outside` when they lie outside its tunnel and no rule by name takes
+it; for a template or an endpoint, the line of a client with nothing of its own there. A template draft keeps the
+ranges of the template it changes while its entries stay the same; other entries are worked out as the preview does.
+A save is never refused for a contradiction.
 
 ## Turning the resolver on
 

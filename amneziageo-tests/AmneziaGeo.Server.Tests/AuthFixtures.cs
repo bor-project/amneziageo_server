@@ -120,6 +120,11 @@ public sealed class Bench : IDisposable
         TokenStore = _scope.ServiceProvider.GetRequiredService<IApiTokens>();
     }
 
+    /// <summary>
+    /// The services the database of the bench is wired with.
+    /// </summary>
+    public IServiceProvider Services => _scope.ServiceProvider;
+
     public AuthOptions Options { get; }
 
     public Clock Clock { get; }

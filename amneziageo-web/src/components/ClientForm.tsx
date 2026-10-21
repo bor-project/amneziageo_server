@@ -7,7 +7,10 @@ import { useClients } from "@/api/clients"
 import type { Client, ClientDraft, Inbound } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
+import { useDnsCheck } from "@/api/dns"
 import { useTemplates } from "@/api/templates"
+import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
+import { lacksServers } from "@/components/dnsWords"
 import { Help, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
@@ -58,6 +61,7 @@ export function ClientForm({
   const clash = others.some((one) => one.name.toLowerCase() === draft.name.trim().toLowerCase())
   const misnamed = !/^[A-Za-z0-9_-]{0,64}$/.test(draft.subscriptionId)
   const allowed = allowanceOf(limit)
+  const check = useDnsCheck(draft.configId > 0 ? { id: self, client: draft } : null)
   const edited =
     !same(draft, start) ||
     shown !== base ||
@@ -71,6 +75,7 @@ export function ClientForm({
     !misnamed &&
     allowed !== null &&
     draft.configId > 0 &&
+    !lacksServers(draft.dnsMode, draft.dns) &&
     (legacy ? parts(listed).length > 0 : whole && spans.length > 0 && problem.length === 0)
 
   function put(change: Partial<ClientDraft>) {
@@ -162,33 +167,45 @@ export function ClientForm({
       </Part>
 
       <Part title={t("clients.template")}>
-        <Pick
-          id="client-template"
-          caption={t("clients.template")}
-          value={draft.templateId === null ? "" : String(draft.templateId)}
-          onChange={(value) => put({ templateId: value === "" ? null : Number(value) })}
-          wide
-        >
-          <option value="">{t("clients.noTemplate")}</option>
-          {(templates.data ?? []).map((one) => (
-            <option key={one.id} value={one.id}>
-              {one.name}
-            </option>
-          ))}
-        </Pick>
-
-        <div className="-mt-2 flex justify-end sm:col-span-2">
-          <Link
-            to={
-              draft.templateId === null
-                ? "/clients/templates/default"
-                : `/clients/templates/${draft.templateId}/edit`
-            }
-            className="text-sm text-brand-ink hover:text-brand-lit"
+        <div>
+          <Pick
+            id="client-template"
+            caption={t("clients.template")}
+            value={draft.templateId === null ? "" : String(draft.templateId)}
+            onChange={(value) => put({ templateId: value === "" ? null : Number(value) })}
           >
-            {t("action.goTo")}
-          </Link>
+            <option value="">{t("clients.noTemplate")}</option>
+            {(templates.data ?? []).map((one) => (
+              <option key={one.id} value={one.id}>
+                {one.name}
+              </option>
+            ))}
+          </Pick>
+
+          <div className="mt-1 flex justify-end">
+            <Link
+              to={
+                draft.templateId === null
+                  ? "/clients/templates/default"
+                  : `/clients/templates/${draft.templateId}/edit`
+              }
+              className="text-sm text-brand-ink hover:text-brand-lit"
+            >
+              {t("action.goTo")}
+            </Link>
+          </div>
         </div>
+
+        <DnsPick id="client-dns-mode" mode={draft.dnsMode} onChange={(dnsMode) => put({ dnsMode })} />
+
+        {draft.dnsMode === "own" && (
+          <>
+            <div className="hidden sm:block" />
+            <DnsServers id="client-dns" mode={draft.dnsMode} servers={draft.dns} onChange={(dns) => put({ dns })} />
+          </>
+        )}
+
+        <DnsOutcome check={check.data} caption="dnsCheck.lineClient" view="client" />
       </Part>
 
       <Part title={t("clients.partAccess")}>

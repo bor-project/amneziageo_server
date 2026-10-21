@@ -1,5 +1,6 @@
 using System.Net;
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Crypto;
 using Microsoft.EntityFrameworkCore;
@@ -332,6 +333,16 @@ public sealed class ClientStore
     }
 
     /// <summary>
+    /// Returns the clients that hold a file that names the resolver of the panel.
+    /// </summary>
+    public async Task<IReadOnlyList<long>> ResolverHeldAsync(CancellationToken ct) =>
+        await _db.Clients.AsNoTracking()
+            .Where(client => client.ResolverHanded)
+            .Select(client => client.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+    /// <summary>
     /// Returns how many clients that are on hold a file that names the resolver of the panel.
     /// </summary>
     public Task<int> ResolverHoldersAsync(CancellationToken ct) =>
@@ -572,6 +583,8 @@ public sealed class ClientStore
         IsEnabled = entity.IsEnabled,
         Note = entity.Note,
         TemplateId = entity.TemplateId,
+        DnsMode = (DnsChoice)entity.DnsMode,
+        Dns = Parts(entity.Dns),
         SubscriptionId = entity.SubscriptionId,
         DailyLimit = entity.DailyLimit,
         Inbound = (ClientInbound)entity.Inbound,
@@ -591,6 +604,8 @@ public sealed class ClientStore
         entity.IsEnabled = client.IsEnabled;
         entity.Note = client.Note.Trim();
         entity.TemplateId = client.TemplateId;
+        entity.DnsMode = (int)client.DnsMode;
+        entity.Dns = string.Join(", ", client.Dns);
         entity.SubscriptionId = client.SubscriptionId.Trim();
         entity.DailyLimit = client.DailyLimit;
         entity.Inbound = (int)client.Inbound;

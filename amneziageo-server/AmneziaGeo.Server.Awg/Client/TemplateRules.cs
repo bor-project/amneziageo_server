@@ -24,6 +24,7 @@ public static class TemplateRules
         return CheckName(template.Name)
             ?? CheckRanges(template.AllowedIps)
             ?? CheckServers(template.Dns)
+            ?? CheckChoice(template.DnsMode, template.Dns)
             ?? CheckMtu(template.Mtu)
             ?? CheckKeepalive(template.Keepalive);
     }
@@ -78,6 +79,20 @@ public static class TemplateRules
         keepalive is null or >= 0 and <= ConfigRules.MaxKeepalive
             ? null
             : Fault("bad-keepalive", $"the keepalive is outside 0 to {ConfigRules.MaxKeepalive}");
+
+    private static ClientFault? CheckChoice(DnsChoice choice, IReadOnlyList<string> servers)
+    {
+        if (!DnsChoiceName.IsKnown(choice))
+        {
+            return Fault(
+                "bad-dns-mode",
+                $"the name servers are '{DnsChoiceName.Auto}', '{DnsChoiceName.Panel}' or '{DnsChoiceName.Own}'");
+        }
+
+        return choice == DnsChoice.Own && servers.Count == 0
+            ? Fault("bad-dns", "the template picks name servers of its own and names none")
+            : null;
+    }
 
     private static ClientFault Fault(string code, string message) => new(code, message);
 }

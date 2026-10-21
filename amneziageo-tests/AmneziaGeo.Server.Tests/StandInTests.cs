@@ -358,7 +358,7 @@ public class StandInTests
     [Fact]
     public void AStandInTemplateHandsTheResolverTheRangeAndItsNetworks()
     {
-        var template = new ClientTemplate { Name = "blocked", StandIns = true, AllowedIps = ["91.108.4.0/22"], Dns = ["9.9.9.9"] };
+        var template = new ClientTemplate { Name = "blocked", StandIns = true, AllowedIps = ["91.108.4.0/22"], Dns = ["9.9.9.9"], DnsMode = DnsChoice.Own };
 
         var text = ClientText.Text(Endpoint(), Client(), template, ["10.8.0.1"]);
 
@@ -379,7 +379,7 @@ public class StandInTests
     [Fact]
     public void AStandInTemplateWithoutTheResolverIsWrittenAsBefore()
     {
-        var template = new ClientTemplate { Name = "blocked", StandIns = true, AllowedIps = ["91.108.4.0/22"], Dns = ["9.9.9.9"] };
+        var template = new ClientTemplate { Name = "blocked", StandIns = true, AllowedIps = ["91.108.4.0/22"], Dns = ["9.9.9.9"], DnsMode = DnsChoice.Own };
 
         var text = ClientText.Text(Endpoint(), Client(), template);
 

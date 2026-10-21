@@ -4,9 +4,12 @@ import { complaint } from "@/api/auth"
 import { downedOf, failure, useConfigs, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import type { Inbound } from "@/api/clients"
+import { useDnsCheck } from "@/api/dns"
 import { usePortState } from "@/api/firewall"
 import type { Holding } from "@/api/firewall"
 import { scopes } from "@/api/scopes"
+import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
+import { lacksServers } from "@/components/dnsWords"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { KeepQuestion, PortNote } from "@/components/PortNote"
 import { Count, Flag, Help, Hinted, Line, ListLine, Part, Pick, Regenerate, Switch } from "@/components/fields"
@@ -87,10 +90,12 @@ export function ConfigForm({
   const address = addressFault(t, draft.address)
   const host = hostFault(t, draft)
   const edited = !same(draft, start) || opening
+  const check = useDnsCheck({ id: self, config: draft })
   const ready =
     edited &&
     !pending &&
     draft.name.length > 0 &&
+    !lacksServers(draft.dnsMode, draft.dns) &&
     [port, services, socket, name, address, host].every((one) => one.length === 0)
   const twisted = JSON.stringify(draft.obfuscation) !== JSON.stringify(start.obfuscation)
 
@@ -271,12 +276,9 @@ export function ConfigForm({
           onChange={(allowedIps) => put({ allowedIps })}
           wide
         />
-        <ListLine
-          id="config-dns"
-          caption={t("configs.dns")}
-          value={draft.dns}
-          onChange={(dns) => put({ dns })}
-        />
+        <DnsPick id="config-dns-mode" mode={draft.dnsMode} onChange={(dnsMode) => put({ dnsMode })} />
+        <DnsServers id="config-dns" mode={draft.dnsMode} servers={draft.dns} onChange={(dns) => put({ dns })} />
+        <DnsOutcome check={check.data} caption="dnsCheck.lineConfig" view="config" />
         <Count id="config-mtu" caption={t("configs.mtu")} value={draft.mtu} onChange={(value) => put({ mtu: value })} />
         <Count
           id="config-keepalive"

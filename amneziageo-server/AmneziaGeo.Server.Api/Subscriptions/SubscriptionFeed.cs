@@ -65,7 +65,9 @@ public sealed class SubscriptionFeed
 
         var endpoints = await _configs.ListAsync(ct).ConfigureAwait(false);
         var templates = (await _templates.ListAsync(ct).ConfigureAwait(false)).ToDictionary(one => one.Id);
-        var handing = _resolver.Handing ?? (await _dns.ReadAsync(ct).ConfigureAwait(false)) with { IsEnabled = false };
+        var held = await _dns.ReadAsync(ct).ConfigureAwait(false);
+        var handing = _resolver.Handing ?? held with { IsEnabled = false };
+        var offering = _resolver.Chosen ?? held;
         var keptOut = _resolver.KeptOut;
         var naming = (await _panels.ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
 
@@ -75,9 +77,15 @@ public sealed class SubscriptionFeed
             templates,
             _ledger.Used,
             endpoint => DnsHandout.For(endpoint, handing, keptOut),
-            (endpoint, member) => ClientText.Title(endpoint, member, naming, host));
-        await KeepAsync(endpoints, members, templates, endpoint => DnsHandout.For(endpoint, handing, keptOut), ct)
-            .ConfigureAwait(false);
+            (endpoint, member) => ClientText.Title(endpoint, member, naming, host),
+            endpoint => DnsHandout.For(endpoint, offering, keptOut));
+        await KeepAsync(
+            endpoints,
+            members,
+            templates,
+            endpoint => DnsHandout.For(endpoint, handing, keptOut),
+            endpoint => DnsHandout.For(endpoint, offering, keptOut),
+            ct).ConfigureAwait(false);
 
         return feed;
     }
@@ -88,6 +96,7 @@ public sealed class SubscriptionFeed
         IReadOnlyList<TunnelClient> members,
         IReadOnlyDictionary<long, ClientTemplate> templates,
         Func<ServerConfig, IReadOnlyList<string>> resolver,
+        Func<ServerConfig, IReadOnlyList<string>> panel,
         CancellationToken ct)
     {
         var named = new List<long>();
@@ -95,10 +104,11 @@ public sealed class SubscriptionFeed
         foreach (var endpoint in endpoints.Where(one => one.IsEnabled))
         {
             var names = resolver(endpoint);
+            var picked = panel(endpoint);
             foreach (var member in members.Where(one => one.ConfigId == endpoint.Id && one.IsEnabled && one.PrivateKey.Length > 0))
             {
                 var template = member.TemplateId is { } chosen ? templates.GetValueOrDefault(chosen) : null;
-                (ClientText.NamesResolver(template, names) ? named : unnamed).Add(member.Id);
+                (ClientText.Dns(endpoint, member, template, names, picked).IsPanel ? named : unnamed).Add(member.Id);
             }
         }
 

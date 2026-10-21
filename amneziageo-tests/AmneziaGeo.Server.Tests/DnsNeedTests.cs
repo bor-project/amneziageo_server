@@ -105,11 +105,16 @@ public class DnsNeedTests
     }
 
     [Theory]
-    [InlineData(true, 0, true)]
-    [InlineData(false, 2, true)]
-    [InlineData(false, 0, false)]
-    public void TheResolverIsKeptWhileTheRoutingNeedsItOrClientsHoldFilesThatNameIt(bool needed, int holders, bool kept) =>
-        Assert.Equal(kept, DnsNeed.Kept(needed, holders));
+    [InlineData(true, 0, 0, true)]
+    [InlineData(false, 2, 0, true)]
+    [InlineData(false, 0, 1, true)]
+    [InlineData(false, 0, 0, false)]
+    public void TheResolverIsKeptWhileTheRoutingNeedsItOrClientsPickItOrHoldFilesThatNameIt(
+        bool needed,
+        int holders,
+        int picked,
+        bool kept) =>
+        Assert.Equal(kept, DnsNeed.Kept(needed, holders, picked));
 
     [Fact]
     public void ClientsAreHandedTheResolverOnlyWhileTheRoutingNeedsIt()
@@ -137,18 +142,18 @@ public class DnsNeedTests
         [
             null,
             new ClientTemplate { Name = "bare" },
-            new ClientTemplate { Name = "own", Dns = ["9.9.9.9"] },
-            new ClientTemplate { Name = "names", Dns = ["9.9.9.9"], StandIns = true },
+            new ClientTemplate { Name = "own", DnsMode = DnsChoice.Own, Dns = ["9.9.9.9"] },
+            new ClientTemplate { Name = "names", DnsMode = DnsChoice.Own, Dns = ["9.9.9.9"], StandIns = true },
         ];
 
         var written = templates
             .Select(template => ClientText.Text(Endpoint, client, template, resolver).Contains("DNS = 10.8.0.1", StringComparison.Ordinal))
             .ToArray();
-        var told = templates.Select(template => ClientText.NamesResolver(template, resolver)).ToArray();
+        var told = templates.Select(template => ClientText.Dns(Endpoint, client, template, resolver).IsPanel).ToArray();
 
         Assert.Equal([true, true, false, true], written);
         Assert.Equal(written, told);
-        Assert.False(ClientText.NamesResolver(null, []));
+        Assert.False(ClientText.Dns(Endpoint, client, null, []).IsPanel);
     }
 
     private static string Chain(string text, string name)

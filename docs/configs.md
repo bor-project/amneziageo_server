@@ -49,7 +49,7 @@ go only to a caller that holds `interfaces:write`; to anyone else they come back
 | Open the port in the firewall | whether the panel holds the port of the endpoint open in the firewall of the host, together with both ways through its interface; set it in item 23 of the menu of the server or with `amneziageo-server-cli endpoint open\|close`, or turn it on by `Open` next to a closed port of the form or of the list, `POST /api/configs/{id}/open`, and `Open on save` for a new port; the form carries no switch for it and a save keeps it; a save that moves a port held open asks whether the old port stays open, `keep`, see [firewall.md](firewall.md) |
 | Access to the clients | what reaches the clients of the endpoint from the tunnel unless a client names it itself: closed, the server alone, or the whole tunnel network, see [clients.md](clients.md) |
 | AllowedIPs | the ranges a client sends through the tunnel |
-| DNS | the name servers a client takes, unless the resolver of the panel answers inside the tunnel |
+| DNS | where the name servers of the clients come from (`dnsMode`): `auto` the resolver of the panel while the routing needs it and the servers listed otherwise, `panel` the resolver, `own` the servers listed; see [dns.md](dns.md#the-name-servers-of-a-file) |
 | Keepalive | how often a client sends an empty packet, in seconds |
 | Client online for | how many seconds after its last packet, the keepalive included, a client counts as online: 60 by default, 10 to 3600 and not under two keepalive intervals; the online state in the list of clients and the guard go by it, see [devices.md](devices.md) |
 | Private key | the key of the interface, the public one is counted from it |
@@ -103,7 +103,8 @@ the code into a phrase of its own language.
 | `bad-port` | the port is outside 1 to 65535 |
 | `bad-address` | the interface carries no range, or one of them is not a range |
 | `bad-allowed` | the client is given no range, or one of them is not a range |
-| `bad-dns` | a name server is not an address |
+| `bad-dns` | a name server is not an address, or `own` lists none |
+| `bad-dns-mode` | the name servers are none of `auto`, `panel` and `own` |
 | `bad-mtu` | the packet size is neither 0 nor between 576 and 9000 |
 | `bad-keepalive` | the keepalive is outside 0 to 65535 |
 | `bad-key` | the private key is not 32 bytes in base64 |

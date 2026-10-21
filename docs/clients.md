@@ -36,6 +36,7 @@ The private key of a client is written out only to a caller that holds `clients:
 | Daily limit | how many bytes a day the client moves; empty for no limit, see [Traffic](#traffic) |
 | Access to the client | what reaches the client from the tunnel: as the interface says, closed, the server alone, or the whole tunnel network, see [The way back](#the-way-back) |
 | Allow the server to disconnect the tunnel | whether the panel tells the application to take the tunnel down when the client is turned off; on unless set otherwise, see [Turning a client off](#turning-a-client-off) |
+| DNS | where the name servers of the file come from (`dnsMode`): as the template or the endpoint pick, the resolver of the panel, or servers of its own (`dns`), see [dns.md](dns.md#the-name-servers-of-a-file) |
 
 `GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair, a subscription of its own and
 a name no other client carries. It stands on the endpoint `?config=<id>` names; without it, on the default endpoint (see
@@ -51,7 +52,7 @@ at once without an address each take a free number of their own, and of clients 
 address the first takes it and the others are answered with `client-address-taken`.
 
 `PUT /api/clients/{id}` without `isEnabled` leaves the client on or off as it was: `true` turns it on and
-`false` off.
+`false` off. Without `dnsMode` and `dns` it keeps the name servers it picked.
 
 The panel adds a client to the interface picked in its form, and the address is written as a number: the head
 of every range comes from the interface and the number goes into each of them, so a client of an interface with
@@ -214,6 +215,7 @@ interface file, in the form of a new interface, see [configs.md](configs.md#taki
 | `client-address-taken` | another client of the endpoint already carries this address |
 | `bad-client-subscription` | the subscription takes letters the rules do not or is longer than 64 characters |
 | `bad-client-limit` | the daily limit is negative or larger than 2^50 bytes |
+| `bad-client-dns` | the name servers are none of `auto`, `panel` and `own`, one is not an address, or `own` lists none |
 | `unknown-client` | the panel holds no client under this number |
 | `unknown-config` | the panel holds no endpoint under this number |
 

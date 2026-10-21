@@ -151,7 +151,7 @@ public class ClientTests
     [Fact]
     public void ATemplateWithNamesOfItsOwnOutweighsTheResolver()
     {
-        var template = new ClientTemplate { Name = "own", Dns = ["9.9.9.9"] };
+        var template = new ClientTemplate { Name = "own", DnsMode = DnsChoice.Own, Dns = ["9.9.9.9"] };
         var text = ClientText.Text(Endpoint(), Client(), template, ["10.8.0.1"]);
 
         Assert.Contains("DNS = 9.9.9.9", text, StringComparison.Ordinal);
@@ -532,6 +532,7 @@ public class ClientTests
             Name = "blocked",
             AllowedIps = ["10.0.0.0/8", "192.168.0.0/16"],
             Dns = ["9.9.9.9"],
+            DnsMode = DnsChoice.Own,
             Mtu = 1280,
             Keepalive = 0,
         };
@@ -664,7 +665,7 @@ public class ClientTests
     [Fact]
     public void ANameServerOfTheTemplateInsideTheNetworkOfTheEndpointGoesIntoTheTunnel()
     {
-        var template = new ClientTemplate { Name = "listed", AllowedIps = ["203.0.113.0/24"], Dns = ["10.8.0.1", "9.9.9.9"] };
+        var template = new ClientTemplate { Name = "listed", AllowedIps = ["203.0.113.0/24"], Dns = ["10.8.0.1", "9.9.9.9"], DnsMode = DnsChoice.Own };
 
         var text = ClientText.Text(Endpoint(), Client(), template);
 

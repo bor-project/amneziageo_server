@@ -442,6 +442,7 @@ public sealed class ConfigStore
         ListenPort = entity.ListenPort,
         Address = Parts(entity.Address),
         Dns = Parts(entity.Dns),
+        DnsMode = (DnsChoice)entity.DnsMode,
         AllowedIps = Parts(entity.AllowedIps),
         Mtu = entity.Mtu,
         Keepalive = entity.Keepalive,
@@ -470,6 +471,7 @@ public sealed class ConfigStore
         entity.ListenPort = config.ListenPort;
         entity.Address = string.Join(", ", config.Address);
         entity.Dns = string.Join(", ", config.Dns);
+        entity.DnsMode = (int)config.DnsMode;
         entity.AllowedIps = string.Join(", ", config.AllowedIps);
         entity.Mtu = config.Mtu;
         entity.Keepalive = config.Keepalive;

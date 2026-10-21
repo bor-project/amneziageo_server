@@ -4,10 +4,12 @@ import { complaint } from "@/api/auth"
 import { useClients, useSwitchClient, useSwitchClients } from "@/api/clients"
 import type { Client } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
+import { findingsAbout, useDnsConflicts } from "@/api/dns"
 import { useFailure } from "@/api/failure"
 import { scopes } from "@/api/scopes"
 import { useTemplates } from "@/api/templates"
 import { Handshake, Speed, Traffic } from "@/components/ClientStats"
+import { DnsMark } from "@/components/DnsMark"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
@@ -35,6 +37,7 @@ export function Clients() {
   const turn = useSwitchClient()
   const turnMany = useSwitchClients()
   const may = holds(user, scopes.manageClients)
+  const report = useDnsConflicts().data
   const picked = Number(params.get("config") ?? 0)
   const find = params.get("find") ?? ""
   const online = params.get("online") === "1"
@@ -212,6 +215,7 @@ export function Clients() {
                       {one.name}
                     </span>
                   )}
+                  <DnsMark findings={findingsAbout(report, one.id)} view="client" />
                   {one.state.isOnline && <span className="min-w-0 truncate text-xs text-good">{t("clients.online")}</span>}
                   {!one.isEnabled && <span className="min-w-0 truncate text-xs text-muted">{t("clients.off")}</span>}
                 </span>

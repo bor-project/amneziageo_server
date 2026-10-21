@@ -13,9 +13,9 @@ public static class DnsNeed
     public static bool Of(RoutePlan? plan, bool standIns) => standIns || plan is { HasNames: true };
 
     /// <summary>
-    /// Tells whether the resolver is kept: the routing needs it or clients hold files that name it.
+    /// Tells whether the resolver is kept: the routing needs it, clients pick it or clients hold files that name it.
     /// </summary>
-    public static bool Kept(bool needed, int holders) => needed || holders > 0;
+    public static bool Kept(bool needed, int holders, int picked) => needed || holders > 0 || picked > 0;
 
     /// <summary>
     /// Returns the settings the resolver runs with: switched on while the panel allows it and the routing needs it.

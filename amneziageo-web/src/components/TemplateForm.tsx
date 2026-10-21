@@ -1,9 +1,11 @@
 import { useState } from "react"
 import { complaint } from "@/api/auth"
-import { useResolver } from "@/api/dns"
+import { useDnsCheck, useResolver } from "@/api/dns"
 import { usePresets } from "@/api/presets"
 import { useTemplateDefaults, useTemplatePreview } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
+import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
+import { lacksServers } from "@/components/dnsWords"
 import { EntryList } from "@/components/EntryList"
 import { Hinted, Line, Multi, Part, Switch } from "@/components/fields"
 import { ResolverTrouble } from "@/components/ResolverTrouble"
@@ -38,13 +40,14 @@ export function TemplateForm({
   const presets = usePresets().data ?? []
   const resolver = useResolver(false).data
   const [draft, setDraft] = useState(start)
-  const [servers, setServers] = useState(start.dns.join(", "))
   const [touched, setTouched] = useState(false)
   const preview = useTemplatePreview(touched ? draft.entries : [], draft.standIns)
   const found = preview.data ?? kept(held)
   const total = found === undefined || preview.isFetching ? null : found.total
   const heavy = total !== null && total > stopAt
-  const edited = !same({ ...draft, dns: parts(servers) }, start)
+  const edited = !same(draft, start)
+  const check = useDnsCheck({ id: held?.id, template: draft })
+  const lacking = lacksServers(draft.dnsMode, draft.dns, draft.standIns)
 
   function put(change: Partial<TemplateDraft>) {
     setDraft({ ...draft, ...change })
@@ -140,15 +143,18 @@ export function TemplateForm({
       </Part>
 
       <Part title={t("templates.partNetwork")}>
-        <Line
-          id="template-dns"
-          caption={t("templates.dns")}
-          value={draft.standIns ? (resolver?.state.listening ?? []).join(", ") : servers}
-          placeholder={defaults?.dns.join(", ") ?? ""}
-          onChange={setServers}
-          disabled={draft.standIns}
-          wide
+        <DnsPick
+          id="template-dns-mode"
+          mode={draft.dnsMode}
+          onChange={(dnsMode) => put({ dnsMode })}
+          locked={draft.standIns}
         />
+        {!draft.standIns && draft.dnsMode === "own" ? (
+          <DnsServers id="template-dns" mode={draft.dnsMode} servers={draft.dns} onChange={(dns) => put({ dns })} />
+        ) : (
+          <div className="hidden sm:block" />
+        )}
+        <DnsOutcome check={check.data} caption="dnsCheck.lineTemplate" view="template" skip={["standins-off"]} />
 
         <Maybe
           id="template-mtu"
@@ -180,8 +186,8 @@ export function TemplateForm({
         </button>
         <button
           type="button"
-          onClick={() => onSave({ ...draft, dns: parts(servers) })}
-          disabled={!edited || pending || preview.isFetching || heavy || draft.name.trim().length === 0}
+          onClick={() => onSave(draft)}
+          disabled={!edited || pending || preview.isFetching || heavy || lacking || draft.name.trim().length === 0}
           className={primary}
         >
           {pending ? t("templates.busy") : t("templates.save")}
@@ -229,11 +235,4 @@ function kept(held: Template | undefined): TemplatePreview | undefined {
 
 function count(t: Text, total: number | null): string {
   return total === null ? t("templates.refreshing") : t("templates.addressesCount", { count: String(total) })
-}
-
-function parts(text: string): string[] {
-  return text
-    .split(/[\s,]+/)
-    .map((one) => one.trim())
-    .filter((one) => one.length > 0)
 }

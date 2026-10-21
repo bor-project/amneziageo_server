@@ -1,5 +1,6 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
+import { findingsOf, useDnsConflicts } from "@/api/dns"
 import { useFailure } from "@/api/failure"
 import { scopes } from "@/api/scopes"
 import { useTemplateDefaults, useTemplates } from "@/api/templates"
@@ -7,6 +8,7 @@ import type { Template } from "@/api/templates"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
+import { DnsMark } from "@/components/DnsMark"
 import { Find } from "@/components/fields"
 import { alarmBar, alarmLine, card } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
@@ -24,6 +26,7 @@ export function Templates() {
   const failed = useFailure(templates)
   const defaults = useTemplateDefaults().data
   const may = holds(user, scopes.manageClients)
+  const report = useDnsConflicts().data
   const find = params.get("find") ?? ""
   const all = templates.data ?? []
   const list = all.filter((one) => matches(one, find))
@@ -90,14 +93,18 @@ export function Templates() {
                 sort: (one) => one.name,
                 lead: true,
                 body: "font-semibold text-ink",
-                cell: (one) =>
-                  may ? (
-                    <Link to={`/clients/templates/${one.id}/edit`} className="hover:text-brand-ink">
-                      {one.name}
-                    </Link>
-                  ) : (
-                    one.name
-                  ),
+                cell: (one) => (
+                  <span className="flex min-w-0 items-center gap-2">
+                    {may ? (
+                      <Link to={`/clients/templates/${one.id}/edit`} className="truncate hover:text-brand-ink">
+                        {one.name}
+                      </Link>
+                    ) : (
+                      <span className="truncate">{one.name}</span>
+                    )}
+                    <DnsMark findings={findingsOf(report, "template", one.id)} view="template" />
+                  </span>
+                ),
               },
               {
                 key: "allowed",
