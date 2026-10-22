@@ -60,6 +60,7 @@ export function PresetPage() {
       {add.error !== null && <div className="mt-2 text-sm text-alarm">{t(complaint(add.error))}</div>}
 
       <PresetForm
+        key={held.id}
         start={draftOf(held)}
         held={held}
         pending={change.isPending}

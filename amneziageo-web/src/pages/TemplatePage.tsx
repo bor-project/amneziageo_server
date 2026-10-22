@@ -79,6 +79,7 @@ export function TemplatePage() {
       {add.error !== null && <div className="mt-2 text-sm text-alarm">{t(complaint(add.error))}</div>}
 
       <TemplateForm
+        key={held.id}
         start={draftOf(held)}
         held={held}
         pending={change.isPending}
