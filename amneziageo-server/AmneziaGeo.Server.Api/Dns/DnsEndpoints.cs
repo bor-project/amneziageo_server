@@ -58,9 +58,11 @@ public static class DnsEndpoints
         DnsSets sets,
         RoutePlans plans,
         NameState names,
+        DnsHolders holders,
+        HttpContext context,
         CancellationToken ct)
     {
-        var draft = DnsAnswers.Draft(request);
+        var draft = DnsAnswers.Draft(request, await store.ReadAsync(ct).ConfigureAwait(false));
         if (draft.Outbound.Length > 0
             && !DnsExit.Knows(
                 draft.Outbound,
@@ -79,6 +81,9 @@ public static class DnsEndpoints
         {
             return Results.Json(new Failure(result.Code, result.Message), statusCode: StatusCodes.Status400BadRequest);
         }
+
+        // The choice of the files may bring the clients to the resolver or take them off it at once.
+        await holders.RefreshAsync(context.RequestServices, ct).ConfigureAwait(false);
 
         return Results.Ok(DnsAnswers.Resolver(result.Record, state, sets, plans.Held, names.Fault, names.Counts));
     }

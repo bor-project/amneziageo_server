@@ -77,6 +77,36 @@ public sealed class DnsCommandTests : IDisposable
         Assert.Equal(DnsDefaults.Upstreams, usual.Upstreams);
     }
 
+    [Fact]
+    public async Task TheFilesOfTheClientsNameWhatTheServerPicksAndItsOwnServersComeWithIt()
+    {
+        var usual = await Heard("dns", "get", "files");
+        Assert.Equal(0, await Run("dns", "set", "--files", "own", "--files-dns", "9.9.9.9,149.112.112.112"));
+        var own = await Held();
+        var shown = await Heard("dns", "show");
+        Assert.Equal(0, await Run("dns", "set", "--files", "network"));
+        var network = await Held();
+        var named = await Heard("dns", "get", "files", "files-dns");
+
+        Assert.Equal(["routing"], usual);
+        Assert.Equal("Own 9.9.9.9,149.112.112.112", $"{own.FilesMode} {string.Join(",", own.FilesDns)}");
+        Assert.Contains("for clients  own name servers 9.9.9.9, 149.112.112.112", shown);
+        Assert.Equal(DnsChoice.Network, network.FilesMode);
+        Assert.Equal(["network", "9.9.9.9,149.112.112.112"], named);
+        Assert.True(network.IsEnabled);
+    }
+
+    [Theory]
+    [InlineData("dns", "set", "--files", "own")]
+    [InlineData("dns", "set", "--files", "dhcp")]
+    [InlineData("dns", "set", "--files", "own", "--files-dns", "dns.quad9.net")]
+    public async Task AChoiceOfTheFilesTheServerDoesNotTakeIsRefused(params string[] words)
+    {
+        Assert.Equal(2, await Run(words));
+
+        Assert.Equal(DnsChoice.Routing, (await Held()).FilesMode);
+    }
+
     [Theory]
     [InlineData("dns", "set")]
     [InlineData("dns", "set", "--enabled", "maybe")]

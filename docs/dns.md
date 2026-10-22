@@ -136,22 +136,50 @@ that names it take new ones, and as clients come to pick it or stop; `GET /api/d
 
 ## The name servers of a file
 
-A client, its template and its endpoint each pick where the `DNS` line of the file comes from (`dnsMode`):
+The server picks where the `DNS` line of the files of its clients comes from, `Preferred DNS` in `DNS in client
+configurations` on the `DNS` page (`filesMode` and `filesDns` of `GET /api/dns` and `PUT /api/dns`). A template and a
+client may pick otherwise (`dnsMode` and `dns`); a client goes first, then its template, then the server:
 
 | Choice | The file names |
 |---|---|
-| `auto` | what the level above picks: a client takes the choice of its template, a template the one of the endpoint, and an endpoint the resolver while the routing needs it and the name servers it lists otherwise |
-| `panel` | the resolver, whether the routing needs it or not; the resolver runs while a client that is on picks it so, itself or through its template or endpoint |
-| `own` | the name servers written next to the choice (`dns`), never the resolver |
+| `auto` | a client or a template only: what the level above picks, the template for a client, the server for a template |
+| `routing` | the resolver while the routing needs it, the name servers of the endpoint otherwise; a fresh server picks it |
+| `panel` | the resolver, whether the routing needs it or not; the resolver runs while a client that is on picks it so, itself or through its template or the server |
+| `network` | no `DNS` line: the device asks the name servers of its network |
+| `own` | the name servers written next to the choice (`dns`, `filesDns` for the server), never the resolver |
+| `endpoint` | the name servers of the endpoint of the client, `DNS` of its form |
 
 A template with Route by name names the resolver whatever is picked. The resolver is named only where it answers:
 in the automatic mode, on port 53, on an address of the configuration, and while the firewall of the host lets the
 clients of the configuration in; otherwise the file takes the name servers of the endpoint, and a client of a
-template `1.1.1.1` and `1.0.0.1` where the endpoint lists none. A new client, template and endpoint are `auto`. The
-update that brought the choice made every template that listed name servers `own`, made every endpoint `panel` where
-the resolver answered on port 53 while no rule, basic list or template matched by name, and left the rest `auto`, so
-the files handed out before the update do not change; the template a fresh panel starts with is `own` with `1.1.1.1`
-and `1.0.0.1`.
+template `1.1.1.1` and `1.0.0.1` where the endpoint lists none. A new client and template are `auto`.
+
+What a client of another make does with each choice, from what the clients say and do:
+
+| Choice | Full tunnel (`0.0.0.0/0`) | Chosen networks |
+|---|---|---|
+| `panel` | the questions go to the panel through the tunnel; the way out of the panel is encrypted | the same: the address of the resolver goes into `AllowedIPs` |
+| `network` | the device asks its network past the tunnel, in the open; a name server outside the subnet of the device (mobile data) is asked through the tunnel, where the panel takes the question on port 53 while the resolver answers the endpoint; AmneziaWG for Windows locks that out in a full tunnel and resolves no name | the device asks its network past the tunnel |
+| `own`, `endpoint`, `routing` without the resolver | the questions go through the tunnel, and while the resolver answers the endpoint the panel takes them on port 53; with a rule by name it also refuses DNS over TLS and HTTPS, so Android falls back to port 53, and without one Android asks a server that speaks DNS over TLS that way, past the resolver | the questions go past the tunnel to those servers |
+
+Routing by name on the server sees only the questions that reach the resolver: `network` never, `own` and `endpoint`
+when the servers lie outside the ranges of the client.
+
+AmneziaVPN takes the `DNS` line only when it holds two IPv4 addresses. With one address, an IPv6 one or no line,
+which is what `panel` and `network` write, it asks the name servers of its own settings, `1.1.1.1` and `1.0.0.1`
+unless changed, through the tunnel in a full tunnel, where the panel takes the questions on port 53 as above while
+the interception of the questions of the clients is on. Its leak guard, on unless turned off, lets DNS reach those
+servers only.
+
+The update that brought the choice of the server gave the server the choice of the endpoint with the most clients
+(`auto` of an endpoint became `routing`, `own` became `endpoint`), and gave the clients of the other endpoints that left
+it to the level above the choice of their endpoint, so the files handed out before the update do not change. The
+choice of an endpoint is gone: its `DNS` is the name servers of the endpoint. The template a fresh panel starts with is
+`own` with `1.1.1.1` and `1.0.0.1`.
+
+Our client learns the choice from the services of the server (`dns` among the features: `mode`, the `servers` of the
+file and the `resolver`, the addresses the resolver answers it on inside the tunnel while it runs), see
+[services.md](services.md).
 
 ## Files that name the resolver
 
@@ -185,17 +213,20 @@ clients it touches, each with where its name servers were picked and what they a
 | `rule-off` | `error` | a rule or a basic list by name while the resolver is off: it does not work |
 | `standins-off` | `error` | a template with Route by name while the resolver is off |
 | `holders-off` | `error` | clients hold a file that names the resolver while it is off: they get no answer to a name |
-| `panel-off` | `warning` | a client, a template or an endpoint picks the resolver while it is off: the files take other name servers |
+| `panel-off` | `warning` | a client, a template or the server picks the resolver while it is off: the files take other name servers |
 | `port` | `warning` | the resolver answers on a port other than 53: no file names it |
 | `listen` | `warning` | the resolver does not listen on an address of a configuration: its files do not name it |
 | `kept` | `warning` | the firewall of the host keeps the clients of a configuration from the resolver: their files do not name it |
-| `rule-outside` | `warning` | a client a rule by name takes asks name servers outside its tunnel: the resolver does not see its questions, and the rule takes only the names the resolver asks about itself |
+| `rule-outside` | `warning` | a client a rule by name takes asks name servers outside its tunnel or leaves them to its network: the resolver does not see its questions, and the rule takes only the names the resolver asks about itself |
+| `outside` | `hint` | a client asks name servers outside its tunnel while no rule by name takes it |
+| `unseen` | `hint` | the clients whose template or the server leaves their questions outside the tunnel while no rule by name takes them: routing by name would not see them |
 
 `POST /api/dns/check` takes the draft of a client, a template, an endpoint, a rule or the settings of the resolver
 (`client`, `template`, `config`, `rule` or `dns`, with `id` for one the panel holds) and answers what it would
 contradict, so a form shows it before the save. For a client it also returns `line`, the name servers its file would
 name and where they were picked, and the hint `outside` when they lie outside its tunnel and no rule by name takes
-it; for an endpoint, the line of a client with nothing of its own there. For a template `lines` holds such a line at
+it; for an endpoint, the line of a client with nothing of its own there; for the settings of the resolver, such a line
+at every endpoint that is on, with the choice of the draft. For a template `lines` holds such a line at
 every endpoint that is on where its clients are, or at every endpoint that is on while it has none there, and `line`
 is the first of them that keeps the resolver. Every line names its `endpoint` and `lost`, whether the file wants the
 resolver and loses it to the port, its addresses or the firewall. A template draft keeps the
@@ -209,7 +240,7 @@ A save is never refused for a contradiction.
 | the installation | no question: a fresh panel is automatic; `resolver` set to `no` in a file of answers keeps it off, see [install.md](install.md#the-menu) |
 | the menu | item 29, `DNS for Clients`; the status under the menu shows `DNS: automatic, asks outside encrypted` |
 | the script | `amneziageo-server dns on`, `amneziageo-server dns off`, `amneziageo-server dns` to be asked |
-| the utility | `dns show`, `dns get enabled port upstreams encrypted outbound holders`, `dns set --enabled auto` (or `on`) or `off`, `dns set --upstreams <servers>` or `default` for the ones a fresh panel asks |
+| the utility | `dns show`, `dns get enabled port upstreams encrypted outbound files files-dns holders`, `dns set --enabled auto` (or `on`) or `off`, `dns set --upstreams <servers>` or `default` for the ones a fresh panel asks, `dns set --files routing \| panel \| network \| own \| endpoint` with `--files-dns <servers>` for `own` |
 | the panel | `Mode` in `DNS server for clients` on the `DNS` page, then `Restart` |
 
 The menu and the commands work the same on a package and in a container: there they go through

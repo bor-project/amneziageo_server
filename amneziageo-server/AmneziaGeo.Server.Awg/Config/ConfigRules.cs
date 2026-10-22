@@ -89,7 +89,6 @@ public static partial class ConfigRules
         ?? CheckRanges(config.AllowedIps, "bad-allowed", "the client")
         ?? CheckBlocked(config.Blocked)
         ?? CheckServers(config.Dns)
-        ?? CheckChoice(config.DnsMode, config.Dns)
         ?? CheckMtu(config.Mtu)
         ?? CheckKeepalive(config.Keepalive)
         ?? CheckOfflineAfter(config.OfflineAfter, config.Keepalive)
@@ -387,20 +386,6 @@ public static partial class ConfigRules
         string.IsNullOrEmpty(key) || Curve25519.IsKey(key)
             ? null
             : Fault("bad-preshared", "the preshared key is not 32 bytes in base64");
-
-    private static ConfigFault? CheckChoice(DnsChoice choice, IReadOnlyList<string> servers)
-    {
-        if (!DnsChoiceName.IsKnown(choice))
-        {
-            return Fault(
-                "bad-dns-mode",
-                $"the name servers are '{DnsChoiceName.Auto}', '{DnsChoiceName.Panel}' or '{DnsChoiceName.Own}'");
-        }
-
-        return choice == DnsChoice.Own && servers.Count == 0
-            ? Fault("bad-dns", "the endpoint picks name servers of its own and names none")
-            : null;
-    }
 
     private static ConfigFault Fault(string code, string message) => new(code, message);
 

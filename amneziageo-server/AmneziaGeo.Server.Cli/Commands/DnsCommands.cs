@@ -1,12 +1,14 @@
 using System.Globalization;
 using System.Text.Json;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Routing.Dns;
 
 namespace AmneziaGeo.Server.Cli.Commands;
 
 /// <summary>
-/// The commands that read the resolver of the clients, turn it on and off and name its name servers.
+/// The commands that read the resolver of the clients, turn it on and off, name its name servers and pick the name servers of
+/// the files of the clients.
 /// </summary>
 public static class DnsCommands
 {
@@ -16,6 +18,8 @@ public static class DnsCommands
     public const string Usual = "default";
 
     private const string Holders = "holders";
+
+    private const string Choices = "routing | panel | network | own | endpoint";
 
     private static readonly char[] Breaks = [',', ' '];
 
@@ -49,6 +53,7 @@ public static class DnsCommands
         Terminal.Say($"asks         {string.Join(", ", held.Upstreams)}");
         Terminal.Say($"encrypted    {Encrypted(held)}");
         Terminal.Say($"through      {(held.Outbound.Length == 0 ? "the way out of the host" : held.Outbound)}");
+        Terminal.Say($"for clients  {Picked(held)}");
         var holders = await context.Clients.ResolverHoldersAsync(ct).ConfigureAwait(false);
         if (holders > 0)
         {
@@ -76,7 +81,7 @@ public static class DnsCommands
             .ToList();
         if (names.Count == 0 || values.Any(value => value is null))
         {
-            return Refuse("dns get enabled | port | upstreams | encrypted | outbound | holders ...");
+            return Refuse("dns get enabled | port | upstreams | encrypted | outbound | files | files-dns | holders ...");
         }
 
         foreach (var value in values)
@@ -98,7 +103,7 @@ public static class DnsCommands
         var held = await context.Dns.ReadAsync(ct).ConfigureAwait(false);
         if (Draft(held, args) is not { } draft)
         {
-            return Refuse($"dns set --enabled auto | off [--upstreams <servers> | {Usual}]");
+            return Refuse($"dns set [--enabled auto | off] [--upstreams <servers> | {Usual}] [--files {Choices}] [--files-dns <servers>]");
         }
 
         var saved = await context.Dns.SaveAsync(draft, ct).ConfigureAwait(false);
@@ -108,6 +113,7 @@ public static class DnsCommands
         }
 
         Terminal.Say($"saved: the resolver {(saved.Record.IsEnabled ? "runs while the routing needs it" : "is off")} and asks {string.Join(", ", saved.Record.Upstreams)}");
+        Terminal.Say($"the files of the clients name {Picked(saved.Record)}, unless a template or a client picks otherwise");
         var holders = saved.Record.IsEnabled ? 0 : await context.Clients.ResolverHoldersAsync(ct).ConfigureAwait(false);
         if (holders > 0)
         {
@@ -124,12 +130,16 @@ public static class DnsCommands
     {
         var enabled = args.Value("enabled") is { } word ? Mode(word) : held.IsEnabled;
         var upstreams = args.Value("upstreams") is { } list ? Servers(list) : held.Upstreams;
-        if (enabled is null || !(args.Has("enabled") || args.Has("upstreams")))
+        var files = args.Value("files") is { } choice ? DnsChoiceName.ReadServer(choice, held.FilesMode) : held.FilesMode;
+        var named = args.Value("files-dns") is { } servers
+            ? servers.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : held.FilesDns;
+        if (enabled is null || !(args.Has("enabled") || args.Has("upstreams") || args.Has("files") || args.Has("files-dns")))
         {
             return null;
         }
 
-        return held with { IsEnabled = enabled.Value, Upstreams = upstreams };
+        return held with { IsEnabled = enabled.Value, Upstreams = upstreams, FilesMode = files, FilesDns = named };
     }
 
     // Reads the word the resolver is set with: auto and on let it run while the routing needs it, off keeps it off.
@@ -213,7 +223,19 @@ public static class DnsCommands
         "upstreams" => string.Join(",", held.Upstreams),
         "encrypted" => Encrypted(held),
         "outbound" => held.Outbound,
+        "files" => DnsChoiceName.Of(held.FilesMode),
+        "files-dns" => string.Join(",", held.FilesDns),
         _ => null,
+    };
+
+    // Tells what the files of the clients name, as the server picks it.
+    private static string Picked(DnsSettings held) => held.FilesMode switch
+    {
+        DnsChoice.Panel => "the resolver of the panel",
+        DnsChoice.Own => $"own name servers {string.Join(", ", held.FilesDns)}",
+        DnsChoice.Network => "no name servers: the device asks the ones of its network",
+        DnsChoice.Endpoint => "the name servers of their endpoint",
+        _ => "the resolver of the panel while the routing needs it, the name servers of their endpoint otherwise",
     };
 
     // Tells whether the questions leave the host encrypted: all, none or partly.
@@ -238,5 +260,5 @@ public static class DnsCommands
     }
 
     private static int Usage() => Refuse(
-        $"usage: amneziageo-server dns show | get <name>... | set --enabled auto | off [--upstreams <servers> | {Usual}]");
+        $"usage: amneziageo-server dns show | get <name>... | set [--enabled auto | off] [--upstreams <servers> | {Usual}] [--files {Choices}] [--files-dns <servers>]");
 }

@@ -122,6 +122,14 @@ public sealed record PresetItem(
 public sealed record PresetsFeature(IReadOnlyList<PresetItem> Lists);
 
 /// <summary>
+/// The name servers the file of the client names and the resolver of the panel inside the tunnel.
+/// </summary>
+/// <param name="Mode">What the client, its template or the server picked: `routing`, `panel`, `network`, `own` or `endpoint`.</param>
+/// <param name="Servers">The name servers of the DNS line of the file, none when the file leaves them to the network.</param>
+/// <param name="Resolver">The addresses the resolver of the panel answers the client on inside the tunnel, none while it does not.</param>
+public sealed record DnsFeature(string Mode, IReadOnlyList<string> Servers, IReadOnlyList<string> Resolver);
+
+/// <summary>
 /// The client that proved its key and the request it asked with.
 /// </summary>
 /// <param name="Client">The client behind the key.</param>
@@ -190,4 +198,9 @@ public static class FeatureNames
     /// The routing lists the client holds.
     /// </summary>
     public const string Presets = "presets";
+
+    /// <summary>
+    /// The name servers of the client and the resolver of the panel.
+    /// </summary>
+    public const string Dns = "dns";
 }

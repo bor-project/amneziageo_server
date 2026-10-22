@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Routing.Dns;
 using Microsoft.EntityFrameworkCore;
 
@@ -105,6 +106,8 @@ public sealed class DnsStore
         CacheSize = row.CacheSize,
         MinTtl = row.MinTtl,
         MaxTtl = row.MaxTtl,
+        FilesMode = (DnsChoice)row.FilesMode,
+        FilesDns = Parts(row.FilesDns),
     };
 
     private static void Write(DnsSettingsEntity row, DnsSettings settings)
@@ -118,6 +121,8 @@ public sealed class DnsStore
         row.CacheSize = settings.CacheSize;
         row.MinTtl = settings.MinTtl;
         row.MaxTtl = settings.MaxTtl;
+        row.FilesMode = (int)settings.FilesMode;
+        row.FilesDns = string.Join(", ", settings.FilesDns);
     }
 
     private static string[] Parts(string text) =>

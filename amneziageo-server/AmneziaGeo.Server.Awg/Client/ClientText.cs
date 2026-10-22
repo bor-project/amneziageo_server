@@ -21,12 +21,13 @@ public static class ClientText
         TunnelClient client,
         ClientTemplate? template = null,
         IReadOnlyList<string>? resolver = null,
-        IReadOnlyList<string>? panel = null)
+        IReadOnlyList<string>? panel = null,
+        DnsFiles? files = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
-        var line = Dns(config, client, template, resolver, panel);
+        var line = Dns(config, client, template, resolver, panel, files);
 
         // A field the template leaves empty takes what the endpoint holds, and only then the built in value.
         var dns = line.Servers;
@@ -145,15 +146,15 @@ public static class ClientText
     }
 
     /// <summary>
-    /// Returns the name servers the file of a client names: the resolver of the panel while the routing needs it, or for
-    /// a client, template or endpoint that picks it, what is picked otherwise.
+    /// Returns the name servers the file of a client names, as the client, its template or the server picks them.
     /// </summary>
     public static ClientDns Dns(
         ServerConfig config,
         TunnelClient client,
         ClientTemplate? template = null,
         IReadOnlyList<string>? resolver = null,
-        IReadOnlyList<string>? panel = null)
+        IReadOnlyList<string>? panel = null,
+        DnsFiles? files = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
@@ -165,14 +166,15 @@ public static class ClientText
             return new ClientDns(offered, DnsFrom.StandIns, DnsChoice.Panel, true);
         }
 
-        var (from, choice, servers) = Chosen(config, client, template);
+        var (from, choice, servers) = Chosen(client, template, files);
         var otherwise = template is null ? config.Dns : Either(config.Dns, TemplateDefaults.Dns);
 
         return choice switch
         {
             DnsChoice.Panel when offered is not null => new ClientDns(offered, from, choice, true),
             DnsChoice.Own when servers.Count > 0 => new ClientDns(servers, from, choice, false),
-            DnsChoice.Auto when needed is not null => new ClientDns(needed, from, choice, true),
+            DnsChoice.Network => new ClientDns([], from, choice, false),
+            DnsChoice.Routing or DnsChoice.Auto when needed is not null => new ClientDns(needed, from, choice, true),
             _ => new ClientDns(otherwise, from, choice, false),
         };
     }
@@ -181,11 +183,10 @@ public static class ClientText
     /// Returns where the name servers of a client are picked, what is picked there and the servers written with it.
     /// </summary>
     public static (DnsFrom From, DnsChoice Choice, IReadOnlyList<string> Servers) Chosen(
-        ServerConfig config,
         TunnelClient client,
-        ClientTemplate? template)
+        ClientTemplate? template,
+        DnsFiles? files = null)
     {
-        ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
         if (client.DnsMode != DnsChoice.Auto)
@@ -193,16 +194,21 @@ public static class ClientText
             return (DnsFrom.Client, client.DnsMode, client.Dns);
         }
 
-        return template is { DnsMode: not DnsChoice.Auto }
-            ? (DnsFrom.Template, template.DnsMode, template.Dns)
-            : (DnsFrom.Endpoint, config.DnsMode, config.Dns);
+        if (template is { DnsMode: not DnsChoice.Auto })
+        {
+            return (DnsFrom.Template, template.DnsMode, template.Dns);
+        }
+
+        var server = files ?? DnsFiles.Usual;
+
+        return (DnsFrom.Server, server.Mode, server.Servers);
     }
 
     /// <summary>
-    /// Tells whether a client picks the resolver of the panel, itself or through its template or endpoint.
+    /// Tells whether a client picks the resolver of the panel, itself or through its template or the server.
     /// </summary>
-    public static bool Picks(ServerConfig config, TunnelClient client, ClientTemplate? template) =>
-        template is not { StandIns: true } && Chosen(config, client, template).Choice == DnsChoice.Panel;
+    public static bool Picks(TunnelClient client, ClientTemplate? template, DnsFiles? files = null) =>
+        template is not { StandIns: true } && Chosen(client, template, files).Choice == DnsChoice.Panel;
 
     /// <summary>
     /// Returns the ranges a client routes into the tunnel with the name servers its file names.

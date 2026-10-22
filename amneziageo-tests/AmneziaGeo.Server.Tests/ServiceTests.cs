@@ -10,6 +10,7 @@ using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Geo;
+using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Template;
 using AmneziaGeo.Server.Routing.Proxy;
 using Microsoft.AspNetCore.Http;
@@ -1048,6 +1049,26 @@ public class ServiceTests
         }
     }
 
+    [Fact]
+    public async Task TheDnsFeatureNamesTheServersOfTheFileWhatPickedThemAndWhereTheResolverAnswers()
+    {
+        using var bench = new Bench();
+        var resolver = new DnsState();
+        var usual = DnsDefaults.Fresh;
+
+        var own = await NamedAsync(bench, resolver, usual with { FilesMode = DnsChoice.Own, FilesDns = ["9.9.9.9"] });
+        var routing = await NamedAsync(bench, resolver, usual);
+        resolver.Took(usual with { FilesMode = DnsChoice.Panel });
+        resolver.Started(["10.8.0.1"], bench.Clock.GetUtcNow());
+        var panel = await NamedAsync(bench, resolver, usual with { FilesMode = DnsChoice.Panel });
+        var network = await NamedAsync(bench, resolver, usual with { FilesMode = DnsChoice.Network });
+
+        Assert.Equal("own|9.9.9.9|", own);
+        Assert.Equal("routing|1.1.1.1,1.0.0.1|", routing);
+        Assert.Equal("panel|10.8.0.1|10.8.0.1", panel);
+        Assert.Equal("network||10.8.0.1", network);
+    }
+
     private static ServiceDesk Desk(
         Bench bench,
         SpeedTickets tickets,
@@ -1055,7 +1076,8 @@ public class ServiceTests
         ApplicationLifetime? life = null,
         RefusalHold? hold = null,
         ILogger<ServiceDesk>? logger = null,
-        AnswerSlots? slots = null)
+        AnswerSlots? slots = null,
+        DnsState? resolver = null)
     {
         var state = subscriptions ?? new SubscriptionState();
 
@@ -1070,6 +1092,7 @@ public class ServiceTests
                 new SubscriptionOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
                 new SourcesOffer(bench.Scopes),
                 new PresetsOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
+                new DnsOffer(resolver ?? new DnsState(), bench.Scopes),
             ],
             state,
             life ?? Life(),
@@ -1111,6 +1134,32 @@ public class ServiceTests
         using var document = JsonDocument.Parse(opened!);
 
         return document.RootElement.GetProperty("features").Clone();
+    }
+
+    // Asks the hello as a client of an endpoint with the resolver given and returns what the dns feature says.
+    private static async Task<string> NamedAsync(Bench bench, DnsState resolver, DnsSettings settings)
+    {
+        Assert.True((await bench.Resolver.SaveAsync(settings, CancellationToken.None)).IsOk);
+        var endpoint = (await bench.Configs.ListAsync(CancellationToken.None)).FirstOrDefault()
+            ?? (await bench.Configs.AddAsync(
+                ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
+                CancellationToken.None)).Record!;
+        var client = (await bench.Clients.ListAsync(CancellationToken.None)).FirstOrDefault()
+            ?? (await bench.Clients.AddAsync(
+                ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+                CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), resolver: resolver);
+        var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
+        var answer = await AskAsync(desk, Point(endpoint), token);
+        var opened = PeerToken.Open(
+            PeerToken.Shared(client.PrivateKey, endpoint.PublicKey),
+            token.Nonce!,
+            JsonSerializer.Deserialize<SealedAnswer>(answer.Body, Web)!);
+        using var document = JsonDocument.Parse(opened!);
+        var dns = document.RootElement.GetProperty("features").GetProperty("dns");
+        var list = (string name) => string.Join(",", dns.GetProperty(name).EnumerateArray().Select(one => one.GetString()));
+
+        return $"{dns.GetProperty("mode").GetString()}|{list("servers")}|{list("resolver")}";
     }
 
     // Adds an endpoint and a client of it the panel takes down by the signal or keeps from it.

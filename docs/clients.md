@@ -36,7 +36,7 @@ The private key of a client is written out only to a caller that holds `clients:
 | Daily limit | how many bytes a day the client moves; empty for no limit, see [Traffic](#traffic) |
 | Access to the client | what reaches the client from the tunnel: as the interface says, closed, the server alone, or the whole tunnel network, see [The way back](#the-way-back) |
 | Allow the server to disconnect the tunnel | whether the panel tells the application to take the tunnel down when the client is turned off; on unless set otherwise, see [Turning a client off](#turning-a-client-off) |
-| DNS | where the name servers of the file come from (`dnsMode`): as the template or the endpoint pick, the resolver of the panel, or servers of its own (`dns`), see [dns.md](dns.md#the-name-servers-of-a-file) |
+| DNS | where the name servers of the file come from (`dnsMode`): `auto` as the template or the server pick, `routing` the resolver of the panel while the routing needs it, `panel` the resolver, `network` no `DNS` line, `own` servers of its own (`dns`), `endpoint` the name servers of the endpoint, see [dns.md](dns.md#the-name-servers-of-a-file) |
 
 `GET /api/clients/draft` returns a client that is not saved yet: a fresh key pair, a subscription of its own and
 a name no other client carries. It stands on the endpoint `?config=<id>` names; without it, on the default endpoint (see

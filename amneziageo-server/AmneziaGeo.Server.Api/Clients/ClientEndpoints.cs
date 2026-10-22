@@ -207,7 +207,7 @@ public static class ClientEndpoints
         var names = DnsHandout.For(endpoint, resolver.Handing ?? held with { IsEnabled = false }, resolver.KeptOut);
         var picked = DnsHandout.For(endpoint, resolver.Chosen ?? held, resolver.KeptOut);
         long[] handed = [client.Id];
-        await (ClientText.Dns(endpoint, client, template, names, picked).IsPanel
+        await (ClientText.Dns(endpoint, client, template, names, picked, held.Files).IsPanel
             ? holders.HandedAsync(store, handed, [], ct)
             : holders.HandedAsync(store, [], handed, ct)).ConfigureAwait(false);
         var naming = (await panels.ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
@@ -215,8 +215,8 @@ public static class ClientEndpoints
 
         return Results.Ok(new ClientConfigResponse(
             ClientText.FileName(endpoint, client, naming, host),
-            ClientText.Text(endpoint, client, template, names, picked),
-            ClientLink.Link(endpoint, client, template, names, ClientText.Title(endpoint, client, naming, host), picked),
+            ClientText.Text(endpoint, client, template, names, picked, held.Files),
+            ClientLink.Link(endpoint, client, template, names, ClientText.Title(endpoint, client, naming, host), picked, held.Files),
             SubscriptionAnswer.Address(
                 subscriptions.Current,
                 panel,

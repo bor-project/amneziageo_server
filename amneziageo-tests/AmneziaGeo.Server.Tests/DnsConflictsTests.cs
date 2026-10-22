@@ -146,7 +146,7 @@ public class DnsConflictsTests
         };
 
         Assert.Empty(DnsConflicts.Of(world).Findings);
-        Assert.Equal(["outside:hint:client1:guest"], Said(DnsConflicts.Of(world, hints: true)));
+        Assert.Equal(["outside:hint:client1:guest", "unseen:hint:template1:guest"], Said(DnsConflicts.Of(world, hints: true)));
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public class DnsConflictsTests
         var plain = DnsConflicts.Line(world, world.Clients[1]);
 
         Assert.Equal("10.8.0.1 Client Panel True", $"{string.Join(",", picked!.Servers)} {picked.From} {picked.Choice} {picked.IsPanel}");
-        Assert.Equal("1.1.1.1,1.0.0.1 Endpoint Auto False", $"{string.Join(",", plain!.Servers)} {plain.From} {plain.Choice} {plain.IsPanel}");
+        Assert.Equal("1.1.1.1,1.0.0.1 Server Routing False", $"{string.Join(",", plain!.Servers)} {plain.From} {plain.Choice} {plain.IsPanel}");
     }
 
     [Fact]
@@ -303,6 +303,46 @@ public class DnsConflictsTests
         Assert.Contains(named.Findings, one => one.Clients.Any(client => client.Name == "carl"));
         Assert.DoesNotContain(kept.Findings, one => one.Clients.Any(client => client.Name == "carl"));
     }
+
+    [Fact]
+    public void ARuleByNameIsUnreliableForTheClientsThatLeaveTheNamesToTheirNetwork()
+    {
+        var world = new DnsWorld
+        {
+            Settings = On with { FilesMode = DnsChoice.Network },
+            Configs = [Config(1, "awg1", "10.8.0.1/24")],
+            Templates = [new ClientTemplate { Id = 1, Name = "panel", DnsMode = DnsChoice.Panel }],
+            Clients = [Client(1, 1, "anna"), Client(2, 1, "guest") with { TemplateId = 1 }, Client(3, 1, "kiosk") with { DnsMode = DnsChoice.Network }],
+            Rules = [Rule(1, "yt")],
+        };
+
+        Assert.Equal(["rule-outside:warning:rule1,dns0,client3:anna,kiosk"], Said(DnsConflicts.Of(world)));
+        Assert.Equal(
+            ["outside:hint:client1:anna", "outside:hint:client3:kiosk", "unseen:hint:dns0:anna"],
+            Said(DnsConflicts.Of(world with { Rules = [] }, hints: true)));
+    }
+
+    [Fact]
+    public void TheResolverCheckNamesTheLineAtEachEndpointWithTheChoiceOfTheDraft()
+    {
+        var world = new DnsWorld
+        {
+            Settings = On,
+            Configs = [Config(1, "awg1", "10.8.0.1/24"), Config(2, "awg2", "10.8.1.1/24") with { Dns = ["8.8.8.8"] }],
+            Clients = [Client(1, 1, "anna"), Client(2, 2, "guest")],
+            Rules = [Rule(1, "yt")],
+        };
+
+        Assert.Equal(["awg1 10.8.0.1 server", "awg2 10.8.1.1 server"], Lines(DnsChecks.Check(world, Resolver(null, null))));
+        Assert.Equal(["awg1  server", "awg2  server"], Lines(DnsChecks.Check(world, Resolver("network", null))));
+        Assert.Equal(["awg1 1.1.1.1,1.0.0.1 server", "awg2 8.8.8.8 server"], Lines(DnsChecks.Check(world, Resolver("endpoint", null))));
+        Assert.Equal(["awg1 9.9.9.9 server", "awg2 9.9.9.9 server"], Lines(DnsChecks.Check(world, Resolver("own", ["9.9.9.9"]))));
+        Assert.Equal(["rule-outside:warning:rule1,dns0:anna,guest"], Said(DnsChecks.Check(world, Resolver("network", null)).Findings));
+        Assert.Empty(DnsChecks.Check(world, Resolver("endpoint", null)).Findings);
+    }
+
+    private static DnsCheckRequest Resolver(string? mode, string[]? servers) =>
+        new(Dns: new DnsRequest(true, 53, ["https://1.1.1.1/dns-query"], string.Empty, [], 60, 1000, 0, 3600, mode, servers));
 
     private static IReadOnlyList<string> Said(DnsReport report) => Said(report.Findings);
 

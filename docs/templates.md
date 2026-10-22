@@ -93,7 +93,7 @@ take them off in the settings of the template first.
 |---|---|
 | Name | up to 64 characters, one of a kind |
 | Entries | up to 256 geo keys, networks, addresses and domains; empty gives `0.0.0.0/0`, with `::/0` for a client with an IPv6 address |
-| DNS | where the name servers come from (`dnsMode`): `auto` takes the choice of the endpoint, `panel` the resolver of the panel, `own` the addresses listed (`dns`); a template saved with addresses and no choice picks `own`, see [dns.md](dns.md#the-name-servers-of-a-file) |
+| DNS | where the name servers come from (`dnsMode`): `auto` takes the choice of the server, `routing` the resolver of the panel while the routing needs it, `panel` the resolver, `network` no `DNS` line, `own` the addresses listed (`dns`), `endpoint` the name servers of the endpoint; a template saved with addresses and no choice picks `own`, see [dns.md](dns.md#the-name-servers-of-a-file) |
 | MTU | 576 to 9000; empty gives 1420 |
 | Keepalive | 0 to 65535 seconds, 0 turns it off; empty gives 25 |
 | Route by name | on or off (`standIns`); works while the resolver of the panel answers its clients on port 53 |

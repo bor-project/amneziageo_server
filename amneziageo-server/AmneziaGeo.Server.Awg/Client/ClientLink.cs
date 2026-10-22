@@ -33,14 +33,15 @@ public static class ClientLink
         ClientTemplate? template = null,
         IReadOnlyList<string>? resolver = null,
         string? title = null,
-        IReadOnlyList<string>? panel = null)
+        IReadOnlyList<string>? panel = null,
+        DnsFiles? files = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
         var last = new JsonObject
         {
-            ["config"] = ClientText.Text(config, client, template, resolver, panel),
+            ["config"] = ClientText.Text(config, client, template, resolver, panel, files),
             ["hostName"] = config.Host,
             ["port"] = config.ListenPort,
         };

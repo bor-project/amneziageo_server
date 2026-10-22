@@ -35,7 +35,7 @@ public sealed class DnsChoiceMigrationTests : IDisposable
                 "INSERT INTO Clients (Address, ConfigId, CreatedUtc, DailyLimit, Inbound, IsEnabled, Name, Note, PresharedKey, PrivateKey, PublicKey, SubscriptionId, TemplateId, UpdatedUtc) VALUES "
                 + "('10.8.0.2/32', 1, " + At + ", 0, 0, 1, 'anna', '', '', '', 'k1', '', 1, " + At + ")");
 
-            await db.Database.MigrateAsync();
+            await db.GetService<IMigrator>().MigrateAsync("DnsChoices");
 
             var templates = await db.Database
                 .SqlQueryRaw<int>("SELECT DnsMode AS Value FROM Templates ORDER BY Id")
@@ -106,7 +106,7 @@ public sealed class DnsChoiceMigrationTests : IDisposable
                     targets);
             }
 
-            await db.Database.MigrateAsync();
+            await db.GetService<IMigrator>().MigrateAsync("DnsChoices");
 
             var endpoints = await db.Database
                 .SqlQueryRaw<int>("SELECT DnsMode AS Value FROM Configs ORDER BY Id")

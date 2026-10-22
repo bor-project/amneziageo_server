@@ -6,7 +6,7 @@ import { usePresets } from "@/api/presets"
 import { useTemplateDefaults, useTemplatePreview, useTemplates } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
-import { lacksServers } from "@/components/dnsWords"
+import { choiceKey, lacksServers } from "@/components/dnsWords"
 import { EntryList } from "@/components/EntryList"
 import { Hinted, Line, Links, Part, Switch } from "@/components/fields"
 import { clientItems, presetItems } from "@/components/members"
@@ -162,7 +162,9 @@ export function TemplateForm({
       <Part title={t("templates.partNetwork")}>
         <DnsPick
           id="template-dns-mode"
+          level="template"
           mode={draft.dnsMode}
+          above={t("dnsPick.asServer", { choice: t(choiceKey(resolver?.filesMode ?? "routing")) })}
           onChange={(dnsMode) => put({ dnsMode })}
           locked={draft.standIns}
         />
@@ -171,7 +173,7 @@ export function TemplateForm({
         ) : (
           <div className="hidden sm:block" />
         )}
-        <DnsOutcome check={check.data} caption="dnsCheck.lineTemplate" view="template" skip={["standins-off"]} />
+        <DnsOutcome check={check.data} caption="dnsCheck.lineTemplate" view="template" skip={["standins-off", "outside"]} />
 
         <Maybe
           id="template-mtu"

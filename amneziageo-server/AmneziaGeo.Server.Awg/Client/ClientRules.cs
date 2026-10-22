@@ -129,7 +129,7 @@ public static partial class ClientRules
         {
             return Fault(
                 "bad-client-dns",
-                $"the name servers are '{DnsChoiceName.Auto}', '{DnsChoiceName.Panel}' or '{DnsChoiceName.Own}'");
+                $"the name servers are {DnsChoiceName.Listed()}");
         }
 
         if (choice == DnsChoice.Own && servers.Count == 0)

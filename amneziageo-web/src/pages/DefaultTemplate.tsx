@@ -2,13 +2,15 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { useClients } from "@/api/clients"
+import { draftOf, useDnsCheck, useResolver } from "@/api/dns"
 import { scopes } from "@/api/scopes"
 import { useFreeClients, useTemplateDefaults, useTemplates } from "@/api/templates"
 import type { TemplateDefaults } from "@/api/templates"
 import { useTail } from "@/components/crumbs"
-import { Links, Part } from "@/components/fields"
+import { DnsOutcome, DnsServerChoice } from "@/components/DnsField"
+import { Links, Part, Shown } from "@/components/fields"
 import { clientItems } from "@/components/members"
-import { field, footer, label, primary, secondary } from "@/components/styles"
+import { footer, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
@@ -39,6 +41,9 @@ function DefaultForm({ defaults, onClose }: { defaults: TemplateDefaults; onClos
     one.templateId === null ? t("clients.noTemplate") : (titles.get(one.templateId) ?? ""),
   )
   const free = useFreeClients()
+  const resolver = useResolver(false).data
+  const check = useDnsCheck(resolver === undefined ? null : { dns: draftOf(resolver) })
+  const lines = check.data === undefined ? undefined : { ...check.data, findings: [] }
   const start = defaults.clientIds.map(String)
   const [picked, setPicked] = useState(start)
   const edited = picked.join(",") !== start.join(",")
@@ -67,7 +72,9 @@ function DefaultForm({ defaults, onClose }: { defaults: TemplateDefaults; onClos
       </Part>
 
       <Part title={t("templates.partNetwork")}>
-        <Shown id="template-dns" caption={t("templates.dns")} value={defaults.dns.join(", ")} wide />
+        <DnsOutcome check={lines} caption="dnsCheck.lineTemplate" view="template">
+          <DnsServerChoice mode={resolver?.filesMode} />
+        </DnsOutcome>
         <Shown id="template-mtu" caption={t("templates.mtu")} value={String(defaults.mtu)} />
         <Shown id="template-keepalive" caption={t("templates.keepalive")} value={String(defaults.keepalive)} />
       </Part>
@@ -99,13 +106,3 @@ function DefaultForm({ defaults, onClose }: { defaults: TemplateDefaults; onClos
   )
 }
 
-function Shown({ id, caption, value, wide = false }: { id: string; caption: string; value: string; wide?: boolean }) {
-  return (
-    <div className={wide ? "sm:col-span-2" : ""}>
-      <label className={label} htmlFor={id}>
-        {caption}
-      </label>
-      <input id={id} value={value} readOnly className={`mt-1 ${field}`} />
-    </div>
-  )
-}

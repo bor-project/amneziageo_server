@@ -18,9 +18,9 @@ public enum DnsFrom
     Template = 1,
 
     /// <summary>
-    /// The endpoint of the client picked them.
+    /// The server picked them.
     /// </summary>
-    Endpoint = 2,
+    Server = 2,
 
     /// <summary>
     /// The template of the client routes by name and takes the resolver of the panel.

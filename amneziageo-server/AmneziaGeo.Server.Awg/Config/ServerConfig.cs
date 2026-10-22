@@ -169,11 +169,6 @@ public sealed record ServerConfig
     public IReadOnlyList<string> Dns { get; init; } = [];
 
     /// <summary>
-    /// Where the name servers of the files of the clients come from.
-    /// </summary>
-    public DnsChoice DnsMode { get; init; }
-
-    /// <summary>
     /// The address ranges routed into the tunnel on a client.
     /// </summary>
     public IReadOnlyList<string> AllowedIps { get; init; } = [];

@@ -60,7 +60,7 @@ static int Usage()
           amneziageo-server endpoint list | open <name> | close <name> | default <name>
           amneziageo-server panel show | get <name> | set <options> | reset
           amneziageo-server subscriptions show | get <name> | set --opened on | off
-          amneziageo-server dns show | get <name> | set --enabled on | off [--upstreams <servers> | default]
+          amneziageo-server dns show | get <name> | set [--enabled on | off] [--upstreams <servers> | default] [--files <choice>] [--files-dns <servers>]
           amneziageo-server update status | check | apply [--beta]
           amneziageo-server geo update                 download the geo sources of the panel now
           amneziageo-server backup check <file>        look a backup of the database over

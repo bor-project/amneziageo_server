@@ -86,7 +86,7 @@ public static class TemplateRules
         {
             return Fault(
                 "bad-dns-mode",
-                $"the name servers are '{DnsChoiceName.Auto}', '{DnsChoiceName.Panel}' or '{DnsChoiceName.Own}'");
+                $"the name servers are {DnsChoiceName.Listed()}");
         }
 
         return choice == DnsChoice.Own && servers.Count == 0

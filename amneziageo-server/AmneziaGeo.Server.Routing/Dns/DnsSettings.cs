@@ -1,3 +1,5 @@
+using AmneziaGeo.Server.Awg.Config;
+
 namespace AmneziaGeo.Server.Routing.Dns;
 
 /// <summary>
@@ -49,6 +51,21 @@ public sealed record DnsSettings
     /// The longest an answer is held back, in seconds.
     /// </summary>
     public int MaxTtl { get; init; } = DnsDefaults.MaxTtl;
+
+    /// <summary>
+    /// What the server picks for the name servers of the files of its clients.
+    /// </summary>
+    public DnsChoice FilesMode { get; init; } = DnsChoice.Routing;
+
+    /// <summary>
+    /// The name servers the files name when the server picks its own.
+    /// </summary>
+    public IReadOnlyList<string> FilesDns { get; init; } = [];
+
+    /// <summary>
+    /// What the server picks for the name servers of the files of its clients, with the servers of its own.
+    /// </summary>
+    public DnsFiles Files => new(FilesMode, FilesDns);
 
     /// <summary>
     /// How long an answered address stays in the set of a rule.

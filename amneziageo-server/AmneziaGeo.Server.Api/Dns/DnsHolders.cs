@@ -34,7 +34,8 @@ public sealed class DnsHolders
     public static int Picking(
         IReadOnlyList<TunnelClient> clients,
         IReadOnlyList<ClientTemplate> templates,
-        IReadOnlyList<ServerConfig> configs)
+        IReadOnlyList<ServerConfig> configs,
+        DnsFiles? files = null)
     {
         ArgumentNullException.ThrowIfNull(clients);
         ArgumentNullException.ThrowIfNull(templates);
@@ -46,7 +47,7 @@ public sealed class DnsHolders
         return clients.Count(client => client.IsEnabled
             && endpoints.TryGetValue(client.ConfigId, out var config)
             && config.IsEnabled
-            && ClientText.Picks(config, client, client.TemplateId is { } id ? held.GetValueOrDefault(id) : null));
+            && ClientText.Picks(client, client.TemplateId is { } id ? held.GetValueOrDefault(id) : null, files));
     }
 
     /// <summary>
@@ -61,7 +62,8 @@ public sealed class DnsHolders
         var picked = Picking(
             await clients.ListAsync(ct).ConfigureAwait(false),
             await services.GetRequiredService<TemplateStore>().ListAsync(ct).ConfigureAwait(false),
-            await services.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false));
+            await services.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false),
+            (await services.GetRequiredService<DnsStore>().ReadAsync(ct).ConfigureAwait(false)).Files);
         Keep(count, picked);
     }
 

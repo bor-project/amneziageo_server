@@ -85,8 +85,48 @@ export function fewNames(t: Text, names: string[], shown = 3): string {
   return names.length > shown ? `${head}, ${t("dnsCheck.more", { count: names.length - shown })}` : head
 }
 
+// The name of a choice of the name servers.
+export function choiceKey(mode: DnsMode): TextKey {
+  switch (mode) {
+    case "routing":
+      return "dnsPick.routing"
+    case "panel":
+      return "dnsPick.panel"
+    case "network":
+      return "dnsPick.network"
+    case "own":
+      return "dnsPick.own"
+    case "endpoint":
+      return "dnsPick.endpoint"
+    default:
+      return "dnsPick.auto"
+  }
+}
+
+// The note of a choice: what a client of another make does with it and whether the panel sees its names.
+export function helpKey(mode: DnsMode): TextKey {
+  switch (mode) {
+    case "routing":
+      return "dnsPick.helpRouting"
+    case "panel":
+      return "dnsPick.helpPanel"
+    case "network":
+      return "dnsPick.helpNetwork"
+    case "own":
+      return "dnsPick.helpOwn"
+    case "endpoint":
+      return "dnsPick.helpEndpoint"
+    default:
+      return "dnsPick.helpAuto"
+  }
+}
+
 // The line of a file in a form: what DNS it names and why the resolver is there.
 export function lineText(t: Text, line: DnsLine, caption: TextKey): string {
+  if (line.servers.length === 0) {
+    return t(`${caption}None` as TextKey)
+  }
+
   const told = t(caption, { servers: line.servers.join(", ") })
   const said = why(t, line)
 
@@ -105,7 +145,10 @@ export function linesText(t: Text, lines: DnsLine[], caption: TextKey): string {
   const whys = shown.map((one) => why(t, one))
   const shared = whys.every((one) => one === whys[0])
   const parts = shown.map((one, at) => {
-    const named = t("dnsCheck.at", { servers: one.servers.join(", "), endpoint: one.endpoint })
+    const named =
+      one.servers.length === 0
+        ? t("dnsCheck.atNone", { endpoint: one.endpoint })
+        : t("dnsCheck.at", { servers: one.servers.join(", "), endpoint: one.endpoint })
 
     return shared || whys[at] === "" ? named : `${named} ${whys[at]}`
   })
@@ -124,7 +167,7 @@ function why(t: Text, line: DnsLine): string {
     return t("dnsCheck.whyStandIns")
   }
 
-  return t(line.choice === "auto" ? "dnsCheck.whyRouting" : "dnsCheck.whyPanel")
+  return t(line.choice === "routing" || line.choice === "auto" ? "dnsCheck.whyRouting" : "dnsCheck.whyPanel")
 }
 
 // The colour of a level.
@@ -209,7 +252,9 @@ export function tell(t: Text, language: string, finding: DnsFinding, view: DnsVi
 
       return said(t("dnsCheck.ruleOutside", { name: ruleName, clients }), finding.clients.map(how))
     case "outside":
-      return said(t("dnsCheck.outside", { servers }))
+      return said(servers === "" ? t("dnsCheck.outsideNetwork") : t("dnsCheck.outside", { servers }))
+    case "unseen":
+      return said(t("dnsCheck.unseen", { clients }), view === "client" ? [] : finding.clients.map(how))
     default:
       return said(finding.code)
   }
@@ -226,11 +271,21 @@ function nameOf(t: Text, subject: DnsSubject): string {
 // Where the name servers of a client come from, said short.
 function source(t: Text, one: DnsAffected): string {
   const servers = one.servers.join(", ")
+  if (one.servers.length === 0) {
+    return t(one.from === "client" ? "dnsCheck.fromClientNetwork" : one.from === "server" ? "dnsCheck.fromServerNetwork" : "dnsCheck.fromTemplateNetwork", {
+      source: one.source,
+    })
+  }
+
   if (one.from === "client") {
     return t("dnsCheck.fromClient", { servers })
   }
 
-  return t(one.from === "endpoint" ? "dnsCheck.fromConfig" : "dnsCheck.fromTemplate", { source: one.source, servers })
+  if (one.from === "server") {
+    return t(one.choice === "own" ? "dnsCheck.fromServer" : "dnsCheck.fromConfig", { source: one.source, servers })
+  }
+
+  return t("dnsCheck.fromTemplate", { source: one.source, servers })
 }
 
 // Tells whether the choice lacks the servers it needs.

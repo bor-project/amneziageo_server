@@ -32,8 +32,8 @@ public sealed record DnsCheckRequest(
 /// The name servers a file names, as the panel reads them.
 /// </summary>
 /// <param name="Servers">The name servers of the DNS line.</param>
-/// <param name="From">`client`, `template`, `endpoint` or `standins`.</param>
-/// <param name="Choice">`auto`, `panel` or `own`, as picked there.</param>
+/// <param name="From">`client`, `template`, `server` or `standins`.</param>
+/// <param name="Choice">`auto`, `routing`, `panel`, `network`, `own` or `endpoint`, as picked there.</param>
 /// <param name="IsPanel">Whether the servers are the resolver of the panel.</param>
 /// <param name="Endpoint">The endpoint the file is at.</param>
 /// <param name="Lost">Whether the file wants the resolver and loses it to the port, its addresses or the firewall.</param>
@@ -172,7 +172,7 @@ public static class DnsChecks
                 after,
                 id,
                 Reached(after, members),
-                DnsConflicts.Of(after).Findings.Where(one =>
+                DnsConflicts.Of(after, hints: true).Findings.Where(one =>
                     Names(one, "template", id) || one.Clients.Any(affected => members.Any(member => member.Id == affected.Id))));
         }
 
@@ -210,9 +210,11 @@ public static class DnsChecks
 
         if (request.Dns is { } dns)
         {
-            var settled = world with { Settings = DnsAnswers.Draft(dns) };
+            var settled = world with { Settings = DnsAnswers.Draft(dns, world.Settings) };
+            var lines = Reached(settled, []).Select(config => Body(settled, Probe(config.Id))).OfType<DnsLineBody>().ToArray();
+            var found = DnsConflicts.Of(settled, hints: true).Findings.Where(one => Names(one, "dns", 0));
 
-            return Answer(settled, null, DnsConflicts.Of(settled).Findings.Where(one => Names(one, "dns", 0)));
+            return new DnsCheckResponse(lines.FirstOrDefault(), lines.FirstOrDefault()?.Endpoint ?? string.Empty, [.. found], lines);
         }
 
         return new DnsCheckResponse(null, string.Empty, [], []);

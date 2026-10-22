@@ -428,9 +428,6 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("DnsMode")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("H1")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -588,6 +585,14 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("CacheSize")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FilesDns")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FilesMode")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsEnabled")

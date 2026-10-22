@@ -9,11 +9,12 @@ import type { TemplateDraft } from "./templates"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
 
-// Where the name servers of a file come from: the level above, the resolver of the panel or the servers listed.
-export type DnsMode = "auto" | "panel" | "own"
+// Where the name servers of a file come from: the level above, the resolver of the panel while the routing needs it or
+// always, the network of the device, the servers listed or the ones of the endpoint.
+export type DnsMode = "auto" | "routing" | "panel" | "network" | "own" | "endpoint"
 
 // Where the name servers of a file were picked.
-export type DnsFrom = "client" | "template" | "endpoint" | "standins"
+export type DnsFrom = "client" | "template" | "server" | "standins"
 
 export type DnsLevel = "error" | "warning" | "hint"
 
@@ -29,6 +30,7 @@ export interface DnsAffected {
   id: number
   name: string
   from: DnsFrom
+  choice: DnsMode
   source: string
   servers: string[]
 }
@@ -104,6 +106,8 @@ export interface DnsDraft {
   cacheSize: number
   minTtl: number
   maxTtl: number
+  filesMode: DnsMode
+  filesDns: string[]
 }
 
 export interface Resolver extends DnsDraft {
@@ -191,6 +195,8 @@ export function draftOf(resolver: Resolver): DnsDraft {
     cacheSize: resolver.cacheSize,
     minTtl: resolver.minTtl,
     maxTtl: resolver.maxTtl,
+    filesMode: resolver.filesMode,
+    filesDns: resolver.filesDns,
   }
 }
 

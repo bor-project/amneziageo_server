@@ -2,12 +2,14 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Template;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 
@@ -308,5 +310,42 @@ public sealed class PresetsOffer : IHelloFeature
             peer.Client.SubscriptionId);
 
         return Uri.TryCreate(url, UriKind.Absolute, out var address) ? address.Host : asked;
+    }
+}
+
+/// <summary>
+/// Tells the client the name servers its file names, what picked them and where the resolver of the panel answers it.
+/// </summary>
+public sealed class DnsOffer : IHelloFeature
+{
+    private readonly DnsState _state;
+
+    private readonly IServiceScopeFactory _scopes;
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public DnsOffer(DnsState state, IServiceScopeFactory scopes)
+    {
+        _state = state;
+        _scopes = scopes;
+    }
+
+    /// <inheritdoc/>
+    public string Name => FeatureNames.Dns;
+
+    /// <inheritdoc/>
+    public async ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+
+        using var scope = _scopes.CreateScope();
+        var held = await scope.ServiceProvider.GetRequiredService<DnsStore>().ReadAsync(ct).ConfigureAwait(false);
+        var names = DnsHandout.For(peer.Endpoint, _state.Handing ?? held with { IsEnabled = false }, _state.KeptOut);
+        var offered = DnsHandout.For(peer.Endpoint, _state.Chosen ?? held, _state.KeptOut);
+        var line = ClientText.Dns(peer.Endpoint, peer.Client, peer.Template, names, offered, held.Files);
+        var mode = line.From == DnsFrom.StandIns ? DnsChoiceName.Panel : DnsChoiceName.Of(line.Choice);
+
+        return new DnsFeature(mode, line.Servers, _state.IsRunning ? offered : []);
     }
 }

@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Route;
 
@@ -60,7 +61,9 @@ public sealed record DnsResponse(
     int MaxTtl,
     bool Pending,
     DnsStateBody State,
-    DnsReadingBody Reading);
+    DnsReadingBody Reading,
+    string FilesMode = DnsChoiceName.Routing,
+    IReadOnlyList<string>? FilesDns = null);
 
 /// <summary>
 /// The settings the resolver is changed with.
@@ -74,7 +77,9 @@ public sealed record DnsRequest(
     int NameMinutes,
     int CacheSize,
     int MinTtl,
-    int MaxTtl);
+    int MaxTtl,
+    string? FilesMode = null,
+    IReadOnlyList<string>? FilesDns = null);
 
 /// <summary>
 /// Turns the resolver settings into what the panel reads and back.
@@ -126,13 +131,16 @@ public static class DnsAnswers
                 state.Needed,
                 state.Holders,
                 state.Picked),
-            reading ?? new DnsReadingBody(false, false, 0, 0, 0, 0, 0, 0, 0));
+            reading ?? new DnsReadingBody(false, false, 0, 0, 0, 0, 0, 0, 0),
+            DnsChoiceName.Of(settings.FilesMode),
+            settings.FilesDns);
     }
 
     /// <summary>
-    /// Returns what a request asks the resolver to become.
+    /// Returns what a request asks the resolver to become; a request without the name servers of the files keeps the
+    /// ones held.
     /// </summary>
-    public static DnsSettings Draft(DnsRequest request)
+    public static DnsSettings Draft(DnsRequest request, DnsSettings? held = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -147,6 +155,8 @@ public static class DnsAnswers
             CacheSize = request.CacheSize,
             MinTtl = request.MinTtl,
             MaxTtl = request.MaxTtl,
+            FilesMode = DnsChoiceName.ReadServer(request.FilesMode, held?.FilesMode ?? DnsChoice.Routing),
+            FilesDns = request.FilesDns is null ? held?.FilesDns ?? [] : Clean(request.FilesDns),
         };
     }
 

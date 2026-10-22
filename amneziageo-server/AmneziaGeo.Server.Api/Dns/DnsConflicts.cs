@@ -66,10 +66,11 @@ public sealed record DnsSubject(string Kind, long Id, string Name);
 /// </summary>
 /// <param name="Id">The number of the client.</param>
 /// <param name="Name">The name of the client.</param>
-/// <param name="From">`client`, `template`, `endpoint` or `standins`.</param>
-/// <param name="Source">The name of the client, template or endpoint the choice was made at.</param>
+/// <param name="From">`client`, `template`, `server` or `standins`.</param>
+/// <param name="Source">The name of the client or template the choice was made at, the endpoint for the server.</param>
 /// <param name="Servers">The name servers the file names.</param>
-public sealed record DnsAffected(long Id, string Name, string From, string Source, IReadOnlyList<string> Servers);
+/// <param name="Choice">What was picked there.</param>
+public sealed record DnsAffected(long Id, string Name, string From, string Source, IReadOnlyList<string> Servers, string Choice = DnsChoiceName.Routing);
 
 /// <summary>
 /// One contradiction between the settings that decide the name servers of the clients.
@@ -85,7 +86,7 @@ public sealed record DnsFinding(string Code, string Level, IReadOnlyList<DnsSubj
 /// </summary>
 /// <param name="Rules">The rules and basic lists by name.</param>
 /// <param name="Templates">The templates routed by name.</param>
-/// <param name="Picked">The clients that are on and pick the resolver, themselves or through their template or endpoint.</param>
+/// <param name="Picked">The clients that are on and pick the resolver, themselves or through their template or the server.</param>
 /// <param name="Holders">The clients that are on and hold a file that names the resolver.</param>
 public sealed record DnsNeeds(
     IReadOnlyList<DnsSubject> Rules,
@@ -194,7 +195,7 @@ public static class DnsConflicts
         DnsFrom.Client => "client",
         DnsFrom.Template => "template",
         DnsFrom.StandIns => "standins",
-        _ => "endpoint",
+        _ => "server",
     };
 
     // The resolver is off: the rules, the templates, the files and the picks that need it.
@@ -222,7 +223,7 @@ public static class DnsConflicts
 
         foreach (var group in seen.Where(one => one.Picks).GroupBy(one => Source(one)))
         {
-            findings.Add(Finding("panel-off", Warning, [Resolver, group.Key], group));
+            findings.Add(Finding("panel-off", Warning, [.. new[] { Resolver, group.Key }.Distinct()], group));
         }
     }
 
@@ -250,10 +251,13 @@ public static class DnsConflicts
         }
     }
 
-    // The clients of the rules by name whose name servers lie outside the tunnel, and with hints the rest of them.
+    // The clients of the rules by name whose name servers lie outside the tunnel or are left to the network of the device,
+    // and with hints the rest of them.
     private static void Outside(DnsWorld world, IReadOnlyList<Seen> seen, List<DnsFinding> findings, bool hints)
     {
-        var outside = seen.Where(one => !one.Line.IsPanel && one.Outside.Count > 0).ToArray();
+        var outside = seen
+            .Where(one => !one.Line.IsPanel && (one.Outside.Count > 0 || one.Line.Choice == DnsChoice.Network))
+            .ToArray();
         foreach (var rule in world.Rules)
         {
             var missed = outside.Where(one => Covers(rule, one)).ToArray();
@@ -272,9 +276,15 @@ public static class DnsConflicts
             return;
         }
 
-        foreach (var one in outside.Where(one => !world.Rules.Any(rule => Covers(rule, one))))
+        var unruled = outside.Where(one => !world.Rules.Any(rule => Covers(rule, one))).ToArray();
+        foreach (var one in unruled)
         {
             findings.Add(Finding("outside", Hint, [Subject(one.Client)], [one]));
+        }
+
+        foreach (var group in unruled.Where(one => one.Line.From != DnsFrom.Client).GroupBy(Source))
+        {
+            findings.Add(Finding("unseen", Hint, [group.Key], group));
         }
     }
 
@@ -295,7 +305,7 @@ public static class DnsConflicts
             var line = Written(world, config, client, template);
             var wanted = Wants(world, config, client, template);
             var outside = Beyond(line.Servers, ClientText.Routed(config, client, template, line));
-            seen.Add(new Seen(client, config, template, line, wanted, ClientText.Picks(config, client, template), outside));
+            seen.Add(new Seen(client, config, template, line, wanted, ClientText.Picks(client, template, world.Settings.Files), outside));
         }
 
         return seen;
@@ -306,7 +316,7 @@ public static class DnsConflicts
     {
         var own = DnsHandout.For(config, DnsDefaults.Settings with { IsEnabled = true });
 
-        return ClientText.Dns(config, client, template, world.Needed ? own : null, own).IsPanel;
+        return ClientText.Dns(config, client, template, world.Needed ? own : null, own, world.Settings.Files).IsPanel;
     }
 
     // Returns the name servers the file of a client names with the settings of the world.
@@ -319,7 +329,8 @@ public static class DnsConflicts
             client,
             template,
             DnsHandout.For(config, handing, world.KeptOut),
-            DnsHandout.For(config, world.Settings, world.KeptOut));
+            DnsHandout.For(config, world.Settings, world.KeptOut),
+            world.Settings.Files);
     }
 
     // Returns the name servers the ranges of a client leave out.
@@ -348,7 +359,7 @@ public static class DnsConflicts
     {
         DnsFrom.Client => Subject(one.Client),
         DnsFrom.Template or DnsFrom.StandIns when one.Template is { } template => Subject(template),
-        _ => Subject(one.Config),
+        _ => Resolver,
     };
 
     private static DnsSubject Subject(RouteRule rule) => new(rule.Id < 0 ? "basic" : "rule", rule.Id, rule.Name);
@@ -378,6 +389,7 @@ public static class DnsConflicts
                 DnsFrom.Template or DnsFrom.StandIns => Template?.Name ?? string.Empty,
                 _ => Config.Name,
             },
-            Line.Servers);
+            Line.Servers,
+            DnsChoiceName.Of(Line.Choice));
     }
 }

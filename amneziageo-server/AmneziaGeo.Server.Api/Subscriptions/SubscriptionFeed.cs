@@ -78,13 +78,15 @@ public sealed class SubscriptionFeed
             _ledger.Used,
             endpoint => DnsHandout.For(endpoint, handing, keptOut),
             (endpoint, member) => ClientText.Title(endpoint, member, naming, host),
-            endpoint => DnsHandout.For(endpoint, offering, keptOut));
+            endpoint => DnsHandout.For(endpoint, offering, keptOut),
+            held.Files);
         await KeepAsync(
             endpoints,
             members,
             templates,
             endpoint => DnsHandout.For(endpoint, handing, keptOut),
             endpoint => DnsHandout.For(endpoint, offering, keptOut),
+            held.Files,
             ct).ConfigureAwait(false);
 
         return feed;
@@ -97,6 +99,7 @@ public sealed class SubscriptionFeed
         IReadOnlyDictionary<long, ClientTemplate> templates,
         Func<ServerConfig, IReadOnlyList<string>> resolver,
         Func<ServerConfig, IReadOnlyList<string>> panel,
+        DnsFiles files,
         CancellationToken ct)
     {
         var named = new List<long>();
@@ -108,7 +111,7 @@ public sealed class SubscriptionFeed
             foreach (var member in members.Where(one => one.ConfigId == endpoint.Id && one.IsEnabled && one.PrivateKey.Length > 0))
             {
                 var template = member.TemplateId is { } chosen ? templates.GetValueOrDefault(chosen) : null;
-                (ClientText.Dns(endpoint, member, template, names, picked).IsPanel ? named : unnamed).Add(member.Id);
+                (ClientText.Dns(endpoint, member, template, names, picked, files).IsPanel ? named : unnamed).Add(member.Id);
             }
         }
 

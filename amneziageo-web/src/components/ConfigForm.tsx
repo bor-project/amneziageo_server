@@ -6,13 +6,12 @@ import { downedOf, failure, useConfigs, useImportConfig, useKeyPair, usePreshare
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import { useClients } from "@/api/clients"
 import type { Inbound } from "@/api/clients"
-import { useDnsCheck } from "@/api/dns"
+import { useDnsCheck, useResolver } from "@/api/dns"
 import { usePortState } from "@/api/firewall"
 import { useRules } from "@/api/rules"
 import type { Holding } from "@/api/firewall"
 import { scopes } from "@/api/scopes"
-import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
-import { lacksServers } from "@/components/dnsWords"
+import { DnsOutcome, DnsServerChoice } from "@/components/DnsField"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { KeepQuestion, PortNote } from "@/components/PortNote"
 import { Count, Flag, Help, Hinted, Line, LinkLine, Links, ListLine, Part, Pick, Regenerate, Switch } from "@/components/fields"
@@ -108,11 +107,11 @@ export function ConfigForm({
   const host = hostFault(t, draft)
   const edited = !same(draft, start) || opening
   const check = useDnsCheck({ id: self, config: draft })
+  const files = useResolver(false).data?.filesMode
   const ready =
     edited &&
     !pending &&
     draft.name.length > 0 &&
-    !lacksServers(draft.dnsMode, draft.dns) &&
     [port, services, socket, name, address, host].every((one) => one.length === 0)
   const twisted = JSON.stringify(draft.obfuscation) !== JSON.stringify(start.obfuscation)
 
@@ -313,9 +312,11 @@ export function ConfigForm({
           onChange={(allowedIps) => put({ allowedIps })}
           wide
         />
-        <DnsPick id="config-dns-mode" mode={draft.dnsMode} onChange={(dnsMode) => put({ dnsMode })} />
-        <DnsServers id="config-dns" mode={draft.dnsMode} servers={draft.dns} onChange={(dns) => put({ dns })} />
-        <DnsOutcome check={check.data} caption="dnsCheck.lineConfig" view="config" />
+        <ListLine id="config-dns" caption={t("dnsPick.endpoint")} value={draft.dns} onChange={(dns) => put({ dns })} />
+        <div className="hidden sm:block" />
+        <DnsOutcome check={check.data} caption="dnsCheck.lineConfig" view="config">
+          <DnsServerChoice mode={files} />
+        </DnsOutcome>
         <Count id="config-mtu" caption={t("configs.mtu")} value={draft.mtu} onChange={(value) => put({ mtu: value })} />
         <Count
           id="config-keepalive"

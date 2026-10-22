@@ -4,7 +4,6 @@ import type { Text } from "@/i18n"
 import { complaint } from "./auth"
 import type { Inbound } from "./clients"
 import { client } from "./client"
-import type { DnsMode } from "./dns"
 import type { Holding } from "./firewall"
 
 export interface Obfuscation {
@@ -41,7 +40,6 @@ export interface Config {
   host: string
   listenPort: number
   address: string[]
-  dnsMode: DnsMode
   dns: string[]
   allowedIps: string[]
   mtu: number
@@ -69,7 +67,6 @@ export interface ConfigDraft {
   host: string
   listenPort: number
   address: string[]
-  dnsMode: DnsMode
   dns: string[]
   allowedIps: string[]
   mtu: number
@@ -197,7 +194,6 @@ export function draftOf(config: Config): ConfigDraft {
     host: config.host,
     listenPort: config.listenPort,
     address: config.address,
-    dnsMode: config.dnsMode,
     dns: config.dns,
     allowedIps: config.allowedIps,
     mtu: config.mtu,

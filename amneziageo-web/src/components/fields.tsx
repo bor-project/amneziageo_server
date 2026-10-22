@@ -14,6 +14,18 @@ export function Part({ title, children }: { title: ReactNode; children: ReactNod
   )
 }
 
+// A value shown the way a field is, not to be changed.
+export function Shown({ id, caption, value, wide = false }: { id: string; caption: string; value: string; wide?: boolean }) {
+  return (
+    <div className={wide ? "sm:col-span-2" : ""}>
+      <label className={label} htmlFor={id}>
+        {caption}
+      </label>
+      <input id={id} value={value} readOnly className={`mt-1 ${field}`} />
+    </div>
+  )
+}
+
 export function Box({ caption, children }: { caption: string; children: ReactNode }) {
   return (
     <div className={`p-4 ${card}`}>

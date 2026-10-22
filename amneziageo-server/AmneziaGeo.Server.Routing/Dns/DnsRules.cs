@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using AmneziaGeo.Server.Awg.Config;
 
 namespace AmneziaGeo.Server.Routing.Dns;
 
@@ -77,7 +78,7 @@ public static class DnsRules
             return new DnsFault("bad-listen", $"'{bad}' is not an address to listen on");
         }
 
-        return Numbers(settings);
+        return Files(settings) ?? Numbers(settings);
     }
 
     /// <summary>
@@ -176,6 +177,23 @@ public static class DnsRules
         point = new IPEndPoint(address, port);
 
         return true;
+    }
+
+    private static DnsFault? Files(DnsSettings settings)
+    {
+        if (!DnsChoiceName.IsServer(settings.FilesMode))
+        {
+            return new DnsFault("bad-dns-mode", $"the name servers of the files are {DnsChoiceName.ListedServer()}");
+        }
+
+        if (settings.FilesDns.FirstOrDefault(one => !Address(one, out _)) is { } odd)
+        {
+            return new DnsFault("bad-dns", $"'{odd}' is not a name server address");
+        }
+
+        return settings.FilesMode == DnsChoice.Own && settings.FilesDns.Count == 0
+            ? new DnsFault("bad-dns", "the server picks name servers of its own and names none")
+            : null;
     }
 
     private static DnsFault? Numbers(DnsSettings settings)

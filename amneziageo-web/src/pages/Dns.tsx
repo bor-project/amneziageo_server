@@ -4,13 +4,15 @@ import { complaint } from "@/api/auth"
 import { draftOf, findingsOf, useDnsCheck, useDnsConflicts, useResolver, useSaveResolver } from "@/api/dns"
 import type { DnsDraft, DnsFinding, DnsReport, DnsState, DnsSubject, Resolver as ResolverSettings } from "@/api/dns"
 import { useBalancers } from "@/api/balancers"
+import { useConfigs } from "@/api/configs"
 import { useFailure } from "@/api/failure"
 import { useOutbounds } from "@/api/outbounds"
 import { useRules } from "@/api/rules"
 import { scopes } from "@/api/scopes"
+import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { DnsMark } from "@/components/DnsMark"
-import { clientsOfWords, clientWords, counted, fewNames, levelOf, ruleWords, templateWords } from "@/components/dnsWords"
-import { Box, Count, ListLine, Part, Pick } from "@/components/fields"
+import { clientsOfWords, clientWords, counted, fewNames, lacksServers, levelOf, ruleWords, templateWords } from "@/components/dnsWords"
+import { Box, Count, ListLine, Part, Pick, Shown } from "@/components/fields"
 import { wayTo } from "@/components/members"
 import { ResolverTrouble } from "@/components/ResolverTrouble"
 import { troubleOf } from "@/components/trouble"
@@ -104,6 +106,11 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
   const report = useDnsConflicts()
   const check = useDnsCheck(kept === null ? null : { dns: draft })
   const findings = kept === null ? findingsOf(report.data, "dns", 0) : (check.data?.findings ?? [])
+  const lines = useDnsCheck({ dns: draft }).data
+  const files = lines === undefined ? undefined : { ...lines, findings: lines.findings.filter((one) => filed.includes(one.code)) }
+  const endpoints = (useConfigs().data ?? [])
+    .map((one) => `${one.name}: ${one.dns.length > 0 ? one.dns.join(", ") : t("dnsPick.endpointNone")}`)
+    .join("; ")
 
   function set(part: Partial<DnsDraft>) {
     const next = { ...draft, ...part }
@@ -237,6 +244,18 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
         )}
       </Part>
 
+      <Part title={t("dns.files")}>
+        <DnsPick id="dns-files" level="server" mode={draft.filesMode} onChange={(filesMode) => set({ filesMode })} />
+        {draft.filesMode === "own" ? (
+          <DnsServers id="dns-files-servers" mode={draft.filesMode} servers={draft.filesDns} onChange={(filesDns) => set({ filesDns })} />
+        ) : draft.filesMode === "endpoint" ? (
+          <Shown id="dns-files-endpoints" caption={t("dnsPick.endpoints")} value={endpoints} />
+        ) : (
+          <div className="hidden sm:block" />
+        )}
+        <DnsOutcome check={files} caption="dnsCheck.lineConfig" view="dns" />
+      </Part>
+
       <Part title={t("dns.memory")}>
         <Count
           id="dns-cache"
@@ -259,7 +278,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
           <button
             type="button"
             onClick={() => void keep()}
-            disabled={kept === null || unpicked || save.isPending}
+            disabled={kept === null || unpicked || lacksServers(draft.filesMode, draft.filesDns) || save.isPending}
             className={primary}
           >
             {t("dns.save")}
@@ -269,6 +288,9 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
     </>
   )
 }
+
+// The findings the choice of the files brings, told under it.
+const filed = ["rule-outside", "unseen"]
 
 // Who needs the resolver, or what stops working or misses the files with the mode picked.
 function Need({

@@ -7,13 +7,13 @@ import { useClients } from "@/api/clients"
 import type { Client, ClientDraft, Inbound } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
-import { useDnsCheck } from "@/api/dns"
+import { useDnsCheck, useResolver } from "@/api/dns"
 import { useRules } from "@/api/rules"
 import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
 import { useTemplates } from "@/api/templates"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
-import { lacksServers } from "@/components/dnsWords"
+import { choiceKey, lacksServers } from "@/components/dnsWords"
 import { Help, Line, LinkLine, Links, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { few, names, ruleItems } from "@/components/members"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
@@ -68,6 +68,14 @@ export function ClientForm({
   const misnamed = !/^[A-Za-z0-9_-]{0,64}$/.test(draft.subscriptionId)
   const allowed = allowanceOf(limit)
   const check = useDnsCheck(draft.configId > 0 ? { id: self, client: draft } : null)
+  const files = useResolver(false).data?.filesMode ?? "routing"
+  const template = (templates.data ?? []).find((one) => one.id === draft.templateId)
+  const above =
+    template === undefined
+      ? t("dnsPick.asServer", { choice: t(choiceKey(files)) })
+      : t("dnsPick.asTemplate", {
+          choice: t(choiceKey(template.standIns ? "panel" : template.dnsMode === "auto" ? files : template.dnsMode)),
+        })
   const user = useAppSelector((s) => s.auth.user)
   const rules = useRules().data ?? []
   const mayRoute = holds(user, scopes.manageRouting)
@@ -225,7 +233,7 @@ export function ClientForm({
           </div>
         </div>
 
-        <DnsPick id="client-dns-mode" mode={draft.dnsMode} onChange={(dnsMode) => put({ dnsMode })} />
+        <DnsPick id="client-dns-mode" level="client" mode={draft.dnsMode} above={above} onChange={(dnsMode) => put({ dnsMode })} />
 
         {draft.dnsMode === "own" && (
           <>

@@ -242,8 +242,6 @@ public sealed class ConfigEntity : IObfuscated
 
     public string Dns { get; set; } = string.Empty;
 
-    public int DnsMode { get; set; }
-
     public string AllowedIps { get; set; } = string.Empty;
 
     public int Mtu { get; set; }
@@ -569,6 +567,10 @@ public sealed class DnsSettingsEntity
     public int MinTtl { get; set; }
 
     public int MaxTtl { get; set; }
+
+    public int FilesMode { get; set; } = 5;
+
+    public string FilesDns { get; set; } = string.Empty;
 
     public DateTimeOffset UpdatedUtc { get; set; }
 }

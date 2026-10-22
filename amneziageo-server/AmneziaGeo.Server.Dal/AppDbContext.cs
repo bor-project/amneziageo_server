@@ -192,6 +192,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
         {
             entity.Property(row => row.Upstreams).HasMaxLength(512);
             entity.Property(row => row.Listen).HasMaxLength(512);
+            entity.Property(row => row.FilesDns).HasMaxLength(512);
         });
 
         builder.Entity<DnsStandingEntity>(entity =>
