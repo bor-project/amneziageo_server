@@ -121,4 +121,68 @@ public class RoleUsersTests
         Assert.Equal(AccountOutcome.LastAdmin, now!.Outcome);
         Assert.Null(after);
     }
+
+    [Fact]
+    public async Task TheRightsAloneRefuseTheCallerHoldingTheRole()
+    {
+        using var bench = new Bench();
+        await bench.RoleAsync("ops", Scopes.ReadState, Scopes.ManageAccess);
+        var me = await bench.UserAsync("two", "long-enough", "ops");
+        await bench.UserAsync("three", "long-enough");
+
+        var refusal = await bench.Accounts.WhyNotRightsAsync("ops", [Scopes.ReadState], me.Id, CancellationToken.None);
+
+        Assert.Equal(AccountOutcome.Self, refusal!.Outcome);
+    }
+
+    [Fact]
+    public async Task TheRightsAloneKeepTheLastAdministrator()
+    {
+        using var bench = new Bench();
+        await bench.RoleAsync("ops", Scopes.ReadState, Scopes.ManageAccess);
+        await bench.RoleAsync("viewer", Scopes.ReadState);
+        await bench.UserAsync("two", "long-enough", "ops");
+        await bench.UserAsync("three", "long-enough", "viewer");
+
+        var refusal = await bench.Accounts.WhyNotRightsAsync("ops", [Scopes.ReadState], actorId: 0, CancellationToken.None);
+
+        Assert.Equal(AccountOutcome.LastAdmin, refusal!.Outcome);
+    }
+
+    [Fact]
+    public async Task TheRightsAloneChangeWhileAnotherAdministratorStays()
+    {
+        using var bench = new Bench();
+        await bench.RoleAsync("ops", Scopes.ReadState, Scopes.ManageAccess);
+        await bench.UserAsync("one", "long-enough", "ops");
+        var me = await bench.UserAsync("two", "long-enough");
+
+        var refusal = await bench.Accounts.WhyNotRightsAsync("ops", [Scopes.ReadState], me.Id, CancellationToken.None);
+
+        Assert.Null(refusal);
+    }
+
+    [Fact]
+    public async Task TheRightsKeepingAccessPassTheCallerHoldingTheRole()
+    {
+        using var bench = new Bench();
+        await bench.RoleAsync("ops", Scopes.ReadState, Scopes.ManageAccess);
+        var me = await bench.UserAsync("two", "long-enough", "ops");
+
+        var refusal = await bench.Accounts.WhyNotRightsAsync(
+            "ops", [Scopes.ReadState, Scopes.ManageAccess, Scopes.ManageClients], me.Id, CancellationToken.None);
+
+        Assert.Null(refusal);
+    }
+
+    [Fact]
+    public async Task TheRightsOfAnUnknownRoleAreRefused()
+    {
+        using var bench = new Bench();
+        var me = await bench.UserAsync("two", "long-enough");
+
+        var refusal = await bench.Accounts.WhyNotRightsAsync("nobody", [Scopes.ReadState], me.Id, CancellationToken.None);
+
+        Assert.Equal(AccountOutcome.UnknownRole, refusal!.Outcome);
+    }
 }

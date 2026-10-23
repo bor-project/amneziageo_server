@@ -248,6 +248,7 @@ of the one it held, the way the settings of the account give it, and an account 
 host. An account that holds the role and is missing from the list is refused with `role-keeps-users` (400): it
 leaves the role only for another role. An account the panel does not hold (`unknown-user`), the caller taking
 their own rights away (`self`) and the last administrator (`last-admin`) are refused before anything is changed;
-a new role refused this way is not kept. The settings of a role name its accounts, which take the role there, and
-its tokens; the list of roles counts both, the page that removes a role names both, and the role of an account and
-of a token is a link to it.
+a new role refused this way is not kept. Rights changed without `users` are judged the same way, with the accounts
+that hold the role now. The settings of a role name its accounts, which take the role there, and its tokens; the
+list of roles counts both, the page that removes a role names both, and the role of an account and of a token is a
+link to it.

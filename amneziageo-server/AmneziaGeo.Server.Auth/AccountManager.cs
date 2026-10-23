@@ -348,6 +348,25 @@ public sealed class AccountManager
     }
 
     /// <summary>
+    /// Returns why the role cannot carry the rights given while the accounts holding it keep it, or null when it can.
+    /// </summary>
+    public async Task<AccountResult?> WhyNotRightsAsync(string role, IReadOnlyCollection<string> scopes, long actorId, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(scopes);
+
+        var found = await _roles.FindByNameAsync(role).ConfigureAwait(false);
+        if (found is null)
+        {
+            return UnknownRole(role);
+        }
+
+        var holders = await _users.GetUsersInRoleAsync(found.Name!).ConfigureAwait(false);
+
+        return await WhyNotHandAsync(found.Name!, [.. holders.Select(user => user.UserName!)], scopes, actorId, ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Gives an account one role, replacing the ones it holds.
     /// </summary>
     public async Task<AccountResult> SetRoleAsync(string name, string role, long actorId, CancellationToken ct)

@@ -85,11 +85,10 @@ public static class RoleEndpoints
             return Refuse(StatusCodes.Status400BadRequest, "incomplete", "the change names nothing to change");
         }
 
-        // Judges the handing by the rights the role carries after the change, before anything is written.
+        // Judges the handing and the rights by what the role carries after the change, before anything is written.
         var actor = http.Caller()!.Id;
-        if (request.Users is not null
-            && await roles.FindAsync(name, ct).ConfigureAwait(false) is not null
-            && await accounts.WhyNotHandAsync(name, request.Users, request.Scopes, actor, ct).ConfigureAwait(false) is { } refusal)
+        if (await roles.FindAsync(name, ct).ConfigureAwait(false) is { } found
+            && await WhyNotChangeAsync(name, found, request, actor, accounts, ct).ConfigureAwait(false) is { } refusal)
         {
             return UserEndpoints.Explain(refusal);
         }
@@ -107,6 +106,25 @@ public static class RoleEndpoints
         }
 
         return Results.Ok(await AnswerAsync(result.Record!.Name!, roles, ct).ConfigureAwait(false));
+    }
+
+    // Returns why the accounts or the rights of the change cannot be given to the role, or null when they can.
+    private static async Task<AccountResult?> WhyNotChangeAsync(
+        string name,
+        RoleView role,
+        RolePatchRequest request,
+        long actor,
+        AccountManager accounts,
+        CancellationToken ct)
+    {
+        if (request.Users is not null)
+        {
+            return await accounts.WhyNotHandAsync(name, request.Users, request.Scopes, actor, ct).ConfigureAwait(false);
+        }
+
+        return request.Scopes is null || role.Record.IsBuiltin
+            ? null
+            : await accounts.WhyNotRightsAsync(name, request.Scopes, actor, ct).ConfigureAwait(false);
     }
 
     // Hands the role to the accounts and carries the moved users of the host to it, returning the refusal or null.
