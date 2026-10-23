@@ -1126,6 +1126,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("ReadOnly")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Uid")
                         .IsRequired()
                         .HasMaxLength(36)
@@ -1331,6 +1334,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<string>("Presets")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("PresetsOnly")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset?>("RefreshedUtc")
                         .HasColumnType("TEXT");

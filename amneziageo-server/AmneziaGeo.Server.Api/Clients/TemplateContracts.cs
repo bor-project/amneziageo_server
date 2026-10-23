@@ -23,7 +23,8 @@ public sealed record TemplateResponse(
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc,
     string DnsMode = DnsChoiceName.Auto,
-    IReadOnlyList<long>? ClientIds = null);
+    IReadOnlyList<long>? ClientIds = null,
+    bool PresetsOnly = false);
 
 /// <summary>
 /// The settings a client template is added or changed with.
@@ -37,7 +38,8 @@ public sealed record TemplateRequest(
     IReadOnlyList<long>? Presets = null,
     bool? StandIns = null,
     string? DnsMode = null,
-    IReadOnlyList<long>? Clients = null);
+    IReadOnlyList<long>? Clients = null,
+    bool? PresetsOnly = null);
 
 /// <summary>
 /// The entries the panel asks what they come out as.
@@ -114,7 +116,8 @@ public static class TemplateAnswers
             template.CreatedUtc,
             template.UpdatedUtc,
             DnsChoiceName.Of(template.DnsMode),
-            clients);
+            clients,
+            template.PresetsOnly);
     }
 
     /// <summary>
@@ -156,7 +159,26 @@ public static class TemplateAnswers
             Mtu = request.Mtu,
             Keepalive = request.Keepalive,
             Presets = [.. (request.Presets ?? []).Distinct()],
+            PresetsOnly = request.PresetsOnly ?? false,
             StandIns = request.StandIns ?? false,
+        };
+    }
+
+    /// <summary>
+    /// Returns what a request asks a held template to become: a mark the request leaves out stays as held, and the
+    /// template keeps its clients to its presets only while it names one.
+    /// </summary>
+    public static ClientTemplate Change(TemplateRequest request, ClientTemplate held)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(held);
+
+        var asked = Draft(request);
+
+        return asked with
+        {
+            StandIns = request.StandIns ?? held.StandIns,
+            PresetsOnly = request.PresetsOnly ?? (held.PresetsOnly && asked.Presets.Count > 0),
         };
     }
 

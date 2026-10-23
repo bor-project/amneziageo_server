@@ -752,6 +752,8 @@ public sealed class TemplateEntity
 
     public string Presets { get; set; } = string.Empty;
 
+    public bool PresetsOnly { get; set; }
+
     public DateTimeOffset? RefreshedUtc { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; }
@@ -781,6 +783,8 @@ public sealed class RoutingPresetEntity
     public bool Full { get; set; }
 
     public bool IsDefault { get; set; }
+
+    public bool ReadOnly { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; }
 

@@ -123,6 +123,64 @@ public class PresetTemplatesTests
         Assert.Equal([3, 4], answer.TemplateIds);
     }
 
+    [Fact]
+    public async Task ATemplateKeepsItsClientsToItsPresetsOnlyWhileItNamesOne()
+    {
+        using var bench = new Bench();
+        var blocked = await PresetAsync(bench, "blocked");
+
+        var bare = await bench.Templates.AddAsync(
+            new ClientTemplate { Name = "bare", AllowedIps = ["0.0.0.0/0"], PresetsOnly = true },
+            CancellationToken.None);
+        var kept = await bench.Templates.AddAsync(
+            new ClientTemplate { Name = "kept", AllowedIps = ["0.0.0.0/0"], Presets = [blocked], PresetsOnly = true },
+            CancellationToken.None);
+
+        Assert.Equal(TemplateOutcome.Invalid, bare.Outcome);
+        Assert.Equal("presets-only-without-presets", bare.Code);
+        Assert.True(kept.IsOk, kept.Message);
+        Assert.True((await bench.Templates.FindAsync(kept.Record!.Id, CancellationToken.None))!.PresetsOnly);
+    }
+
+    [Fact]
+    public async Task ATemplateLeftWithoutPresetsNoLongerKeepsItsClientsToThem()
+    {
+        using var bench = new Bench();
+        var blocked = await PresetAsync(bench, "blocked");
+        var other = await PresetAsync(bench, "other");
+        var office = (await bench.Templates.AddAsync(
+            new ClientTemplate { Name = "office", AllowedIps = ["0.0.0.0/0"], Presets = [blocked, other], PresetsOnly = true },
+            CancellationToken.None)).Record!.Id;
+
+        await bench.Presets.ChangeAsync(blocked, Fresh("blocked"), [], CancellationToken.None);
+        var one = await bench.Templates.FindAsync(office, CancellationToken.None);
+        await bench.Presets.ChangeAsync(other, Fresh("other"), [], CancellationToken.None);
+        var none = await bench.Templates.FindAsync(office, CancellationToken.None);
+
+        Assert.Equal([other], one!.Presets);
+        Assert.True(one.PresetsOnly);
+        Assert.Empty(none!.Presets);
+        Assert.False(none.PresetsOnly);
+    }
+
+    [Fact]
+    public void AChangeThatLeavesTheMarkOutKeepsItWhileTheTemplateNamesAPreset()
+    {
+        var held = new ClientTemplate { Name = "office", Presets = [3], PresetsOnly = true, StandIns = true };
+
+        var kept = TemplateAnswers.Change(new TemplateRequest("office", [], [], null, null, Presets: [3]), held);
+        var emptied = TemplateAnswers.Change(new TemplateRequest("office", [], [], null, null, Presets: []), held);
+        var asked = TemplateAnswers.Change(new TemplateRequest("office", [], [], null, null, Presets: [3], PresetsOnly: false), held);
+        var answer = TemplateAnswers.Template(kept with { Id = 5 }, []);
+
+        Assert.True(kept.PresetsOnly);
+        Assert.True(kept.StandIns);
+        Assert.False(emptied.PresetsOnly);
+        Assert.False(asked.PresetsOnly);
+        Assert.True(answer.PresetsOnly);
+        Assert.True(TemplateAnswers.Draft(new TemplateRequest("office", [], [], null, null, Presets: [3], PresetsOnly: true)).PresetsOnly);
+    }
+
     private static async Task<long> PresetAsync(Bench bench, string name) =>
         (await bench.Presets.AddAsync(Fresh(name), CancellationToken.None)).Record!.Id;
 

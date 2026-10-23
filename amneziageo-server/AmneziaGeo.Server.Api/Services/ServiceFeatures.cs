@@ -291,10 +291,11 @@ public sealed class PresetsOffer : IHelloFeature
                 preset.Uid,
                 preset.UpdatedUtc,
                 preset.IsDefault,
-                source))
+                source,
+                preset.ReadOnly))
             .ToList();
 
-        return new PresetsFeature(lists);
+        return new PresetsFeature(lists, template.PresetsOnly);
     }
 
     // Returns the host the subscription names the configurations with, the one the client asked at without a subscription.

@@ -105,6 +105,7 @@ public sealed record SourcesFeature(IReadOnlyList<SourceItem> Items);
 /// <param name="Updated">When the list was last changed.</param>
 /// <param name="Default">Whether the client turns the list on when it adds it and routes by none.</param>
 /// <param name="Source">The name the configuration of the client goes by.</param>
+/// <param name="ReadOnly">Whether the client keeps the list from being changed and takes the versions of the server as they come.</param>
 public sealed record PresetItem(
     string Name,
     IReadOnlyList<string> Rules,
@@ -113,13 +114,15 @@ public sealed record PresetItem(
     string Id,
     DateTimeOffset Updated,
     bool Default,
-    string Source);
+    string Source,
+    bool ReadOnly = false);
 
 /// <summary>
 /// Arguments of the presets feature.
 /// </summary>
 /// <param name="Lists">The routing lists the template of the client hands out, in its order.</param>
-public sealed record PresetsFeature(IReadOnlyList<PresetItem> Lists);
+/// <param name="Only">Whether the client routes the configuration by these lists alone.</param>
+public sealed record PresetsFeature(IReadOnlyList<PresetItem> Lists, bool Only = false);
 
 /// <summary>
 /// The name servers the file of the client names and the resolver of the panel inside the tunnel.

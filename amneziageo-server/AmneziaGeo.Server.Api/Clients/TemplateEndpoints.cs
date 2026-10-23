@@ -113,7 +113,7 @@ public static class TemplateEndpoints
             return Missing(id);
         }
 
-        var draft = TemplateAnswers.Draft(request) with { StandIns = request.StandIns ?? held.StandIns };
+        var draft = TemplateAnswers.Change(request, held);
         if (await store.RefuseAsync(draft, id, ct).ConfigureAwait(false) is { } refusal)
         {
             return Explain(refusal);

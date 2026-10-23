@@ -11,6 +11,7 @@ export interface Preset {
   allUdp: boolean
   full: boolean
   isDefault: boolean
+  readOnly: boolean
   templates: number
   createdUtc: string
   updatedUtc: string
@@ -25,6 +26,7 @@ export interface PresetDraft {
   allUdp: boolean
   full: boolean
   isDefault: boolean
+  readOnly: boolean
   templates: number[]
 }
 
@@ -58,6 +60,7 @@ export function draftOf(preset: Preset): PresetDraft {
     allUdp: preset.allUdp,
     full: preset.full,
     isDefault: preset.isDefault,
+    readOnly: preset.readOnly,
     templates: preset.templateIds,
   }
 }
@@ -70,6 +73,7 @@ export const freshPreset: PresetDraft = {
   allUdp: false,
   full: false,
   isDefault: false,
+  readOnly: false,
   templates: [],
 }
 

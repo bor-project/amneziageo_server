@@ -291,7 +291,8 @@ public sealed class PresetStore
             : PresetResult.No(PresetOutcome.Invalid, "unknown-template", $"there is no template under the number {missing[0]}");
     }
 
-    // Puts the preset last in the presets of the templates on the list and takes it off the other templates that name it.
+    // Puts the preset last in the presets of the templates on the list and takes it off the other templates that name it;
+    // a template left with no preset no longer keeps its clients to its presets.
     private async Task HandAsync(long id, IReadOnlyCollection<long>? templates, DateTimeOffset now, CancellationToken ct)
     {
         if (templates is null)
@@ -310,8 +311,9 @@ public sealed class PresetStore
                 continue;
             }
 
-            var next = takes ? presets.Append(id) : presets.Where(preset => preset != id);
+            var next = (takes ? presets.Append(id) : presets.Where(preset => preset != id)).ToList();
             template.Presets = string.Join(", ", next);
+            template.PresetsOnly &= next.Count > 0;
             template.UpdatedUtc = now;
         }
     }
@@ -330,6 +332,7 @@ public sealed class PresetStore
         AllUdp = entity.AllUdp,
         Full = entity.Full,
         IsDefault = entity.IsDefault,
+        ReadOnly = entity.ReadOnly,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
     };
@@ -337,12 +340,13 @@ public sealed class PresetStore
     private static void Write(RoutingPresetEntity entity, RoutingPreset preset)
     {
         entity.Name = preset.Name;
-        entity.Proxy = string.Join(", ", preset.Proxy);
-        entity.Direct = string.Join(", ", preset.Direct);
-        entity.Block = string.Join(", ", preset.Block);
+        entity.Proxy = string.Join('\n', preset.Proxy);
+        entity.Direct = string.Join('\n', preset.Direct);
+        entity.Block = string.Join('\n', preset.Block);
         entity.AllUdp = preset.AllUdp;
         entity.Full = preset.Full;
         entity.IsDefault = preset.IsDefault;
+        entity.ReadOnly = preset.ReadOnly;
     }
 
     private static RoutingPreset Whole(RoutingPreset draft) => draft with
@@ -354,10 +358,11 @@ public sealed class PresetStore
     };
 
     private static IReadOnlyList<string> Clean(IReadOnlyList<string> entries) =>
-        [.. entries.Select(one => TemplateList.Entry(one) ?? one.Trim()).Distinct(StringComparer.Ordinal)];
+        [.. entries.Select(one => PresetList.Entry(one) ?? one.Trim()).Distinct(StringComparer.Ordinal)];
 
+    // Reads the entries of a list, one a line.
     private static IReadOnlyList<string> Entries(string text) =>
-        [.. Parts(text).Select(one => TemplateList.Entry(one) ?? one)];
+        [.. text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(one => PresetList.Entry(one) ?? one)];
 
     private static IReadOnlyList<long> Numbers(string text) =>
         [.. Parts(text).Select(part => long.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : 0).Where(id => id > 0)];

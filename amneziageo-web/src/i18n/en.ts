@@ -293,6 +293,7 @@ export const en = {
   "error.badPresetName": "The name of the preset is empty or longer than 64 characters",
   "error.unknownPreset": "There is no such routing preset",
   "error.presetInUse": "A template hands the preset out",
+  "error.presetsOnlyWithoutPresets": "Server lists only: pick a preset",
   "templates.resolved": "In the file",
   "templates.refreshed": "Refreshed {time}",
   "templates.missed": "Nothing found for: {list}",
@@ -306,6 +307,7 @@ export const en = {
   "templates.kindAddress": "Address",
   "templates.kindDomain": "Domain",
   "templates.kindKeyword": "Keyword",
+  "templates.kindApp": "Program",
   "templates.showEntries": "Show what it holds",
   "templates.entriesCount": "Entries: {count}",
   "templates.entriesShown": "First {shown} of {total} entries",
@@ -326,6 +328,10 @@ export const en = {
   "templates.pickPresets": "Pick presets",
   "templates.noPresets": "No presets: add them in the tab Routing presets",
   "templates.standIns": "Route by name",
+  "templates.presetsOnly": "Server lists only",
+  "templates.presetsOnlyHint":
+    "For the configurations of this template the application of a client offers these lists alone. The own lists of the user and no list at all are not offered for them. Turns on once a preset is picked",
+  "templates.presetsOnlyNeedsPreset": "Pick a preset first",
   "templates.troubleOff": "Will not work: the DNS server is off. Set it to Automatic in the DNS section or run on the server:",
   "templates.troublePort":
     "Will not work: the panel DNS server answers on port {port}, while the clients ask on 53. Set port 53 in the DNS section.",
@@ -335,7 +341,7 @@ export const en = {
     "The names of the list go into the tunnel whatever address they get: the panel DNS server answers with its own addresses out of 198.19.0.0/16, the server leads the connections to the real ones",
   "templates.standIn": "by name",
   "presets.about":
-    "Routing lists the AmneziaGeo application of a client gets through its template. The client adds a list it holds none of and offers to update a list it already got when the preset is newer.",
+    "Routing lists the AmneziaGeo application of a client gets through its template. The client adds a list it holds none of and offers to update a list it already got when the preset is newer. A read-only list updates on the client by itself.",
   "presets.empty": "No presets",
   "presets.loading": "Loading",
   "presets.name": "Name",
@@ -343,11 +349,16 @@ export const en = {
   "presets.updated": "updated {time}",
   "presets.isDefault": "On by default",
   "presets.isDefaultHint": "The client puts the list in use when it adds it, unless a list is in use already",
+  "presets.readOnly": "Read only",
+  "presets.readOnlyHint":
+    "The application of a client keeps the list from being renamed, changed or removed. It can still be turned on and off for a configuration. Newer versions from the server take its place without asking",
   "presets.partLists": "Lists",
   "presets.proxy": "Through the VPN",
-  "presets.proxyHint": "Geo keys, networks, addresses and domains that go through the tunnel",
+  "presets.proxyHint":
+    "Geo keys, networks, addresses, domains and programs that go through the tunnel. A program is app:<name>, for example app:Telegram: the application of the client finds it on the device itself and leaves the line out when it finds none",
   "presets.direct": "Directly",
-  "presets.directHint": "Geo keys, networks, addresses and domains that go past the tunnel",
+  "presets.directHint":
+    "Geo keys, networks, addresses, domains and programs that go past the tunnel. A program is app:<name>, for example app:Telegram: the application of the client finds it on the device itself and leaves the line out when it finds none",
   "presets.block": "Block",
   "presets.blockHint": "Geo keys, networks, addresses and domains the client blocks",
   "presets.full": "Everything through the VPN",

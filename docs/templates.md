@@ -28,6 +28,7 @@ obfuscation always come from the interface: they have to match the server.
 
 A template names the routing presets its clients are handed, in the order they get them, see
 [Routing presets](#routing-presets).
+With `Server lists only` the application of a client routes the configuration by those presets alone.
 
 ## Where the ranges come from
 
@@ -97,6 +98,7 @@ take them off in the settings of the template first.
 | MTU | 576 to 9000; empty gives 1420 |
 | Keepalive | 0 to 65535 seconds, 0 turns it off; empty gives 25 |
 | Route by name | on or off (`standIns`); works while the resolver of the panel answers its clients on port 53 |
+| Server lists only | on or off (`presetsOnly`); needs a routing preset, see [Routing presets](#routing-presets) |
 
 `GET /api/templates` lists the templates with their entries, the ranges they gave, the entries that gave
 nothing, the time of the last pass, the number of clients that take each and their numbers (`clientIds`);
@@ -147,6 +149,13 @@ A preset names what happens to the traffic of its entries, written the way a tem
 | All UDP through the tunnel | every UDP packet goes through the tunnel, whatever the entries say |
 | Everything through the VPN | everything goes through the tunnel but what goes directly |
 
+In `Through the VPN` and `Directly` a preset names applications too, which a template and `Block` do not:
+`app:<name>`, a program the application of the client looks for on the device itself (`app:Telegram`,
+`app:Telegram Desktop`), and the forms the client knows with a value, `app:path=`, `app:dir=`, `app:name=`,
+`app:svc=` and `app:pkg=`. The panel keeps each as one line, spaces and all, and hands it out as it is written; a
+client that finds no such program leaves the line out, and an application older than the names takes the line for
+nothing.
+
 Every preset carries an identifier of its own, given when it is added and never changed, and the time the list it
 hands out was last changed: its name, its entries and the two switches. The hello hands both out with the list,
 and the client knows the list by the identifier:
@@ -156,6 +165,9 @@ and the client knows the list by the identifier:
 - a client that holds the list keeps what it holds. When the preset is newer, the card of the list offers the
   update, and the owner who takes it gets the name, the entries and the switches of the preset in place of what the
   list held; the list stays in use or out of use as it was;
+- a preset kept `Read only` cannot be renamed, changed or removed in the application, only turned on and off for a
+  configuration, and its newer version takes the place of the list at once, with the routes of a tunnel that uses
+  it; the mark taken off makes it an ordinary list again;
 - a list the owner removed comes back at the next hello;
 - a list an application older than the identifiers added under the name of the preset is tied to the preset: left as
   it is when it holds the same, offered the update when it differs.
@@ -179,20 +191,36 @@ hold is refused with `unknown-preset`.
 | Setting | Holds |
 |---|---|
 | Name | up to 64 characters, one of a kind; the name of the list on the client |
-| Through the VPN, Directly, Block | up to 256 geo keys, networks, addresses and domains each |
+| Through the VPN, Directly | up to 256 geo keys, networks, addresses, domains and applications each |
+| Block | up to 256 geo keys, networks, addresses and domains |
 | All UDP through the tunnel | off by default |
 | Everything through the VPN | off by default |
 | On by default | off by default; the application puts the list in use when it adds it and routes by none |
+| Read only | off by default; the application keeps the list as the panel hands it out and takes its versions as they come |
 
 `GET /api/templates/routing` lists the presets with the number of templates that name each and their numbers
 (`templateIds`), and
 `GET /api/templates/routing/{id}` returns one; both need `state:read`. `POST /api/templates/routing`,
 `PUT /api/templates/routing/{id}` and `DELETE /api/templates/routing/{id}` need `clients:write`. A request writes
-`name`, `proxy`, `direct`, `block`, `allUdp`, `full` and `isDefault`; the answer adds `uid`, the identifier, and
-`updatedUtc`, the time the list was last changed: a change of `isDefault` alone leaves it as it stands, and a
-change that leaves `isDefault` out keeps the mark. A client template names its presets in `presets`, by number.
+`name`, `proxy`, `direct`, `block`, `allUdp`, `full`, `isDefault` and `readOnly`; the answer adds `uid`, the
+identifier, and `updatedUtc`, the time the list was last changed: a change of `isDefault` or `readOnly` alone leaves
+it as it stands, and a change that leaves either out keeps the mark. A client template names its presets in
+`presets`, by number.
 `POST` and `PUT` take the templates of the preset in `templates`, the numbers of every template that names it after
 the request: a template on the list that does not name it takes it last, a template missing from the list drops it,
 and a request without the field leaves the templates as they are. A number the panel does not hold is refused with
 `unknown-template` (400), and nothing is written.
+
+The utility of the server lists the presets with what each carries and its marks, `amneziageo-server preset list`,
+and keeps one read-only or lets the applications change it, `amneziageo-server preset set <name> --readonly on|off`.
+
+A template with `Server lists only` (`presetsOnly`) keeps the application of its clients to its presets: for the
+configuration the application offers only the lists of its server, no list of the owner and no routing without a
+list, and moves a configuration routed by a list of the owner onto the preset marked on by default, else the
+first one; the mark taken off frees the choice and leaves the list in use as it is. It needs a preset: a template
+with the mark and no preset is refused with `presets-only-without-presets` (400), a request that leaves the mark
+out keeps it while the template names a preset, and a template that loses its last preset in the settings of a
+preset loses the mark. The hello says it in `only` of `presets`. The utility lists the templates with their
+clients, presets and the mark, `amneziageo-server template list`, and sets the mark,
+`amneziageo-server template set <name> --presets-only on|off`.
 

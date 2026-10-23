@@ -40,8 +40,8 @@ public static class PresetRules
         ArgumentNullException.ThrowIfNull(preset);
 
         return CheckName(preset.Name)
-            ?? TemplateList.Check(preset.Proxy)
-            ?? TemplateList.Check(preset.Direct)
+            ?? PresetList.Check(preset.Proxy)
+            ?? PresetList.Check(preset.Direct)
             ?? TemplateList.Check(preset.Block);
     }
 

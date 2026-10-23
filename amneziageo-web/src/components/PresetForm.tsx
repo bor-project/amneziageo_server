@@ -84,6 +84,14 @@ export function PresetForm({
             onChange={(isDefault) => put({ isDefault })}
           />
         </div>
+        <div className="sm:col-span-2">
+          <Flag
+            id="preset-readonly"
+            caption={<Hinted caption={t("presets.readOnly")} text={t("presets.readOnlyHint")} />}
+            value={draft.readOnly}
+            onChange={(readOnly) => put({ readOnly })}
+          />
+        </div>
         <div className="text-xs text-muted sm:col-span-2">{t("presets.about")}</div>
       </Part>
 
@@ -112,6 +120,7 @@ export function PresetForm({
                 parts={undefined}
                 placeholder=""
                 onChange={(entries) => put({ [bucket.key]: entries })}
+                apps={bucket.key !== "block"}
               />
             </div>
           </div>

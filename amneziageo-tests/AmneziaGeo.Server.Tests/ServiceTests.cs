@@ -541,6 +541,44 @@ public class ServiceTests
     }
 
     [Fact]
+    public async Task ARoutingListKeptReadOnlySaysSo()
+    {
+        using var bench = new Bench();
+        var plain = (await bench.Presets.AddAsync(
+            new RoutingPreset { Name = "No ads", Block = ["geosite:category-ads-all"] },
+            CancellationToken.None)).Record!;
+        var kept = (await bench.Presets.AddAsync(
+            new RoutingPreset { Name = "Unblock", Proxy = ["geosite:youtube"], ReadOnly = true },
+            CancellationToken.None)).Record!;
+        var template = (await bench.Templates.AddAsync(
+            new ClientTemplate { Name = "phones", AllowedIps = ["0.0.0.0/0"], Presets = [plain.Id, kept.Id] },
+            CancellationToken.None)).Record!;
+
+        var features = await FeaturesAsync(bench, template.Id);
+
+        var lists = features.GetProperty("presets").GetProperty("lists").EnumerateArray().ToList();
+        Assert.Equal([false, true], lists.Select(list => list.GetProperty("readOnly").GetBoolean()));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ATemplateThatKeepsItsClientsToItsListsSaysSo(bool only)
+    {
+        using var bench = new Bench();
+        var unblock = (await bench.Presets.AddAsync(
+            new RoutingPreset { Name = "Unblock", Proxy = ["geosite:youtube"] },
+            CancellationToken.None)).Record!;
+        var template = (await bench.Templates.AddAsync(
+            new ClientTemplate { Name = "phones", AllowedIps = ["0.0.0.0/0"], Presets = [unblock.Id], PresetsOnly = only },
+            CancellationToken.None)).Record!;
+
+        var features = await FeaturesAsync(bench, template.Id);
+
+        Assert.Equal(only, features.GetProperty("presets").GetProperty("only").GetBoolean());
+    }
+
+    [Fact]
     public async Task AClientLearnsWhereItsSubscriptionIsAndWhatItHandsOutNow()
     {
         using var bench = new Bench();

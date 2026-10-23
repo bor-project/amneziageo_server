@@ -438,6 +438,7 @@ public sealed class TemplateStore
         Keepalive = entity.Keepalive,
         StandIns = entity.StandIns,
         Presets = Numbers(entity.Presets),
+        PresetsOnly = entity.PresetsOnly,
         RefreshedUtc = entity.RefreshedUtc,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
@@ -455,6 +456,7 @@ public sealed class TemplateStore
         entity.Keepalive = template.Keepalive;
         entity.StandIns = template.StandIns;
         entity.Presets = string.Join(", ", template.Presets);
+        entity.PresetsOnly = template.PresetsOnly;
         entity.RefreshedUtc = template.RefreshedUtc;
     }
 

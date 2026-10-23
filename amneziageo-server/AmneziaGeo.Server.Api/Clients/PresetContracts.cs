@@ -18,7 +18,8 @@ public sealed record PresetResponse(
     int Templates,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc,
-    IReadOnlyList<long>? TemplateIds = null);
+    IReadOnlyList<long>? TemplateIds = null,
+    bool ReadOnly = false);
 
 /// <summary>
 /// The lists a routing preset is added or changed with.
@@ -31,13 +32,16 @@ public sealed record PresetRequest(
     bool? AllUdp = null,
     bool? Full = null,
     bool? IsDefault = null,
-    IReadOnlyList<long>? Templates = null);
+    IReadOnlyList<long>? Templates = null,
+    bool? ReadOnly = null);
 
 /// <summary>
 /// Turns routing presets into what the panel reads and back.
 /// </summary>
 public static class PresetAnswers
 {
+    private static readonly char[] Breaks = [',', ' ', '\t', '\r'];
+
     /// <summary>
     /// Returns one preset with the templates that name it.
     /// </summary>
@@ -59,11 +63,13 @@ public static class PresetAnswers
             templates.Count,
             preset.CreatedUtc,
             preset.UpdatedUtc,
-            templates);
+            templates,
+            preset.ReadOnly);
     }
 
     /// <summary>
-    /// Returns what a request asks a preset to become; a request that leaves the default mark out keeps the one held.
+    /// Returns what a request asks a preset to become; a request that leaves the default or the read-only mark out
+    /// keeps the one held.
     /// </summary>
     public static RoutingPreset Draft(PresetRequest request, RoutingPreset? held = null)
     {
@@ -72,14 +78,29 @@ public static class PresetAnswers
         return new RoutingPreset
         {
             Name = (request.Name ?? string.Empty).Trim(),
-            Proxy = TemplateAnswers.Entries(request.Proxy),
-            Direct = TemplateAnswers.Entries(request.Direct),
-            Block = TemplateAnswers.Entries(request.Block),
+            Proxy = Entries(request.Proxy),
+            Direct = Entries(request.Direct),
+            Block = Entries(request.Block),
             AllUdp = request.AllUdp ?? false,
             Full = request.Full ?? false,
             IsDefault = request.IsDefault ?? held?.IsDefault ?? false,
+            ReadOnly = request.ReadOnly ?? held?.ReadOnly ?? false,
         };
     }
+
+    /// <summary>
+    /// Returns the entries written the way a preset keeps them: a line that names an application parts only where
+    /// another entry follows a comma or a semicolon, the other lines are split at commas and spaces.
+    /// </summary>
+    public static IReadOnlyList<string> Entries(IReadOnlyList<string>? values) =>
+    [
+        .. (values ?? [])
+            .SelectMany(value => value.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .SelectMany(line => PresetList.IsApp(line) ? PresetList.AppPieces(line) : [line])
+            .SelectMany(piece => PresetList.IsApp(piece) ? [piece] : piece.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(one => PresetList.Entry(one) ?? one)
+            .Distinct(StringComparer.Ordinal),
+    ];
 
     /// <summary>
     /// Returns the templates a request hands the preset to, null when it leaves them as they are.

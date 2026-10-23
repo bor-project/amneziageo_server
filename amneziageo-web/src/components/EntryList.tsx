@@ -11,6 +11,8 @@ import type { Text, TextKey } from "@/i18n"
 
 const offered = 8
 
+const appKinds = ["path", "dir", "name", "svc", "pkg"]
+
 export function EntryList({
   id,
   value,
@@ -18,6 +20,7 @@ export function EntryList({
   placeholder,
   onChange,
   standIns = false,
+  apps = false,
 }: {
   id: string
   value: string[]
@@ -25,6 +28,7 @@ export function EntryList({
   placeholder: string
   onChange: (value: string[]) => void
   standIns?: boolean
+  apps?: boolean
 }) {
   const t = useText()
   const keys = useGeoKeys()
@@ -32,7 +36,7 @@ export function EntryList({
   const [focused, setFocused] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
   const query = text.trim().toLowerCase()
-  const typed = entry(text)
+  const typed = entry(text, apps)
   const offers =
     focused && query.length > 0
       ? [
@@ -59,9 +63,8 @@ export function EntryList({
     }
 
     event.preventDefault()
-    const many = text
-      .split(/[\s,;]+/)
-      .map((one) => entry(one))
+    const many = pieces(text, apps)
+      .map((one) => entry(one, apps))
       .filter((one): one is string => one !== null)
     if (many.length > 1) {
       add(many)
@@ -120,15 +123,17 @@ export function EntryList({
                 ) : (
                   <span className="shrink-0 text-xs text-muted">{held(parts, one)?.total}</span>
                 )}
-                <button
-                  type="button"
-                  title={t("templates.showEntries")}
-                  aria-label={t("templates.showEntries")}
-                  onClick={() => setOpen(open === one ? null : one)}
-                  className="px-1 text-muted hover:text-brand-ink"
-                >
-                  <Caret open={open === one} />
-                </button>
+                {!program(one) && (
+                  <button
+                    type="button"
+                    title={t("templates.showEntries")}
+                    aria-label={t("templates.showEntries")}
+                    onClick={() => setOpen(open === one ? null : one)}
+                    className="px-1 text-muted hover:text-brand-ink"
+                  >
+                    <Caret open={open === one} />
+                  </button>
+                )}
                 <button
                   type="button"
                   title={t("templates.remove")}
@@ -185,7 +190,65 @@ function held(parts: TemplatePart[] | undefined, token: string): TemplatePart | 
   return parts?.find((one) => one.entry === token)
 }
 
-function entry(text: string): string | null {
+// The lines of a pasted text: a line that names a program parts only where another entry follows a comma, the others
+// split at spaces and commas.
+function pieces(text: string, apps: boolean): string[] {
+  return text
+    .split(/[\n;]+/)
+    .flatMap((line) => (apps && /^\s*app:/i.test(line) ? appPieces(line) : [line]))
+    .flatMap((piece) => (apps && /^\s*app:/i.test(piece) ? [piece] : piece.split(/[\s,]+/)))
+}
+
+// The pieces of a line that names a program: it parts at a comma another entry follows, the rest stays in the program.
+function appPieces(line: string): string[] {
+  const result: string[] = []
+  let start = 0
+  for (let at = line.indexOf(","); at >= 0; at = line.indexOf(",", at + 1)) {
+    const next = line.indexOf(",", at + 1)
+    if (startsEntry(line.slice(at + 1, next < 0 ? line.length : next))) {
+      result.push(line.slice(start, at))
+      start = at + 1
+    }
+  }
+
+  result.push(line.slice(start))
+  return result.map((piece) => piece.trim()).filter((piece) => piece.length > 0)
+}
+
+// Whether a text starts another entry: one led by its kind, or an address, a network or a domain with a dot.
+function startsEntry(text: string): boolean {
+  const body = text.trim()
+  if (/^(app|geoip|geosite|domain|cidr):/i.test(body)) {
+    return true
+  }
+
+  const word = body.split(/\s+/)[0] ?? ""
+  return /[.:]/.test(word) && entry(word) !== null
+}
+
+// A program as the list keeps it: app:<name> or app:<kind>=<value>.
+function app(text: string): string | null {
+  const body = text.trim().replace(/^app:/i, "").trim()
+  if (body.length === 0 || body.length > 260 || /[|\p{Cc}]/u.test(body)) {
+    return null
+  }
+
+  const equals = body.indexOf("=")
+  if (equals < 0) {
+    return `app:${body}`
+  }
+
+  const kind = body.slice(0, equals).trim().toLowerCase()
+  const value = body.slice(equals + 1).trim()
+
+  return equals > 0 && value.length > 0 && appKinds.includes(kind) ? `app:${kind}=${value}` : null
+}
+
+function entry(text: string, apps = false): string | null {
+  if (/^\s*app:/i.test(text)) {
+    return apps ? app(text) : null
+  }
+
   const body = host(text.trim().replace(/^(domain|cidr):/i, "").trim())
   if (body.length === 0) {
     return null
@@ -215,6 +278,10 @@ function host(text: string): string {
 }
 
 function badge(one: string): TextKey {
+  if (program(one)) {
+    return "templates.kindApp"
+  }
+
   if (one.startsWith("geoip:")) {
     return "templates.kindGeoIp"
   }
@@ -241,6 +308,10 @@ function badge(one: string): TextKey {
 
 function geo(one: string): boolean {
   return one.startsWith("geoip:") || one.startsWith("geosite:")
+}
+
+function program(one: string): boolean {
+  return one.startsWith("app:")
 }
 
 function named(one: string): boolean {

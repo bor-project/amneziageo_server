@@ -38,9 +38,92 @@ public class PresetStoreTests
         Assert.Equal("name-taken", second.Code);
     }
 
+    [Fact]
+    public async Task AnApplicationReadsBackWholeWithItsSpaces()
+    {
+        using var bench = new Bench();
+
+        var added = await bench.Presets.AddAsync(
+            Fresh("apps") with
+            {
+                Proxy = ["app:Telegram Desktop", " APP:PATH = C:\\Program Files\\Telegram\\Telegram.exe ", "app:pkg=org.telegram.messenger"],
+                Direct = ["app:Discord", "geoip:ru"],
+            },
+            CancellationToken.None);
+        var read = await bench.Presets.FindAsync(added.Record!.Id, CancellationToken.None);
+
+        Assert.True(added.IsOk, added.Message);
+        Assert.Equal(["app:Telegram Desktop", "app:path=C:\\Program Files\\Telegram\\Telegram.exe", "app:pkg=org.telegram.messenger"], read!.Proxy);
+        Assert.Equal(["app:Discord", "geoip:ru"], read.Direct);
+        Assert.Equal(["proxy|app:Telegram Desktop", "proxy|app:path=C:\\Program Files\\Telegram\\Telegram.exe", "proxy|app:pkg=org.telegram.messenger", "direct|app:Discord", "direct|geoip:ru"], PresetRules.Rules(read));
+    }
+
+    [Fact]
+    public async Task TheBlockListTakesNoApplication()
+    {
+        using var bench = new Bench();
+
+        var added = await bench.Presets.AddAsync(Fresh("apps") with { Block = ["app:Telegram"] }, CancellationToken.None);
+
+        Assert.Equal(PresetOutcome.Invalid, added.Outcome);
+        Assert.Equal("bad-entry", added.Code);
+    }
+
+    [Fact]
+    public async Task ATemplateTakesNoApplication()
+    {
+        using var bench = new Bench();
+
+        var added = await bench.Templates.AddAsync(Template("apps") with { Entries = ["app:Telegram"] }, CancellationToken.None);
+
+        Assert.Equal(TemplateOutcome.Invalid, added.Outcome);
+        Assert.Equal("bad-entry", added.Code);
+    }
+
+    [Fact]
+    public void ARequestKeepsALineOfAnApplicationWholeAndSplitsTheOthers()
+    {
+        var entries = PresetAnswers.Entries(["app:Telegram Desktop", "geosite:youtube, geoip:RU", "app:Discord\napp:Slack", "geoip:ru"]);
+
+        Assert.Equal(["app:Telegram Desktop", "geosite:youtube", "geoip:ru", "app:Discord", "app:Slack"], entries);
+    }
+
+    [Fact]
+    public void ALineOfAnApplication_PartsWhereAnotherEntryFollowsACommaOrASemicolon()
+    {
+        var entries = PresetAnswers.Entries(
+        [
+            "app:Telegram, app:Zoom",
+            "app:Signal, geoip:RU; domain:x.example",
+            "app:Viber, 10.0.0.0/8, y.example",
+            "app:Foo, Bar",
+            @"app:path=C:\Program Files\A, B\b.exe",
+        ]);
+
+        Assert.Equal(
+            [
+                "app:Telegram",
+                "app:Zoom",
+                "app:Signal",
+                "geoip:ru",
+                "domain:x.example",
+                "app:Viber",
+                "cidr:10.0.0.0/8",
+                "domain:y.example",
+                "app:Foo, Bar",
+                @"app:path=C:\Program Files\A, B\b.exe",
+            ],
+            entries);
+    }
+
     [Theory]
     [InlineData("keyword:ads", "bad-entry")]
     [InlineData("not an entry", "bad-entry")]
+    [InlineData("app:", "bad-entry")]
+    [InlineData("app:=Telegram", "bad-entry")]
+    [InlineData("app:file=Telegram.exe", "bad-entry")]
+    [InlineData("app:path=", "bad-entry")]
+    [InlineData("app:Tele|gram", "bad-entry")]
     public async Task ABadEntryIsRefusedByCode(string entry, string code)
     {
         using var bench = new Bench();
@@ -217,6 +300,35 @@ public class PresetStoreTests
         Assert.False(PresetAnswers.Draft(new PresetRequest("blocked", null, null, null, IsDefault: false), draft).IsDefault);
         Assert.True(answer.IsDefault);
         Assert.Equal("0f8fad5b-d9cb-469f-a165-70867728950e", answer.Uid);
+    }
+
+    [Fact]
+    public async Task TheReadOnlyMarkReadsBackAndLeavesTheTimeOfTheList()
+    {
+        using var bench = new Bench();
+        var added = (await bench.Presets.AddAsync(Fresh("blocked") with { ReadOnly = true }, CancellationToken.None)).Record!;
+        bench.Clock.Pass(TimeSpan.FromHours(1));
+
+        var freed = (await bench.Presets.ChangeAsync(added.Id, Fresh("blocked"), CancellationToken.None)).Record!;
+        var read = await bench.Presets.FindAsync(added.Id, CancellationToken.None);
+
+        Assert.True(added.ReadOnly);
+        Assert.False(freed.ReadOnly);
+        Assert.False(read!.ReadOnly);
+        Assert.Equal(added.UpdatedUtc, freed.UpdatedUtc);
+    }
+
+    [Fact]
+    public void ARequestThatLeavesTheReadOnlyMarkOutKeepsTheOneHeld()
+    {
+        var draft = PresetAnswers.Draft(new PresetRequest("blocked", ["geosite:youtube"], null, null, ReadOnly: true));
+        var answer = PresetAnswers.Preset(draft with { Id = 7 }, []);
+
+        Assert.True(draft.ReadOnly);
+        Assert.True(answer.ReadOnly);
+        Assert.False(PresetAnswers.Draft(new PresetRequest("blocked", null, null, null)).ReadOnly);
+        Assert.True(PresetAnswers.Draft(new PresetRequest("blocked", null, null, null), draft).ReadOnly);
+        Assert.False(PresetAnswers.Draft(new PresetRequest("blocked", null, null, null, ReadOnly: false), draft).ReadOnly);
     }
 
     private static RoutingPreset Changed(string what) => what switch

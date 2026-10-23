@@ -51,6 +51,11 @@ public sealed record RoutingPreset
     public bool IsDefault { get; init; }
 
     /// <summary>
+    /// Whether the application keeps the list from being changed and takes the versions of the panel as they come.
+    /// </summary>
+    public bool ReadOnly { get; init; }
+
+    /// <summary>
     /// When the preset was added.
     /// </summary>
     public DateTimeOffset CreatedUtc { get; init; }

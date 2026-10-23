@@ -153,9 +153,20 @@ export function TemplateForm({
               value={draft.presets.map(String)}
               items={presetItems(presets)}
               placeholder={t(presets.length === 0 ? "templates.noPresets" : "templates.pickPresets")}
-              onChange={(keys) => put({ presets: keys.map(Number) })}
+              onChange={(keys) => put({ presets: keys.map(Number), presetsOnly: draft.presetsOnly && keys.length > 0 })}
             />
           </div>
+        </div>
+
+        <div className="sm:col-span-2">
+          <Switch
+            id="template-presets-only"
+            caption={<Hinted caption={t("templates.presetsOnly")} text={t("templates.presetsOnlyHint")} />}
+            value={draft.presetsOnly}
+            onChange={(presetsOnly) => put({ presetsOnly })}
+            disabled={draft.presets.length === 0}
+            title={draft.presets.length === 0 ? t("templates.presetsOnlyNeedsPreset") : undefined}
+          />
         </div>
       </Part>
 

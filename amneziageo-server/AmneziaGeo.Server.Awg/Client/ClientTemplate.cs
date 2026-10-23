@@ -63,6 +63,11 @@ public sealed record ClientTemplate
     public IReadOnlyList<long> Presets { get; init; } = [];
 
     /// <summary>
+    /// Whether the application of a client routes the configuration by the routing presets of the template alone.
+    /// </summary>
+    public bool PresetsOnly { get; init; }
+
+    /// <summary>
     /// When the ranges were last worked out.
     /// </summary>
     public DateTimeOffset? RefreshedUtc { get; init; }

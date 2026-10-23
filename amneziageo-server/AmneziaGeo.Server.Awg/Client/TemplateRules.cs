@@ -26,7 +26,8 @@ public static class TemplateRules
             ?? CheckServers(template.Dns)
             ?? CheckChoice(template.DnsMode, template.Dns)
             ?? CheckMtu(template.Mtu)
-            ?? CheckKeepalive(template.Keepalive);
+            ?? CheckKeepalive(template.Keepalive)
+            ?? CheckPresetsOnly(template.PresetsOnly, template.Presets);
     }
 
     /// <summary>
@@ -79,6 +80,11 @@ public static class TemplateRules
         keepalive is null or >= 0 and <= ConfigRules.MaxKeepalive
             ? null
             : Fault("bad-keepalive", $"the keepalive is outside 0 to {ConfigRules.MaxKeepalive}");
+
+    private static ClientFault? CheckPresetsOnly(bool presetsOnly, IReadOnlyList<long> presets) =>
+        presetsOnly && presets.Count == 0
+            ? Fault("presets-only-without-presets", "the template keeps the clients to its routing presets and names none")
+            : null;
 
     private static ClientFault? CheckChoice(DnsChoice choice, IReadOnlyList<string> servers)
     {

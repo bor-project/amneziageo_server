@@ -48,6 +48,7 @@ export function Templates() {
           mtu: defaults.mtu,
           keepalive: defaults.keepalive,
           presets: [],
+          presetsOnly: false,
           standIns: false,
           clients: defaults.clientIds.length,
           clientIds: defaults.clientIds,

@@ -465,7 +465,7 @@ public class ClientTests
         Assert.Equal(client.PrivateKey, fields.GetProperty("client_priv_key").GetString());
         Assert.Equal(Endpoint().PublicKey, fields.GetProperty("server_pub_key").GetString());
         Assert.Equal(client.PresharedKey, fields.GetProperty("psk_key").GetString());
-        Assert.Equal(["0.0.0.0/0", "::/0"], fields.GetProperty("allowed_ips").EnumerateArray().Select(range => range.GetString()).ToArray());
+        Assert.Equal(["0.0.0.0/0", "::/0"], fields.GetProperty("allowed_ips").EnumerateArray().Select(range => range.GetString()!).ToArray());
         Assert.Equal("1420", fields.GetProperty("mtu").GetString());
         Assert.Equal("25", fields.GetProperty("persistent_keep_alive").GetString());
         Assert.Equal("5", fields.GetProperty("Jc").GetString());

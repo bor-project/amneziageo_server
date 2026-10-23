@@ -13,6 +13,7 @@ export interface Template {
   mtu: number | null
   keepalive: number | null
   presets: number[]
+  presetsOnly: boolean
   standIns: boolean
   clients: number
   clientIds: number[]
@@ -29,6 +30,7 @@ export interface TemplateDraft {
   mtu: number | null
   keepalive: number | null
   presets: number[]
+  presetsOnly: boolean
   standIns: boolean
   clients: number[]
 }
@@ -110,6 +112,7 @@ export function draftOf(template: Template): TemplateDraft {
     mtu: template.mtu,
     keepalive: template.keepalive,
     presets: template.presets,
+    presetsOnly: template.presetsOnly,
     standIns: template.standIns,
     clients: template.clientIds,
   }
@@ -123,6 +126,7 @@ export const freshTemplate: TemplateDraft = {
   mtu: null,
   keepalive: null,
   presets: [],
+  presetsOnly: false,
   standIns: false,
   clients: [],
 }
