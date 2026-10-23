@@ -35,6 +35,7 @@ export function EntryList({
   const [text, setText] = useState("")
   const [focused, setFocused] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
+  const [refused, setRefused] = useState<string[]>([])
   const query = text.trim().toLowerCase()
   const typed = entry(text, apps)
   const offers =
@@ -48,13 +49,14 @@ export function EntryList({
         ]
       : []
 
-  function add(found: string[]) {
+  function add(found: string[], left: string[] = []) {
     const fresh = found.filter((one, at) => !value.includes(one) && found.indexOf(one) === at)
     if (fresh.length > 0) {
       onChange([...value, ...fresh])
     }
 
-    setText("")
+    setText(left.join(", "))
+    setRefused(left)
   }
 
   function press(event: KeyboardEvent<HTMLInputElement>) {
@@ -63,11 +65,12 @@ export function EntryList({
     }
 
     event.preventDefault()
-    const many = pieces(text, apps)
-      .map((one) => entry(one, apps))
-      .filter((one): one is string => one !== null)
-    if (many.length > 1) {
-      add(many)
+    const given = pieces(text, apps)
+    if (given.length > 1) {
+      add(
+        given.map((one) => entry(one, apps)).filter((one): one is string => one !== null),
+        given.filter((one) => entry(one, apps) === null),
+      )
 
       return
     }
@@ -75,6 +78,8 @@ export function EntryList({
     const first = offers[0]
     if (first !== undefined) {
       add([first])
+    } else if (given.length === 1) {
+      setRefused(given)
     }
   }
 
@@ -85,7 +90,10 @@ export function EntryList({
           id={id}
           value={text}
           placeholder={placeholder}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value)
+            setRefused([])
+          }}
           onKeyDown={press}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
@@ -108,6 +116,10 @@ export function EntryList({
           </div>
         )}
       </div>
+
+      {refused.length > 0 && (
+        <div className="mt-1 text-xs text-alarm">{t("templates.notAccepted", { pieces: refused.join(", ") })}</div>
+      )}
 
       {value.length > 0 && (
         <div className="mt-2 max-h-72 overflow-y-auto rounded border border-line">
@@ -190,29 +202,46 @@ function held(parts: TemplatePart[] | undefined, token: string): TemplatePart | 
   return parts?.find((one) => one.entry === token)
 }
 
-// The lines of a pasted text: a line that names a program parts only where another entry follows a comma, the others
-// split at spaces and commas.
+// The lines of a pasted text: a program in a line ends only where another entry follows a comma, the rest of the line
+// splits at spaces and commas.
 function pieces(text: string, apps: boolean): string[] {
   return text
     .split(/[\n;]+/)
-    .flatMap((line) => (apps && /^\s*app:/i.test(line) ? appPieces(line) : [line]))
+    .flatMap((line) => (apps ? appPieces(line) : [line]))
     .flatMap((piece) => (apps && /^\s*app:/i.test(piece) ? [piece] : piece.split(/[\s,]+/)))
 }
 
-// The pieces of a line that names a program: it parts at a comma another entry follows, the rest stays in the program.
+// The pieces of a line: a program runs from its app: to a comma another entry follows, the text around the programs
+// stays as it is.
 function appPieces(line: string): string[] {
   const result: string[] = []
   let start = 0
-  for (let at = line.indexOf(","); at >= 0; at = line.indexOf(",", at + 1)) {
+  let program = false
+  for (let at = 0; at < line.length; at++) {
+    if (!program) {
+      if (/^app:/i.test(line.slice(at, at + 4)) && (at === 0 || /[\s,]/.test(line[at - 1] ?? ""))) {
+        result.push(line.slice(start, at))
+        start = at
+        program = true
+      }
+
+      continue
+    }
+
+    if (line[at] !== ",") {
+      continue
+    }
+
     const next = line.indexOf(",", at + 1)
     if (startsEntry(line.slice(at + 1, next < 0 ? line.length : next))) {
       result.push(line.slice(start, at))
       start = at + 1
+      program = false
     }
   }
 
   result.push(line.slice(start))
-  return result.map((piece) => piece.trim()).filter((piece) => piece.length > 0)
+  return result.map((piece) => piece.replace(/^[\s,]+|[\s,]+$/g, "")).filter((piece) => piece.length > 0)
 }
 
 // Whether a text starts another entry: one led by its kind, or an address, a network or a domain with a dot.

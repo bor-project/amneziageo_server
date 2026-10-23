@@ -340,6 +340,7 @@ export const en = {
   "templates.standInsHint":
     "The names of the list go into the tunnel whatever address they get: the panel DNS server answers with its own addresses out of 198.19.0.0/16, the server leads the connections to the real ones",
   "templates.standIn": "by name",
+  "templates.notAccepted": "Not accepted: {pieces}",
   "presets.about":
     "Routing lists the AmneziaGeo application of a client gets through its template. The client adds a list it holds none of and offers to update a list it already got when the preset is newer. A read-only list updates on the client by itself.",
   "presets.empty": "No presets",

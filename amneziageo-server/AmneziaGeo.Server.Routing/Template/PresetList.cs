@@ -27,6 +27,9 @@ public static class PresetList
 
     private static readonly char[] Spaces = [' ', '\t'];
 
+    // What is cut off the edges of a piece of a line.
+    private static readonly char[] Edges = [' ', '\t', '\r', ',', ';'];
+
     /// <summary>
     /// Returns the entry written the way a preset keeps it, or null when the text is none.
     /// </summary>
@@ -39,17 +42,30 @@ public static class PresetList
         (text ?? string.Empty).TrimStart().StartsWith(AppMark, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Returns the pieces of a line that starts with an application: it parts at a comma or a semicolon another entry
-    /// follows, and the rest stays in the application.
+    /// Returns the pieces of a line: an application runs from its app: to a comma or a semicolon another entry
+    /// follows, the text around the applications stays as it is.
     /// </summary>
-    public static IReadOnlyList<string> AppPieces(string line)
+    public static IReadOnlyList<string> Pieces(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
 
         var pieces = new List<string>();
         var start = 0;
+        var app = false;
         for (var at = 0; at < line.Length; at++)
         {
+            if (!app)
+            {
+                if (AppAt(line, at))
+                {
+                    pieces.Add(line[start..at]);
+                    start = at;
+                    app = true;
+                }
+
+                continue;
+            }
+
             if (line[at] is not (',' or ';'))
             {
                 continue;
@@ -60,12 +76,13 @@ public static class PresetList
             {
                 pieces.Add(line[start..at]);
                 start = at + 1;
+                app = false;
             }
         }
 
         pieces.Add(line[start..]);
 
-        return [.. pieces.Select(piece => piece.Trim()).Where(piece => piece.Length > 0)];
+        return [.. pieces.Select(piece => piece.Trim(Edges)).Where(piece => piece.Length > 0)];
     }
 
     /// <summary>
@@ -90,6 +107,11 @@ public static class PresetList
 
         return null;
     }
+
+    // Whether an application starts at this place of a line: app: at its start or after a space or a separator.
+    private static bool AppAt(string line, int at) =>
+        (at == 0 || char.IsWhiteSpace(line[at - 1]) || line[at - 1] is ',' or ';')
+        && string.Compare(line, at, AppMark, 0, AppMark.Length, StringComparison.OrdinalIgnoreCase) == 0;
 
     // Whether a text starts another entry: one led by its kind, or an address, a network or a domain with a dot.
     private static bool StartsEntry(string text)

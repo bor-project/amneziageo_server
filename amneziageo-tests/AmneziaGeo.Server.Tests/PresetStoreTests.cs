@@ -116,6 +116,38 @@ public class PresetStoreTests
             entries);
     }
 
+    [Fact]
+    public void AnApplication_KeepsNoCommaNoOtherEntryFollows()
+    {
+        var entries = PresetAnswers.Entries(["app:Telegram, app:Zoom,", "app:Viber, , app:Skype;", "app:Signal ,"]);
+
+        Assert.Equal(["app:Telegram", "app:Zoom", "app:Viber", "app:Skype", "app:Signal"], entries);
+    }
+
+    [Fact]
+    public void AnApplicationAfterAnotherEntry_KeepsItsWholeName()
+    {
+        var entries = PresetAnswers.Entries(
+        [
+            "geoip:us, app:Discord Canary",
+            "geoip:ru app:Telegram Desktop, y.example",
+            "geosite:youtube; app:Zoom Workplace; geoip:de",
+        ]);
+
+        Assert.Equal(
+            [
+                "geoip:us",
+                "app:Discord Canary",
+                "geoip:ru",
+                "app:Telegram Desktop",
+                "domain:y.example",
+                "geosite:youtube",
+                "app:Zoom Workplace",
+                "geoip:de",
+            ],
+            entries);
+    }
+
     [Theory]
     [InlineData("keyword:ads", "bad-entry")]
     [InlineData("not an entry", "bad-entry")]

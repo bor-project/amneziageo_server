@@ -40,7 +40,7 @@ public sealed record PresetRequest(
 /// </summary>
 public static class PresetAnswers
 {
-    private static readonly char[] Breaks = [',', ' ', '\t', '\r'];
+    private static readonly char[] Breaks = [',', ';', ' ', '\t', '\r'];
 
     /// <summary>
     /// Returns one preset with the templates that name it.
@@ -89,14 +89,14 @@ public static class PresetAnswers
     }
 
     /// <summary>
-    /// Returns the entries written the way a preset keeps them: a line that names an application parts only where
-    /// another entry follows a comma or a semicolon, the other lines are split at commas and spaces.
+    /// Returns the entries written the way a preset keeps them: an application in a line ends only where another
+    /// entry follows a comma or a semicolon, the rest of the line is split at commas, semicolons and spaces.
     /// </summary>
     public static IReadOnlyList<string> Entries(IReadOnlyList<string>? values) =>
     [
         .. (values ?? [])
             .SelectMany(value => value.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .SelectMany(line => PresetList.IsApp(line) ? PresetList.AppPieces(line) : [line])
+            .SelectMany(PresetList.Pieces)
             .SelectMany(piece => PresetList.IsApp(piece) ? [piece] : piece.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Select(one => PresetList.Entry(one) ?? one)
             .Distinct(StringComparer.Ordinal),
