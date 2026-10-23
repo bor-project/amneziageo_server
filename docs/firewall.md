@@ -11,8 +11,8 @@ item 23 `Firewall Management`, or by `amneziageo-server endpoint open <name>`,
 the panel by the button next to a closed port, see [A closed port in the panel](#a-closed-port-in-the-panel). Nothing
 changes on a host that was set up by hand until one of them goes on.
 
-`amneziageo-server endpoint list` names every endpoint with its port and with who keeps that port open: `held open by
-the panel` or `left to the host`. It reads the switch and not the firewall, so a port left to the host is open
+`amneziageo-server endpoint list` names every endpoint with its port, its addresses and who keeps that port open:
+`held open by the panel` or `left to the host`. It reads the switch and not the firewall, so a port left to the host is open
 wherever the host closes nothing.
 
 The page of the panel turns these switches on and never off. `PUT /api/configs/{id}`, `PUT /api/panel` and

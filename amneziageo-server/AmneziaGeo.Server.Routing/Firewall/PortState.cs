@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
+using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Awg.Device;
 
 namespace AmneziaGeo.Server.Routing.Firewall;
 
@@ -118,10 +120,19 @@ public static partial class PortState
     /// Reads what <c>ufw status verbose</c> says of a port for what comes in on one interface: a rule for another
     /// interface or from some addresses only does not decide.
     /// </summary>
-    public static string OfUfw(string status, string protocol, int port, string inbound)
+    public static string OfUfw(string status, string protocol, int port, string inbound) =>
+        OfUfw(status, protocol, port, inbound, []);
+
+    /// <summary>
+    /// Reads what <c>ufw status verbose</c> says of a port for what comes in on one interface that carries the given
+    /// addresses: a rule for another interface does not decide, and a rule from some addresses only decides when
+    /// they hold every subnet of the interface in their family.
+    /// </summary>
+    public static string OfUfw(string status, string protocol, int port, string inbound, IReadOnlyList<string> addresses)
     {
         ArgumentNullException.ThrowIfNull(status);
         ArgumentNullException.ThrowIfNull(inbound);
+        ArgumentNullException.ThrowIfNull(addresses);
 
         var lines = status.Split('\n', StringSplitOptions.TrimEntries);
         if (lines.Contains("Status: inactive"))
@@ -151,7 +162,7 @@ public static partial class PortState
 
             var columns = Columns().Split(line);
             if (columns.Length < 3 || columns[1].Contains("OUT", StringComparison.Ordinal)
-                || columns[1].Contains("FWD", StringComparison.Ordinal) || columns[2] != "Anywhere"
+                || columns[1].Contains("FWD", StringComparison.Ordinal) || !Lets(columns[2], addresses)
                 || !Takes(OnInterface(columns[0]), inbound) || !Names(columns[0], protocol, port))
             {
                 continue;
@@ -175,16 +186,38 @@ public static partial class PortState
     /// Reads what the chains of ufw in nftables say of a port for what comes in on one interface: a rule for another
     /// interface or for some addresses only does not decide, a rule for the interface without a port does.
     /// </summary>
-    public static string OfChains(string input, string rules, string protocol, int port, string inbound)
+    public static string OfChains(string input, string rules, string protocol, int port, string inbound) =>
+        OfChains(input, rules, protocol, port, inbound, []);
+
+    /// <summary>
+    /// Reads what the chains of ufw in nftables say of a port for what comes in on one interface that carries the
+    /// given addresses: a rule for another interface does not decide, a rule from some addresses only decides when
+    /// they hold every subnet of the interface in their family, a rule for the interface without a port does.
+    /// </summary>
+    public static string OfChains(
+        string input,
+        string rules,
+        string protocol,
+        int port,
+        string inbound,
+        IReadOnlyList<string> addresses)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(inbound);
+        ArgumentNullException.ThrowIfNull(addresses);
 
         foreach (var line in rules.Split('\n', StringSplitOptions.TrimEntries))
         {
             var verdict = Verdict(line);
-            if (verdict.Length == 0 || Addressed().IsMatch(line) || line.Contains("oifname", StringComparison.Ordinal))
+            if (verdict.Length == 0 || Destined().IsMatch(line) || line.Contains("oifname", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var sources = Sourced().Match(line);
+            if (sources.Success
+                && (sources.Groups[2].Length > 0 || !Covers(Ranges(sources.Groups[3].Value), addresses, sources.Groups[1].Length > 0)))
             {
                 continue;
             }
@@ -253,6 +286,47 @@ public static partial class PortState
         }
 
         return false;
+    }
+
+    // Tells whether the addresses a rule of ufw lets in take every client of an interface: everyone, or a network that
+    // holds every subnet of the interface in its family.
+    private static bool Lets(string from, IReadOnlyList<string> addresses)
+    {
+        var source = from.Split(' ', 2)[0];
+
+        return source == "Anywhere"
+            || (AwgAllowedIp.TryParse(source, out var range) && Covers([range], addresses, range.IsSix));
+    }
+
+    // Tells whether some sources hold every subnet an interface carries in a family: each subnet lies inside one of them.
+    private static bool Covers(IReadOnlyList<AwgAllowedIp> sources, IReadOnlyList<string> addresses, bool six)
+    {
+        var subnets = new List<AwgAllowedIp>();
+        foreach (var text in addresses)
+        {
+            if (AwgAllowedIp.TryParse(text, out var carried) && carried.IsSix == six)
+            {
+                subnets.Add(carried.Network());
+            }
+        }
+
+        return subnets.Count > 0
+            && subnets.All(subnet => sources.Any(source => source.Cidr <= subnet.Cidr && ClientPool.Inside(source, subnet.Address)));
+    }
+
+    // Returns the ranges a rule of nftables names, one or a set in braces.
+    private static List<AwgAllowedIp> Ranges(string text)
+    {
+        var ranges = new List<AwgAllowedIp>();
+        foreach (var part in text.Trim('{', '}', ' ').Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (AwgAllowedIp.TryParse(part, out var range))
+            {
+                ranges.Add(range);
+            }
+        }
+
+        return ranges;
     }
 
     // Tells whether the target of a rule of ufw takes the port.
@@ -324,8 +398,11 @@ public static partial class PortState
     [GeneratedRegex(@"\biifname (?:""([^""]+)""|\{([^}]*)\})")]
     private static partial Regex Inbound();
 
-    [GeneratedRegex(@"\bip6? (saddr|daddr)\b")]
-    private static partial Regex Addressed();
+    [GeneratedRegex(@"\bip6? daddr\b")]
+    private static partial Regex Destined();
+
+    [GeneratedRegex(@"\bip(6?) saddr (!= )?(\{[^}]*\}|\S+)")]
+    private static partial Regex Sourced();
 
     [GeneratedRegex(@"\bmeta l4proto (\w+)")]
     private static partial Regex Carried();

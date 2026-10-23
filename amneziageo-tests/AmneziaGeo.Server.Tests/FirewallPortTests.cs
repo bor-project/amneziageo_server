@@ -203,6 +203,7 @@ public sealed class FirewallPortTests
         53 on awg2                 ALLOW IN    10.0.2.0/24
         Anywhere on awg3           ALLOW IN    Anywhere
         53/tcp on awg4             ALLOW IN    Anywhere
+        53 on awg6                 ALLOW IN    10.0.6.5
         53 (v6) on awg0            ALLOW IN    Anywhere (v6)
         """;
 
@@ -218,6 +219,8 @@ public sealed class FirewallPortTests
                 iifname "awg4" meta l4proto tcp counter packets 0 bytes 0 accept
                 iifname "awg5" meta l4proto udp udp dport 53 counter packets 0 bytes 0 drop
                 iifname { "awg6", "awg7" } meta l4proto udp udp dport 53 counter packets 0 bytes 0 accept
+                iifname "awg8" ip saddr { 10.0.8.0/24, 10.0.9.0/24 } meta l4proto udp udp dport 53 counter packets 0 bytes 0 accept
+                iifname "awg9" ip saddr != 10.0.9.0/24 meta l4proto udp udp dport 53 counter packets 0 bytes 0 accept
             }
         }
         """;
@@ -238,6 +241,7 @@ public sealed class FirewallPortTests
         table ip6 filter {
             chain ufw6-user-input {
                 iifname "awg0" meta l4proto udp udp dport 53 counter packets 0 bytes 0 accept
+                iifname "awg2" ip6 saddr fd00:2::/64 meta l4proto udp udp dport 53 counter packets 0 bytes 0 accept
                 iifname "awg3" counter packets 0 bytes 0 accept
             }
         }
@@ -268,6 +272,48 @@ public sealed class FirewallPortTests
         Assert.Equal(state, PortState.OfChains(Input, Before + TunnelRules, "udp", 53, inbound));
     }
 
+    [Theory]
+    [InlineData("awg2", "10.0.2.1/24", PortState.Open)]
+    [InlineData("awg2", "10.0.2.1/25", PortState.Open)]
+    [InlineData("awg2", "10.0.2.1/24,fd00:2::1/64", PortState.Open)]
+    [InlineData("awg2", "10.0.0.1/16", PortState.Closed)]
+    [InlineData("awg2", "10.0.3.1/24", PortState.Closed)]
+    [InlineData("awg2", "10.0.2.1/24,10.0.3.1/24", PortState.Closed)]
+    [InlineData("awg2", "fd00:2::1/64", PortState.Closed)]
+    [InlineData("awg2", "", PortState.Closed)]
+    [InlineData("awg6", "10.0.6.5/32", PortState.Open)]
+    [InlineData("awg6", "10.0.6.1/24", PortState.Closed)]
+    [InlineData("awg0", "10.0.0.1/24", PortState.Open)]
+    [InlineData("awg1", "10.0.1.1/24", PortState.Closed)]
+    public void ARuleOfUfwFromTheSubnetOfAnInterfaceLetsItsClientsIn(string inbound, string addresses, string state)
+    {
+        Assert.Equal(state, PortState.OfUfw(Tunnels, "udp", 53, inbound, Split(addresses)));
+    }
+
+    [Theory]
+    [InlineData("awg2", "10.0.2.1/24", PortState.Open)]
+    [InlineData("awg2", "10.0.2.1/25", PortState.Open)]
+    [InlineData("awg2", "10.0.0.1/16", PortState.Closed)]
+    [InlineData("awg2", "10.0.3.1/24", PortState.Closed)]
+    [InlineData("awg2", "", PortState.Closed)]
+    [InlineData("awg8", "10.0.8.1/24", PortState.Open)]
+    [InlineData("awg8", "10.0.9.1/24", PortState.Open)]
+    [InlineData("awg8", "10.0.8.1/23", PortState.Closed)]
+    [InlineData("awg9", "10.0.9.1/24", PortState.Closed)]
+    [InlineData("awg0", "10.0.0.1/24", PortState.Open)]
+    public void ARuleOfTheChainsFromTheSubnetOfAnInterfaceLetsItsClientsIn(string inbound, string addresses, string state)
+    {
+        Assert.Equal(state, PortState.OfChains(Input, Before + TunnelRules, "udp", 53, inbound, Split(addresses)));
+    }
+
+    [Fact]
+    public void ARuleOfTheSixChainsFromTheSubnetOfAnInterfaceLetsItsClientsIn()
+    {
+        Assert.Equal(PortState.Open, PortState.OfChains(Input, Rules6, "udp", 53, "awg2", ["10.0.2.1/24", "fd00:2::1/64"]));
+        Assert.Equal(PortState.Closed, PortState.OfChains(Input, Rules6, "udp", 53, "awg2", ["10.0.2.1/24", "fd00:3::1/64"]));
+        Assert.Equal(PortState.Closed, PortState.OfChains(Input, Rules6, "udp", 53, "awg2", ["10.0.2.1/24"]));
+    }
+
     [Fact]
     public void AnInterfaceLetsThePortInWhereTheFirewallLetsEverythingIn()
     {
@@ -293,12 +339,36 @@ public sealed class FirewallPortTests
         withUfw.Answers["ufw status verbose"] = new CommandResult(0, Tunnels, string.Empty);
 
         Assert.Equal(
-            ["awg1", "wg7"],
-            await new FirewallHost(chains, new Ledger(), string.Empty).KeptOutAsync(["awg0", "awg1", "wg7", "awg3"], 53, CancellationToken.None));
-        Assert.Empty(await new FirewallHost(bare, new Ledger(), string.Empty).KeptOutAsync(["awg0"], 53, CancellationToken.None));
+            ["awg1", "awg8", "wg7"],
+            await new FirewallHost(chains, new Ledger(), string.Empty).KeptOutAsync(
+                [
+                    Door("awg0", "10.0.0.1/24", "fd00::1/64"),
+                    Door("awg1", "10.0.1.1/24"),
+                    Door("awg2", "10.0.2.1/24"),
+                    Door("awg8", "10.0.8.1/24", "fd00:8::1/64"),
+                    Door("wg7", "10.0.7.1/24", "fd00:7::1/64"),
+                    Door("awg3", "10.0.3.1/24", "fd00:3::1/64"),
+                ],
+                53,
+                CancellationToken.None));
+        Assert.Empty(await new FirewallHost(bare, new Ledger(), string.Empty).KeptOutAsync([Door("awg0", "10.0.0.1/24")], 53, CancellationToken.None));
         Assert.Equal(
-            ["awg1", "awg2"],
-            await new FirewallHost(withUfw, new Ledger(), "ufw").KeptOutAsync(["awg0", "awg1", "awg2", "awg3"], 53, CancellationToken.None));
+            ["awg1", "awg4", "awg6"],
+            await new FirewallHost(withUfw, new Ledger(), "ufw").KeptOutAsync(
+                [
+                    Door("awg0", "10.0.0.1/24"),
+                    Door("awg1", "10.0.1.1/24"),
+                    Door("awg2", "10.0.2.1/24"),
+                    Door("awg3", "10.0.3.1/24"),
+                    Door("awg4", "10.0.4.1/24"),
+                    Door("awg6", "10.0.6.1/24"),
+                ],
+                53,
+                CancellationToken.None));
         Assert.Empty(await new FirewallHost(chains, new Ledger(), string.Empty).KeptOutAsync([], 53, CancellationToken.None));
     }
+
+    private static Doorway Door(string name, params string[] addresses) => new(name, addresses);
+
+    private static string[] Split(string addresses) => addresses.Split(',', StringSplitOptions.RemoveEmptyEntries);
 }

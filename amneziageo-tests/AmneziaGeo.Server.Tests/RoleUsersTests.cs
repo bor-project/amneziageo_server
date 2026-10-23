@@ -91,4 +91,34 @@ public class RoleUsersTests
 
         Assert.Equal(AccountOutcome.UnknownRole, handed.Refusal!.Outcome);
     }
+
+    [Fact]
+    public async Task TheRightsTheRoleLosesRefuseTheCallerBeforehand()
+    {
+        using var bench = new Bench();
+        await bench.RoleAsync("ops", Scopes.ReadState, Scopes.ManageAccess);
+        var me = await bench.UserAsync("two", "long-enough");
+        await bench.UserAsync("three", "long-enough");
+
+        var now = await bench.Accounts.WhyNotHandAsync("ops", ["two"], me.Id, CancellationToken.None);
+        var after = await bench.Accounts.WhyNotHandAsync("ops", ["two"], [Scopes.ReadState], me.Id, CancellationToken.None);
+
+        Assert.Null(now);
+        Assert.Equal(AccountOutcome.Self, after!.Outcome);
+    }
+
+    [Fact]
+    public async Task TheRightsTheRoleGainsKeepTheLastAdministrator()
+    {
+        using var bench = new Bench();
+        await bench.RoleAsync("viewer", Scopes.ReadState);
+        await bench.UserAsync("two", "long-enough");
+
+        var now = await bench.Accounts.WhyNotHandAsync("viewer", ["two"], actorId: 0, CancellationToken.None);
+        var after = await bench.Accounts.WhyNotHandAsync(
+            "viewer", ["two"], [Scopes.ReadState, Scopes.ManageAccess], actorId: 0, CancellationToken.None);
+
+        Assert.Equal(AccountOutcome.LastAdmin, now!.Outcome);
+        Assert.Null(after);
+    }
 }

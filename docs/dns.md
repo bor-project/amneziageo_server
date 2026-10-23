@@ -98,7 +98,9 @@ Where the panel holds the ports of an endpoint open in the firewall of the host,
 endpoint reach the resolver as well: the port of the resolver is opened on the interface of the endpoint, for UDP
 and TCP, while the resolver answers on one of its addresses, see [firewall.md](firewall.md). An endpoint whose
 ports the panel does not hold open is left to the host: its clients get no answer until that port is let in on
-its interface. The panel reads ufw for it and names the interfaces whose clients ufw keeps from the resolver
+its interface, for everyone or from the whole subnet of its clients (`ufw allow in on awg0 from 10.8.0.0/24 to any
+port 53`); a rule from a part of the subnet lets them not. The panel reads ufw for it and names the interfaces whose
+clients ufw keeps from the resolver
 (`state.keptOut` of `GET /api/dns`); the form of a template with Route by name shows them with the commands that
 let them in. On the host, item 23 of the menu, subitem 13, or `amneziageo-server dns open` gives ufw
 `allow in on <interface> to any port 53` for each of them, under the comment `amneziageo resolver <interface>`;
@@ -165,8 +167,9 @@ What a client of another make does with each choice, from what the clients say a
 Routing by name on the server sees only the questions that reach the resolver: `network` never, `own` and `endpoint`
 when the servers lie outside the ranges of the client.
 
-AmneziaVPN takes the `DNS` line only when it holds two IPv4 addresses. With one address, an IPv6 one or no line,
-which is what `panel` and `network` write, it asks the name servers of its own settings, `1.1.1.1` and `1.0.0.1`
+AmneziaVPN takes the IPv4 addresses of the `DNS` line from the `vpn://` link and asks them, while from the file it
+takes the line only when it holds two IPv4 addresses. Without an IPv4 address, that is with no line, which is what
+`network` writes, or with an IPv6 one alone, it asks the name servers of its own settings, `1.1.1.1` and `1.0.0.1`
 unless changed, through the tunnel in a full tunnel, where the panel takes the questions on port 53 as above while
 the interception of the questions of the clients is on. Its leak guard, on unless turned off, lets DNS reach those
 servers only.

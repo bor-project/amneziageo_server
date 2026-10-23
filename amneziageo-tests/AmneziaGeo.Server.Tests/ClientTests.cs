@@ -448,6 +448,92 @@ public class ClientTests
     }
 
     [Fact]
+    public void TheLinkCarriesTheFieldsAmneziaVpnConnectsByBesideTheFile()
+    {
+        var client = Client() with
+        {
+            Address = ["10.8.0.2/32", "fd00::2/128"],
+            PresharedKey = "wHS9TkIlE61wUO3AglOpnvrCIWDQ5vmoa20cbOEW56k=",
+        };
+
+        using var document = Opened(ClientLink.Link(Endpoint(), client));
+        var awg = document.RootElement.GetProperty("containers")[0].GetProperty("awg");
+        using var last = JsonDocument.Parse(awg.GetProperty("last_config").GetString()!);
+        var fields = last.RootElement;
+
+        Assert.Equal("10.8.0.2/32, fd00::2/128", fields.GetProperty("client_ip").GetString());
+        Assert.Equal(client.PrivateKey, fields.GetProperty("client_priv_key").GetString());
+        Assert.Equal(Endpoint().PublicKey, fields.GetProperty("server_pub_key").GetString());
+        Assert.Equal(client.PresharedKey, fields.GetProperty("psk_key").GetString());
+        Assert.Equal(["0.0.0.0/0", "::/0"], fields.GetProperty("allowed_ips").EnumerateArray().Select(range => range.GetString()).ToArray());
+        Assert.Equal("1420", fields.GetProperty("mtu").GetString());
+        Assert.Equal("25", fields.GetProperty("persistent_keep_alive").GetString());
+        Assert.Equal("5", fields.GetProperty("Jc").GetString());
+        Assert.Equal("109", fields.GetProperty("S1").GetString());
+        Assert.Equal("194488238-194553774", fields.GetProperty("H2").GetString());
+        Assert.Equal("12-44", fields.GetProperty("ContentPaddingAddition").GetString());
+        Assert.False(fields.TryGetProperty("S3", out _));
+        Assert.False(fields.TryGetProperty("RekeyTimeout", out _));
+    }
+
+    [Fact]
+    public void TheLinkFillsTheObfuscationSettingsAmneziaVpnDemands()
+    {
+        var endpoint = Endpoint() with { Obfuscation = new ObfuscationSettings { H1 = "5", H2 = "6", H3 = "7", H4 = "8" } };
+
+        using var document = Opened(ClientLink.Link(endpoint, Client()));
+        var awg = document.RootElement.GetProperty("containers")[0].GetProperty("awg");
+        using var last = JsonDocument.Parse(awg.GetProperty("last_config").GetString()!);
+        var fields = last.RootElement;
+
+        Assert.DoesNotContain("Jc", fields.GetProperty("config").GetString(), StringComparison.Ordinal);
+        Assert.Equal("0", fields.GetProperty("Jc").GetString());
+        Assert.Equal("0", fields.GetProperty("Jmin").GetString());
+        Assert.Equal("0", fields.GetProperty("Jmax").GetString());
+        Assert.Equal("0", fields.GetProperty("S1").GetString());
+        Assert.Equal("0", fields.GetProperty("S2").GetString());
+        Assert.Equal("5", fields.GetProperty("H1").GetString());
+        Assert.False(fields.TryGetProperty("S3", out _));
+    }
+
+    [Fact]
+    public void TheLinkOfAFileWithoutObfuscationNamesTheWireGuardContainer()
+    {
+        var endpoint = Endpoint() with { Obfuscation = new ObfuscationSettings() };
+
+        using var document = Opened(ClientLink.Link(endpoint, Client()));
+        var root = document.RootElement;
+        var container = root.GetProperty("containers")[0];
+        using var last = JsonDocument.Parse(container.GetProperty("wireguard").GetProperty("last_config").GetString()!);
+
+        Assert.Equal("amnezia-wireguard", root.GetProperty("defaultContainer").GetString());
+        Assert.Equal("amnezia-wireguard", container.GetProperty("container").GetString());
+        Assert.False(container.TryGetProperty("awg", out _));
+        Assert.False(last.RootElement.TryGetProperty("Jc", out _));
+        Assert.Equal("10.8.0.2/32", last.RootElement.GetProperty("client_ip").GetString());
+    }
+
+    [Fact]
+    public void TheLinkNamesTheNameServersOfTheFileForAmneziaVpn()
+    {
+        using var one = Opened(ClientLink.Link(Endpoint(), Client()));
+        using var two = Opened(ClientLink.Link(Endpoint() with { Dns = ["1.1.1.1", "1.0.0.1"] }, Client()));
+        using var mixed = Opened(ClientLink.Link(Endpoint() with { Dns = ["fd00::1", "10.8.0.1"] }, Client()));
+        using var six = Opened(ClientLink.Link(Endpoint() with { Dns = ["fd00::1"] }, Client()));
+        using var none = Opened(ClientLink.Link(Endpoint() with { Dns = [] }, Client()));
+
+        Assert.Equal("1.1.1.1", one.RootElement.GetProperty("dns1").GetString());
+        Assert.Equal("1.1.1.1", one.RootElement.GetProperty("dns2").GetString());
+        Assert.Equal("1.1.1.1", two.RootElement.GetProperty("dns1").GetString());
+        Assert.Equal("1.0.0.1", two.RootElement.GetProperty("dns2").GetString());
+        Assert.Equal("10.8.0.1", mixed.RootElement.GetProperty("dns1").GetString());
+        Assert.Equal("10.8.0.1", mixed.RootElement.GetProperty("dns2").GetString());
+        Assert.False(six.RootElement.TryGetProperty("dns1", out _));
+        Assert.False(none.RootElement.TryGetProperty("dns1", out _));
+        Assert.False(none.RootElement.TryGetProperty("dns2", out _));
+    }
+
+    [Fact]
     public void TheLinkNamesTheClientAndTheServer()
     {
         using var document = Opened(ClientLink.Link(Endpoint(), Client()));

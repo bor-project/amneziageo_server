@@ -290,7 +290,19 @@ public sealed class AccountManager
     /// <summary>
     /// Returns why the role cannot be handed to the accounts on the list, or null when it can.
     /// </summary>
-    public async Task<AccountResult?> WhyNotHandAsync(string role, IReadOnlyCollection<string> names, long actorId, CancellationToken ct)
+    public async Task<AccountResult?> WhyNotHandAsync(string role, IReadOnlyCollection<string> names, long actorId, CancellationToken ct) =>
+        await WhyNotHandAsync(role, names, null, actorId, ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// Returns why the role cannot be handed to the accounts on the list once it carries the rights given, or null
+    /// when it can; null rights are the ones it carries now.
+    /// </summary>
+    public async Task<AccountResult?> WhyNotHandAsync(
+        string role,
+        IReadOnlyCollection<string> names,
+        IReadOnlyCollection<string>? scopes,
+        long actorId,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(names);
 
@@ -309,7 +321,9 @@ public sealed class AccountManager
                 $"the account '{kept.UserName}' leaves the role '{found.Name}' only for another role");
         }
 
-        var keeps = await Keeps(found.Name, ct).ConfigureAwait(false);
+        var keeps = scopes is null
+            ? await Keeps(found.Name, ct).ConfigureAwait(false)
+            : scopes.Contains(Scopes.ManageAccess);
         var losing = new List<long>();
         foreach (var name in listed)
         {

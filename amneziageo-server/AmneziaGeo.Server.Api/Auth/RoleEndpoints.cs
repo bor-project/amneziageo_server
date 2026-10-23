@@ -85,10 +85,11 @@ public static class RoleEndpoints
             return Refuse(StatusCodes.Status400BadRequest, "incomplete", "the change names nothing to change");
         }
 
+        // Judges the handing by the rights the role carries after the change, before anything is written.
         var actor = http.Caller()!.Id;
         if (request.Users is not null
             && await roles.FindAsync(name, ct).ConfigureAwait(false) is not null
-            && await accounts.WhyNotHandAsync(name, request.Users, actor, ct).ConfigureAwait(false) is { } refusal)
+            && await accounts.WhyNotHandAsync(name, request.Users, request.Scopes, actor, ct).ConfigureAwait(false) is { } refusal)
         {
             return UserEndpoints.Explain(refusal);
         }

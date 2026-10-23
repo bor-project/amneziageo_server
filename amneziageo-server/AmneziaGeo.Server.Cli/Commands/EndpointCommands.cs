@@ -26,7 +26,7 @@ public static class EndpointCommands
     }
 
     /// <summary>
-    /// Names the endpoints and who keeps their ports open, the panel or the host.
+    /// Names the endpoints with their addresses and who keeps their ports open, the panel or the host.
     /// </summary>
     public static async Task<int> ListAsync(Context context, CancellationToken ct)
     {
@@ -42,9 +42,10 @@ public static class EndpointCommands
 
         foreach (var config in held)
         {
+            var addressed = config.Address.Count > 0 ? $"{string.Join(", ", config.Address)}, " : string.Empty;
             var carried = config.WebSocket ? $", websocket on TCP {ConfigServices.Port(config)}" : string.Empty;
             var marked = config.IsDefault ? ", default" : string.Empty;
-            Terminal.Say($"{config.Name}: port {config.ListenPort}, {Keeper(config.Opened)}{carried}{marked}");
+            Terminal.Say($"{config.Name}: port {config.ListenPort}, {addressed}{Keeper(config.Opened)}{carried}{marked}");
         }
 
         return 0;

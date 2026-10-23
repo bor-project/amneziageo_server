@@ -32,8 +32,8 @@ public sealed class EndpointCommandTests : IDisposable
 
         Assert.Equal(
             [
-                "awg0: port 51821, left to the host, websocket on TCP 51821, default",
-                "awg1: port 443, held open by the panel",
+                "awg0: port 51821, 10.8.0.1/24, left to the host, websocket on TCP 51821, default",
+                "awg1: port 443, 10.0.1.1/24, held open by the panel",
             ],
             said);
     }
@@ -48,7 +48,7 @@ public sealed class EndpointCommandTests : IDisposable
         var listed = await Said("endpoint", "list");
 
         Assert.Equal(["awg1: new clients start on this endpoint"], made);
-        Assert.Equal(["awg0: port 51820, left to the host", "awg1: port 443, left to the host, default"], listed);
+        Assert.Equal(["awg0: port 51820, 10.8.0.1/24, left to the host", "awg1: port 443, 10.0.1.1/24, left to the host, default"], listed);
         Assert.Equal(2, await Code("endpoint", "default", "awg9"));
     }
 

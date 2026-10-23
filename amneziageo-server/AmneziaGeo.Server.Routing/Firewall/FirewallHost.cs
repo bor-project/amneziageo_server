@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Routing.Firewall;
@@ -41,6 +42,13 @@ public sealed record FirewallReach(string Engine, bool IsAble, string Reason, st
     /// </summary>
     public static FirewallReach Able(string engine) => new(engine, true, string.Empty, string.Empty);
 }
+
+/// <summary>
+/// An interface the clients come in on, with the addresses it carries.
+/// </summary>
+/// <param name="Name">The name of the interface.</param>
+/// <param name="Addresses">The addresses of the interface, each with its prefix length.</param>
+public sealed record Doorway(string Name, IReadOnlyList<string> Addresses);
 
 /// <summary>
 /// Holds the ports of the panel open in the firewall of the host.
@@ -249,13 +257,14 @@ public sealed class FirewallHost
 
     /// <summary>
     /// Returns the interfaces whose clients the firewall of the host keeps from a UDP port of the host, over IPv4 or
-    /// IPv6; a host without ufw keeps nobody out.
+    /// over IPv6 where the interface carries IPv6; a rule from the subnets of an interface lets its clients in, and a
+    /// host without ufw keeps nobody out.
     /// </summary>
-    public async Task<IReadOnlyList<string>> KeptOutAsync(IReadOnlyList<string> interfaces, int port, CancellationToken ct)
+    public async Task<IReadOnlyList<string>> KeptOutAsync(IReadOnlyList<Doorway> doorways, int port, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(interfaces);
+        ArgumentNullException.ThrowIfNull(doorways);
 
-        if (interfaces.Count == 0)
+        if (doorways.Count == 0)
         {
             return [];
         }
@@ -267,7 +276,7 @@ public sealed class FirewallHost
                 var status = await RunAsync(["status", "verbose"], ct).ConfigureAwait(false);
 
                 return status.IsOk
-                    ? [.. interfaces.Where(name => PortState.OfUfw(status.Output, Udp, port, name) == PortState.Closed)]
+                    ? [.. doorways.Where(door => PortState.OfUfw(status.Output, Udp, port, door.Name, door.Addresses) == PortState.Closed).Select(door => door.Name)]
                     : [];
             }
 
@@ -280,9 +289,9 @@ public sealed class FirewallHost
 
             return
             [
-                .. interfaces.Where(name =>
-                    PortState.OfChains(four.Input, four.Rules, Udp, port, name) == PortState.Closed
-                    || (six is { } other && PortState.OfChains(other.Input, other.Rules, Udp, port, name) == PortState.Closed)),
+                .. doorways
+                    .Where(door => KeepsOut(four, six, port, door))
+                    .Select(door => door.Name),
             ];
         }
         catch (Exception ex)
@@ -292,6 +301,24 @@ public sealed class FirewallHost
             return [];
         }
     }
+
+    // Tells whether the chains of ufw keep the clients of an interface from a UDP port in a family the interface carries.
+    private static bool KeepsOut((string Input, string Rules) four, (string Input, string Rules)? six, int port, Doorway door)
+    {
+        var carriesSix = Carries(door, six: true);
+        if ((Carries(door, six: false) || !carriesSix)
+            && PortState.OfChains(four.Input, four.Rules, Udp, port, door.Name, door.Addresses) == PortState.Closed)
+        {
+            return true;
+        }
+
+        return carriesSix && six is { } other
+            && PortState.OfChains(other.Input, other.Rules, Udp, port, door.Name, door.Addresses) == PortState.Closed;
+    }
+
+    // Tells whether an interface carries an address of a family.
+    private static bool Carries(Doorway door, bool six) =>
+        door.Addresses.Any(text => AwgAllowedIp.TryParse(text, out var range) && range.IsSix == six);
 
     // Returns the input chain of one family and the rules ufw reads in it ahead of its policy, or null without ufw.
     private async Task<(string Input, string Rules)?> ChainsAsync(string family, string prefix, CancellationToken ct)

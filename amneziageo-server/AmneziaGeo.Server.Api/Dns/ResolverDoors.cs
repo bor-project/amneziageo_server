@@ -44,20 +44,20 @@ public sealed class ResolverDoors
             return [];
         }
 
-        var names = configs
+        var doors = configs
             .Where(config => config.IsEnabled && FirewallPlan.Answers(resolver, config))
-            .Select(config => config.Name)
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
+            .Select(config => new Doorway(config.Name, config.Address))
+            .DistinctBy(door => door.Name, StringComparer.Ordinal)
+            .OrderBy(door => door.Name, StringComparer.Ordinal)
             .ToArray();
-        var key = $"{resolver.Port}:{string.Join(",", names)}";
+        var key = $"{resolver.Port}:{string.Join(",", doors.Select(door => $"{door.Name}={string.Join("+", door.Addresses)}"))}";
         var now = _time.GetUtcNow();
         if (!fresh && Volatile.Read(ref _seen) is { } seen && seen.Key == key && now - seen.At < Kept)
         {
             return seen.Out;
         }
 
-        var shut = await _host.KeptOutAsync(names, resolver.Port, ct).ConfigureAwait(false);
+        var shut = await _host.KeptOutAsync(doors, resolver.Port, ct).ConfigureAwait(false);
         Volatile.Write(ref _seen, new Seen(key, now, shut));
 
         return shut;

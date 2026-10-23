@@ -36,7 +36,7 @@ public class MenuResolverTests
           case "$*" in
             'dns get enabled') echo "${resolver:-on}" ;;
             'dns get port') echo 53 ;;
-            'endpoint list') printf 'awg0: port 51820, left to the host\nawg1: port 443, left to the host\n' ;;
+            'endpoint list') printf 'awg0: port 51820, 10.0.0.1/24, left to the host\nawg1: port 443, 10.0.1.1/24, fd00:1::1/64, left to the host\nawg2: port 444, 10.0.2.1/24, left to the host\n' ;;
             'dns set --enabled on') echo "utility: $*" ;;
           esac
         }
@@ -57,6 +57,37 @@ public class MenuResolverTests
         var (exit, _, _) = await MenuQuestionsTests.RunAsync(Ufw + $"ufw_lets_in {name} 53", string.Empty);
 
         Assert.Equal(code, exit);
+    }
+
+    [Theory]
+    [InlineData("awg2", "10.0.2.1/24", 0)]
+    [InlineData("awg2", "10.0.2.1/25", 0)]
+    [InlineData("awg2", "10.0.2.1/24,fd00:2::1/64", 0)]
+    [InlineData("awg2", "10.0.0.1/16", 1)]
+    [InlineData("awg2", "10.0.3.1/24", 1)]
+    [InlineData("awg2", "10.0.2.1/24,10.0.3.1/24", 1)]
+    [InlineData("awg2", "fd00:2::1/64", 1)]
+    [InlineData("awg2", "", 1)]
+    [InlineData("awg0", "10.0.0.1/24", 0)]
+    [InlineData("awg1", "10.0.1.1/24", 1)]
+    public async Task ARuleOfUfwFromTheSubnetOfAnInterfaceLetsItsClientsIn(string name, string addresses, int code)
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+
+        var (exit, _, _) = await MenuQuestionsTests.RunAsync(Ufw + $"ufw_lets_in {name} 53 '{addresses}'", string.Empty);
+
+        Assert.Equal(code, exit);
+    }
+
+    [Fact]
+    public async Task TheMenuReadsTheAddressesOfTheEndpointsOutOfTheList()
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+
+        var (exit, told, _) = await MenuQuestionsTests.RunAsync(Panel + "endpoint_nets", string.Empty);
+
+        Assert.Equal(0, exit);
+        Assert.Equal("awg0 10.0.0.1/24\nawg1 10.0.1.1/24,fd00:1::1/64\nawg2 10.0.2.1/24\n", told);
     }
 
     [Theory]
@@ -84,6 +115,7 @@ public class MenuResolverTests
         Assert.Equal(0, exit);
         Assert.Contains("ufw: allow in on awg1 to any port 53 comment amneziageo resolver awg1\n", said, StringComparison.Ordinal);
         Assert.DoesNotContain("on awg0", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("on awg2", said, StringComparison.Ordinal);
         Assert.Contains("ufw lets the clients of awg1 reach the resolver on port 53", told, StringComparison.Ordinal);
     }
 
@@ -96,7 +128,7 @@ public class MenuResolverTests
 
         Assert.Equal(1, exit);
         Assert.Contains("run this on the host", said, StringComparison.Ordinal);
-        Assert.Contains("ufw allow in on awg0 to any port 53; ufw allow in on awg1 to any port 53", told, StringComparison.Ordinal);
+        Assert.Contains("ufw allow in on awg0 to any port 53; ufw allow in on awg1 to any port 53; ufw allow in on awg2 to any port 53", told, StringComparison.Ordinal);
         Assert.DoesNotContain("ufw: allow", said, StringComparison.Ordinal);
     }
 
