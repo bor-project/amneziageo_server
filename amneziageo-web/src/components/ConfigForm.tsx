@@ -11,6 +11,7 @@ import { usePortState } from "@/api/firewall"
 import { useRules } from "@/api/rules"
 import type { Holding } from "@/api/firewall"
 import { scopes } from "@/api/scopes"
+import { AppCaption } from "@/components/AppMark"
 import { DnsOutcome, DnsServerChoice } from "@/components/DnsField"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { KeepQuestion, PortNote } from "@/components/PortNote"
@@ -247,7 +248,7 @@ export function ConfigForm({
         <div className="sm:col-span-2">
           <Flag
             id="config-websocket"
-            caption={t("configs.webSocket")}
+            caption={<AppCaption caption={t("configs.webSocket")} what="webSocket" />}
             value={draft.webSocket}
             onChange={(value) => put({ webSocket: value })}
           />
@@ -255,7 +256,7 @@ export function ConfigForm({
         </div>
         <Count
           id="config-services-port"
-          caption={t("configs.servicesPort")}
+          caption={<AppCaption caption={t("configs.servicesPort")} what="services" />}
           value={draft.servicesPort}
           unset={String(draft.listenPort)}
           onChange={(value) => put({ servicesPort: value })}

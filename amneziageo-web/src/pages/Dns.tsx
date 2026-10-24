@@ -9,6 +9,7 @@ import { useFailure } from "@/api/failure"
 import { useOutbounds } from "@/api/outbounds"
 import { useRules } from "@/api/rules"
 import { scopes } from "@/api/scopes"
+import { AppCaption } from "@/components/AppMark"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { DnsMark } from "@/components/DnsMark"
 import { clientsOfWords, clientWords, counted, fewNames, lacksServers, levelOf, ruleWords, templateWords } from "@/components/dnsWords"
@@ -136,7 +137,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
 
   return (
     <>
-      <Part title={t("dns.serving")}>
+      <Part title={<AppCaption caption={t("dns.serving")} what="resolver" />}>
         <div className="text-sm text-muted sm:col-span-2">{t("dns.about")}</div>
         <Pick
           id="dns-mode"

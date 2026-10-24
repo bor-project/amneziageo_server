@@ -4,6 +4,7 @@ import { signOut } from "@/api/auth"
 import { useHealth } from "@/api/health"
 import { usePanel } from "@/api/panel"
 import { queryClient } from "@/api/queryClient"
+import { AppSign } from "@/components/AppMark"
 import { Crumbs, CrumbsHolder } from "@/components/Crumbs"
 import { Glyph } from "@/components/Glyph"
 import { LanguagePicker } from "@/components/LanguagePicker"
@@ -82,14 +83,7 @@ export function Layout() {
         {open && (
           <aside className={wide ? column : drawer}>
             <Link to="/" onClick={shut} className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-nav">
-              <svg viewBox="0 0 24 24" className="size-5.5 shrink-0" aria-hidden>
-                <circle cx="12" cy="12" r="11.6" fill="#2A6FDB" />
-                <path
-                  fill="#fff"
-                  transform="translate(4.5 4.5) scale(0.625)"
-                  d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"
-                />
-              </svg>
+              <AppSign className="size-5.5 shrink-0" />
               <span className="text-sm font-semibold tracking-[-0.01em] text-ink">{t("app.name")}</span>
             </Link>
 

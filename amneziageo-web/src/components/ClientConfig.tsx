@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useClientConfig } from "@/api/clients"
 import type { Miss } from "@/api/clients"
 import { scopes } from "@/api/scopes"
+import { AppMark } from "@/components/AppMark"
 import { QrSheet } from "@/components/QrSheet"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -93,6 +94,7 @@ export function ClientConfig({ id, editable }: { id: number; editable: boolean }
           name={one.kind === "file" ? name : stem + one.tail}
           plain={one.kind === "file"}
           note={note(one.kind)}
+          mark={one.kind === "subscription" ? <AppMark what="subscriptionQr" /> : undefined}
           t={t}
         />
       ))}

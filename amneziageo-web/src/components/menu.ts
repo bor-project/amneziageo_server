@@ -1,4 +1,5 @@
 import { scopes } from "@/api/scopes"
+import type { AppOnly } from "@/components/AppMark"
 import type { GlyphName } from "@/components/Glyph"
 import type { TextKey } from "@/i18n"
 
@@ -10,6 +11,7 @@ export interface Item {
   scope: string
   add?: { to: string; scope: string }
   unlisted?: boolean
+  only?: AppOnly
 }
 
 export interface Section {
@@ -53,6 +55,7 @@ export const clients: Item[] = [
     icon: "fork",
     scope: scopes.readState,
     add: { to: "/clients/presets/new", scope: scopes.manageClients },
+    only: "presetList",
   },
 ]
 
@@ -89,6 +92,7 @@ export const routing: Item[] = [
     icon: "map",
     scope: scopes.readState,
     add: { to: "/routing/geo/new", scope: scopes.manageRouting },
+    only: "geo",
   },
   { to: "/routing/dns", label: "tab.dns", about: "about.dns", icon: "globe", scope: scopes.readState },
 ]
@@ -108,6 +112,7 @@ export const settings: Item[] = [
     about: "about.subscriptions",
     icon: "feed",
     scope: scopes.manageAccess,
+    only: "subscriptions",
   },
   { to: "/settings/users", label: "tab.users", about: "about.users", icon: "people", scope: scopes.manageAccess },
   {

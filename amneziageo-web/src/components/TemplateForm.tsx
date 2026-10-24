@@ -5,6 +5,7 @@ import { useDnsCheck, useResolver } from "@/api/dns"
 import { usePresets } from "@/api/presets"
 import { useTemplateDefaults, useTemplatePreview, useTemplates } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
+import { AppCaption } from "@/components/AppMark"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { choiceKey, lacksServers } from "@/components/dnsWords"
 import { EntryList } from "@/components/EntryList"
@@ -145,7 +146,7 @@ export function TemplateForm({
 
         <div className="sm:col-span-2">
           <label className={label} htmlFor="template-presets">
-            <Hinted caption={t("templates.presets")} text={t("templates.presetsHint")} />
+            <AppCaption caption={t("templates.presets")} hint={t("templates.presetsHint")} what="presets" />
           </label>
           <div className="mt-1">
             <Links
@@ -161,7 +162,7 @@ export function TemplateForm({
         <div className="sm:col-span-2">
           <Switch
             id="template-presets-only"
-            caption={<Hinted caption={t("templates.presetsOnly")} text={t("templates.presetsOnlyHint")} />}
+            caption={<AppCaption caption={t("templates.presetsOnly")} hint={t("templates.presetsOnlyHint")} what="presetsOnly" />}
             value={draft.presetsOnly}
             onChange={(presetsOnly) => put({ presetsOnly })}
             disabled={draft.presets.length === 0}
