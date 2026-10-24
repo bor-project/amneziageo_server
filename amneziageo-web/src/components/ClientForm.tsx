@@ -12,6 +12,7 @@ import { useRules } from "@/api/rules"
 import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
 import { useTemplates } from "@/api/templates"
+import { AppCaption } from "@/components/AppMark"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { choiceKey, lacksServers } from "@/components/dnsWords"
 import { Help, Line, LinkLine, Links, Part, Pick, Regenerate, Switch } from "@/components/fields"
@@ -281,7 +282,7 @@ export function ClientForm({
 
         <Line
           id="client-subscription"
-          caption={t("clients.subscription")}
+          caption={<AppCaption caption={t("clients.subscription")} what="subscription" />}
           value={draft.subscriptionId}
           onChange={(subscriptionId) => put({ subscriptionId: subscriptionId.trim() })}
           fault={misnamed ? t("error.badClientSubscription") : ""}
@@ -308,7 +309,7 @@ export function ClientForm({
         <div className="flex items-end sm:pb-2">
           <Switch
             id="client-disconnect"
-            caption={t("clients.disconnect")}
+            caption={<AppCaption caption={t("clients.disconnect")} what="signal" />}
             value={draft.disconnect}
             onChange={(disconnect) => put({ disconnect })}
           />

@@ -9,8 +9,8 @@ import type { Picture } from "@/qr"
 const pictures = window.isSecureContext && typeof ClipboardItem !== "undefined"
 
 /**
- * A card of the export of a configuration: its caption, the buttons that copy and save it, and its QR code, or a note
- * in place of them.
+ * A card of the export of a configuration: its caption with its mark, the buttons that copy and save it, and its QR
+ * code, or a note in place of them.
  */
 export function QrSheet({
   caption,
@@ -19,6 +19,7 @@ export function QrSheet({
   name,
   plain,
   note,
+  mark,
   t,
 }: {
   caption: string
@@ -27,6 +28,7 @@ export function QrSheet({
   name: string
   plain: boolean
   note: ReactNode
+  mark?: ReactNode
   t: Text
 }) {
   const [taken, setTaken] = useState("")
@@ -54,7 +56,10 @@ export function QrSheet({
   return (
     <div className={card}>
       <div className="flex min-h-12 items-center gap-2 border-b border-line px-4 py-2">
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{caption}</span>
+        <span className="flex min-w-0 flex-1 items-center gap-1">
+          <span className="min-w-0 truncate text-sm font-medium text-ink">{caption}</span>
+          {mark}
+        </span>
         {note === null && (
           <>
             <button

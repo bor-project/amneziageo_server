@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react"
 import type { ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { Link, Outlet, useLocation } from "react-router-dom"
+import { AppMark } from "@/components/AppMark"
 import { Glyph } from "@/components/Glyph"
 import { Tabs } from "@/components/Tabs"
 import { Held, useCrumbs } from "@/components/crumbs"
@@ -66,9 +67,12 @@ export function Sectioned({
   return (
     <div>
       <div className="flex items-start justify-between gap-4">
-        <h1 className="min-w-0 truncate text-2xl leading-10 font-semibold tracking-[-0.02em]" title={heading}>
-          {heading}
-        </h1>
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className="min-w-0 truncate text-2xl leading-10 font-semibold tracking-[-0.02em]" title={heading}>
+            {heading}
+          </h1>
+          {listed && !tabbed && now.only !== undefined && <AppMark what={now.only} large />}
+        </div>
         <div ref={setSlot} className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {add !== null && (
             <Link to={add} className={`flex h-10 shrink-0 items-center ${primary}`}>
@@ -80,7 +84,12 @@ export function Sectioned({
 
       {tabbed && listed && tabs.length > 1 && (
         <Tabs
-          items={tabs.map((one) => ({ to: spotIn(spots, one.to), label: t(one.label), end: one.to === to }))}
+          items={tabs.map((one) => ({
+            to: spotIn(spots, one.to),
+            label: t(one.label),
+            end: one.to === to,
+            mark: one.only === undefined ? undefined : <AppMark what={one.only} />,
+          }))}
         />
       )}
 

@@ -162,6 +162,28 @@ export const en = {
   "dnsCheck.clientsOfOne": "{count} client",
   "dnsCheck.clientsOfMany": "{count} clients",
   "dnsCheck.clientsOfOther": "{count} clients",
+  "appOnly.title": "Only in the AmneziaGeo app",
+  "appOnly.more": "Learn more",
+  "appOnly.others": "Other AmneziaWG clients do not get this: they get only the configuration file.",
+  "appOnly.webSocket":
+    "The AmneziaGeo app learns the WebSocket port and path from the server and carries the tunnel over WebSocket itself where UDP is blocked.",
+  "appOnly.services":
+    "On this port the AmneziaGeo app asks what the server offers it, measures the speed, reads its subscription and connects over WebSocket.",
+  "appOnly.presets": "The AmneziaGeo app takes these routing lists itself and adds them for the user.",
+  "appOnly.presetsOnly":
+    "The AmneziaGeo app keeps the restriction: for these configurations it does not let the user pick their own lists or no list at all.",
+  "appOnly.presetList": "Only the AmneziaGeo app gets the presets, through the template of the client.",
+  "appOnly.subscription": "The AmneziaGeo app reads the configurations of the client from this address itself and updates them.",
+  "appOnly.subscriptions": "The AmneziaGeo app reads subscriptions: from the address of its subscription it adds the configurations of the client itself and updates them.",
+  "appOnly.subscriptionQr":
+    "The AmneziaGeo app reads this code: it adds every configuration of the subscription and updates them itself.",
+  "appOnly.signal":
+    "When the client is turned off in the panel, the server sends a signal and the AmneziaGeo app takes the tunnel down on the device.",
+  "appOnly.geo": "The AmneziaGeo app takes the enabled sources itself and routes by them on the device.",
+  "appOnly.geoOthers": "Other AmneziaWG clients get only the ranges of the template in AllowedIPs of the configuration file.",
+  "appOnly.resolver":
+    "The AmneziaGeo app learns the addresses of the DNS server and lets the user pick it for a configuration as the Server item, even where the DNS line of the file names another one.",
+  "appOnly.resolverOthers": "Other AmneziaWG clients reach it only when the DNS line of the file names it.",
   "error.noUpstream": "No upstream name server is named",
   "error.badUpstream": "The address of the upstream server was not read",
   "error.badListen": "The address to listen on was not read",
@@ -324,7 +346,7 @@ export const en = {
   "templates.duplicate": "Duplicate",
   "templates.copyName": "{name} copy",
   "templates.presets": "Routing presets",
-  "templates.presetsHint": "The lists the AmneziaGeo application of a client of the template gets, while it routes on the client",
+  "templates.presetsHint": "The lists the clients of the template get, while they route on the client",
   "templates.pickPresets": "Pick presets",
   "templates.noPresets": "No presets: add them in the tab Routing presets",
   "templates.standIns": "Route by name",
@@ -342,7 +364,7 @@ export const en = {
   "templates.standIn": "by name",
   "templates.notAccepted": "Not accepted: {pieces}",
   "presets.about":
-    "Routing lists the AmneziaGeo application of a client gets through its template. The client adds a list it holds none of and offers to update a list it already got when the preset is newer. A read-only list updates on the client by itself.",
+    "Routing lists a client gets through its template. The client adds a list it holds none of and offers to update a list it already got when the preset is newer. A read-only list updates on the client by itself.",
   "presets.empty": "No presets",
   "presets.loading": "Loading",
   "presets.name": "Name",
