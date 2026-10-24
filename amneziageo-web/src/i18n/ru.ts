@@ -543,7 +543,7 @@ export const ru: Dictionary = {
   "services.down": "Не работает с {time}: {why}",
   "services.noHost": "не задан хост",
   "services.interfaceDown": "интерфейса нет на хосте",
-  "services.noModule": "интерфейса нет на хосте, модуль AmneziaWG не загружен",
+  "services.noModule": "интерфейса нет на хосте, модуль AmneziaWG не загружен: его соберёт пункт 18 «Check Status» меню amneziageo-server",
   "services.portRefused": "хост не дал порт",
   "services.portClosed": "файрвол хоста держит {detail} закрытым",
   "services.frontDown": "фронт WebSocket не запущен",

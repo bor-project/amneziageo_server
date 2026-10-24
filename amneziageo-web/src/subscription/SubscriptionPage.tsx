@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { QrSheet } from "@/components/QrSheet"
+import { primary } from "@/components/styles"
 import type { Text } from "@/i18n"
 import { draw } from "@/qr"
 import type { Picture } from "@/qr"
@@ -30,6 +31,7 @@ export function SubscriptionPage({ view, language }: { view: View | null; langua
 function Body({ view, language, t }: { view: View; language: Language; t: Text }) {
   const own = words[language]
   const address = location.origin + location.pathname
+  const android = /Android/i.test(navigator.userAgent)
   const count = new Intl.PluralRules(language).select(view.configs.length) as keyof typeof own.configs
 
   return (
@@ -45,6 +47,15 @@ function Body({ view, language, t }: { view: View; language: Language; t: Text }
           {view.total > 0 ? ` ${fill(own.of, { total: bytes(language, view.total) })}` : ""}
         </span>
       </div>
+
+      {android && (
+        <a
+          href={`amneziageo://import?url=${encodeURIComponent(address)}`}
+          className={`${primary} mt-4 flex w-full justify-center md:inline-flex md:w-auto`}
+        >
+          {own.open}
+        </a>
+      )}
 
       <div className="mt-4 grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Drawn caption={t("clients.qrSubscription")} text={address} name={`${view.name}-subscription.png`} plain={false} t={t} />

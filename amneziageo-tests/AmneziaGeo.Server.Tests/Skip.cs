@@ -6,18 +6,10 @@ namespace AmneziaGeo.Server.Tests;
 public static class Skip
 {
     /// <summary>
-    /// Ends the calling test quietly unless a condition holds.
+    /// Ends the calling test as skipped unless a condition holds.
     /// </summary>
     public static void IfNot(bool condition)
     {
-        if (!condition)
-        {
-            throw new SkipException();
-        }
+        Assert.SkipUnless(condition, "the host cannot carry this test");
     }
 }
-
-/// <summary>
-/// Raised to end a test the host cannot carry.
-/// </summary>
-public sealed class SkipException : Exception;

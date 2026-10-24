@@ -18,6 +18,7 @@ forwarding_conf=/etc/sysctl.d/90-amneziageo.conf
 bbr_conf=/etc/sysctl.d/91-amneziageo-bbr.conf
 bbr_module=/etc/modules-load.d/amneziageo-bbr.conf
 qdisc_file=/proc/sys/net/core/default_qdisc
+modules_dir=/lib/modules
 os_release=/etc/os-release
 override_mark='# written by amneziageo-server'
 answers_file=/root/.amneziageo-install
@@ -908,11 +909,58 @@ manifest() {
   printf '%s %s' "$tag" "$(manifest_version "$work/update.json")"
 }
 
+# Prints the metapackages of the headers that follow the kernel metapackages on the host, else the one of the flavour of
+# the running kernel.
+headers_metas() {
+  local image flavour found=
+  # shellcheck disable=SC2016
+  for image in $(dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' 'linux-image-*' 2> /dev/null \
+    | awk '$1 == "ii" {print $2}' | grep -Ev '^linux-image-(unsigned-)?[0-9]'); do
+    if apt_has "linux-headers-${image#linux-image-}"; then
+      printf 'linux-headers-%s\n' "${image#linux-image-}"
+      found=1
+    fi
+  done
+
+  flavour=$(uname -r | sed -nE 's/^[^-]+(-[0-9][^-]*)*-([a-z].*)$/\2/p')
+  if [ -z "$found" ] && [ -n "$flavour" ] && apt_has "linux-headers-$flavour"; then
+    printf 'linux-headers-%s\n' "$flavour"
+  fi
+}
+
+# Prints the kernels other than the running one that DKMS built the amneziawg module for.
+module_kernels() {
+  local path kernel
+  for path in "$modules_dir"/*/updates/dkms/amneziawg.ko*; do
+    kernel=${path#"$modules_dir"/}
+    kernel=${kernel%%/*}
+    if [ -e "$path" ] && [ "$kernel" != "$(uname -r)" ]; then
+      printf '%s\n' "$kernel"
+    fi
+  done
+}
+
+# Tells whether dpkg has a package on.
+dpkg_has() {
+  # shellcheck disable=SC2016
+  case $(dpkg-query -W -f '${db:Status-Abbrev}' "$1" 2> /dev/null) in
+    ii*) return 0 ;;
+  esac
+
+  return 1
+}
+
 # Builds the amneziawg module from the PPA of Amnezia and loads it at boot.
 install_module() {
-  local suite swap= built=
+  local suite swap= built= metas=()
   apt-get install -y --no-install-recommends dkms gcc make "linux-headers-$(uname -r)" || return 1
-  apt-get install -y --no-install-recommends "linux-headers-$(uname -r | cut -d- -f3-)" > /dev/null 2>&1 || true
+  mapfile -t metas < <(headers_metas)
+  if [ "${#metas[@]}" -eq 0 ]; then
+    bad "apt has no metapackage of the kernel headers: after a kernel upgrade the module builds once linux-headers of the new kernel are on"
+  elif ! apt-get install -y --no-install-recommends "${metas[@]}" > /dev/null; then
+    bad "${metas[*]} did not install: after a kernel upgrade the module builds once linux-headers of the new kernel are on"
+  fi
+
   install -d -m 755 /etc/apt/keyrings
   curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x$ppa_key" \
     -o /etc/apt/keyrings/amnezia-ppa.asc || return 1
@@ -3239,6 +3287,45 @@ services_report() {
   fi
 }
 
+# Builds the amneziawg module for the running kernel when DKMS built it for other kernels only, and loads it.
+rebuild_module() {
+  local others metas=()
+  others=$(module_kernels | tr '\n' ' ')
+  if [ -z "$others" ]; then
+    return 0
+  fi
+
+  mapfile -t metas < <(headers_metas)
+  bad "DKMS built the module for ${others% } and not for the running kernel $(uname -r): apt-get install linux-headers-$(uname -r)${metas[*]:+ ${metas[*]}} && dkms autoinstall -k $(uname -r) builds it"
+  if agree "Build it now and load it?"; then
+    apt-get install -y --no-install-recommends "linux-headers-$(uname -r)" "${metas[@]}" > /dev/null \
+      && dkms autoinstall -k "$(uname -r)" && modprobe amneziawg && good "amneziawg module loaded"
+  fi
+}
+
+# Puts on the metapackages of the kernel headers that DKMS needs to build the module for the next kernel, when asked.
+follow_headers() {
+  local meta lacks=()
+  if ! command -v dkms > /dev/null 2>&1; then
+    return 0
+  fi
+
+  for meta in $(headers_metas); do
+    if ! dpkg_has "$meta"; then
+      lacks+=("$meta")
+    fi
+  done
+
+  if [ "${#lacks[@]}" -eq 0 ]; then
+    return 0
+  fi
+
+  bad "${lacks[*]} not on: after a kernel upgrade DKMS has no headers to build the module with"
+  if agree "Put ${lacks[*]} on?"; then
+    apt-get install -y --no-install-recommends "${lacks[@]}" > /dev/null && good "${lacks[*]} on"
+  fi
+}
+
 # Item 18: the service, the answer of the panel and what the host lacks, with the fixes it takes.
 check_status() {
   local kind tool
@@ -3250,10 +3337,16 @@ check_status() {
     good "amneziawg module loaded"
   else
     bad "amneziawg module not loaded"
-    if modinfo amneziawg > /dev/null 2>&1 && agree "Load it now and at boot?"; then
+    if ! modinfo amneziawg > /dev/null 2>&1; then
+      rebuild_module
+    elif agree "Load it now and at boot?"; then
       printf 'amneziawg\n' > /etc/modules-load.d/amneziawg.conf
       modprobe amneziawg && good "amneziawg module loaded"
     fi
+  fi
+
+  if [ "$kind" != container ]; then
+    follow_headers
   fi
 
   if forwarding; then

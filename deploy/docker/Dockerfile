@@ -6,7 +6,7 @@
 
 ARG DOTNET=10.0
 
-FROM --platform=$BUILDPLATFORM node:22-trixie-slim AS web
+FROM --platform=$BUILDPLATFORM node:24-trixie-slim AS web
 WORKDIR /src
 COPY amneziageo-web/package.json amneziageo-web/package-lock.json amneziageo-web/
 RUN npm --prefix amneziageo-web ci --no-audit --no-fund

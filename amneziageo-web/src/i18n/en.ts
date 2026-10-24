@@ -544,7 +544,7 @@ export const en = {
   "services.down": "Down since {time}: {why}",
   "services.noHost": "no host is set",
   "services.interfaceDown": "the interface is not on the host",
-  "services.noModule": "the interface is not on the host, the AmneziaWG module is not loaded",
+  "services.noModule": "the interface is not on the host, the AmneziaWG module is not loaded: item 18 \"Check Status\" of the amneziageo-server menu builds it",
   "services.portRefused": "the host did not give the port",
   "services.portClosed": "the firewall of the host keeps {detail} closed",
   "services.frontDown": "the WebSocket front does not run",

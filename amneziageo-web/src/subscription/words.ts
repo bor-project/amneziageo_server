@@ -32,6 +32,7 @@ export const words = {
     of: "из {total}",
     none: "В подписке нет включённых конфигураций",
     gone: "Подписка не прочитана",
+    open: "Открыть в AmneziaGeo",
     units: ["Б", "КБ", "МБ", "ГБ", "ТБ"],
   },
   en: {
@@ -42,6 +43,7 @@ export const words = {
     of: "of {total}",
     none: "The subscription holds no configuration that is on",
     gone: "The subscription was not read",
+    open: "Open in AmneziaGeo",
     units: ["B", "KB", "MB", "GB", "TB"],
   },
 }
