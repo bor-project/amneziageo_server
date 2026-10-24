@@ -643,6 +643,27 @@ public class ServiceTests
     }
 
     [Fact]
+    public async Task AnApplicationReadsTheMarkOfAnAmneziaGeoPanelAndABrowserDoesNot()
+    {
+        using var bench = new Bench();
+        await File.WriteAllTextAsync(bench.PagePath, "<html>" + SubscriptionPage.Mark + "</html>");
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        var path = "/sub/" + client.SubscriptionId;
+
+        var page = await BrowseAsync(desk, Point(endpoint), path, "text/html");
+        var links = await BrowseAsync(desk, Point(endpoint), path, "text/plain, */*");
+
+        Assert.Equal("1", links.Response.Headers["X-AmneziaGeo-Subscription"].ToString());
+        Assert.Empty(page.Response.Headers["X-AmneziaGeo-Subscription"].ToString());
+    }
+
+    [Fact]
     public async Task ABrowserReadsTheLinksWhileThePanelWasBuiltWithoutThePage()
     {
         using var bench = new Bench();

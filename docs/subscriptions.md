@@ -58,6 +58,7 @@ off answers an empty body, and the client application marks their configurations
 | `Subscription-Userinfo` | `upload` and `download`, what the clients made today; `total`, their daily limits added up, 0 when one of them has none; `expire=0` |
 | `Profile-Update-Interval` | the update interval in hours |
 | `Profile-Title` | the profile title as `base64:`, left out when it is empty |
+| `X-AmneziaGeo-Subscription` | `1`, the format of the answer: the AmneziaGeo client adds a subscription only when its first answer carries it |
 | `Cache-Control` | `no-store` |
 | `Vary` | `Accept`: a browser reads the same address as a page, see below |
 

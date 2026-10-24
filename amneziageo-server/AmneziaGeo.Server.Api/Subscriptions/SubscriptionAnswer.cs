@@ -41,6 +41,13 @@ public static class SubscriptionAnswer
     /// </summary>
     public const string DeviceHeader = "X-Hwid";
 
+    /// <summary>
+    /// The header that marks the answer of an AmneziaGeo panel with the format of the answer.
+    /// </summary>
+    public const string MarkHeader = "X-AmneziaGeo-Subscription";
+
+    private const string MarkFormat = "1";
+
     private const string HoldTail = "/hold";
 
     private const int MaxDevice = 128;
@@ -139,6 +146,7 @@ public static class SubscriptionAnswer
         headers.ETag = "\"" + Revision(feed.Body) + "\"";
         headers["Subscription-Userinfo"] = feed.Usage;
         headers["Profile-Update-Interval"] = settings.UpdateHours.ToString(CultureInfo.InvariantCulture);
+        headers[MarkHeader] = MarkFormat;
         if (settings.Title.Length > 0)
         {
             headers["Profile-Title"] = ClientFeed.Title(settings.Title);
