@@ -45,6 +45,10 @@ The reference by section, written together with the code:
 - [install](docs/install.md) and [docker](docs/docker.md) - how the panel goes on a server;
 - [updates](docs/updates.md) - how it updates itself.
 
+## License
+
+[GPL-3.0 or later](LICENSE). The [terms of use](TERMS.md), the [privacy notes](PRIVACY.md) and the [third-party components](THIRD-PARTY.md) lie in the root of the repository; the panel shows them at the first sign-in and on the page About.
+
 ## Credits
 
 The server is built on the [Amnezia VPN](https://github.com/amnezia-vpn) ecosystem: the AmneziaWG kernel module. The tunnel inside WebSocket is carried by [wstunnel](https://github.com/erebe/wstunnel). Default geo databases: [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat), [runetfreedom](https://github.com/runetfreedom), [zkeen-ip](https://github.com/jameszeroX/zkeen-ip) and our own [amneziageo-geo](https://github.com/bor-project/amneziageo-geo).

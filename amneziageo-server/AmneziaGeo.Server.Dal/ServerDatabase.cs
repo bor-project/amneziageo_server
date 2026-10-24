@@ -74,6 +74,7 @@ public static class ServerDatabase
         services.AddScoped<StandInStore>();
         services.AddScoped<AccessStore>();
         services.AddScoped<PanelStore>();
+        services.AddScoped<TermsStore>();
         services.AddScoped<TemplateStore>();
         services.AddScoped<PresetStore>();
         services.AddScoped<SubscriptionStore>();

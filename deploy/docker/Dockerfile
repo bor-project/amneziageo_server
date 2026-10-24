@@ -11,6 +11,7 @@ WORKDIR /src
 COPY amneziageo-web/package.json amneziageo-web/package-lock.json amneziageo-web/
 RUN npm --prefix amneziageo-web ci --no-audit --no-fund
 COPY amneziageo-web/ amneziageo-web/
+COPY TERMS.md TERMS.ru.md PRIVACY.md PRIVACY.ru.md THIRD-PARTY.md THIRD-PARTY.ru.md ./
 RUN mkdir -p amneziageo-server/AmneziaGeo.Server.Api \
  && npm --prefix amneziageo-web run build
 

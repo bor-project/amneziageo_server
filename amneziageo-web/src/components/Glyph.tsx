@@ -17,6 +17,7 @@ export type GlyphName =
   | "feed"
   | "people"
   | "pulse"
+  | "info"
 
 const drawings: Record<GlyphName, ReactNode> = {
   shield: <path d="M12 3l7 3v5.5c0 4.3-2.9 7.9-7 9.5-4.1-1.6-7-5.2-7-9.5V6l7-3Z" />,
@@ -99,6 +100,12 @@ const drawings: Record<GlyphName, ReactNode> = {
     </>
   ),
   pulse: <path d="M3 12h4l2.5-6 5 12 2.5-6h4" />,
+  info: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v5M12 8h.01" />
+    </>
+  ),
 }
 
 export function Caret({ open }: { open: boolean }) {

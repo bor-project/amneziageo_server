@@ -2,6 +2,7 @@ import { Navigate, Outlet, useOutletContext } from "react-router-dom"
 import { useText } from "@/i18n"
 import { useAppSelector } from "@/store/hooks"
 import { holds } from "@/store/authSlice"
+import { TermsGate } from "@/components/TermsGate"
 
 export function RequireAuth() {
   const status = useAppSelector((s) => s.auth.status)
@@ -10,7 +11,13 @@ export function RequireAuth() {
     return <Navigate to="/password" replace />
   }
 
-  return status === "active" ? <Outlet /> : <Navigate to="/login" replace />
+  return status === "active" ? (
+    <TermsGate>
+      <Outlet />
+    </TermsGate>
+  ) : (
+    <Navigate to="/login" replace />
+  )
 }
 
 export function RequireScope({ scope }: { scope: string }) {

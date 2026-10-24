@@ -14,6 +14,8 @@ import { Layout } from "@/components/Layout"
 import { RequireAuth, RequireScope } from "@/components/RequireAuth"
 import { Cards, Sectioned } from "@/components/Section"
 import { clients, interfaces, routing, settings } from "@/components/menu"
+import { About } from "@/pages/About"
+import { AboutText } from "@/pages/AboutText"
 import { Accounts } from "@/pages/Accounts"
 import { BalancerPage } from "@/pages/BalancerPage"
 import { BasicRouting } from "@/pages/BasicRouting"
@@ -79,6 +81,8 @@ const router = createBrowserRouter(
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route path="account/password" element={<OwnPassword />} />
+          <Route path="about" element={<About />} />
+          <Route path="about/:document" element={<AboutText />} />
           <Route element={<RequireScope scope={scopes.readState} />}>
             <Route index element={<Dashboard />} />
             <Route path="interfaces" element={<Sectioned title="nav.interfaces" to="/interfaces" items={interfaces} />}>

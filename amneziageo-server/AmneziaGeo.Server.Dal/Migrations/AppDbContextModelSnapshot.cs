@@ -1355,6 +1355,31 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.ToTable("Templates");
                 });
 
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.TermsEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("AcceptedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Login")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Terms");
+                });
+
             modelBuilder.Entity("AmneziaGeo.Server.Dal.TrafficEntity", b =>
                 {
                     b.Property<long>("Id")

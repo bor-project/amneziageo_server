@@ -78,6 +78,19 @@ export function levelOf(findings: DnsFinding[]): DnsLevel | null {
   return findings.some((one) => one.level === "warning") ? "warning" : null
 }
 
+// The findings as a template sees them: a rule by sites keeps only the clients of the template.
+export function ofTemplate(findings: DnsFinding[], members: number[]): DnsFinding[] {
+  return findings.flatMap((one) => {
+    if (one.code !== "rule-outside") {
+      return [one]
+    }
+
+    const clients = one.clients.filter((affected) => members.includes(affected.id))
+
+    return clients.length === 0 ? [] : [{ ...one, clients }]
+  })
+}
+
 // The names of a few, the rest counted.
 export function fewNames(t: Text, names: string[], shown = 3): string {
   const head = names.slice(0, shown).join(", ")

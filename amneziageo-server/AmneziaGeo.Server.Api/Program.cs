@@ -87,6 +87,7 @@ app.MapBalancers();
 app.MapRules();
 app.MapResolver();
 app.MapPanel();
+app.MapTerms();
 app.MapSubscriptions();
 app.MapDiagnostics();
 app.MapAccess();

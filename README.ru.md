@@ -27,6 +27,10 @@
 
 Справочник по разделам на английском, он пишется вместе с кодом: список в [README.md](README.md#for-developers).
 
+## Лицензия
+
+[GPL-3.0 или более поздняя](LICENSE). [Условия использования](TERMS.ru.md), [конфиденциальность](PRIVACY.ru.md) и [сторонние компоненты](THIRD-PARTY.ru.md) лежат в корне репозитория; панель показывает их при первом входе и на странице «О программе».
+
 ## Благодарности
 
 Сервер построен на экосистеме [Amnezia VPN](https://github.com/amnezia-vpn): модуль ядра AmneziaWG. Туннель внутри WebSocket несёт [wstunnel](https://github.com/erebe/wstunnel). Гео-базы по умолчанию: [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat), [runetfreedom](https://github.com/runetfreedom), [zkeen-ip](https://github.com/jameszeroX/zkeen-ip) и наша [amneziageo-geo](https://github.com/bor-project/amneziageo-geo).

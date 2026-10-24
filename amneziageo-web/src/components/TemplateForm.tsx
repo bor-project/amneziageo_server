@@ -184,7 +184,13 @@ export function TemplateForm({
         ) : (
           <div className="hidden sm:block" />
         )}
-        <DnsOutcome check={check.data} caption="dnsCheck.lineTemplate" view="template" skip={["standins-off", "outside"]} />
+        <DnsOutcome
+          check={check.data}
+          caption="dnsCheck.lineTemplate"
+          view="template"
+          skip={["standins-off", "outside"]}
+          members={draft.clients}
+        />
 
         <Maybe
           id="template-mtu"

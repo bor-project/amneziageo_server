@@ -3,7 +3,7 @@ import type { MouseEvent, ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { useResolver } from "@/api/dns"
 import type { DnsFinding, DnsLevel, DnsSubject } from "@/api/dns"
-import { levelOf, tell, tone } from "@/components/dnsWords"
+import { levelOf, ofTemplate, tell, tone } from "@/components/dnsWords"
 import type { DnsContext, DnsView, Said } from "@/components/dnsWords"
 import { menu } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
@@ -18,24 +18,27 @@ export function DnsMark({
   view,
   title,
   everyone,
+  members,
 }: {
   findings: DnsFinding[]
   view: DnsView
   title?: string
   everyone?: (subject: DnsSubject) => boolean
+  members?: number[]
 }) {
   const t = useText()
   const language = useLanguage()
   const held = useDnsContext()
   const context = everyone === undefined ? held : { ...held, everyone }
-  const level = levelOf(findings)
+  const shown = members === undefined ? findings : ofTemplate(findings, members)
+  const level = levelOf(shown)
   const [spot, setSpot] = useState<{ top: number; left: number } | null>(null)
 
   if (level === null) {
     return null
   }
 
-  const said = findings.filter((one) => one.level !== "hint").map((one) => tell(t, language, one, view, context))
+  const said = shown.filter((one) => one.level !== "hint").map((one) => tell(t, language, one, view, context))
   const hover = title ?? said.map((one) => one.text).join("\n")
 
   function toggle(event: MouseEvent<HTMLButtonElement>) {
@@ -73,11 +76,21 @@ export function DnsMark({
 }
 
 // The findings of a draft as lines of a form, each with its list behind the icon.
-export function DnsNotes({ findings, view, skip = [] }: { findings: DnsFinding[]; view: DnsView; skip?: string[] }) {
+export function DnsNotes({
+  findings,
+  view,
+  skip = [],
+  members,
+}: {
+  findings: DnsFinding[]
+  view: DnsView
+  skip?: string[]
+  members?: number[]
+}) {
   const t = useText()
   const language = useLanguage()
   const context = { ...useDnsContext(), draft: true }
-  const shown = findings.filter((one) => !skip.includes(one.code))
+  const shown = (members === undefined ? findings : ofTemplate(findings, members)).filter((one) => !skip.includes(one.code))
 
   if (shown.length === 0) {
     return null

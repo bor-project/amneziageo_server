@@ -10,7 +10,7 @@ public class MenuDockerTests
         var system = folder.Write("os-release", "ID=ubuntu\nVERSION_CODENAME=noble\nUBUNTU_CODENAME=noble\n");
 
         var (exit, told, said) = await MenuQuestionsTests.RunAsync(
-            $"os_release={system}; seen[docker]=; docker_lacks() {{ printf docker; }}; ask_installation; echo went on", "2\n");
+            $"os_release={system}; seen[docker]=; docker_lacks() {{ printf docker; }}; ask_installation; echo went on", "y\n2\n");
 
         Assert.Equal(1, exit);
         Assert.Contains("Install as: 2\n", told, StringComparison.Ordinal);
@@ -196,7 +196,7 @@ public class MenuDockerTests
             $"docker_dir={directory}; seen[docker]=29; docker_lacks() {{ :; }}; " +
             "eval \"$(declare -f answer_yes | sed 1s/answer_yes/kept_answer_yes/)\"; " +
             "answer_yes() { if [ \"$1\" = upgrade ]; then echo stop; exit 0; fi; kept_answer_yes \"$@\"; }; ask_installation",
-            "2\n\n\n");
+            "y\n2\n\n\n");
 
         Assert.Contains(
             $"Install as: 2\nDirectory for compose.yaml: {directory}\n" +

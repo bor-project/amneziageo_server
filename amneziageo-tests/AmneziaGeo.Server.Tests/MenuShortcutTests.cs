@@ -133,9 +133,9 @@ public class MenuShortcutTests
     }
 
     [Theory]
-    [InlineData("1\n\n\n", "ag-s")]
-    [InlineData("2\n\ny\n\n\n", "ag-s")]
-    [InlineData("2\n\nn\n", "")]
+    [InlineData("y\n1\n\n\n", "ag-s")]
+    [InlineData("y\n2\n\ny\n\n\n", "ag-s")]
+    [InlineData("y\n2\n\nn\n", "")]
     public async Task TheShortCommand_IsAskedForAfterThePackageOrTheCommandOnTheHostOfAContainer(string input, string taken)
     {
         Skip.IfNot(OperatingSystem.IsLinux());

@@ -1801,10 +1801,26 @@ ask_shortcut() {
   answer_until shortcut "Name of the short command" "$(free_shortcut ag-s)" shortcut_ok || given[shortcut]=
 }
 
+# Shows the short terms of use and asks to accept them; without the consent nothing is installed.
+ask_license() {
+  if [ -z "${given[license]+set}" ]; then
+    say "AmneziaGeo server is free software under GPL-3.0, provided as is, without any warranty."
+    say "Your clients' traffic passes through this server: you answer for it and for the laws that apply."
+    say "The server asks GitHub for new versions; nothing about this server or its clients is sent."
+    say "Terms of use: https://bor-project.github.io/amneziageo_server/TERMS.html"
+  fi
+
+  if ! answer_yes license "Accept the terms of use?" no; then
+    bad "the terms of use are not accepted, nothing is installed; license=yes in a file of answers accepts them"
+    return 1
+  fi
+}
+
 # Asks everything the installation needs before it changes anything.
 ask_installation() {
   local opening routed
   step "questions"
+  ask_license || return 1
   if [ -z "${given[kind]+set}" ]; then
     say "  1. Package"
     say "  2. Docker"

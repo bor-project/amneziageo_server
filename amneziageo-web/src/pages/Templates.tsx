@@ -148,7 +148,9 @@ export function Templates() {
                     ) : (
                       <span className={`truncate ${one.id === 0 ? "font-normal text-muted" : ""}`}>{one.name}</span>
                     )}
-                    {one.id > 0 && <DnsMark findings={findingsOf(report, "template", one.id)} view="template" />}
+                    {one.id > 0 && (
+                      <DnsMark findings={findingsOf(report, "template", one.id)} view="template" members={one.clientIds} />
+                    )}
                   </span>
                 ),
               },

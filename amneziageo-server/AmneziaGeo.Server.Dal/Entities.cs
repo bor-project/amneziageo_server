@@ -606,6 +606,22 @@ public sealed class StandInEntity
 }
 
 /// <summary>
+/// One acceptance of the terms of use of the panel as the database holds it.
+/// </summary>
+public sealed class TermsEntity
+{
+    public long Id { get; set; }
+
+    public int Version { get; set; }
+
+    public long? UserId { get; set; }
+
+    public string Login { get; set; } = string.Empty;
+
+    public DateTimeOffset AcceptedUtc { get; set; }
+}
+
+/// <summary>
 /// One balancer as the database holds it.
 /// </summary>
 public sealed class BalancerEntity

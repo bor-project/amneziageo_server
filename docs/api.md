@@ -58,6 +58,7 @@ for a token like any other route. The shapes of the answers are not in it; the p
 | diagnostics, the connection log | [diagnostics.md](diagnostics.md) |
 | the overview | [overview.md](overview.md) |
 | updates of the panel | [updates.md](updates.md) |
+| the terms of use | [terms.md](terms.md) |
 
 ## What stays in the console
 

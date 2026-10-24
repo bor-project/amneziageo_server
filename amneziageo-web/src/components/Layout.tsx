@@ -101,7 +101,13 @@ export function Layout() {
                 ))}
             </nav>
 
-            <div className="border-t border-line px-1 pt-3 text-xs text-faint">{state(t, health)}</div>
+            <div className="flex flex-col gap-1.5 border-t border-line pt-3">
+              <NavLink to="/about" onClick={shut} className={({ isActive }) => `${row} ${isActive ? active : idle}`}>
+                <Glyph name="info" className={glyph} />
+                {t("nav.about")}
+              </NavLink>
+              <div className="px-1 text-xs text-faint">{state(t, health)}</div>
+            </div>
           </aside>
         )}
 

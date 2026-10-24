@@ -112,12 +112,14 @@ export function DnsOutcome({
   caption,
   view,
   skip,
+  members,
   children,
 }: {
   check: DnsCheck | undefined
   caption: TextKey
   view: DnsView
   skip?: string[]
+  members?: number[]
   children?: ReactNode
 }) {
   const t = useText()
@@ -130,7 +132,7 @@ export function DnsOutcome({
     <>
       {check.lines.length > 0 && <div className="text-sm text-muted sm:col-span-2">{linesText(t, check.lines, caption)}</div>}
       {children}
-      <DnsNotes findings={check.findings} view={view} skip={skip} />
+      <DnsNotes findings={check.findings} view={view} skip={skip} members={members} />
     </>
   )
 }

@@ -55,6 +55,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<StandInEntity> StandIns => Set<StandInEntity>();
 
+    public DbSet<TermsEntity> Terms => Set<TermsEntity>();
+
     public DbSet<AccessEntity> Access => Set<AccessEntity>();
 
     public DbSet<PanelEntity> Panel => Set<PanelEntity>();
@@ -207,6 +209,11 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(row => row.Address).HasMaxLength(64);
             entity.Property(row => row.Real).HasMaxLength(64);
             entity.HasIndex(row => row.Name).IsUnique();
+        });
+
+        builder.Entity<TermsEntity>(entity =>
+        {
+            entity.Property(row => row.Login).HasMaxLength(256);
         });
 
         builder.Entity<PanelEntity>(entity =>

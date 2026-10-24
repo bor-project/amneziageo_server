@@ -27,7 +27,7 @@ services behind them, the interfaces of AmneziaWG and WireGuard, the certificate
 the panel cannot live with: a release missing for the architecture, a container host without the module. The first
 question is a package or a container. A container takes Docker with its compose plugin and a running daemon: where
 the host lacks one of them, the script prints the commands that put it on from the repository of Docker and stops
-before it changes anything, and the same command goes on once it is on. Then it asks everything at once, for a
+before it changes anything, and the same command goes on once it is on. Then it asks everything at once: first the consent to the terms of use ([terms.md](terms.md)), then for a
 container the directory of `compose.yaml` and whether the command goes on the host among it, then on a terminal
 whether a short command of the menu goes on the host and its name, `ag-s` by default, the answers of the
 look as defaults, prints the plan and, once
@@ -71,6 +71,7 @@ every key the installation runs without a question:
 | `generate` | `yes` makes up a temporary password and prints it once, `no` asks for one |
 | `domain` | the name of the server for a certificate of Let's Encrypt, empty for none |
 | `email`, `terms` | the email for Let's Encrypt, empty for none; `yes` agrees to its terms |
+| `license` | `yes` accepts the terms of use of the server, see [terms.md](terms.md); without it and without a terminal the installation stops |
 | `port` | the TCP port of the panel |
 | `everywhere` | `yes` opens the panel on every address without a certificate |
 | `endpoint` | `yes` makes the first endpoint of `endpoint_name`, `endpoint_port`, `endpoint_host` and `websocket` |
