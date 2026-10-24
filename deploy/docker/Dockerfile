@@ -15,7 +15,7 @@ COPY TERMS.md TERMS.ru.md PRIVACY.md PRIVACY.ru.md THIRD-PARTY.md THIRD-PARTY.ru
 RUN mkdir -p amneziageo-server/AmneziaGeo.Server.Api \
  && npm --prefix amneziageo-web run build
 
-FROM rust:1.95-bookworm AS tunnel
+FROM rust:1.99-bookworm AS tunnel
 RUN apt-get update \
  && apt-get install -y --no-install-recommends cmake libclang-dev \
  && rm -rf /var/lib/apt/lists/*
