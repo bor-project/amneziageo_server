@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using AmneziaGeo.Server.Api.Services;
@@ -709,6 +710,64 @@ public class ServiceTests
     }
 
     [Fact]
+    public async Task UnderAMadeUpCertificateThePortOfTheServicesKeepsTheSubscriptionsAndTheHelloSaysWhy()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var state = new SubscriptionState();
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), state, certificates: Certificates(bench, state, new WebOptions()));
+        var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
+
+        var answer = await AskAsync(desk, Point(endpoint), token);
+        var feed = await ReadAsync(desk, Point(endpoint), "/sub/" + client.SubscriptionId);
+        var page = await BrowseAsync(desk, Point(endpoint), "/sub/" + client.SubscriptionId, "text/html");
+
+        var subscription = Offered(client, endpoint, token, answer).GetProperty("subscription");
+        Assert.Equal(StatusCodes.Status200OK, answer.Status);
+        Assert.Equal(StatusCodes.Status404NotFound, feed.Status);
+        Assert.Equal(StatusCodes.Status404NotFound, page.Response.StatusCode);
+        Assert.Equal(
+            $"https://vpn.example:{endpoint.ListenPort}/sub/{client.SubscriptionId}",
+            subscription.GetProperty("url").GetString());
+        Assert.Equal(CertificateCheck.Missing, subscription.GetProperty("fault").GetString());
+        Assert.Equal(string.Empty, subscription.GetProperty("pin").GetString());
+    }
+
+    [Fact]
+    public async Task UnderACertificateEveryClientTakesThePortOfTheServicesHandsOutTheSubscriptions()
+    {
+        using var bench = new Bench();
+        using var place = new Issuing.Place();
+        var now = bench.Clock.GetUtcNow();
+        using var root = Issuing.Root("CN=the root of the tests", now);
+        using var middle = Issuing.Authority(root, "CN=an authority of the tests", now);
+        using var leaf = Issuing.Leaf(middle, "vpn.example", now.AddDays(-30), now.AddDays(60));
+        var options = new WebOptions { Certificate = Issuing.Write(place.Root, leaf, middle) };
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var state = new SubscriptionState();
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), state, certificates: Certificates(bench, state, options, [root]));
+        var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
+
+        var answer = await AskAsync(desk, Point(endpoint), token);
+        var feed = await ReadAsync(desk, Point(endpoint), "/sub/" + client.SubscriptionId);
+
+        var subscription = Offered(client, endpoint, token, answer).GetProperty("subscription");
+        Assert.Equal(StatusCodes.Status200OK, feed.Status);
+        Assert.Equal(string.Empty, subscription.GetProperty("fault").GetString());
+        Assert.Equal(SubscriptionAnswer.Revision(feed.Body), subscription.GetProperty("revision").GetString());
+    }
+
+    [Fact]
     public async Task ATokenThatDoesNotHoldIsRefusedWithItsReason()
     {
         using var bench = new Bench();
@@ -1138,7 +1197,8 @@ public class ServiceTests
         RefusalHold? hold = null,
         ILogger<ServiceDesk>? logger = null,
         AnswerSlots? slots = null,
-        DnsState? resolver = null)
+        DnsState? resolver = null,
+        SubscriptionCertificates? certificates = null)
     {
         var state = subscriptions ?? new SubscriptionState();
 
@@ -1150,7 +1210,7 @@ public class ServiceTests
                 new InboundOffer(),
                 new DisconnectOffer(),
                 new SpeedOffer(tickets),
-                new SubscriptionOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
+                new SubscriptionOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes, certificates),
                 new SourcesOffer(bench.Scopes),
                 new PresetsOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
                 new DnsOffer(resolver ?? new DnsState(), bench.Scopes),
@@ -1160,7 +1220,28 @@ public class ServiceTests
             Options.Create(new JsonOptions()),
             logger ?? NullLogger<ServiceDesk>.Instance,
             hold,
-            slots);
+            slots,
+            certificates);
+    }
+
+    // Tells under which certificate the subscriptions answer, the roots standing in for the ones of the host.
+    private static SubscriptionCertificates Certificates(
+        Bench bench,
+        SubscriptionState state,
+        WebOptions options,
+        X509Certificate2Collection? roots = null) =>
+        new(state, PanelDefaults.Settings, options, new CertificateVerdicts(bench.Clock, roots), NullLogger<SubscriptionCertificates>.Instance);
+
+    // Opens the answer to a hello and returns the features it offers.
+    private static JsonElement Offered(TunnelClient client, ServerConfig endpoint, HelloRequest token, (int Status, byte[] Body) answer)
+    {
+        var opened = PeerToken.Open(
+            PeerToken.Shared(client.PrivateKey, endpoint.PublicKey),
+            token.Nonce!,
+            JsonSerializer.Deserialize<SealedAnswer>(answer.Body, Web)!);
+        using var document = JsonDocument.Parse(opened!);
+
+        return document.RootElement.GetProperty("features").Clone();
     }
 
     // A request for a websocket that comes from the address given.

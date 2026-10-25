@@ -12,6 +12,7 @@ import type { Overview, ServiceFault, ServiceHealth } from "@/api/overview"
 import { scopes } from "@/api/scopes"
 import { busy, useApplyUpdate, useCheckUpdate, useSeeUpdate, useUpdate } from "@/api/update"
 import { Sparkline } from "@/components/Chart"
+import { certificateWhy } from "@/components/certificateWords"
 import type { Trace } from "@/components/Chart"
 import { Dialog } from "@/components/Dialog"
 import { useCrumbs } from "@/components/crumbs"
@@ -513,15 +514,22 @@ function serviceDown(one: ServiceHealth, t: Text, language: string): string {
       .map((fault) =>
         fault.code === "certificate-expired" && one.until !== null
           ? t("services.certificateExpired", { date: day(one.until, language) })
-          : serviceFault(fault, t),
+          : fault.code === "certificate-unreadable"
+            ? serviceFault(fault, t)
+            : upper(certificateWhy(fault.code, fault.detail, t, language) ?? serviceFault(fault, t)),
       )
       .join("; ")
   }
 
   return t("services.down", {
     time: moment(one.since, language),
-    why: one.faults.map((fault) => serviceFault(fault, t)).join("; "),
+    why: one.faults.map((fault) => certificateWhy(fault.code, fault.detail, t, language) ?? serviceFault(fault, t)).join("; "),
   })
+}
+
+// Opens a reason with a capital letter, as the lines of a certificate read.
+function upper(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 function serviceFault(fault: ServiceFault, t: Text): string {

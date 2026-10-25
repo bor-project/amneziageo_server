@@ -147,15 +147,23 @@ public sealed class SubscriptionOffer : IHelloFeature
 
     private readonly IServiceScopeFactory _scopes;
 
+    private readonly SubscriptionCertificates? _certificates;
+
     /// <summary>
     /// ctor
     /// </summary>
-    public SubscriptionOffer(SubscriptionState state, PanelSettings panel, WebOptions options, IServiceScopeFactory scopes)
+    public SubscriptionOffer(
+        SubscriptionState state,
+        PanelSettings panel,
+        WebOptions options,
+        IServiceScopeFactory scopes,
+        SubscriptionCertificates? certificates = null)
     {
         _state = state;
         _panel = panel;
         _options = options;
         _scopes = scopes;
+        _certificates = certificates;
     }
 
     /// <inheritdoc/>
@@ -192,7 +200,13 @@ public sealed class SubscriptionOffer : IHelloFeature
             return null;
         }
 
-        return new SubscriptionFeature(url, SubscriptionAnswer.Revision(feed.Body), settings.Separate ? string.Empty : Pin(peer.Context));
+        var revision = SubscriptionAnswer.Revision(feed.Body);
+        if (_certificates?.Of(url) is { IsGood: false } verdict)
+        {
+            return new SubscriptionFeature(url, revision, string.Empty, verdict.Fault, verdict.Detail);
+        }
+
+        return new SubscriptionFeature(url, revision, settings.Separate ? string.Empty : Pin(peer.Context));
     }
 
     // Returns the SHA-256 of the certificate the port answered under, empty without one.

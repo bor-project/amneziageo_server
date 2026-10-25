@@ -366,6 +366,48 @@ public class ServiceWatchTests
     }
 
     [Fact]
+    public void TheSubscriptionsAreDownUnderACertificateNotEveryClientTakes()
+    {
+        var shared = ServiceChecks.Of(
+            Fine(Awg1) with { SubscriptionCertificate = new CertificateVerdict(CertificateCheck.Missing, string.Empty) },
+            Now)[0];
+        var apart = ServiceChecks.Of(
+            Fine() with
+            {
+                Subscription = SubscriptionDefaults.Settings with { Separate = true, Port = 8445 },
+                SubscriptionCertificate = new CertificateVerdict(CertificateCheck.Name, "vpn.example.org"),
+            },
+            Now)[0];
+        var taken = ServiceChecks.Of(Fine(Awg1) with { SubscriptionCertificate = CertificateVerdict.Good }, Now)[0];
+
+        Assert.Equal(ServiceChecks.Subscription, shared.Kind);
+        Assert.Equal([new ServiceFault(CertificateCheck.Missing, string.Empty)], shared.Faults);
+        Assert.Equal([new ServiceFault(CertificateCheck.Name, "vpn.example.org")], apart.Faults);
+        Assert.True(taken.Works);
+    }
+
+    [Fact]
+    public void ACertificateWhoseChainNotEveryClientTakesIsDown()
+    {
+        var x2 = ServiceChecks.Of(
+            Fine() with
+            {
+                Certificates =
+                [
+                    new CertificateFacts("vpn.example.org", Now.AddDays(60), string.Empty, new CertificateVerdict(CertificateCheck.OldAndroid, "ISRG Root X2")),
+                ],
+            },
+            Now)[^1];
+        var taken = ServiceChecks.Of(
+            Fine() with { Certificates = [new CertificateFacts("vpn.example.org", Now.AddDays(60), string.Empty, CertificateVerdict.Good)] },
+            Now)[^1];
+
+        Assert.Equal(ServiceChecks.Certificate, x2.Kind);
+        Assert.Equal([new ServiceFault(CertificateCheck.OldAndroid, "ISRG Root X2")], x2.Faults);
+        Assert.True(taken.Works);
+    }
+
+    [Fact]
     public void ACertificateThatRunsOutWithinTwoWeeksWorksAndSaysInHowManyDays()
     {
         var soon = ServiceChecks.Of(Fine() with { Certificates = [new CertificateFacts("vpn.example.org", Now.AddDays(8).AddHours(3), string.Empty)] }, Now)[^1];

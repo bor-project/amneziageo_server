@@ -326,7 +326,11 @@ public static class SubscriptionAnswer
             ? "Этот конфиг уже подключён на другом устройстве"
             : "This configuration is already connected on another device";
 
-    private static string Name(SubscriptionSettings settings, PanelSettings panel, string host)
+    /// <summary>
+    /// Returns the host a subscription address names: the first domain of the subscriptions, then of the panel, then
+    /// the host given.
+    /// </summary>
+    internal static string Name(SubscriptionSettings settings, PanelSettings panel, string host)
     {
         if (settings.Domains.Count > 0)
         {

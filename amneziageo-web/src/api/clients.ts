@@ -80,6 +80,10 @@ export interface ClientConfig {
   link: string
   subscription: string
   subscriptionMiss: Miss | ""
+  subscriptionFault?: string
+  subscriptionDetail?: string
+  panelFault?: string
+  panelDetail?: string
 }
 
 export function useClients() {
