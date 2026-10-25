@@ -1,13 +1,10 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react"
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react"
-import { scopes } from "@/api/scopes"
-import { useUpdate } from "@/api/update"
+import { usePanelDocs } from "@/components/docs"
 import { Help } from "@/components/fields"
 import { menu } from "@/components/styles"
-import { useLanguage, useText } from "@/i18n"
+import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
-import { holds } from "@/store/authSlice"
-import { useAppSelector } from "@/store/hooks"
 
 // What reaches the AmneziaGeo app alone, by the place that says so.
 export type AppOnly =
@@ -33,8 +30,6 @@ const width = 400
 
 // How long the window stays after the pointer leaves, so the pointer can reach it.
 const linger = 200
-
-const site = "https://bor-project.github.io/amneziageo_server"
 
 // The sign of AmneziaGeo: the white power glyph on the accent disc.
 export function AppSign({ className }: { className: string }) {
@@ -190,10 +185,5 @@ export function AppCaption({ caption, what, hint }: { caption: ReactNode; what: 
 
 // The part of the site about the sign, on the page of the panel of the way it runs and in its language.
 function useDocs(): string {
-  const language = useLanguage()
-  const user = useAppSelector((s) => s.auth.user)
-  const mode = useUpdate(holds(user, scopes.readState)).data?.mode
-  const kind = mode === "docker" ? "docker" : "service"
-
-  return language === "ru" ? `${site}/${kind}/panel/index.ru.html#значок-amneziageo` : `${site}/${kind}/panel/#amneziageo-mark`
+  return usePanelDocs("index", "значок-amneziageo", "amneziageo-mark")
 }

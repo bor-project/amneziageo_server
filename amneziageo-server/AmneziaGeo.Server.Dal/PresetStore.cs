@@ -150,7 +150,7 @@ public sealed class PresetStore
         ArgumentNullException.ThrowIfNull(draft);
 
         var wanted = Whole(draft);
-        if (await RefusalAsync(wanted, 0, ct).ConfigureAwait(false) is { } refusal)
+        if (await RefusalAsync(wanted, 0, false, ct).ConfigureAwait(false) is { } refusal)
         {
             return refusal;
         }
@@ -201,7 +201,7 @@ public sealed class PresetStore
         }
 
         var wanted = Whole(draft);
-        if (await RefusalAsync(wanted, id, ct).ConfigureAwait(false) is { } refusal)
+        if (await RefusalAsync(wanted, id, entity.Full, ct).ConfigureAwait(false) is { } refusal)
         {
             return refusal;
         }
@@ -252,11 +252,20 @@ public sealed class PresetStore
         return PresetResult.Done(gone);
     }
 
-    private async Task<PresetResult?> RefusalAsync(RoutingPreset draft, long id, CancellationToken ct)
+    // Returns why a preset is refused, or null when it is taken.
+    private async Task<PresetResult?> RefusalAsync(RoutingPreset draft, long id, bool heldFull, CancellationToken ct)
     {
         if (PresetRules.Check(draft) is { } fault)
         {
             return PresetResult.No(PresetOutcome.Invalid, fault.Code, fault.Message);
+        }
+
+        if (draft.Full && !heldFull)
+        {
+            return PresetResult.No(
+                PresetOutcome.Invalid,
+                "preset-full-retired",
+                "a preset no longer takes everything through the tunnel: it carries only what it names");
         }
 
         if (await _db.RoutingPresets.AnyAsync(one => one.Name == draft.Name && one.Id != id, ct).ConfigureAwait(false))

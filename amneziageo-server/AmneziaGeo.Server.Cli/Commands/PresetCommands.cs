@@ -101,6 +101,11 @@ public static class PresetCommands
             marks.Add("read-only");
         }
 
+        if (preset.Full)
+        {
+            marks.Add("everything through the tunnel: unsafe for the server, turn it off in the panel");
+        }
+
         return string.Join(", ", marks);
     }
 

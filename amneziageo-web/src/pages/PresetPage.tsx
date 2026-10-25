@@ -47,7 +47,12 @@ export function PresetPage() {
           type="button"
           onClick={() =>
             void add
-              .mutateAsync({ ...draftOf(held), name: t("templates.copyName", { name: held.name }), templates: [] })
+              .mutateAsync({
+                ...draftOf(held),
+                name: t("templates.copyName", { name: held.name }),
+                templates: [],
+                full: false,
+              })
               .then((made) => navigate(`/clients/presets/${made.id}/edit`))
           }
           disabled={add.isPending}

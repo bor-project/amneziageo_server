@@ -3,6 +3,7 @@ using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Cli;
 using AmneziaGeo.Server.Cli.Commands;
 using AmneziaGeo.Server.Routing.Template;
+using Microsoft.Data.Sqlite;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -38,6 +39,17 @@ public sealed class PresetCommandTests : IDisposable
                 "Unblock: through the tunnel 2, directly 1, blocked 0, templates 1, on by default, read-only",
             ],
             said);
+    }
+
+    [Fact]
+    public async Task TheListMarksAPresetMadeToTunnelEverything()
+    {
+        var id = await Add(new RoutingPreset { Name = "All", Direct = ["geoip:ru"] });
+        await MarkFull(id);
+
+        var said = await Said("preset", "list");
+
+        Assert.Equal(["All: through the tunnel 0, directly 1, blocked 0, templates 0, everything through the tunnel: unsafe for the server, turn it off in the panel"], said);
     }
 
     [Fact]
@@ -78,6 +90,17 @@ public sealed class PresetCommandTests : IDisposable
         Assert.True(added.IsOk, added.Message);
 
         return added.Record!.Id;
+    }
+
+    // Marks a preset the way the panel made it before the mode was retired.
+    private async Task MarkFull(long id)
+    {
+        await using var connection = new SqliteConnection($"Data Source={Database};Pooling=False");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE RoutingPresets SET Full = 1 WHERE Id = $id";
+        command.Parameters.AddWithValue("$id", id);
+        Assert.Equal(1, await command.ExecuteNonQueryAsync());
     }
 
     private async Task AddTemplate(string name, params long[] presets)

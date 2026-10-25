@@ -13,7 +13,7 @@ public class PresetStoreTests
         using var bench = new Bench();
 
         var added = await bench.Presets.AddAsync(
-            Fresh("blocked") with { Direct = ["geoip:RU"], Block = ["https://ads.example.com/x"], AllUdp = true, Full = true },
+            Fresh("blocked") with { Direct = ["geoip:RU"], Block = ["https://ads.example.com/x"], AllUdp = true },
             CancellationToken.None);
         var read = await bench.Presets.FindAsync(added.Record!.Id, CancellationToken.None);
 
@@ -23,7 +23,7 @@ public class PresetStoreTests
         Assert.Equal(["geoip:ru"], read.Direct);
         Assert.Equal(["domain:ads.example.com"], read.Block);
         Assert.True(read.AllUdp);
-        Assert.True(read.Full);
+        Assert.False(read.Full);
     }
 
     [Fact]
@@ -290,7 +290,6 @@ public class PresetStoreTests
     [InlineData("direct")]
     [InlineData("block")]
     [InlineData("udp")]
-    [InlineData("full")]
     public async Task AChangeOfTheListMovesItsTime(string what)
     {
         using var bench = new Bench();
@@ -363,14 +362,86 @@ public class PresetStoreTests
         Assert.False(PresetAnswers.Draft(new PresetRequest("blocked", null, null, null, ReadOnly: false), draft).ReadOnly);
     }
 
+    [Fact]
+    public async Task ANewPresetThatTunnelsEverythingIsRefused()
+    {
+        using var bench = new Bench();
+
+        var added = await bench.Presets.AddAsync(Fresh("all") with { Full = true }, CancellationToken.None);
+
+        Assert.Equal(PresetOutcome.Invalid, added.Outcome);
+        Assert.Equal("preset-full-retired", added.Code);
+        Assert.Empty(await bench.Presets.ListAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task APresetIsNotTurnedToTunnelEverything()
+    {
+        using var bench = new Bench();
+        var added = (await bench.Presets.AddAsync(Fresh("blocked"), CancellationToken.None)).Record!;
+
+        var changed = await bench.Presets.ChangeAsync(added.Id, Fresh("blocked") with { Full = true }, CancellationToken.None);
+        var read = await bench.Presets.FindAsync(added.Id, CancellationToken.None);
+
+        Assert.Equal(PresetOutcome.Invalid, changed.Outcome);
+        Assert.Equal("preset-full-retired", changed.Code);
+        Assert.False(read!.Full);
+    }
+
+    [Fact]
+    public async Task APresetMadeToTunnelEverythingReadsBackSo()
+    {
+        using var bench = new Bench();
+
+        var held = await LegacyAsync(bench, Fresh("all"));
+
+        Assert.True(held.Full);
+    }
+
+    [Fact]
+    public async Task APresetMadeToTunnelEverythingKeepsItsModeThroughAChange()
+    {
+        using var bench = new Bench();
+        var held = await LegacyAsync(bench, Fresh("all"));
+
+        var changed = await bench.Presets.ChangeAsync(held.Id, Fresh("renamed") with { Full = true }, CancellationToken.None);
+
+        Assert.True(changed.IsOk, changed.Message);
+        Assert.True(changed.Record!.Full);
+    }
+
+    [Fact]
+    public async Task APresetMadeToTunnelEverythingIsTurnedOffAndMovesItsTime()
+    {
+        using var bench = new Bench();
+        var held = await LegacyAsync(bench, Fresh("all"));
+        bench.Clock.Pass(TimeSpan.FromHours(1));
+
+        var changed = await bench.Presets.ChangeAsync(held.Id, Fresh("all"), CancellationToken.None);
+
+        Assert.True(changed.IsOk, changed.Message);
+        Assert.False(changed.Record!.Full);
+        Assert.True(changed.Record.UpdatedUtc > held.UpdatedUtc);
+    }
+
+    // Adds a preset and marks it the way the panel made it before the mode was retired.
+    private static async Task<RoutingPreset> LegacyAsync(Bench bench, RoutingPreset preset)
+    {
+        var added = (await bench.Presets.AddAsync(preset, CancellationToken.None)).Record!;
+        var entity = (await bench.Db.RoutingPresets.FindAsync(added.Id))!;
+        entity.Full = true;
+        await bench.Db.SaveChangesAsync();
+
+        return (await bench.Presets.FindAsync(added.Id, CancellationToken.None))!;
+    }
+
     private static RoutingPreset Changed(string what) => what switch
     {
         "name" => Fresh("renamed"),
         "proxy" => Fresh("blocked") with { Proxy = ["geosite:youtube"] },
         "direct" => Fresh("blocked") with { Direct = ["geoip:ru"] },
         "block" => Fresh("blocked") with { Block = ["domain:ads.example.com"] },
-        "udp" => Fresh("blocked") with { AllUdp = true },
-        _ => Fresh("blocked") with { Full = true },
+        _ => Fresh("blocked") with { AllUdp = true },
     };
 
     private static RoutingPreset Fresh(string name) => new()
