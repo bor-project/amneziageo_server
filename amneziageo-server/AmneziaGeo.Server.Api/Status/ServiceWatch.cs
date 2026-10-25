@@ -45,6 +45,8 @@ public sealed class ServiceWatch : BackgroundService
 
     private readonly ClientUpdateState _updates;
 
+    private readonly SubscriptionCertificates? _certificates;
+
     private readonly FirewallHost _firewall;
 
     private readonly DnsState _resolver;
@@ -88,7 +90,8 @@ public sealed class ServiceWatch : BackgroundService
         PanelHealth health,
         TimeProvider time,
         ILogger<ServiceWatch> logger,
-        ClientUpdateState? updates = null)
+        ClientUpdateState? updates = null,
+        SubscriptionCertificates? certificates = null)
     {
         ArgumentNullException.ThrowIfNull(health);
 
@@ -97,6 +100,7 @@ public sealed class ServiceWatch : BackgroundService
         _fronts = fronts;
         _subscriptions = subscriptions;
         _updates = updates ?? new ClientUpdateState();
+        _certificates = certificates;
         _firewall = firewall;
         _resolver = resolver;
         _panel = panel;
@@ -232,7 +236,8 @@ public sealed class ServiceWatch : BackgroundService
             await WallsAsync(ServiceChecks.Exposed(configs, subscription, Updates()), now, ct).ConfigureAwait(false),
             resolver,
             Certificates(subscription),
-            Updates());
+            Updates(),
+            _certificates?.Served(configs));
     }
 
     // Reads what the releases of the client are served with.
@@ -260,7 +265,17 @@ public sealed class ServiceWatch : BackgroundService
             chains.Add(subscription.Certificate);
         }
 
-        return [.. chains.Select(one => ServiceCertificates.Read(one, _logger))];
+        return [.. chains.Select(Read)];
+    }
+
+    // Reads what the file of a certificate says and, once it reads, whether every client takes its chain.
+    private CertificateFacts Read(string chain)
+    {
+        var read = ServiceCertificates.Read(chain, _logger);
+
+        return read.Until is not null && _certificates is not null
+            ? read with { Check = _certificates.OfChain(chain, string.Empty) }
+            : read;
     }
 
     // Asks the host about the front of every endpoint that takes a websocket and counts its falls since the check before.

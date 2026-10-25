@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Core.Panel;
 
 namespace AmneziaGeo.Server.Api.Subscriptions;
@@ -15,6 +16,8 @@ public static class SubscriptionServices
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<SubscriptionState>();
+        services.AddSingleton<CertificateVerdicts>();
+        services.AddSingleton<SubscriptionCertificates>();
         services.AddSingleton<DeviceHolds>();
         services.AddSingleton<SubscriptionServer>();
         services.AddHostedService(provider => provider.GetRequiredService<SubscriptionServer>());
@@ -34,6 +37,7 @@ public static class SubscriptionServices
         var state = app.Services.GetRequiredService<SubscriptionState>();
         var panel = app.Services.GetRequiredService<PanelSettings>();
         var scopes = app.Services.GetRequiredService<IServiceScopeFactory>();
+        var certificates = app.Services.GetRequiredService<SubscriptionCertificates>();
         app.Use(async (context, next) =>
         {
             var settings = state.Current;
@@ -43,7 +47,14 @@ public static class SubscriptionServices
                 && settings.Port == panel.Port
                 && (SubscriptionAnswer.Asked(path, settings) ?? SubscriptionAnswer.AskedHold(path, settings)) is not null)
             {
-                await SubscriptionAnswer.WriteAsync(context, settings, scopes).ConfigureAwait(false);
+                if (certificates.OnRequest(context.Request.Host.Host).IsGood)
+                {
+                    await SubscriptionAnswer.WriteAsync(context, settings, scopes).ConfigureAwait(false);
+                }
+                else
+                {
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                }
 
                 return;
             }

@@ -106,14 +106,19 @@ public sealed record ClientSyncFault(string Config, string Message);
 public sealed record ClientImportRequest(long ConfigId, string? Text, string? Prefix = null);
 
 /// <summary>
-/// The configuration a client connects with, the address of its subscription and why the address is empty.
+/// The configuration a client connects with, the address of its subscription, why the address is empty, and what keeps
+/// the certificate of the subscription and the one of the panel from being taken by every client.
 /// </summary>
 public sealed record ClientConfigResponse(
     string FileName,
     string Text,
     string Link,
     string Subscription,
-    string SubscriptionMiss);
+    string SubscriptionMiss,
+    string SubscriptionFault = "",
+    string SubscriptionDetail = "",
+    string PanelFault = "",
+    string PanelDetail = "");
 
 /// <summary>
 /// What putting the clients of one endpoint on the host produced.

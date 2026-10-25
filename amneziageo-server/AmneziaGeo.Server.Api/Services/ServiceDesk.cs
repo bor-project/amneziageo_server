@@ -49,6 +49,8 @@ public sealed class ServiceDesk
 
     private readonly AnswerSlots _slots;
 
+    private readonly SubscriptionCertificates? _certificates;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -61,7 +63,8 @@ public sealed class ServiceDesk
         IOptions<JsonOptions> json,
         ILogger<ServiceDesk> logger,
         RefusalHold? hold = null,
-        AnswerSlots? slots = null)
+        AnswerSlots? slots = null,
+        SubscriptionCertificates? certificates = null)
     {
         ArgumentNullException.ThrowIfNull(life);
         ArgumentNullException.ThrowIfNull(json);
@@ -75,6 +78,7 @@ public sealed class ServiceDesk
         _logger = logger;
         _hold = hold ?? new RefusalHold();
         _slots = slots ?? new AnswerSlots(0);
+        _certificates = certificates;
     }
 
     /// <summary>
@@ -370,6 +374,7 @@ public sealed class ServiceDesk
         return subscriptions.IsEnabled
             && !subscriptions.Separate
             && (SubscriptionAnswer.Asked(path, subscriptions) ?? SubscriptionAnswer.AskedHold(path, subscriptions)) is not null
+            && _certificates?.OnRequest(context.Request.Host.Host).IsGood != false
             ? Wanted.Subscription
             : Wanted.None;
     }

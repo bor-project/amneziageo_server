@@ -105,7 +105,8 @@ public sealed record ResolverFacts(bool IsEnabled, bool IsRunning, int Port, str
 /// <param name="Name">The name the certificate was issued for, or the folder of its file when it did not read.</param>
 /// <param name="Until">When the certificate runs out, null when the file did not read.</param>
 /// <param name="Fault">Why the file did not read, empty when it did.</param>
-public sealed record CertificateFacts(string Name, DateTimeOffset? Until, string Fault);
+/// <param name="Check">What keeps the chain from being one every client takes, null when it was not looked at.</param>
+public sealed record CertificateFacts(string Name, DateTimeOffset? Until, string Fault, CertificateVerdict? Check = null);
 
 /// <summary>
 /// What the releases of the client are served with.
@@ -133,6 +134,8 @@ public sealed record ClientUpdateFacts(bool IsEnabled, bool Own, int Port, bool 
 /// <param name="Resolver">What the resolver of the clients is doing.</param>
 /// <param name="Certificates">The certificates the panel, the TCP ports of the endpoints and the subscriptions answer under.</param>
 /// <param name="Updates">What the releases of the client are served with, null when they are not looked at.</param>
+/// <param name="SubscriptionCertificate">What keeps the certificate the subscriptions answer under from carrying them,
+/// null when it was not looked at.</param>
 public sealed record ServiceFacts(
     IReadOnlyList<ServerConfig> Configs,
     int PanelPort,
@@ -145,7 +148,8 @@ public sealed record ServiceFacts(
     IReadOnlyDictionary<ServicePort, string> Walls,
     ResolverFacts Resolver,
     IReadOnlyList<CertificateFacts> Certificates,
-    ClientUpdateFacts? Updates = null);
+    ClientUpdateFacts? Updates = null,
+    CertificateVerdict? SubscriptionCertificate = null);
 
 /// <summary>
 /// Tells which services the server runs for its clients and what keeps each from working.
@@ -384,6 +388,8 @@ public static class ServiceChecks
                 faults.Add(new ServiceFault(NoEndpoint, string.Empty));
             }
 
+            Carry(facts, faults);
+
             return new ServiceHealth(Subscription, string.Empty, [], false, [], faults, now);
         }
 
@@ -398,6 +404,8 @@ public static class ServiceChecks
         {
             Wall(facts, port, faults);
         }
+
+        Carry(facts, faults);
 
         return new ServiceHealth(Subscription, string.Empty, [port], shared, [], faults, now);
     }
@@ -494,7 +502,21 @@ public static class ServiceChecks
             notes.Add(new ServiceFault(CertificateExpiring, ((int)(until - now).TotalDays).ToString(CultureInfo.InvariantCulture)));
         }
 
+        if (faults.Count == 0 && certificate.Check is { IsGood: false } check && check.Fault != CertificateCheck.Expired)
+        {
+            faults.Add(new ServiceFault(check.Fault, check.Detail));
+        }
+
         return new ServiceHealth(Certificate, certificate.Name, [], false, [], faults, now) { Notes = notes, Until = certificate.Until };
+    }
+
+    // Notes a certificate the subscriptions answer under that not every client takes.
+    private static void Carry(ServiceFacts facts, List<ServiceFault> faults)
+    {
+        if (facts.SubscriptionCertificate is { IsGood: false } verdict)
+        {
+            faults.Add(new ServiceFault(verdict.Fault, verdict.Detail));
+        }
     }
 
     // Tells whether the TCP port of an endpoint answers: the panel serves it or the host took it.

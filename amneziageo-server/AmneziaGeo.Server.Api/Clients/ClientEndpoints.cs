@@ -1,3 +1,4 @@
+using System.Net;
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Api.Rules;
@@ -185,6 +186,7 @@ public static class ClientEndpoints
         PanelSettings panel,
         PanelStore panels,
         WebOptions options,
+        SubscriptionCertificates certificates,
         CancellationToken ct)
     {
         var client = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -212,19 +214,39 @@ public static class ClientEndpoints
             : holders.HandedAsync(store, [], handed, ct)).ConfigureAwait(false);
         var naming = (await panels.ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
         var host = context.Request.Host.Host;
+        var address = SubscriptionAnswer.Address(
+            subscriptions.Current,
+            panel,
+            Listening.Chain(options, panel).Length > 0,
+            context.Request.Host.Host,
+            endpoint,
+            client.PrivateKey.Length > 0 ? client.SubscriptionId : string.Empty);
+        var carried = certificates.Of(address);
+        var asked = Asked(context, certificates, Listening.Chain(options, panel));
 
         return Results.Ok(new ClientConfigResponse(
             ClientText.FileName(endpoint, client, naming, host),
             ClientText.Text(endpoint, client, template, names, picked, held.Files),
             ClientLink.Link(endpoint, client, template, names, ClientText.Title(endpoint, client, naming, host), picked, held.Files),
-            SubscriptionAnswer.Address(
-                subscriptions.Current,
-                panel,
-                Listening.Chain(options, panel).Length > 0,
-                context.Request.Host.Host,
-                endpoint,
-                client.PrivateKey.Length > 0 ? client.SubscriptionId : string.Empty),
-            Miss(subscriptions.Current, client)));
+            address,
+            Miss(subscriptions.Current, client),
+            carried.Fault,
+            carried.Detail,
+            asked.Fault,
+            asked.Detail));
+    }
+
+    // What keeps the certificate of the panel from being taken at the host it was asked at; nothing over the loopback.
+    private static CertificateVerdict Asked(HttpContext context, SubscriptionCertificates certificates, string chain)
+    {
+        if (context.Connection.RemoteIpAddress is { } caller && IPAddress.IsLoopback(caller))
+        {
+            return CertificateVerdict.Good;
+        }
+
+        return context.Request.IsHttps
+            ? certificates.OfChain(chain, context.Request.Host.Host)
+            : new CertificateVerdict(CertificateCheck.Missing, string.Empty);
     }
 
     private static string Miss(SubscriptionSettings settings, TunnelClient client) => settings switch

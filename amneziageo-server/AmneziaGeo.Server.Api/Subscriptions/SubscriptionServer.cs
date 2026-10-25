@@ -26,6 +26,8 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
 
     private readonly AnswerSlots _slots;
 
+    private readonly SubscriptionCertificates? _certificates;
+
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private WebApplication? _app;
@@ -39,7 +41,8 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
         PanelSettings panel,
         WebOptions options,
         ILogger<SubscriptionServer> logger,
-        AnswerSlots? slots = null)
+        AnswerSlots? slots = null,
+        SubscriptionCertificates? certificates = null)
     {
         _scopes = scopes;
         _state = state;
@@ -47,6 +50,7 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
         _options = options;
         _logger = logger;
         _slots = slots ?? new AnswerSlots(0);
+        _certificates = certificates;
     }
 
     /// <summary>
@@ -140,6 +144,13 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
             return string.Empty;
         }
 
+        if (Chain(settings).Length == 0)
+        {
+            _logger.LogWarning("the subscriptions stay off port {Port}: neither they nor the panel hold a certificate", settings.Port);
+
+            return string.Empty;
+        }
+
         try
         {
             var app = Build(settings);
@@ -193,9 +204,19 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
         });
 
         var app = builder.Build();
-        app.Run(context => _slots.AnswerAsync(() => SubscriptionAnswer.WriteAsync(context, _state.Current, _scopes), context.RequestAborted));
+        app.Run(context => _certificates?.OnRequest(context.Request.Host.Host).IsGood == false
+            ? Unanswered(context)
+            : _slots.AnswerAsync(() => SubscriptionAnswer.WriteAsync(context, _state.Current, _scopes), context.RequestAborted));
 
         return app;
+    }
+
+    // Answers a request the certificate of the port does not carry as a path the subscriptions hold nothing at.
+    private static Task Unanswered(HttpContext context)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+
+        return Task.CompletedTask;
     }
 
     private string Chain(SubscriptionSettings settings) =>

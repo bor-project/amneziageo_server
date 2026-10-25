@@ -1,5 +1,6 @@
 import { useRef, useState } from "react"
 import type { ReactNode } from "react"
+import { Link } from "react-router-dom"
 import { card, quiet } from "@/components/styles"
 import type { Text } from "@/i18n"
 import { copyImage, copyText, save, saveText } from "@/qr"
@@ -8,9 +9,11 @@ import type { Picture } from "@/qr"
 // The browser copies a picture only on a page served over HTTPS or from localhost.
 const pictures = window.isSecureContext && typeof ClipboardItem !== "undefined"
 
+const button = `${quiet} disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted`
+
 /**
- * A card of the export of a configuration: its caption with its mark, the buttons that copy and save it, and its QR
- * code, or a note in place of them.
+ * A card of the export of a configuration: its caption with its mark and its warning, the buttons that copy and save
+ * it, and its QR code, or a note in place of them; a locked card only shows them.
  */
 export function QrSheet({
   caption,
@@ -20,6 +23,9 @@ export function QrSheet({
   plain,
   note,
   mark,
+  warning,
+  locked = false,
+  fix = null,
   t,
 }: {
   caption: string
@@ -29,6 +35,9 @@ export function QrSheet({
   plain: boolean
   note: ReactNode
   mark?: ReactNode
+  warning?: string
+  locked?: boolean
+  fix?: string | null
   t: Text
 }) {
   const [taken, setTaken] = useState("")
@@ -59,6 +68,7 @@ export function QrSheet({
         <span className="flex min-w-0 flex-1 items-center gap-1">
           <span className="min-w-0 truncate text-sm font-medium text-ink">{caption}</span>
           {mark}
+          {warning !== undefined && <Warning text={warning} to={fix} />}
         </span>
         {note === null && (
           <>
@@ -67,7 +77,8 @@ export function QrSheet({
               title={t("action.copyText")}
               aria-label={t("action.copyText")}
               onClick={() => void put("text")}
-              className={`${quiet} ${taken === "text" ? "text-good" : ""}`}
+              disabled={locked}
+              className={`${button} ${taken === "text" ? "text-good" : ""}`}
             >
               {taken === "text" ? <Tick /> : <Papers />}
             </button>
@@ -77,8 +88,8 @@ export function QrSheet({
                 title={t("action.copyImage")}
                 aria-label={t("action.copyImage")}
                 onClick={() => void put("image")}
-                disabled={picture === null}
-                className={`${quiet} ${taken === "image" ? "text-good" : ""}`}
+                disabled={locked || picture === null}
+                className={`${button} ${taken === "image" ? "text-good" : ""}`}
               >
                 {taken === "image" ? <Tick /> : <Frame />}
               </button>
@@ -88,8 +99,8 @@ export function QrSheet({
               title={t("clients.download")}
               aria-label={t("clients.download")}
               onClick={keep}
-              disabled={!plain && picture === null}
-              className={quiet}
+              disabled={locked || (!plain && picture === null)}
+              className={button}
             >
               <Arrow />
             </button>
@@ -109,12 +120,31 @@ export function QrSheet({
             <img
               src={picture.url}
               alt={t("clients.qr")}
-              className="aspect-square w-full max-w-80 rounded bg-white p-2 [image-rendering:pixelated]"
+              className={`aspect-square w-full max-w-80 rounded bg-white p-2 [image-rendering:pixelated] ${locked ? "opacity-40 grayscale" : ""}`}
             />
           )}
         </div>
       )}
     </div>
+  )
+}
+
+// The mark of a card whose certificate not every client takes, saying what is wrong as the pointer rests on it.
+function Warning({ text, to }: { text: string; to: string | null }) {
+  const mark = (
+    <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-warn-soft text-[11px] font-semibold text-warn">
+      !
+    </span>
+  )
+
+  return to === null ? (
+    <span title={text} aria-label={text} className="flex shrink-0">
+      {mark}
+    </span>
+  ) : (
+    <Link to={to} title={text} aria-label={text} className="flex shrink-0">
+      {mark}
+    </Link>
   )
 }
 

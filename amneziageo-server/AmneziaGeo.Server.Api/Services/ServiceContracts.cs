@@ -78,7 +78,10 @@ public sealed record SpeedFeature(SpeedLeg Inside, SpeedLeg Outside, long Limit,
 /// <param name="Url">The address the client reads its subscription at.</param>
 /// <param name="Revision">The mark of what the subscription hands out now.</param>
 /// <param name="Pin">The SHA-256 of the certificate the address answers under, empty when the address is elsewhere.</param>
-public sealed record SubscriptionFeature(string Url, string Revision, string Pin);
+/// <param name="Fault">What keeps the client from reading the subscription: a certificate not every client takes; empty
+/// when nothing does.</param>
+/// <param name="Detail">The date, the name or the authority the fault is about.</param>
+public sealed record SubscriptionFeature(string Url, string Revision, string Pin, string Fault = "", string Detail = "");
 
 /// <summary>
 /// One geo source the client fetches its lists from.
