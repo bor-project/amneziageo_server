@@ -114,6 +114,14 @@ export const settings: Item[] = [
     scope: scopes.manageAccess,
     only: "subscriptions",
   },
+  {
+    to: "/settings/client-updates",
+    label: "tab.clientUpdates",
+    about: "about.clientUpdates",
+    icon: "download",
+    scope: scopes.manageClientUpdates,
+    only: "clientUpdates",
+  },
   { to: "/settings/users", label: "tab.users", about: "about.users", icon: "people", scope: scopes.manageAccess },
   {
     to: "/settings/diagnostics",

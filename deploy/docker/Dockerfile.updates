@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1
+
+# The service of the releases of the client, built from the repository root for amd64 and arm64:
+#   docker buildx build -f deploy/docker/Dockerfile.updates --platform linux/amd64,linux/arm64 -t amneziageo-updates:<version> .
+
+ARG DOTNET=10.0
+
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:$DOTNET AS server
+ARG TARGETARCH
+ARG VERSION=0.0.1
+WORKDIR /src
+COPY Directory.Build.props .editorconfig ./
+COPY amneziageo-server/AmneziaGeo.Server.Updates/ amneziageo-server/AmneziaGeo.Server.Updates/
+COPY amneziageo-server/AmneziaGeo.Server.Updates.Host/ amneziageo-server/AmneziaGeo.Server.Updates.Host/
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    case "$TARGETARCH" in \
+      amd64) rid=linux-x64 ;; \
+      arm64) rid=linux-arm64 ;; \
+      *) echo "no build for $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+ && dotnet publish amneziageo-server/AmneziaGeo.Server.Updates.Host -c Release -r "$rid" --self-contained false \
+      -p:Version="$VERSION" -o /out --nologo -v minimal
+
+FROM mcr.microsoft.com/dotnet/aspnet:$DOTNET
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl tini \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=server /out/ /opt/amneziageo-updates/
+ARG VERSION=0.0.1
+LABEL org.opencontainers.image.source=https://github.com/bor-project/amneziageo_server \
+      org.opencontainers.image.version=$VERSION
+ENV DOTNET_NOLOGO=1 \
+    ASPNETCORE_HTTP_PORTS= \
+    Updates__Directory=/var/lib/amneziageo-updates \
+    Updates__Etc=/etc/amneziageo-updates
+WORKDIR /opt/amneziageo-updates
+VOLUME ["/var/lib/amneziageo-updates", "/etc/amneziageo-updates"]
+EXPOSE 8445
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s \
+  CMD curl -fsSk https://127.0.0.1:8445/health > /dev/null || exit 1
+ENTRYPOINT ["tini", "--", "/opt/amneziageo-updates/AmneziaGeo.Server.Updates.Host"]

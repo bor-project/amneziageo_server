@@ -11,6 +11,10 @@ etc=/etc/amneziageo-server
 data=${AMNEZIAGEO_DATA:-/var/lib/amneziageo-server}
 unit=${AMNEZIAGEO_UNIT:-amneziageo-server}
 docker_dir=${AMNEZIAGEO_DOCKER_DIR:-/opt/amneziageo-docker}
+updates_image=ghcr.io/bor-project/amneziageo-updates
+updates_dir=${AMNEZIAGEO_UPDATES_DIR:-/opt/amneziageo-updates}
+updates_data=/var/lib/amneziageo-updates
+updates_etc=/etc/amneziageo-updates
 endpoints=/etc/amnezia/amneziawg
 run_dir=/run/amneziageo-server
 docker_socket=/var/run/docker.sock
@@ -4028,6 +4032,170 @@ install_doors() {
   fi
 }
 
+# Item 30: the service of the releases of the client, apart from the panel, as a container of its own image.
+# Runs docker compose in the directory of the service.
+ucompose() {
+  (cd "$updates_dir" && docker compose "$@")
+}
+
+# Prints the state of the container of the service.
+updates_state() {
+  docker inspect -f '{{.State.Status}}' amneziageo-updates 2> /dev/null || printf 'not installed'
+}
+
+# Prints the port the service answers on, empty before it is installed.
+updates_port() {
+  sed -n 's/^AMNEZIAGEO_UPDATES_PORT=//p' "$updates_dir/.env" 2> /dev/null | tail -1
+}
+
+# Writes the compose project of the service: its port, its directories and a certificate of the host when one is named.
+write_updates_compose() {
+  local certificate=$1
+  {
+    cat <<EOF
+name: amneziageo-updates
+
+services:
+  updates:
+    image: $updates_image:\${AMNEZIAGEO_UPDATES_TAG:-latest}
+    container_name: amneziageo-updates
+    ports:
+      - "\${AMNEZIAGEO_UPDATES_PORT:-8445}:8445"
+    volumes:
+      - $updates_data:/var/lib/amneziageo-updates
+      - $updates_etc:/etc/amneziageo-updates
+EOF
+    if [ -n "$certificate" ]; then
+      cat <<EOF
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    environment:
+      - Updates__Certificate=/etc/letsencrypt/live/$certificate/fullchain.pem
+      - Updates__CertificateKey=/etc/letsencrypt/live/$certificate/privkey.pem
+EOF
+    fi
+
+    cat <<'EOF'
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    restart: unless-stopped
+EOF
+  } > "$updates_dir/compose.yaml"
+}
+
+# Puts the service on, or moves it to the newest release, and prints its token the first time.
+updates_install() {
+  local work found version port certificate names fresh=
+  need_docker || return 1
+  work=$(mktemp -d) || return 1
+  found=$(manifest stable "$work") || { rm -rf "$work"; return 1; }
+  rm -rf "$work"
+  version=${found#* }
+  port=$(updates_port)
+  if [ -z "$port" ]; then
+    port=$(ask "Port of the service [8445]:" 8445) || return 1
+    if ! [[ $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+      bad "$port is not a port"
+      return 1
+    fi
+
+    if ! port_free t "$port"; then
+      bad "port $port is taken on this host"
+      return 1
+    fi
+  fi
+
+  certificate=
+  names=$(certificates | awk '{print $1}')
+  if [ -n "$names" ]; then
+    say "certificates of the host: $(printf '%s' "$names" | tr '\n' ' ')"
+    certificate=$(ask "Certificate for the service (empty for one of its own):" "") || return 1
+    if [ -n "$certificate" ] && [ ! -f "/etc/letsencrypt/live/$certificate/fullchain.pem" ]; then
+      bad "there is no certificate $certificate"
+      return 1
+    fi
+  fi
+
+  if [ ! -s "$updates_etc/token" ]; then
+    fresh=1
+  fi
+
+  mkdir -p "$updates_dir" "$updates_data" "$updates_etc"
+  chmod 700 "$updates_etc"
+  printf 'AMNEZIAGEO_UPDATES_TAG=%s\nAMNEZIAGEO_UPDATES_PORT=%s\n' "$version" "$port" > "$updates_dir/.env"
+  write_updates_compose "$certificate"
+  ucompose pull && ucompose up -d || return 1
+  good "the service of $version runs from $updates_dir/compose.yaml"
+  say "address for the panel: https://$(public_address):$port/"
+  if [ -n "$fresh" ]; then
+    updates_show_token
+  fi
+}
+
+# Waits for the token the service writes at its first start and prints it once.
+updates_show_token() {
+  local tries=0
+  while [ ! -s "$updates_etc/token" ] && [ "$tries" -lt 30 ]; do
+    sleep 1
+    tries=$((tries + 1))
+  done
+
+  if [ -s "$updates_etc/token" ]; then
+    say "the token for the panel, shown once: $(cat "$updates_etc/token")"
+  else
+    bad "the service did not write its token to $updates_etc/token"
+  fi
+}
+
+# Gives the service a new token and prints it once.
+updates_new_token() {
+  openssl rand -hex 24 > "$updates_etc/token" || return 1
+  chmod 600 "$updates_etc/token"
+  ucompose restart > /dev/null || return 1
+  say "the new token for the panel, shown once: $(cat "$updates_etc/token")"
+}
+
+# Takes the service off the host, leaving its releases and its token.
+updates_remove() {
+  agree "Take the service off this host? Its releases in $updates_data stay." || return 0
+  ucompose down > /dev/null 2>&1
+  rm -rf "$updates_dir"
+  good "the service is off; the releases stay in $updates_data, the token in $updates_etc"
+}
+
+updates_menu() {
+  local choice
+  while true; do
+    step "Client Updates Service"
+    say "state: $(updates_state), port ${port:-$(updates_port)}"
+    say "  1. Install or update the service"
+    say "  2. New token"
+    say "  3. Logs of the service"
+    say "  4. Remove the service"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1) updates_install ;;
+      2 | 3 | 4)
+        if [ ! -d "$updates_dir" ]; then
+          bad "the service is not installed"
+          continue
+        fi
+
+        case $choice in
+          2) updates_new_token ;;
+          3) ucompose logs --tail 100 -f ;;
+          4) updates_remove ;;
+        esac
+        ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
 # Writes a line of the menu frame.
 row() {
   printf '│  %-45s│\n' "$1"
@@ -4122,9 +4290,11 @@ menu() {
     rule
     entry 28 "Update Geo Files"
     entry 29 "DNS for Clients"
+    rule
+    entry 30 "Client Updates Service"
     printf '%s\n' '╚───────────────────────────────────────────────╝'
     reading status_block
-    choice=$(ask "Choose [0-29]:") || exit 0
+    choice=$(ask "Choose [0-30]:") || exit 0
     hold=1
     case $choice in
       0) exit 0 ;;
@@ -4157,6 +4327,7 @@ menu() {
       27) bbr_item ;;
       28) need_panel && cli geo update ;;
       29) resolver_item ;;
+      30) updates_menu && hold= ;;
       "") hold= ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -4186,6 +4357,7 @@ usage:
   amneziageo-server bbr [on | off]     BBR with the fq queue for TCP
   amneziageo-server dns [on | off]     the resolver of the clients: on runs it whenever the routing needs it
   amneziageo-server dns open           let the clients of the endpoints reach the resolver through ufw
+  amneziageo-server updates            the service of the client releases, apart from the panel
   amneziageo-server <command>          a command of the utility: user, role, token, panel, endpoint,
                                        import, device, family, geo, dns, init, login, whoami, update status
 EOF
@@ -4259,6 +4431,7 @@ main() {
         *) cli_in "$@" ;;
       esac
       ;;
+    updates) updates_menu ;;
     *) cli_in "$@" ;;
   esac
 }

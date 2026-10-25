@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Net.NetworkInformation;
+using AmneziaGeo.Server.Api.ClientUpdates;
 using AmneziaGeo.Server.Api.Services;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
@@ -41,6 +42,8 @@ public sealed class ServiceWatch : BackgroundService
     private readonly ProxyHost _fronts;
 
     private readonly SubscriptionState _subscriptions;
+
+    private readonly ClientUpdateState _updates;
 
     private readonly FirewallHost _firewall;
 
@@ -84,7 +87,8 @@ public sealed class ServiceWatch : BackgroundService
         WebOptions options,
         PanelHealth health,
         TimeProvider time,
-        ILogger<ServiceWatch> logger)
+        ILogger<ServiceWatch> logger,
+        ClientUpdateState? updates = null)
     {
         ArgumentNullException.ThrowIfNull(health);
 
@@ -92,6 +96,7 @@ public sealed class ServiceWatch : BackgroundService
         _services = services;
         _fronts = fronts;
         _subscriptions = subscriptions;
+        _updates = updates ?? new ClientUpdateState();
         _firewall = firewall;
         _resolver = resolver;
         _panel = panel;
@@ -224,9 +229,19 @@ public sealed class ServiceWatch : BackgroundService
             await FrontsAsync(configs, ct).ConfigureAwait(false),
             _probe.Tunnel().Loaded,
             Links(),
-            await WallsAsync(ServiceChecks.Exposed(configs, subscription), now, ct).ConfigureAwait(false),
+            await WallsAsync(ServiceChecks.Exposed(configs, subscription, Updates()), now, ct).ConfigureAwait(false),
             resolver,
-            Certificates(subscription));
+            Certificates(subscription),
+            Updates());
+    }
+
+    // Reads what the releases of the client are served with.
+    private ClientUpdateFacts Updates()
+    {
+        var settings = _updates.Current;
+        var port = settings.PortOr(_panel.Port);
+
+        return new ClientUpdateFacts(settings.IsEnabled, settings.Own, port, port == _panel.Port, _updates.Fault, _updates.AddressFault);
     }
 
     // Reads the certificates the panel, the TCP ports of the endpoints and the subscriptions answer under.

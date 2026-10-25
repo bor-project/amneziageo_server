@@ -7,6 +7,7 @@
     <ProjectReference Include="..\AmneziaGeo.Server.Auth\AmneziaGeo.Server.Auth.csproj" />
     <ProjectReference Include="..\AmneziaGeo.Server.Geo\AmneziaGeo.Server.Geo.csproj" />
     <ProjectReference Include="..\AmneziaGeo.Server.Routing\AmneziaGeo.Server.Routing.csproj" />
+    <ProjectReference Include="..\AmneziaGeo.Server.Updates\AmneziaGeo.Server.Updates.csproj" />
   </ItemGroup>
 
   <ItemGroup>

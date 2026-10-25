@@ -108,6 +108,17 @@ public sealed record ResolverFacts(bool IsEnabled, bool IsRunning, int Port, str
 public sealed record CertificateFacts(string Name, DateTimeOffset? Until, string Fault);
 
 /// <summary>
+/// What the releases of the client are served with.
+/// </summary>
+/// <param name="IsEnabled">Whether the panel offers the releases.</param>
+/// <param name="Own">Whether the releases come from a store of the panel, not a service apart.</param>
+/// <param name="Port">The TCP port the store of the panel answers on.</param>
+/// <param name="Shared">Whether the store answers on the port of the panel.</param>
+/// <param name="Fault">Why the host refused to serve the store, empty when it did not.</param>
+/// <param name="AddressFault">Why the service apart did not answer, empty when it did.</param>
+public sealed record ClientUpdateFacts(bool IsEnabled, bool Own, int Port, bool Shared, string Fault, string AddressFault);
+
+/// <summary>
 /// What the checks of the services read off the panel and the host.
 /// </summary>
 /// <param name="Configs">The endpoints the panel holds.</param>
@@ -121,6 +132,7 @@ public sealed record CertificateFacts(string Name, DateTimeOffset? Until, string
 /// <param name="Walls">What the firewall of the host says about each port.</param>
 /// <param name="Resolver">What the resolver of the clients is doing.</param>
 /// <param name="Certificates">The certificates the panel, the TCP ports of the endpoints and the subscriptions answer under.</param>
+/// <param name="Updates">What the releases of the client are served with, null when they are not looked at.</param>
 public sealed record ServiceFacts(
     IReadOnlyList<ServerConfig> Configs,
     int PanelPort,
@@ -132,7 +144,8 @@ public sealed record ServiceFacts(
     IReadOnlySet<string>? Links,
     IReadOnlyDictionary<ServicePort, string> Walls,
     ResolverFacts Resolver,
-    IReadOnlyList<CertificateFacts> Certificates);
+    IReadOnlyList<CertificateFacts> Certificates,
+    ClientUpdateFacts? Updates = null);
 
 /// <summary>
 /// Tells which services the server runs for its clients and what keeps each from working.
@@ -163,6 +176,11 @@ public static class ServiceChecks
     /// A certificate the panel, the TCP ports of the endpoints or the subscriptions answer under.
     /// </summary>
     public const string Certificate = "certificate";
+
+    /// <summary>
+    /// The releases of the client.
+    /// </summary>
+    public const string Updates = "updates";
 
     /// <summary>
     /// The endpoint names no host, so its clients get no address to reach it at.
@@ -235,6 +253,16 @@ public static class ServiceChecks
     public const string CertificateExpiring = "certificate-expiring";
 
     /// <summary>
+    /// The directory of the releases does not take files.
+    /// </summary>
+    public const string UpdatesDirectory = "updates-directory";
+
+    /// <summary>
+    /// The service apart that holds the releases does not answer.
+    /// </summary>
+    public const string UpdatesAddress = "updates-address";
+
+    /// <summary>
     /// How many days before its end a certificate is named as running out.
     /// </summary>
     public const int ExpiringDays = 14;
@@ -260,6 +288,10 @@ public static class ServiceChecks
         }
 
         services.AddRange(facts.Certificates.Select(one => OfCertificate(one, now)));
+        if (facts.Updates is { IsEnabled: true } updates)
+        {
+            services.Add(OfUpdates(facts, updates, now));
+        }
 
         return services;
     }
@@ -267,7 +299,10 @@ public static class ServiceChecks
     /// <summary>
     /// Lists the ports of the services the firewall of the host is asked about.
     /// </summary>
-    public static IReadOnlyList<ServicePort> Exposed(IReadOnlyList<ServerConfig> configs, SubscriptionSettings subscription)
+    public static IReadOnlyList<ServicePort> Exposed(
+        IReadOnlyList<ServerConfig> configs,
+        SubscriptionSettings subscription,
+        ClientUpdateFacts? updates = null)
     {
         ArgumentNullException.ThrowIfNull(configs);
         ArgumentNullException.ThrowIfNull(subscription);
@@ -282,6 +317,11 @@ public static class ServiceChecks
         if (subscription.IsEnabled && subscription.Separate && FirewallPlan.Reached(subscription.Listen))
         {
             Take(ports, new ServicePort(FirewallPlan.Tcp, subscription.Port));
+        }
+
+        if (updates is { IsEnabled: true, Own: true, Shared: false })
+        {
+            Take(ports, new ServicePort(FirewallPlan.Tcp, updates.Port));
         }
 
         return ports;
@@ -299,6 +339,7 @@ public static class ServiceChecks
             Endpoint => $"endpoint {service.Name}",
             Certificate => $"certificate {service.Name}",
             Subscription => "subscriptions",
+            Updates => "client updates",
             _ => service.Kind,
         };
     }
@@ -405,6 +446,35 @@ public static class ServiceChecks
         }
 
         return new ServiceHealth(Resolver, string.Empty, [new ServicePort(FirewallPlan.Udp, resolver.Port)], false, [], faults, now);
+    }
+
+    private static ServiceHealth OfUpdates(ServiceFacts facts, ClientUpdateFacts updates, DateTimeOffset now)
+    {
+        var faults = new List<ServiceFault>();
+        if (!updates.Own)
+        {
+            if (updates.AddressFault.Length > 0)
+            {
+                faults.Add(new ServiceFault(UpdatesAddress, updates.AddressFault));
+            }
+
+            return new ServiceHealth(Updates, string.Empty, [], false, [], faults, now);
+        }
+
+        if (updates.Fault.Length > 0)
+        {
+            faults.Add(new ServiceFault(updates.Fault == UpdatesDirectory ? UpdatesDirectory : PortRefused, updates.Fault));
+        }
+
+        if (updates.Shared)
+        {
+            return new ServiceHealth(Updates, string.Empty, [], true, [], faults, now);
+        }
+
+        var port = new ServicePort(FirewallPlan.Tcp, updates.Port);
+        Wall(facts, port, faults);
+
+        return new ServiceHealth(Updates, string.Empty, [port], false, [], faults, now);
     }
 
     private static ServiceHealth OfCertificate(CertificateFacts certificate, DateTimeOffset now)

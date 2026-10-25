@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using AmneziaGeo.Server.Api.ClientUpdates;
 using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
@@ -349,4 +350,59 @@ public sealed class DnsOffer : IHelloFeature
 
         return new DnsFeature(mode, line.Servers, _state.IsRunning ? offered : []);
     }
+}
+
+/// <summary>
+/// Tells the client where it reads the releases of its own application, while the panel offers them.
+/// </summary>
+public sealed class UpdatesOffer : IHelloFeature
+{
+    private readonly ClientUpdateState _state;
+
+    private readonly PanelSettings _panel;
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public UpdatesOffer(ClientUpdateState state, PanelSettings panel)
+    {
+        _state = state;
+        _panel = panel;
+    }
+
+    /// <inheritdoc/>
+    public string Name => FeatureNames.Updates;
+
+    /// <inheritdoc/>
+    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+
+        var settings = _state.Current;
+        if (!settings.IsEnabled)
+        {
+            return ValueTask.FromResult<object?>(null);
+        }
+
+        if (!settings.Own)
+        {
+            var url = ClientUpdateAnswers.Url(settings, _panel, peer.Context.Request.Host.Host);
+
+            return ValueTask.FromResult<object?>(url.Length == 0 ? null : new UpdatesFeature(url, settings.Default, _state.Pin));
+        }
+
+        if (_state.Store is null)
+        {
+            return ValueTask.FromResult<object?>(null);
+        }
+
+        return ValueTask.FromResult<object?>(
+            new UpdatesFeature(ClientUpdateAnswers.Url(settings, _panel, peer.Context.Request.Host.Host), settings.Default, Pin(peer.Context)));
+    }
+
+    // Returns the SHA-256 of the certificate the port answered under, empty without one.
+    private static string Pin(HttpContext context) =>
+        context.Features.Get<ISslStreamFeature>()?.SslStream.LocalCertificate is { } certificate
+            ? Convert.ToHexStringLower(SHA256.HashData(certificate.GetRawCertData()))
+            : string.Empty;
 }

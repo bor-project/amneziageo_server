@@ -67,6 +67,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<SubscriptionEntity> Subscription => Set<SubscriptionEntity>();
 
+    public DbSet<ClientUpdateEntity> ClientUpdates => Set<ClientUpdateEntity>();
+
     public DbSet<SeedEntity> Seeds => Set<SeedEntity>();
 
     /// <summary>
@@ -235,6 +237,15 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(row => row.Certificate).HasMaxLength(PanelRules.MaxFileLength);
             entity.Property(row => row.CertificateKey).HasMaxLength(PanelRules.MaxFileLength);
             entity.Property(row => row.Title).HasMaxLength(SubscriptionRules.MaxTitleLength);
+        });
+
+        builder.Entity<ClientUpdateEntity>(entity =>
+        {
+            entity.Property(row => row.Source).HasMaxLength(16);
+            entity.Property(row => row.Address).HasMaxLength(ClientUpdateRules.MaxAddressLength);
+            entity.Property(row => row.Token).HasMaxLength(ClientUpdateRules.MaxTokenLength);
+            entity.Property(row => row.Directory).HasMaxLength(PanelRules.MaxFileLength);
+            entity.Property(row => row.Path).HasMaxLength(PanelRules.MaxPathLength);
         });
 
         builder.Entity<BalancerEntity>(entity =>

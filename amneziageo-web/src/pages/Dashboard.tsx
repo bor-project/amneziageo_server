@@ -32,6 +32,7 @@ const serviceTitles: Record<string, TextKey> = {
   endpoint: "services.endpoint",
   dns: "services.dns",
   certificate: "services.certificate",
+  updates: "services.updates",
 }
 
 const serviceParts: Record<string, TextKey> = {
@@ -53,6 +54,8 @@ const serviceFaults: Record<string, TextKey> = {
   "resolver-down": "services.resolverDown",
   "resolver-way": "services.resolverWay",
   "certificate-unreadable": "services.certificateUnreadable",
+  "updates-directory": "services.updatesDirectory",
+  "updates-address": "services.updatesAddress",
 }
 
 const serviceRow =
@@ -442,6 +445,8 @@ function serviceTarget(one: ServiceHealth, configs: Config[], may: (scope: strin
       return may(scopes.manageAccess) ? "/settings/subscriptions" : null
     case "certificate":
       return may(scopes.manageAccess) ? "/settings/certificates" : null
+    case "updates":
+      return may(scopes.manageAccess) && may(scopes.manageClientUpdates) ? "/settings/client-updates" : null
     case "dns":
       return may(scopes.manageRouting) ? "/routing/dns" : null
     case "endpoint": {

@@ -15,6 +15,7 @@ export type AppOnly =
   | "presetList"
   | "subscription"
   | "subscriptions"
+  | "clientUpdates"
   | "subscriptionQr"
   | "signal"
   | "geo"

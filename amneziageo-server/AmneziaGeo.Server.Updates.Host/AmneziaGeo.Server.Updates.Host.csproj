@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\AmneziaGeo.Server.Updates\AmneziaGeo.Server.Updates.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Product>AmneziaGeo Updates</Product>
+    <Description>AmneziaGeo Updates - the releases of the client, served apart from the panel.</Description>
+  </PropertyGroup>
+
+</Project>

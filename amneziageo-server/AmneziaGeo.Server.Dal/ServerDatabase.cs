@@ -78,6 +78,7 @@ public static class ServerDatabase
         services.AddScoped<TemplateStore>();
         services.AddScoped<PresetStore>();
         services.AddScoped<SubscriptionStore>();
+        services.AddScoped<ClientUpdateStore>();
         services.AddScoped<DatabaseBackup>();
         services.AddScoped<IRefreshTokens, RefreshTokenStore>();
         services.AddScoped<IApiTokens, ApiTokenStore>();

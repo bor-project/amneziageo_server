@@ -133,6 +133,14 @@ public sealed record PresetsFeature(IReadOnlyList<PresetItem> Lists, bool Only =
 public sealed record DnsFeature(string Mode, IReadOnlyList<string> Servers, IReadOnlyList<string> Resolver);
 
 /// <summary>
+/// Where the client reads the releases of its own application.
+/// </summary>
+/// <param name="Url">The address the manifests of the channels and the files lie under.</param>
+/// <param name="Default">Whether the client takes this server for its updates before it picks one itself.</param>
+/// <param name="Pin">The SHA-256 of the certificate the address answers under, empty when it is not known.</param>
+public sealed record UpdatesFeature(string Url, bool Default, string Pin);
+
+/// <summary>
 /// The client that proved its key and the request it asked with.
 /// </summary>
 /// <param name="Client">The client behind the key.</param>
@@ -206,4 +214,9 @@ public static class FeatureNames
     /// The name servers of the client and the resolver of the panel.
     /// </summary>
     public const string Dns = "dns";
+
+    /// <summary>
+    /// Where the client reads the releases of its own application.
+    /// </summary>
+    public const string Updates = "updates";
 }

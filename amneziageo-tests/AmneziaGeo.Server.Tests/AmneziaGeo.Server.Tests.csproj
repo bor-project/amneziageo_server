@@ -35,6 +35,7 @@
     <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Cli\AmneziaGeo.Server.Cli.csproj" />
     <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Geo\AmneziaGeo.Server.Geo.csproj" />
     <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Routing\AmneziaGeo.Server.Routing.csproj" />
+    <ProjectReference Include="..\..\amneziageo-server\AmneziaGeo.Server.Updates\AmneziaGeo.Server.Updates.csproj" />
   </ItemGroup>
 
 </Project>

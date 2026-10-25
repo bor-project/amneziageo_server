@@ -832,3 +832,29 @@ public sealed class SeedEntity
 
     public DateTimeOffset UpdatedUtc { get; set; }
 }
+
+/// <summary>
+/// The settings of the releases of the client as the database holds them.
+/// </summary>
+public sealed class ClientUpdateEntity
+{
+    public long Id { get; set; }
+
+    public bool IsEnabled { get; set; }
+
+    public string Source { get; set; } = string.Empty;
+
+    public string Address { get; set; } = string.Empty;
+
+    public string Token { get; set; } = string.Empty;
+
+    public string Directory { get; set; } = string.Empty;
+
+    public int Port { get; set; }
+
+    public string Path { get; set; } = string.Empty;
+
+    public bool IsDefault { get; set; }
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}

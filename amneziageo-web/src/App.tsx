@@ -22,6 +22,9 @@ import { BasicRouting } from "@/pages/BasicRouting"
 import { BalancerRemove } from "@/pages/BalancerRemove"
 import { Channels } from "@/pages/Channels"
 import { ClientExport, ClientSettings, ClientView, NewClient } from "@/pages/ClientPage"
+import { ClientReleasePage } from "@/pages/ClientReleasePage"
+import { ClientReleaseRemove } from "@/pages/ClientReleaseRemove"
+import { ClientUpdates } from "@/pages/ClientUpdates"
 import { ClientRemove } from "@/pages/ClientRemove"
 import { ClientsRemove } from "@/pages/ClientsRemove"
 import { Clients } from "@/pages/Clients"
@@ -159,6 +162,12 @@ const router = createBrowserRouter(
               <Route path="server" element={<PanelServer />} />
               <Route path="certificates" element={<PanelCertificates />} />
               <Route path="subscriptions" element={<Subscriptions />} />
+              <Route element={<RequireScope scope={scopes.manageClientUpdates} />}>
+                <Route path="client-updates" element={<ClientUpdates />} />
+                <Route path="client-updates/new" element={<ClientReleasePage />} />
+                <Route path="client-updates/:tag/edit" element={<ClientReleasePage />} />
+                <Route path="client-updates/:tag/delete" element={<ClientReleaseRemove />} />
+              </Route>
               <Route path="users" element={<Accounts />} />
               <Route path="users/new" element={<UserPage />} />
               <Route path="users/roles/new" element={<RolePage />} />

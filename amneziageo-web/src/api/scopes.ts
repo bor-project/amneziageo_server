@@ -5,6 +5,7 @@ export const scopes = {
   manageRouting: "routing:write",
   manageAccess: "access:write",
   manageUpdates: "updates:write",
+  manageClientUpdates: "client-updates:write",
   readBackup: "backup:read",
   changePassword: "password:change",
 } as const
