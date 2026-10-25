@@ -19,5 +19,8 @@ dns-files        DNS: DNS in client configurations
 server           Settings: Server
 certificates     Settings: Certificates
 subscriptions    Settings: Subscriptions
+client-updates   Settings: Client updates, the source Own with the releases
+client-updates-address Settings: Client updates, the source Address
+client-release   Settings: Client updates, a new update with files chosen
 users            Settings: Users and roles
 diagnostics      Settings: Diagnostics

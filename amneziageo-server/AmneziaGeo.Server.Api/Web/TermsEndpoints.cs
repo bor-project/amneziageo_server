@@ -13,7 +13,7 @@ public static class TermsEndpoints
     /// <summary>
     /// The version of the terms of use and of the privacy notes the panel asks to accept.
     /// </summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     /// <summary>
     /// Maps the routes of the terms of use.

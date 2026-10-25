@@ -1,12 +1,13 @@
 # AmneziaGeo server privacy
 
-Version 1, 24 October 2026
+Version 2, 25 October 2026
 
 AmneziaGeo server has no telemetry and no analytics. Nothing about your server or your clients reaches its authors. The code carries no telemetry or crash-reporting library.
 
 ## Who the server exchanges data with
 
-- Your clients. Their traffic goes through the server, and the panel hands them their configurations and subscriptions.
+- Your clients. Their traffic goes through the server, and the panel hands them their configurations and subscriptions and, when "Client updates" are on, the releases of the client.
+- The service of the client releases apart, when "Client updates" take it by its address. The panel asks it about itself once every 5 minutes and sends it the releases you upload.
 - GitHub (api.github.com, github.com). Checks for new versions once every 12 hours; downloads when you start an update or allowed it. For Docker, the images come from ghcr.io.
 - Sources of the geo databases. By default these are github.com (the Loyalsoldier, runetfreedom and jameszeroX sets) and raw.githubusercontent.com/bor-project/amneziageo-geo. The server checks and downloads the databases once every 24 hours. The sources can be changed in the panel.
 - Upstream DNS servers of the panel resolver. Only when the resolver is on, and only the addresses you set (for example, 1.1.1.1 or 8.8.4.4).
@@ -22,6 +23,8 @@ In the database of the panel on your server:
 - traffic counters of the clients by day and the time of their latest connection;
 - the connection log, only when you turned it on: for every new connection of a client, the time, the client, the address and name of the destination and what routing did with the connection. The log is kept for as many days as you set;
 - the record of accepted terms.
+
+In the directory of the client releases, when "Client updates" keep them on this server: the releases you uploaded, until you remove them.
 
 The server sends none of it anywhere. Backups and their keeping are up to you.
 

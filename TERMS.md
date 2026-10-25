@@ -1,6 +1,6 @@
 # AmneziaGeo server terms of use
 
-Version 1, 24 October 2026
+Version 2, 25 October 2026
 
 ## The program and its license
 
@@ -16,6 +16,7 @@ You install the server and keep it. The traffic of your clients goes through it,
 
 - access to the server and the panel, passwords and keys;
 - whom you connect and what you tell them about the server;
+- the releases of the client you hand out in "Client updates": the application of your clients takes them in place of the releases of the project, under the certificate of your server;
 - following the laws of the country where the server stands and of the countries of your clients, the ones on keeping data about connections among them.
 
 ## Updates

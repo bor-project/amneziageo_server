@@ -4040,7 +4040,9 @@ ucompose() {
 
 # Prints the state of the container of the service.
 updates_state() {
-  docker inspect -f '{{.State.Status}}' amneziageo-updates 2> /dev/null || printf 'not installed'
+  local state
+  state=$(docker inspect -f '{{.State.Status}}' amneziageo-updates 2> /dev/null) || state=
+  printf '%s' "${state:-not installed}"
 }
 
 # Prints the port the service answers on, empty before it is installed.
@@ -4128,7 +4130,7 @@ updates_install() {
   write_updates_compose "$certificate"
   ucompose pull && ucompose up -d || return 1
   good "the service of $version runs from $updates_dir/compose.yaml"
-  say "address for the panel: https://$(public_address):$port/"
+  say "address for the panel: https://${certificate:-$(public_address)}:$port/"
   if [ -n "$fresh" ]; then
     updates_show_token
   fi
@@ -4167,9 +4169,10 @@ updates_remove() {
 
 updates_menu() {
   local choice
+  host_only "the service of the client releases" || return 1
   while true; do
     step "Client Updates Service"
-    say "state: $(updates_state), port ${port:-$(updates_port)}"
+    say "state: $(updates_state), port $(updates_port)"
     say "  1. Install or update the service"
     say "  2. New token"
     say "  3. Logs of the service"
