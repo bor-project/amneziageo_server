@@ -73,6 +73,12 @@ public sealed record SpeedLeg(string Down, string Up);
 public sealed record SpeedFeature(SpeedLeg Inside, SpeedLeg Outside, long Limit, DateTimeOffset Expires);
 
 /// <summary>
+/// Arguments of the feature of the services inside the tunnel.
+/// </summary>
+/// <param name="Origin">Where the hello answers plain inside the tunnel.</param>
+public sealed record InsideFeature(string Origin);
+
+/// <summary>
 /// Arguments of the subscription feature.
 /// </summary>
 /// <param name="Url">The address the client reads its subscription at.</param>
@@ -197,6 +203,11 @@ public static class FeatureNames
     /// The measurement of the speed against the server.
     /// </summary>
     public const string Speed = "speed";
+
+    /// <summary>
+    /// The services inside the tunnel, plain.
+    /// </summary>
+    public const string Inside = "inside";
 
     /// <summary>
     /// The subscription of the client.

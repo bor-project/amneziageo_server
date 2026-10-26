@@ -388,8 +388,9 @@ public class ServiceTests
         Assert.Equal(endpoint.ListenPort, features.GetProperty("websocket").GetProperty("port").GetInt32());
         Assert.Equal(endpoint.WebSocketPath, features.GetProperty("websocket").GetProperty("path").GetString());
         Assert.False(features.TryGetProperty("routing", out _));
-        Assert.StartsWith($"https://10.8.0.1:{endpoint.ListenPort}/api/speed/down?", features.GetProperty("speed").GetProperty("inside").GetProperty("down").GetString(), StringComparison.Ordinal);
+        Assert.StartsWith($"http://10.8.0.1:{endpoint.ListenPort}/api/speed/down?", features.GetProperty("speed").GetProperty("inside").GetProperty("down").GetString(), StringComparison.Ordinal);
         Assert.StartsWith($"https://vpn.example:{endpoint.ListenPort}/api/speed/up?", features.GetProperty("speed").GetProperty("outside").GetProperty("up").GetString(), StringComparison.Ordinal);
+        Assert.Equal($"http://10.8.0.1:{endpoint.ListenPort}", features.GetProperty("inside").GetProperty("origin").GetString());
         Assert.False(features.TryGetProperty("inbound", out _));
         Assert.False(features.TryGetProperty("routes", out _));
         Assert.Equal(DisconnectSignal.Port, features.GetProperty("disconnect").GetProperty("port").GetInt32());
@@ -1170,6 +1171,90 @@ public class ServiceTests
     }
 
     [Fact]
+    public async Task ThePortOfThePanelKeepsTheMeasurementInsideOnTls()
+    {
+        using var bench = new Bench();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"] },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), share: new ServiceShare { Point = Point(endpoint) });
+        var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
+
+        var features = Offered(client, endpoint, token, await AskAsync(desk, Point(endpoint), token));
+
+        Assert.StartsWith($"https://10.8.0.1:{endpoint.ListenPort}/api/speed/down?", features.GetProperty("speed").GetProperty("inside").GetProperty("down").GetString(), StringComparison.Ordinal);
+        Assert.False(features.TryGetProperty("inside", out _));
+    }
+
+    [Fact]
+    public async Task APlainRequestAtTheAddressOfTheEndpointInsideTheTunnelReachesTheHelloAndTheMeasurementAlone()
+    {
+        using var bench = new Bench();
+        var port = Free();
+        await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["127.0.0.1/8"], ServicesPort = port },
+            CancellationToken.None);
+        var (server, folder) = Served(bench);
+        try
+        {
+            await server.SettleAsync(CancellationToken.None);
+            using var plain = new HttpClient();
+            using var tls = Trusting();
+
+            using var measured = await plain.GetAsync(new Uri($"http://127.0.0.1:{port}/api/speed/down?ticket=none"));
+            using var hello = await plain.PostAsync(new Uri($"http://127.0.0.1:{port}/api/hello"), new StringContent("not a hello", Encoding.UTF8, "application/json"));
+            using var other = await plain.GetAsync(new Uri($"http://127.0.0.1:{port}/sub/none"));
+            using var secure = await tls.GetAsync(new Uri($"https://127.0.0.1:{port}/api/speed/down?ticket=none"));
+
+            Assert.Equal(System.Net.HttpStatusCode.Forbidden, measured.StatusCode);
+            Assert.Equal(System.Net.HttpStatusCode.BadRequest, hello.StatusCode);
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, other.StatusCode);
+            Assert.Equal(System.Net.HttpStatusCode.Forbidden, secure.StatusCode);
+        }
+        finally
+        {
+            await server.DisposeAsync();
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task APlainRequestAtAnotherAddressMeetsTheTlsOfThePort()
+    {
+        using var bench = new Bench();
+        var port = Free();
+        await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], ServicesPort = port },
+            CancellationToken.None);
+        var (server, folder) = Served(bench);
+        try
+        {
+            await server.SettleAsync(CancellationToken.None);
+            using var plain = new HttpClient();
+            using var tls = Trusting();
+
+            await Assert.ThrowsAnyAsync<HttpRequestException>(() => plain.GetAsync(new Uri($"http://127.0.0.1:{port}/api/speed/down?ticket=none")));
+            using var secure = await tls.GetAsync(new Uri($"https://127.0.0.1:{port}/api/speed/down?ticket=none"));
+
+            Assert.Equal(System.Net.HttpStatusCode.Forbidden, secure.StatusCode);
+        }
+        finally
+        {
+            await server.DisposeAsync();
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task TheDnsFeatureNamesTheServersOfTheFileWhatPickedThemAndWhereTheResolverAnswers()
     {
         using var bench = new Bench();
@@ -1198,7 +1283,8 @@ public class ServiceTests
         ILogger<ServiceDesk>? logger = null,
         AnswerSlots? slots = null,
         DnsState? resolver = null,
-        SubscriptionCertificates? certificates = null)
+        SubscriptionCertificates? certificates = null,
+        ServiceShare? share = null)
     {
         var state = subscriptions ?? new SubscriptionState();
 
@@ -1209,7 +1295,8 @@ public class ServiceTests
                 new WebSocketOffer(),
                 new InboundOffer(),
                 new DisconnectOffer(),
-                new SpeedOffer(tickets),
+                new SpeedOffer(tickets, share),
+                new InsideOffer(share),
                 new SubscriptionOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes, certificates),
                 new SourcesOffer(bench.Scopes),
                 new PresetsOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),
@@ -1367,6 +1454,26 @@ public class ServiceTests
 
         return context;
     }
+
+    // The server of the services of the bench, with the folder its fronts would take.
+    private static (ServiceServer Server, string Folder) Served(Bench bench)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"amneziageo-fronts-{Guid.NewGuid():N}");
+        var server = new ServiceServer(
+            bench.Scopes,
+            Desk(bench, new SpeedTickets(bench.Clock)),
+            new ProxyHost(new Ledger(), new Fronts(string.Empty), folder),
+            new WebOptions(),
+            PanelDefaults.Settings,
+            new ServiceShare(),
+            NullLogger<ServiceServer>.Instance);
+
+        return (server, folder);
+    }
+
+    // A client that takes the certificate the services make up.
+    private static HttpClient Trusting() =>
+        new(new HttpClientHandler { ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator });
 
     // Tells whether a TCP port of the loopback takes a connection.
     private static bool Listens(int port)

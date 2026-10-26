@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -20,7 +21,13 @@ namespace AmneziaGeo.Server.Api.Services;
 /// <param name="Front">The loopback port the websocket front of the endpoint listens on.</param>
 /// <param name="Target">The UDP port the front hands the tunnel to.</param>
 /// <param name="Path">The path the websocket of the endpoint comes under.</param>
-public sealed record ServiceEndpoint(long ConfigId, string Name, bool WebSocket, int Front, int Target, string Path);
+public sealed record ServiceEndpoint(long ConfigId, string Name, bool WebSocket, int Front, int Target, string Path)
+{
+    /// <summary>
+    /// The addresses the endpoint holds inside the tunnel, where its services answer plain as well.
+    /// </summary>
+    public IReadOnlyList<IPAddress> Inside { get; init; } = [];
+}
 
 /// <summary>
 /// Where the services of the endpoints that share a TCP port answer.
@@ -91,7 +98,7 @@ public static class ServicePoints
                 config.WebSocket,
                 ConfigServices.Front(config),
                 config.ListenPort,
-                ConfigServices.WebSocketPath(config));
+                ConfigServices.WebSocketPath(config)) { Inside = PlainInside.Addresses(config) };
             var held = points.FindIndex(point => point.Port == port);
             if (held < 0)
             {
@@ -352,18 +359,30 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             kestrel.ListenAnyIP(point.Port, listen =>
             {
                 listen.Protocols = HttpProtocols.Http1;
+                var gate = new PlainGate(() => served.Point);
                 listen.Use(next => connection =>
                 {
                     Congest(connection);
 
-                    return next(connection);
+                    return gate.SortAsync(connection, next);
                 });
                 listen.UseHttps(https => https.ServerCertificateSelector = (_, _) => Pick(certificate));
+                listen.Use(gate.Keep);
             });
         });
 
         var app = builder.Build();
-        app.Run(context => _desk.AnswerAsync(context, served.Point));
+        app.Run(context =>
+        {
+            if (!context.Request.IsHttps && !PlainInside.Serves(context.Request))
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+
+                return Task.CompletedTask;
+            }
+
+            return _desk.AnswerAsync(context, served.Point);
+        });
 
         return app;
     }

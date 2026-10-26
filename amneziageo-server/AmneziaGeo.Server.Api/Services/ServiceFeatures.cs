@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using AmneziaGeo.Server.Api.ClientUpdates;
 using AmneziaGeo.Server.Api.Dns;
@@ -85,12 +83,15 @@ public sealed class SpeedOffer : IHelloFeature
 {
     private readonly SpeedTickets _tickets;
 
+    private readonly ServiceShare? _share;
+
     /// <summary>
     /// ctor
     /// </summary>
-    public SpeedOffer(SpeedTickets tickets)
+    public SpeedOffer(SpeedTickets tickets, ServiceShare? share = null)
     {
         _tickets = tickets;
+        _share = share;
     }
 
     /// <inheritdoc/>
@@ -103,34 +104,49 @@ public sealed class SpeedOffer : IHelloFeature
 
         var ticket = _tickets.Mint(peer.Client.Id);
         var port = ConfigServices.Port(peer.Endpoint);
-        var outside = peer.Endpoint.Host.Length > 0 ? peer.Endpoint.Host : peer.Context.Request.Host.Host;
-        var inside = Inside(peer.Endpoint) ?? outside;
+        var outside = PlainInside.Root("https", peer.Endpoint.Host.Length > 0 ? peer.Endpoint.Host : peer.Context.Request.Host.Host, port);
+        var inside = PlainInside.Origin(peer.Endpoint, port, _share)
+            ?? (PlainInside.Address(peer.Endpoint) is { } address ? PlainInside.Root("https", address.ToString(), port) : outside);
 
         return ValueTask.FromResult<object?>(
-            new SpeedFeature(Leg(inside, port, ticket), Leg(outside, port, ticket), SpeedTickets.MaxBytes, ticket.Expires));
+            new SpeedFeature(Leg(inside, ticket), Leg(outside, ticket), SpeedTickets.MaxBytes, ticket.Expires));
     }
 
-    // Returns the address of the interface the tunnel reaches, the first one of IPv4 ahead of the rest.
-    private static string? Inside(ServerConfig endpoint)
+    private static SpeedLeg Leg(string origin, SpeedTicket ticket)
     {
-        var addresses = endpoint.Address
-            .Select(range => IPAddress.TryParse(range.Split('/')[0].Trim(), out var found) ? found : null)
-            .OfType<IPAddress>()
-            .ToList();
-        var chosen = addresses.FirstOrDefault(one => one.AddressFamily == AddressFamily.InterNetwork) ?? addresses.FirstOrDefault();
-
-        return chosen?.ToString();
-    }
-
-    private static SpeedLeg Leg(string host, int port, SpeedTicket ticket)
-    {
-        var shown = IPAddress.TryParse(host, out var address) && address.AddressFamily == AddressFamily.InterNetworkV6
-            ? $"[{host}]"
-            : host;
-        var root = string.Create(CultureInfo.InvariantCulture, $"https://{shown}:{port}{ServiceDesk.SpeedPath}");
+        var root = origin + ServiceDesk.SpeedPath;
         var bytes = SpeedTickets.DefaultBytes.ToString(CultureInfo.InvariantCulture);
 
         return new SpeedLeg(root + "/down?bytes=" + bytes + "&ticket=" + ticket.Value, root + "/up?ticket=" + ticket.Value);
+    }
+}
+
+/// <summary>
+/// Offers where the hello answers plain inside the tunnel.
+/// </summary>
+public sealed class InsideOffer : IHelloFeature
+{
+    private readonly ServiceShare? _share;
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public InsideOffer(ServiceShare? share = null)
+    {
+        _share = share;
+    }
+
+    /// <inheritdoc/>
+    public string Name => FeatureNames.Inside;
+
+    /// <inheritdoc/>
+    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+
+        var origin = PlainInside.Origin(peer.Endpoint, ConfigServices.Port(peer.Endpoint), _share);
+
+        return ValueTask.FromResult<object?>(origin is null ? null : new InsideFeature(origin));
     }
 }
 

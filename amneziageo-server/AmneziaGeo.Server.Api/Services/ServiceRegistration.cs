@@ -52,6 +52,7 @@ public static class ServiceRegistration
         services.AddSingleton<IHelloFeature, InboundOffer>();
         services.AddSingleton<IHelloFeature, DisconnectOffer>();
         services.AddSingleton<IHelloFeature, SpeedOffer>();
+        services.AddSingleton<IHelloFeature, InsideOffer>();
         services.AddSingleton<IHelloFeature, SubscriptionOffer>();
         services.AddSingleton<IHelloFeature, SourcesOffer>();
         services.AddSingleton<IHelloFeature, PresetsOffer>();
