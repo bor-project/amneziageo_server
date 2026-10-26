@@ -4,7 +4,6 @@ import { useFailure } from "@/api/failure"
 import { usePresets } from "@/api/presets"
 import type { Preset } from "@/api/presets"
 import { scopes } from "@/api/scopes"
-import { FullMark } from "@/components/PresetForm"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
@@ -73,18 +72,14 @@ export function Presets() {
                 sort: (one) => one.name,
                 lead: true,
                 body: "font-semibold text-ink",
-                cell: (one) => (
-                  <span className="flex items-center gap-1.5">
-                    {may ? (
-                      <Link to={`/clients/presets/${one.id}/edit`} className="hover:text-brand-ink">
-                        {one.name}
-                      </Link>
-                    ) : (
-                      one.name
-                    )}
-                    {one.full && <FullMark title={t("presets.fullMark")} />}
-                  </span>
-                ),
+                cell: (one) =>
+                  may ? (
+                    <Link to={`/clients/presets/${one.id}/edit`} className="hover:text-brand-ink">
+                      {one.name}
+                    </Link>
+                  ) : (
+                    one.name
+                  ),
               },
               {
                 key: "proxy",

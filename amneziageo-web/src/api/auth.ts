@@ -103,7 +103,6 @@ const complaints: Record<string, TextKey> = {
   "bad-preset-name": "error.badPresetName",
   "unknown-preset": "error.unknownPreset",
   "preset-in-use": "error.presetInUse",
-  "preset-full-retired": "error.presetFullRetired",
   "presets-only-without-presets": "error.presetsOnlyWithoutPresets",
   "bad-entry": "error.badEntry",
   "too-many-entries": "error.tooManyEntries",

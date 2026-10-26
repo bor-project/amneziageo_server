@@ -319,7 +319,6 @@ export const ru: Dictionary = {
   "error.badPresetName": "Имя пресета пустое или длиннее 64 знаков",
   "error.unknownPreset": "Такого пресета маршрутизации нет",
   "error.presetInUse": "Пресет раздаётся в шаблоне",
-  "error.presetFullRetired": "Режим «Всё через VPN» убран: пресет ведёт через VPN только выбранное",
   "error.presetsOnlyWithoutPresets": "Только списки сервера: выберите хотя бы один пресет",
   "templates.resolved": "В конфиге",
   "templates.refreshed": "Обновлено {time}",
@@ -391,10 +390,6 @@ export const ru: Dictionary = {
   "presets.blockHint": "Ключи гео, сети, адреса и домены, которые клиент блокирует",
   "presets.full": "Всё через VPN",
   "presets.fullHint": "Всё идёт через туннель, кроме того, что идёт напрямую",
-  "presets.fullRetired":
-    "Режим «Всё через VPN» убран: приложения на устройстве проверяют через туннель заблокированные сайты и узнают адрес сервера. Клиенты покажут у этого списка предупреждение. Новые пресеты в этом режиме не заводятся.",
-  "presets.fullMark": "Режим «Всё через VPN» раскрывает сервер",
-  "presets.more": "Подробнее",
   "presets.allUdp": "Весь UDP через туннель",
   "presets.allUdpHint": "Каждый UDP-пакет идёт через туннель, что бы ни говорили списки",
   "presets.templates": "Шаблонов",

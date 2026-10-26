@@ -471,10 +471,8 @@ public class ServiceTests
             new RoutingPreset { Name = "Unblock", Proxy = ["geosite:youtube"], Direct = ["geoip:ru"], AllUdp = true },
             CancellationToken.None)).Record!;
         var ads = (await bench.Presets.AddAsync(
-            new RoutingPreset { Name = "No ads", Block = ["geosite:category-ads-all"] },
+            new RoutingPreset { Name = "No ads", Block = ["geosite:category-ads-all"], Full = true },
             CancellationToken.None)).Record!;
-        (await bench.Db.RoutingPresets.FindAsync(ads.Id))!.Full = true;
-        await bench.Db.SaveChangesAsync();
         var template = (await bench.Templates.AddAsync(
             new ClientTemplate { Name = "phones", AllowedIps = ["0.0.0.0/0"], Presets = [ads.Id, unblock.Id] },
             CancellationToken.None)).Record!;

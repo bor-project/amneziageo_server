@@ -320,7 +320,6 @@ export const en = {
   "error.badPresetName": "The name of the preset is empty or longer than 64 characters",
   "error.unknownPreset": "There is no such routing preset",
   "error.presetInUse": "A template hands the preset out",
-  "error.presetFullRetired": "Everything through the VPN is retired: a preset tunnels only what it names",
   "error.presetsOnlyWithoutPresets": "Server lists only: pick a preset",
   "templates.resolved": "In the file",
   "templates.refreshed": "Refreshed {time}",
@@ -392,10 +391,6 @@ export const en = {
   "presets.blockHint": "Geo keys, networks, addresses and domains the client blocks",
   "presets.full": "Everything through the VPN",
   "presets.fullHint": "Everything goes through the tunnel but what goes directly",
-  "presets.fullRetired":
-    "Everything through the VPN is retired: apps on the device check blocked sites through the tunnel and learn the address of the server. Clients show a warning at this list. New presets do not take this mode.",
-  "presets.fullMark": "Everything through the VPN gives the server away",
-  "presets.more": "Learn more",
   "presets.allUdp": "All UDP through the tunnel",
   "presets.allUdpHint": "Every UDP packet goes through the tunnel, whatever the lists say",
   "presets.templates": "Templates",

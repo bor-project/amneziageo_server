@@ -3,7 +3,6 @@ import { complaint } from "@/api/auth"
 import { usePresets } from "@/api/presets"
 import type { PresetDraft } from "@/api/presets"
 import { useTemplates } from "@/api/templates"
-import { usePanelDocs } from "@/components/docs"
 import { EntryList } from "@/components/EntryList"
 import { Flag, Hinted, Line, Links, Part } from "@/components/fields"
 import { templateItems } from "@/components/members"
@@ -48,7 +47,6 @@ export function PresetForm({
   )
   const [draft, setDraft] = useState(start)
   const edited = !same(draft, start)
-  const docs = usePanelDocs("presets", "full-mode", "full-mode")
 
   function put(change: Partial<PresetDraft>) {
     setDraft({ ...draft, ...change })
@@ -110,18 +108,6 @@ export function PresetForm({
       </Part>
 
       <Part title={t("presets.partLists")}>
-        {draft.full && (
-          <div className="flex items-start gap-2 rounded-md border border-line bg-warn-soft px-3 py-2 text-sm text-warn sm:col-span-2">
-            <FullMark />
-            <span>
-              {t("presets.fullRetired")}{" "}
-              <a href={docs} target="_blank" rel="noreferrer" className="text-brand-ink hover:text-brand-lit">
-                {t("presets.more")}
-              </a>
-            </span>
-          </div>
-        )}
-
         {buckets.map((bucket) => (
           <div key={bucket.key} className="sm:col-span-2">
             <label className={label} htmlFor={`preset-${bucket.key}`}>
@@ -140,16 +126,14 @@ export function PresetForm({
           </div>
         ))}
 
-        {start.full && (
-          <div className="sm:col-span-2">
-            <Flag
-              id="preset-full"
-              caption={<Hinted caption={t("presets.full")} text={t("presets.fullHint")} />}
-              value={draft.full}
-              onChange={(full) => put({ full })}
-            />
-          </div>
-        )}
+        <div className="sm:col-span-2">
+          <Flag
+            id="preset-full"
+            caption={<Hinted caption={t("presets.full")} text={t("presets.fullHint")} />}
+            value={draft.full}
+            onChange={(full) => put({ full })}
+          />
+        </div>
 
         <div className="sm:col-span-2">
           <Flag
@@ -182,17 +166,5 @@ export function PresetForm({
         </button>
       </div>
     </div>
-  )
-}
-
-// The mark of a preset made to tunnel everything.
-export function FullMark({ title }: { title?: string }) {
-  return (
-    <span className="inline-flex shrink-0 items-center text-warn" title={title} aria-label={title}>
-      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M12 7.5v5.5M12 16.5v.01" strokeLinecap="round" />
-      </svg>
-    </span>
   )
 }
