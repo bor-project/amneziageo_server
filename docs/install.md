@@ -169,6 +169,9 @@ Web__CertificateKey=/etc/letsencrypt/live/<host>/privkey.pem
 `systemctl restart amneziageo-server` takes the change. The chain itself is read again whenever it is
 renewed on disk. The panel names the same certificate by a pair of paths, on the **Settings** page.
 
+The certificate needs an RSA key, so that its chain reaches ISRG Root X1, the root every Android since 7.1 holds:
+see [A certificate older Android trusts](https://bor-project.github.io/amneziageo_server/service/recipes/android-certificate.html).
+
 ## Take the clients the host carries
 
 For every interface of the host:

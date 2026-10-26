@@ -356,10 +356,9 @@ certbot certonly --standalone --preferred-challenges http --key-type rsa --rsa-k
 certbot certificates
 ```
 
-Ключ RSA нужен Android до 14-й версии: цепочка такого сертификата идёт до корня ISRG Root X1. Certbot 2 по
-умолчанию выпускает ключ ECDSA с цепочкой до ISRG Root X2, а этого корня в старых Android нет, и подписка там не
-скачивается. Certbot старше 1.10 параметра `--key-type` не знает и выпускает RSA сам. Сертификат с ключом ECDSA
-переводится на RSA той же командой с `--force-renewal`.
+Ключ RSA нужен, чтобы цепочка доходила до корня ISRG Root X1, который есть во всех Android с 7.1; как проверить
+цепочку и перевести на RSA уже выпущенный сертификат, см.
+[Сертификат, которому верят старые Android](https://bor-project.github.io/amneziageo_server/docker/recipes/android-certificate.ru.html).
 
 Certbot спросит почту и согласие с условиями Let's Encrypt. После успешного выпуска появятся:
 

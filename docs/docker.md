@@ -109,6 +109,9 @@ package. A certificate is read inside the container, so its directory goes into 
       - /etc/letsencrypt:/etc/letsencrypt:ro
 ```
 
+The certificate needs an RSA key, so that its chain reaches ISRG Root X1, the root every Android since 7.1 holds:
+see [A certificate older Android trusts](https://bor-project.github.io/amneziageo_server/docker/recipes/android-certificate.html).
+
 The health check asks `/api/health` at the address the panel writes into `health` beside its database as it
 starts, so it follows the panel to another port, a path of its own and TLS. `AMNEZIAGEO_HEALTH` names another
 address. Outside its path the panel answers `/api/health` to the loopback alone.
