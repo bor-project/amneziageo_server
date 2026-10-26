@@ -3,9 +3,11 @@ import { complaint } from "@/api/auth"
 import { usePresets } from "@/api/presets"
 import type { PresetDraft } from "@/api/presets"
 import { useTemplates } from "@/api/templates"
+import { usePanelDocs } from "@/components/docs"
 import { EntryList } from "@/components/EntryList"
 import { Flag, Hinted, Line, Links, Part } from "@/components/fields"
 import { templateItems } from "@/components/members"
+import { reachOf, reachWarnings } from "@/components/presetReach"
 import { danger, footer, label, primary, secondary } from "@/components/styles"
 import { useLanguage, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -47,6 +49,8 @@ export function PresetForm({
   )
   const [draft, setDraft] = useState(start)
   const edited = !same(draft, start)
+  const reach = reachOf(draft)
+  const docs = usePanelDocs("presets", "full-mode", "full-mode")
 
   function put(change: Partial<PresetDraft>) {
     setDraft({ ...draft, ...change })
@@ -126,6 +130,21 @@ export function PresetForm({
           </div>
         ))}
 
+        {reach !== null && (
+          <div className="flex items-start gap-2 rounded-md border border-line bg-warn-soft px-3 py-2 text-sm text-warn sm:col-span-2">
+            <WarnMark />
+            <span className="flex flex-col gap-0.5">
+              <span className="font-semibold">{t(reachWarnings[reach].title)}</span>
+              <span>
+                {t(reachWarnings[reach].text)}{" "}
+                <a href={docs} target="_blank" rel="noreferrer" className="text-brand-ink hover:text-brand-lit">
+                  {t("presets.more")}
+                </a>
+              </span>
+            </span>
+          </div>
+        )}
+
         <div className="sm:col-span-2">
           <Flag
             id="preset-full"
@@ -166,5 +185,17 @@ export function PresetForm({
         </button>
       </div>
     </div>
+  )
+}
+
+// The mark of a preset that sends more than its lists through the VPN.
+function WarnMark() {
+  return (
+    <span className="mt-0.5 inline-flex shrink-0 items-center text-warn" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M12 7.5v5.5M12 16.5v.01" strokeLinecap="round" />
+      </svg>
+    </span>
   )
 }

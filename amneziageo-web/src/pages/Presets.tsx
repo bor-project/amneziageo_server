@@ -4,6 +4,7 @@ import { useFailure } from "@/api/failure"
 import { usePresets } from "@/api/presets"
 import type { Preset } from "@/api/presets"
 import { scopes } from "@/api/scopes"
+import { reachMarks, reachOf } from "@/components/presetReach"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
 import { Rows } from "@/components/Rows"
@@ -72,14 +73,7 @@ export function Presets() {
                 sort: (one) => one.name,
                 lead: true,
                 body: "font-semibold text-ink",
-                cell: (one) =>
-                  may ? (
-                    <Link to={`/clients/presets/${one.id}/edit`} className="hover:text-brand-ink">
-                      {one.name}
-                    </Link>
-                  ) : (
-                    one.name
-                  ),
+                cell: (one) => <Name one={one} may={may} t={t} />,
               },
               {
                 key: "proxy",
@@ -125,6 +119,31 @@ export function Presets() {
         )}
       </div>
     </div>
+  )
+}
+
+function Name({ one, may, t }: { one: Preset; may: boolean; t: Text }) {
+  const reach = reachOf(one)
+  const mark = "shrink-0 rounded-full bg-warn-soft px-2 py-0.5 text-xs font-normal text-warn"
+
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+      {may ? (
+        <Link to={`/clients/presets/${one.id}/edit`} className="truncate hover:text-brand-ink">
+          {one.name}
+        </Link>
+      ) : (
+        <span className="truncate">{one.name}</span>
+      )}
+      {reach !== null &&
+        (may ? (
+          <Link to={`/clients/presets/${one.id}/edit`} className={`${mark} hover:underline`}>
+            {t(reachMarks[reach])}
+          </Link>
+        ) : (
+          <span className={mark}>{t(reachMarks[reach])}</span>
+        ))}
+    </span>
   )
 }
 

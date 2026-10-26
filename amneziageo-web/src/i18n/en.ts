@@ -393,6 +393,15 @@ export const en = {
   "presets.fullHint": "Everything goes through the tunnel but what goes directly",
   "presets.allUdp": "All UDP through the tunnel",
   "presets.allUdpHint": "Every UDP packet goes through the tunnel, whatever the lists say",
+  "presets.markFull": "All apps through the VPN",
+  "presets.markAllUdp": "All UDP through the VPN",
+  "presets.fullTitle": "Every app goes through the VPN",
+  "presets.fullNotice":
+    "The client sends every app of the device through the VPN except the entries in Direct. Apps that do not need the VPN go through the server as well: some apps may notice the VPN, learn the server address or stop working. Add such apps to Direct.",
+  "presets.allUdpTitle": "All UDP goes through the VPN",
+  "presets.allUdpNotice":
+    "The client sends UDP of every app of the device through the server even when its addresses are not in the lists. Some apps may notice the VPN and learn the server address.",
+  "presets.more": "More",
   "presets.templates": "Templates",
   "presets.partTemplates": "Templates",
   "presets.addTemplate": "Add a template",
