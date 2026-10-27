@@ -42,7 +42,7 @@ export function OwnPassword() {
   }
 
   return (
-    <div className="flex max-w-[35rem] flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <h1 className="text-2xl leading-10 font-semibold tracking-[-0.02em]">{t("password.title")}</h1>
 
       <Part title={t("password.title")}>

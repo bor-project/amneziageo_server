@@ -26,7 +26,7 @@ export function UserPassword() {
   }
 
   return (
-    <div className="mt-4 flex max-w-[42rem] flex-col gap-4">
+    <div className="mt-4 flex flex-col gap-4">
       <Part title={t("users.passwordTitle", { name })}>
         <div className="sm:col-span-2">
           <label className={label} htmlFor="set-password">

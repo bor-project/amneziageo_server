@@ -206,7 +206,7 @@ function ReleaseForm({ held }: { held: ReleaseDetails | null }) {
   )
 
   return (
-    <div className="mt-4 flex max-w-[60rem] flex-col gap-4">
+    <div className="mt-4 flex flex-col gap-4">
       <Part title={t("releases.partRelease")}>
         {made === null ? (
           <Line

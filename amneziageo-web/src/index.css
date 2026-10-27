@@ -189,6 +189,13 @@ select:not([multiple]):not([size]) {
   padding-right: 2.4rem;
 }
 
+/* The way down to the bar of a form grows to the window, so the bar stands at its bottom on a short page too. */
+.page-fill :has(.form-bar) {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
 /* A control reached from the keyboard shows where the focus is. */
 a:focus-visible,
 button:focus-visible,

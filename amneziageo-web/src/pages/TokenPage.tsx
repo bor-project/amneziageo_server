@@ -40,7 +40,7 @@ export function TokenPage() {
   }
 
   return (
-    <div className="mt-4 flex max-w-[42rem] flex-col gap-4">
+    <div className="mt-4 flex flex-col gap-4">
       <Part title={t("apiTokens.title")}>
         <Line id="token-name" caption={t("apiTokens.name")} value={name} onChange={setName} />
 
@@ -94,7 +94,7 @@ function Secret({ minted }: { minted: MintedApiToken }) {
   }
 
   return (
-    <div className="mt-4 flex max-w-[42rem] flex-col gap-4">
+    <div className="mt-4 flex flex-col gap-4">
       <h2 className="text-[22px] font-semibold">{t("apiTokens.secretTitle", { name: minted.token.name })}</h2>
 
       <div className={`p-4 ${card}`}>

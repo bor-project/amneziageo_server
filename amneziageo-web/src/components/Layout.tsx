@@ -130,8 +130,8 @@ export function Layout() {
             </div>
           </header>
 
-          <main className="flex-1 p-5">
-            <div className="mx-auto max-w-[1240px]">
+          <main className="flex flex-1 flex-col p-5">
+            <div className="page-fill mx-auto flex w-full max-w-[1240px] flex-1 flex-col">
               <Outlet />
             </div>
           </main>
