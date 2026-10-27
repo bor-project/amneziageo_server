@@ -51,6 +51,17 @@ public static class ConfigServices
     }
 
     /// <summary>
+    /// Returns the TCP port a file without the line of the services asks the services of an endpoint on once they
+    /// moved, zero while they did not.
+    /// </summary>
+    public static int Former(ServerConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        return Moved(config) ? config.ListenPort : 0;
+    }
+
+    /// <summary>
     /// Returns the loopback port the websocket front of an endpoint listens on.
     /// </summary>
     public static int Front(ServerConfig config)

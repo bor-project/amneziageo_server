@@ -151,6 +151,37 @@ public sealed class InsideOffer : IHelloFeature
 }
 
 /// <summary>
+/// Tells the client where the services of its endpoint answer outside the tunnel and inside it.
+/// </summary>
+public sealed class ServicesOffer : IHelloFeature
+{
+    private readonly ServiceShare? _share;
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public ServicesOffer(ServiceShare? share = null)
+    {
+        _share = share;
+    }
+
+    /// <inheritdoc/>
+    public string Name => FeatureNames.Services;
+
+    /// <inheritdoc/>
+    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+
+        var port = ConfigServices.Port(peer.Endpoint);
+        var inside = PlainInside.Origin(peer.Endpoint, port, _share)
+            ?? (PlainInside.Address(peer.Endpoint) is { } address ? PlainInside.Root("https", address.ToString(), port) : string.Empty);
+
+        return ValueTask.FromResult<object?>(new ServicesFeature(port, inside));
+    }
+}
+
+/// <summary>
 /// Tells the client where it reads its subscription and what the subscription hands out now.
 /// </summary>
 public sealed class SubscriptionOffer : IHelloFeature

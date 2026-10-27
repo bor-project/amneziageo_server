@@ -67,12 +67,12 @@ public class FirewallTests
     }
 
     [Fact]
-    public void TheServicesOfAnEndpointTakeTheirOwnPortWhereTheyMoved()
+    public void TheServicesOfAnEndpointTakeTheirOwnPortWhereTheyMovedAndKeepTheOneOfTheEndpoint()
     {
         var plan = FirewallPlan.Of([Endpoint() with { ServicesPort = 8446 }], new PanelSettings(), new SubscriptionSettings());
 
         Assert.Equal(
-            [("udp", 51820), ("tcp", 8446)],
+            [("udp", 51820), ("tcp", 8446), ("tcp", 51820)],
             plan.Ports.Select(port => (port.Protocol, port.Port)).ToArray());
     }
 
@@ -215,7 +215,7 @@ public class FirewallTests
         Assert.Equal("nft", sync.Engine);
         Assert.Contains("table inet amneziageo_open", ledger.Ruleset, StringComparison.Ordinal);
         Assert.Contains("udp dport 51820 accept", ledger.Ruleset, StringComparison.Ordinal);
-        Assert.DoesNotContain("tcp dport 51820", ledger.Ruleset, StringComparison.Ordinal);
+        Assert.Contains("tcp dport 51820 accept", ledger.Ruleset, StringComparison.Ordinal);
         Assert.Contains("tcp dport 8446 accept", ledger.Ruleset, StringComparison.Ordinal);
         Assert.Contains("iifname \"awg0\" accept", ledger.Ruleset, StringComparison.Ordinal);
         Assert.Contains("oifname \"awg0\" accept", ledger.Ruleset, StringComparison.Ordinal);
@@ -394,7 +394,7 @@ public class FirewallTests
     }
 
     [Fact]
-    public void TheUdpPortAnEndpointMovedOffIsDropped()
+    public void TheUdpPortAnEndpointMovedOffIsDroppedWithTheTcpPortOfItsNumber()
     {
         var before = FirewallPlan.Of([Endpoint() with { ServicesPort = 8446 }], new PanelSettings(), new SubscriptionSettings());
         var after = FirewallPlan.Of(
@@ -402,7 +402,9 @@ public class FirewallTests
             new PanelSettings(),
             new SubscriptionSettings());
 
-        Assert.Equal([new FirewallPort("udp", 51820, "awg0")], FirewallPlan.Dropped(before, after));
+        Assert.Equal(
+            [new FirewallPort("udp", 51820, "awg0"), new FirewallPort("tcp", 51820, "awg0")],
+            FirewallPlan.Dropped(before, after));
     }
 
     [Fact]

@@ -23,7 +23,7 @@ it; a request that names `opened` changes it.
 
 | Toggle | What it opens |
 |---|---|
-| An endpoint, item 23 of the menu or the button by its port, see [configs.md](configs.md) | its UDP port, the TCP port of its services, see [services.md](services.md), both ways through its interface, so what its clients send and what comes back to them passes, and the port of the resolver on that interface while the resolver answers on an address of the endpoint, see [dns.md](dns.md) |
+| An endpoint, item 23 of the menu or the button by its port, see [configs.md](configs.md) | its UDP port, the TCP port of its services and, while they moved, the TCP port with the number of its UDP port, see [services.md](services.md), both ways through its interface, so what its clients send and what comes back to them passes, and the port of the resolver on that interface while the resolver answers on an address of the endpoint, see [dns.md](dns.md) |
 | The panel, item 23 of the menu or the button by its port, see [serving.md](serving.md) | the port the panel binds, unless it binds the loopback alone |
 | The subscriptions, item 23 of the menu or the button by their port, see [subscriptions.md](subscriptions.md) | the port they are served on, while they are handed out on a port of their own |
 

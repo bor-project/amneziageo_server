@@ -79,6 +79,13 @@ public sealed record SpeedFeature(SpeedLeg Inside, SpeedLeg Outside, long Limit,
 public sealed record InsideFeature(string Origin);
 
 /// <summary>
+/// Arguments of the feature that says where the services of the endpoint answer.
+/// </summary>
+/// <param name="Port">The TCP port the services answer on at the host of the endpoint.</param>
+/// <param name="Inside">Where the services answer inside the tunnel, empty where the endpoint holds no address there.</param>
+public sealed record ServicesFeature(int Port, string Inside);
+
+/// <summary>
 /// Arguments of the subscription feature.
 /// </summary>
 /// <param name="Url">The address the client reads its subscription at.</param>
@@ -208,6 +215,11 @@ public static class FeatureNames
     /// The services inside the tunnel, plain.
     /// </summary>
     public const string Inside = "inside";
+
+    /// <summary>
+    /// Where the services of the endpoint answer.
+    /// </summary>
+    public const string Services = "services";
 
     /// <summary>
     /// The subscription of the client.

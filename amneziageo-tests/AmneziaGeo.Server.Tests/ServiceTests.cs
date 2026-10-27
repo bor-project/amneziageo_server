@@ -146,18 +146,172 @@ public class ServiceTests
 
         var points = ServicePoints.Of([first, moved, off, shared], "/tls/chain.pem", "/tls/key.pem");
 
-        Assert.Equal([51820, 8443], points.Select(point => point.Port).ToArray());
+        Assert.Equal([51820, 8443, 51821, 51823], points.Select(point => point.Port).ToArray());
         Assert.Equal(
             [("awg0", false, 61001, 51820), ("awg3", true, 61004, 51823)],
             points[0].Endpoints.Select(one => (one.Name, one.WebSocket, one.Front, one.Target)).ToArray());
         Assert.Equal(
             [("awg1", true, 61002, 51821)],
             points[1].Endpoints.Select(one => (one.Name, one.WebSocket, one.Front, one.Target)).ToArray());
+        Assert.Equal(["awg1", "awg3"], points.Skip(2).Select(point => point.Names).ToArray());
         Assert.Equal("awg0, awg3", points[0].Names);
         Assert.Contains(points[0].Endpoints, one => one.WebSocket);
         Assert.Equal(4, points[0].Of(4)!.ConfigId);
         Assert.Null(points[0].Of(3));
         Assert.All(points, point => Assert.Equal("/tls/chain.pem", point.Chain));
+    }
+
+    [Fact]
+    public void ServicesThatMovedKeepAnsweringOnThePortOfTheirEndpointUnlessAnotherEndpointAnswersThere()
+    {
+        var moved = Endpoint(1, "awg0", 51820) with { ServicesPort = 8443 };
+        var taken = Endpoint(2, "awg1", 51821) with { ServicesPort = 8443 };
+        var holder = Endpoint(3, "awg2", 51822) with { ServicesPort = 51821 };
+        var kept = Endpoint(4, "awg3", 51823) with { ServicesPort = 51823 };
+
+        var points = ServicePoints.Of([moved, taken, holder, kept], string.Empty, string.Empty);
+
+        Assert.Equal(
+            [(8443, "awg0, awg1"), (51821, "awg2"), (51823, "awg3"), (51820, "awg0"), (51822, "awg2")],
+            points.Select(point => (point.Port, point.Names)).ToArray());
+    }
+
+    [Fact]
+    public async Task AFileWithoutTheLineOfTheServicesFindsThemOnThePortOfTheEndpointAndLearnsWhereTheyMoved()
+    {
+        using var bench = new Bench();
+        var former = Free();
+        var port = Free();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", ListenPort = former, Address = ["10.8.0.1/24"], ServicesPort = port },
+            CancellationToken.None)).Record!;
+        var client = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var (server, folder) = Served(bench);
+        try
+        {
+            await server.SettleAsync(CancellationToken.None);
+            using var tls = Trusting();
+            var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
+
+            using var asked = await tls.PostAsync(
+                new Uri($"https://127.0.0.1:{former}{ServiceDesk.HelloPath}"),
+                new StringContent(JsonSerializer.Serialize(token, Web), Encoding.UTF8, "application/json"));
+            var services = Offered(client, endpoint, token, ((int)asked.StatusCode, await asked.Content.ReadAsByteArrayAsync()))
+                .GetProperty("services");
+
+            Assert.Equal(System.Net.HttpStatusCode.OK, asked.StatusCode);
+            Assert.Equal(port, services.GetProperty("port").GetInt32());
+            Assert.Equal($"http://10.8.0.1:{port}", services.GetProperty("inside").GetString());
+        }
+        finally
+        {
+            await server.DisposeAsync();
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ThePortOfAnEndpointTheHostHoldsLeavesItsServicesWithoutAFaultAndIsTakenOnceItIsFree()
+    {
+        using var bench = new Bench();
+        using var held = new TcpListener(System.Net.IPAddress.IPv6Any, 0);
+        held.Server.DualMode = true;
+        held.Start();
+        var busy = ((System.Net.IPEndPoint)held.LocalEndpoint).Port;
+        var port = Free();
+        await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { ListenPort = busy, Address = ["10.8.0.1/24"], WebSocket = true, ServicesPort = port },
+            CancellationToken.None);
+        var (server, folder) = Served(bench);
+        try
+        {
+            var faults = await server.SettleAsync(CancellationToken.None);
+            var refused = server.Refused.Keys.ToArray();
+            held.Stop();
+            await server.SettleAsync(CancellationToken.None);
+
+            Assert.Empty(faults);
+            Assert.Empty(refused);
+            Assert.True(Listens(port));
+            Assert.True(Listens(busy));
+        }
+        finally
+        {
+            await server.DisposeAsync();
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ThePortOfAnEndpointIsLeftToTheSubscriptionsThatTakeItApart()
+    {
+        using var bench = new Bench();
+        var former = Free();
+        var port = Free();
+        await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { ListenPort = former, Address = ["10.8.0.1/24"], ServicesPort = port },
+            CancellationToken.None);
+        var subscriptions = new SubscriptionState { Current = SubscriptionDefaults.Settings with { Separate = true, Port = former } };
+        var folder = Path.Combine(Path.GetTempPath(), $"amneziageo-fronts-{Guid.NewGuid():N}");
+        var server = new ServiceServer(
+            bench.Scopes,
+            Desk(bench, new SpeedTickets(bench.Clock)),
+            new ProxyHost(new Ledger(), new Fronts(string.Empty), folder),
+            new WebOptions(),
+            PanelDefaults.Settings,
+            new ServiceShare(),
+            NullLogger<ServiceServer>.Instance,
+            subscriptions);
+        try
+        {
+            await server.SettleAsync(CancellationToken.None);
+
+            Assert.True(Listens(port));
+            Assert.False(Listens(former));
+        }
+        finally
+        {
+            await server.DisposeAsync();
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task TheHelloSaysWhereTheServicesAnswerOutsideTheTunnelAndInsideIt()
+    {
+        using var bench = new Bench();
+        var apart = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example", Address = ["10.8.0.1/24"], ServicesPort = 8446 },
+            CancellationToken.None)).Record!;
+        var shared = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg2") with { Host = "vpn.example", ListenPort = 51821, Address = ["10.9.0.1/24"], ServicesPort = 8445 },
+            CancellationToken.None)).Record!;
+        var milena = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(apart.Id, "milena") with { Address = ["10.8.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var pavel = (await bench.Clients.AddAsync(
+            ClientDefaults.Fresh(shared.Id, "pavel") with { Address = ["10.9.0.2/32"] },
+            CancellationToken.None)).Record!;
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), share: new ServiceShare { Point = Point(shared) });
+        var first = Token(milena.PrivateKey, apart.PublicKey, bench.Clock.GetUtcNow());
+        var second = Token(pavel.PrivateKey, shared.PublicKey, bench.Clock.GetUtcNow());
+
+        var own = Offered(milena, apart, first, await AskAsync(desk, Point(apart), first)).GetProperty("services");
+        var panel = Offered(pavel, shared, second, await AskAsync(desk, Point(shared), second)).GetProperty("services");
+
+        Assert.Equal((8446, "http://10.8.0.1:8446"), (own.GetProperty("port").GetInt32(), own.GetProperty("inside").GetString()));
+        Assert.Equal((8445, "https://10.9.0.1:8445"), (panel.GetProperty("port").GetInt32(), panel.GetProperty("inside").GetString()));
     }
 
     [Fact]
@@ -1295,6 +1449,7 @@ public class ServiceTests
                 new DisconnectOffer(),
                 new SpeedOffer(tickets, share),
                 new InsideOffer(share),
+                new ServicesOffer(share),
                 new SubscriptionOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes, certificates),
                 new SourcesOffer(bench.Scopes),
                 new PresetsOffer(state, PanelDefaults.Settings, new WebOptions(), bench.Scopes),

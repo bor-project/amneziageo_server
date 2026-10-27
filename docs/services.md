@@ -27,12 +27,19 @@ The file of a client carries the port only when it was moved, as the line
 in `[Interface]`; otherwise the client takes the port of the endpoint. Other applications read the line as a
 comment. The link and the subscription carry nothing else of the server.
 
+An endpoint whose services moved keeps answering them on the TCP port with the number of its UDP port as well,
+unless another endpoint answers its own services there or the subscriptions or the releases of the client take that
+port apart from the panel: a file handed out before the move carries no line and asks there, and the hello tells it
+where the services moved, see `services` below. When the host holds that port for another service, the panel says
+so in its log and the services stay on their own port.
+
 The port answers under TLS: the certificate of the panel when it has one, see [serving.md](serving.md), and a
 certificate the panel makes for itself at start when it has none. A client does not check it: the token below
 proves the client, and what the server answers is sealed for that client alone.
 
 Holding the ports of the endpoint open, item 23 of the menu of the server, opens the TCP port of the services together
-with its UDP port, see [firewall.md](firewall.md).
+with its UDP port, and the TCP port with the number of its UDP port while the services moved, see
+[firewall.md](firewall.md).
 
 ## The token
 
@@ -77,6 +84,7 @@ and `features` carries what the server offers this client, each under its name:
 | `inbound` | `mode`: `server` or `network` | the client lets connections in from the tunnel, see [clients.md](clients.md) |
 | `disconnect` | `port`, `from`, `allowed` | the endpoint and the client carry an address and the panel does not keep the client from the signal: the TCP port the application takes the signal to disconnect on, the addresses the signal comes from, and `allowed`, true, which leaves the choice to take the signal to the application, see [The signal to disconnect](#the-signal-to-disconnect) |
 | `speed` | `inside`, `outside` (each `down` and `up`), `limit`, `expires` | always: where to measure and until when |
+| `services` | `port`, `inside` | always: the TCP port the services answer on at the host of the endpoint, and where they answer inside the tunnel, plain on a port of their own and under TLS on the port the panel shares, empty where the endpoint holds no address there |
 | `subscription` | `url`, `revision`, `pin` | the subscriptions are on and the client has one: where it reads it and what it hands out now |
 | `sources` | `items`, each `name`, `kind` (`geoip` or `geosite`) and `url` | the panel has a geo source on: the sources the client adds when it holds none at the address, and moves to the address when it holds one under the name |
 | `presets` | `lists`, each `name`, `rules`, `allUdp`, `full`, `id`, `updated`, `default`, `source` and `readOnly`, and `only` | the template of the client names routing presets: the lists the client takes by `id`, each with the time it was last changed, whether it is on by default, the name the configuration of the client goes by and whether the client keeps it read-only; `only` keeps the configuration to these lists, see [templates.md](templates.md) |

@@ -66,6 +66,7 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         {
             Take(ports, new FirewallPort(Udp, config.ListenPort, config.Name));
             Take(ports, new FirewallPort(Tcp, ConfigServices.Port(config), config.Name));
+            Take(ports, new FirewallPort(Tcp, ConfigServices.Former(config), config.Name));
             if (resolver is not null && Answers(resolver, config))
             {
                 Take(ports, new FirewallPort(Udp, resolver.Port, config.Name, config.Name));
