@@ -8,6 +8,8 @@ builder.Configuration.GetSection(UpdatesOptions.Section).Bind(options);
 var certificate = HostCertificate.Of(options);
 var (token, made) = Token(options);
 var store = new ReleaseStore(options.Directory);
+var version = typeof(UpdatesOptions).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+using var window = new UpdateWindow(Path.Combine(builder.Environment.ContentRootPath, "wwwroot"), WebPath(options), options.Path, version);
 builder.WebHost.ConfigureKestrel(kestrel =>
 {
     kestrel.AddServerHeader = false;
@@ -34,7 +36,7 @@ app.Logger.LogInformation(
     store.Directory);
 if (made)
 {
-    app.Logger.LogInformation("the token of the releases is {Token}; it is kept in {File}", token, options.TokenPath);
+    app.Logger.LogInformation("a new token of the releases is kept in {File}", options.TokenPath);
 }
 
 var status = store.Status();
@@ -43,12 +45,22 @@ if (!status.Writable)
     app.Logger.LogWarning("{Fault}", status.Fault);
 }
 
+if (!window.Present)
+{
+    app.Logger.LogWarning("the web interface is not there: {Page} is missing", Path.Combine(builder.Environment.ContentRootPath, "wwwroot", UpdateWindow.PageName));
+}
+
 app.Run(async context =>
 {
     if (context.Request.Path == "/health")
     {
         context.Response.StatusCode = StatusCodes.Status204NoContent;
 
+        return;
+    }
+
+    if (await window.TryAnswerAsync(context).ConfigureAwait(false))
+    {
         return;
     }
 
@@ -85,6 +97,34 @@ static (string Token, bool Made) Token(UpdatesOptions options)
     }
 
     return (token, true);
+}
+
+// Reads the path of the web interface from the options or its file, making and writing one when there is none.
+static string WebPath(UpdatesOptions options)
+{
+    var path = options.WebPath;
+    if (path.Length == 0 && File.Exists(options.WebPathFile))
+    {
+        path = File.ReadAllText(options.WebPathFile).Trim();
+    }
+
+    if (path.Length == 0)
+    {
+        path = UpdateWindow.Make();
+        Directory.CreateDirectory(Path.GetDirectoryName(options.WebPathFile) ?? ".");
+        File.WriteAllText(options.WebPathFile, path + "\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(options.WebPathFile, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
+
+    if (!UpdateWindow.Fits(path, options.Path))
+    {
+        throw new InvalidOperationException($"'{path}' cannot hold the web interface: names of letters, digits, dots, dashes and underscores, none of them a route of the releases");
+    }
+
+    return path;
 }
 
 // Reads an entry of the listen list: a star or an address, and a port.

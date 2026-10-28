@@ -12,6 +12,7 @@ tools/
 amneziawg/
 amneziageo-tests/
 amneziageo-server/AmneziaGeo.Server.Api/wwwroot/
+amneziageo-server/AmneziaGeo.Server.Updates.Host/wwwroot/
 wstunnel/wstunnel/target/
 wstunnel/wstunnel/.git
 deploy/docker/server.env

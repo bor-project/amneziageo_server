@@ -71,7 +71,7 @@ stage_release() {
   fi
 
   rm -rf "$target.new"
-  cp -a "$here/publish" "$target.new"
+  cp -a --no-preserve=ownership "$here/publish" "$target.new"
   rm -rf "$target.new/wwwroot"
   cp "$here/install.sh" "$here/release" "$here/server" "$target.new/"
   install -m 755 "$here/wstunnel" "$target.new/"
@@ -91,7 +91,7 @@ stage_web() {
   fi
 
   rm -rf "$target.new"
-  cp -a "$1" "$target.new"
+  cp -a --no-preserve=ownership "$1" "$target.new"
   before=$(readlink -f "$base/wwwroot" || true)
   if [ -n "$before" ] && [ -d "$before/assets" ]; then
     mkdir -p "$target.new/assets"
@@ -101,12 +101,22 @@ stage_web() {
         continue
       fi
 
-      cp -p "$file" "$target.new/assets/"
+      cp --preserve=mode,timestamps "$file" "$target.new/assets/"
       echo "$name" >> "$target.new/.carried"
     done
   fi
 
   mv -T "$target.new" "$target"
+}
+
+# Hands the releases and the web interfaces the host keeps to root.
+own() {
+  local dir
+  for dir in "$base/releases" "$base/web"; do
+    if [ -d "$dir" ]; then
+      chown -R root:root "$dir"
+    fi
+  done
 }
 
 # Puts the services and the menu in place where they differ, and drops the unit of the relays.
@@ -222,6 +232,7 @@ whole() {
 
   install -d "$base/releases" "$base/web" "$data" /etc/amneziageo-server
   adopt
+  own
   before=$(readlink "$base/current" || true)
   before_web=$(readlink "$base/wwwroot" || true)
   before_previous=$(readlink "$base/previous" || true)
@@ -299,6 +310,7 @@ web() {
     fail "this web interface was built for another server: put the whole package on, or add --force"
   fi
 
+  own
   old=$(readlink "$base/wwwroot")
   if [ "$old" = "web/$release" ] && [ -z "$force" ]; then
     echo "the host already serves the web interface $release"
@@ -329,6 +341,7 @@ rollback() {
     web=$(readlink "$base/previous-web" || readlink "$base/wwwroot")
   fi
 
+  own
   was=$(systemctl is-active "$unit" || true)
   if [ "$was" = active ]; then
     systemctl stop "$unit"

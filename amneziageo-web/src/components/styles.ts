@@ -1,9 +1,14 @@
 export const card = "rounded-xl border border-line bg-surface"
 
+const bar =
+  "sticky bottom-5 z-10 flex justify-end gap-2 rounded-xl border border-line bg-surface px-4 py-3.5 shadow-[0_-10px_24px_-18px_rgba(15,23,42,.35),0_26px_0_6px_var(--canvas)]"
+
 // The bar with the buttons of a form, at the bottom of the window on a short page and while a long one scrolls, as
 // far from it as the page is padded; its second shadow covers what passes under it there.
-export const footer =
-  "form-bar sticky bottom-5 z-10 mt-auto flex justify-end gap-2 rounded-xl border border-line bg-surface px-4 py-3.5 shadow-[0_-10px_24px_-18px_rgba(15,23,42,.35),0_26px_0_6px_var(--canvas)]"
+export const footer = `form-bar mt-auto ${bar}`
+
+// The bar of a form with more of the page after it, right under the form.
+export const footerUnder = bar
 
 export const field =
   "w-full rounded-lg border border-line-input bg-input px-3 py-2.25 text-sm text-ink outline-none focus:border-brand disabled:opacity-50"

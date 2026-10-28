@@ -24,3 +24,5 @@ client-updates-address Settings: Client updates, the source Address
 client-release   Settings: Client updates, a new update with files chosen
 users            Settings: Users and roles
 diagnostics      Settings: Diagnostics
+updates-window-login Updates server apart: the sign-in to its window
+updates-window   Updates server apart: its window with the releases

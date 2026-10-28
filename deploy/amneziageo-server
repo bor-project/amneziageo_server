@@ -15,6 +15,8 @@ updates_image=ghcr.io/bor-project/amneziageo-updates
 updates_dir=${AMNEZIAGEO_UPDATES_DIR:-/opt/amneziageo-updates}
 updates_data=/var/lib/amneziageo-updates
 updates_etc=/etc/amneziageo-updates
+updates_env=$updates_etc/updates.env
+updates_unit=amneziageo-updates
 endpoints=/etc/amnezia/amneziawg
 run_dir=/run/amneziageo-server
 docker_socket=/var/run/docker.sock
@@ -913,6 +915,11 @@ manifest() {
   printf '%s %s' "$tag" "$(manifest_version "$work/update.json")"
 }
 
+# Prints the SHA-256 the manifest of a release gives a file of it.
+manifest_sha() {
+  grep -A3 "\"$2\"" "$1" | sed -n 's/.*"sha256": *"\([0-9a-f]*\)".*/\1/p' | head -1
+}
+
 # Prints the metapackages of the headers that follow the kernel metapackages on the host, else the one of the flavour of
 # the running kernel.
 headers_metas() {
@@ -1160,8 +1167,8 @@ need_docker() {
   lacks=$(docker_lacks)
   case $lacks in
     '') return 0 ;;
-    docker) bad "Docker is not on this host: the container of the panel needs Docker with compose" ;;
-    compose) bad "docker compose does not answer: the container of the panel needs the compose plugin of Docker" ;;
+    docker) bad "Docker is not on this host: the container needs Docker with compose" ;;
+    compose) bad "docker compose does not answer: the container needs the compose plugin of Docker" ;;
     daemon) bad "the daemon of Docker does not answer" ;;
   esac
 
@@ -1268,7 +1275,7 @@ install_package() {
   version=${found#* }
   file=amneziageo-server-$version-linux-$(release_arch).tar.gz
   fetch "$tag" "$file" "$work" || { rm -rf "$work"; return 1; }
-  want=$(grep -A3 "\"$file\"" "$work/update.json" | sed -n 's/.*"sha256": *"\([0-9a-f]*\)".*/\1/p' | head -1)
+  want=$(manifest_sha "$work/update.json" "$file")
   if [ -z "$want" ] || ! (cd "$work" && printf '%s  %s\n' "$want" "$file" | sha256sum -c - > /dev/null 2>&1); then
     bad "$file does not match the manifest of $tag"
     rm -rf "$work"
@@ -1853,12 +1860,19 @@ ask_shortcut() {
   answer_until shortcut "Name of the short command" "$(free_shortcut ag-s)" shortcut_ok || given[shortcut]=
 }
 
-# Shows the short terms of use and asks to accept them; without the consent nothing is installed.
+# Shows the short terms of use for the panel, or for the client updates server alone, and asks to accept them; without
+# the consent nothing is installed.
 ask_license() {
   if [ -z "${given[license]+set}" ]; then
     say "AmneziaGeo server is free software under GPL-3.0, provided as is, without any warranty."
-    say "Your clients' traffic passes through this server: you answer for it and for the laws that apply."
-    say "The server asks GitHub for new versions; nothing about this server or its clients is sent."
+    if [ "${1:-panel}" = updates ]; then
+      say "The releases this server hands to the apps are yours: you answer for them and for the laws that apply."
+      say "The menu asks GitHub for new versions; nothing about this server is sent."
+    else
+      say "Your clients' traffic passes through this server: you answer for it and for the laws that apply."
+      say "The server asks GitHub for new versions; nothing about this server or its clients is sent."
+    fi
+
     say "Terms of use: https://bor-project.github.io/amneziageo_server/TERMS.html"
   fi
 
@@ -2086,7 +2100,12 @@ upgrade_system() {
   fi
 
   keep_answers
-  say "the host boots into a new kernel, and the module is built for that one"
+  if [ "${given[role]:-panel}" = updates ]; then
+    say "the host boots into a new kernel"
+  else
+    say "the host boots into a new kernel, and the module is built for that one"
+  fi
+
   say "after the reboot run amneziageo-server install again: it goes on with these answers"
   if answer_yes reboot "Reboot now?" yes; then
     reboot
@@ -2475,13 +2494,33 @@ final_check() {
   fi
 }
 
-# Item 1: looks the host over, asks everything first, then puts the panel on as a package or a container, fresh or on
-# the database of a backup.
-install_panel() {
-  if [ "$(kind)" != none ]; then
-    say "the panel is already on this host as a $(kind): item 2 updates it"
-    return 0
+# Asks what the installation puts on the host: the panel, which serves the client updates itself, or the client updates
+# server alone.
+ask_role() {
+  if [ -z "${given[role]+set}" ]; then
+    say "  1. Panel"
+    say "  2. Client updates server"
   fi
+
+  answer role "What to install" 1
+  case ${given[role]} in
+    2 | updates) given[role]=updates ;;
+    *) given[role]=panel ;;
+  esac
+}
+
+# Item 1: asks what goes on the host, the panel or the client updates server alone, and puts it on.
+install_host() {
+  case $(role) in
+    panel)
+      say "the panel is already on this host as a $(kind): item 2 updates it"
+      return 0
+      ;;
+    updates)
+      say "the client updates server is already on this host as a $(updates_kind): item 2 updates it"
+      return 0
+      ;;
+  esac
 
   if [ -f "$answers_file" ] && [ -z "${given[stage]:-}" ]; then
     if agree "An installation stopped for a reboot: go on with its answers?"; then
@@ -2491,6 +2530,17 @@ install_panel() {
     rm -f "$answers_file"
   fi
 
+  ask_role
+  if [ "${given[role]}" = updates ]; then
+    install_updates
+  else
+    install_panel
+  fi
+}
+
+# Looks the host over, asks everything first, then puts the panel on as a package or a container, fresh or on the
+# database of a backup.
+install_panel() {
   assess_host || return 1
   ask_installation || return 1
   plan
@@ -4032,27 +4082,161 @@ install_doors() {
   fi
 }
 
-# Item 30: the service of the releases of the client, apart from the panel, as a container of its own image.
-# Runs docker compose in the directory of the service.
+# The client updates server alone on a host, as a package or a container: the second choice of the installation, its
+# own menu, and item 30 of the panel while a container put on beside the panel by that item stays.
+# Runs docker compose in the directory of the client updates server.
 ucompose() {
   (cd "$updates_dir" && docker compose "$@")
 }
 
-# Prints the state of the container of the service.
+# Tells how the client updates server is put on the host: package, docker or none.
+updates_kind() {
+  if [ -L "$updates_dir/current" ] && [ -f "/etc/systemd/system/$updates_unit.service" ]; then
+    printf 'package'
+  elif [ -f "$updates_dir/compose.yaml" ] && command -v docker > /dev/null 2>&1; then
+    printf 'docker'
+  else
+    printf 'none'
+  fi
+}
+
+# Tells what the host carries: the panel, the client updates server alone, or nothing yet.
+role() {
+  if [ "$(kind)" != none ]; then
+    printf 'panel'
+  elif [ "$(updates_kind)" != none ]; then
+    printf 'updates'
+  else
+    printf 'none'
+  fi
+}
+
+# Stops an item that needs the client updates server on a host without it.
+need_updates() {
+  if [ "$(updates_kind)" = none ]; then
+    bad "the client updates server is not on this host"
+    return 1
+  fi
+}
+
+# Prints running or stopped for the client updates server, not installed without it.
 updates_state() {
-  local state
-  state=$(docker inspect -f '{{.State.Status}}' amneziageo-updates 2> /dev/null) || state=
-  printf '%s' "${state:-not installed}"
+  case $(updates_kind) in
+    package)
+      if systemctl is-active --quiet "$updates_unit"; then
+        printf 'running'
+      else
+        printf 'stopped'
+      fi
+      ;;
+    docker)
+      if [ "$(docker inspect -f '{{.State.Status}}' amneziageo-updates 2> /dev/null)" = running ]; then
+        printf 'running'
+      else
+        printf 'stopped'
+      fi
+      ;;
+    *)
+      printf 'not installed'
+      ;;
+  esac
 }
 
-# Prints the port the service answers on, empty before it is installed.
+# Prints the version of the client updates server the host runs.
+updates_version() {
+  case $(updates_kind) in
+    package) cat "$updates_dir/current/version" 2> /dev/null ;;
+    docker) sed -n 's/^AMNEZIAGEO_UPDATES_TAG=//p' "$updates_dir/.env" 2> /dev/null | tail -1 ;;
+  esac
+}
+
+# Prints the channel the client updates server takes its releases from.
+updates_channel() {
+  local channel
+  channel=$(cat "$updates_etc/channel" 2> /dev/null)
+  printf '%s' "${channel:-stable}"
+}
+
+# Prints the port the client updates server answers on.
 updates_port() {
-  sed -n 's/^AMNEZIAGEO_UPDATES_PORT=//p' "$updates_dir/.env" 2> /dev/null | tail -1
+  local port
+  port=$(sed -n 's/^Updates__Listen__0=.*:\([0-9]*\)$/\1/p' "$updates_env" 2> /dev/null | tail -1)
+  if [ -z "$port" ]; then
+    port=$(sed -n 's/^AMNEZIAGEO_UPDATES_PORT=//p' "$updates_dir/.env" 2> /dev/null | tail -1)
+  fi
+
+  printf '%s' "${port:-8445}"
 }
 
-# Writes the compose project of the service: its port, its directories and a certificate of the host when one is named.
+# Prints the name of the certificate of Let's Encrypt the client updates server answers under, empty for its own.
+updates_certificate() {
+  sed -n 's|^.*Updates__Certificate=/etc/letsencrypt/live/\([^/]*\)/fullchain.pem.*$|\1|p' \
+    "$updates_env" "$updates_dir/compose.yaml" 2> /dev/null | head -1
+}
+
+# Prints the address the releases of the client updates server answer at from outside.
+updates_address() {
+  local host
+  host=$(updates_certificate)
+  host=${host:-$(public_address)}
+  printf 'https://%s:%s/' "${host:-<address of the server>}" "$(updates_port)"
+}
+
+# Prints the address of the web interface of the client updates server.
+updates_window() {
+  printf '%s%s/' "$(updates_address)" "$(cat "$updates_etc/web-path" 2> /dev/null)"
+}
+
+# Prints a path of sixteen letters and digits for the web interface.
+fresh_path() {
+  local path=
+  while [ ${#path} -lt 16 ]; do
+    path+=$(head -c 64 /dev/urandom | LC_ALL=C tr -dc 'a-z0-9')
+  done
+
+  printf '%s\n' "${path:0:16}"
+}
+
+# Writes the settings of the client updates server, its port and the certificate it answers under, and gives it a token
+# and a path of the web interface where it has none.
+settle_updates() {
+  local port=$1 name=${2:-}
+  mkdir -p "$updates_data" "$updates_etc"
+  chmod 700 "$updates_etc"
+  (
+    umask 077
+    if [ ! -s "$updates_etc/token" ]; then
+      openssl rand -hex 24 > "$updates_etc/token"
+    fi
+
+    if [ ! -s "$updates_etc/web-path" ]; then
+      fresh_path > "$updates_etc/web-path"
+    fi
+
+    {
+      printf 'Updates__Listen__0=*:%s\n' "$port"
+      if [ -n "$name" ]; then
+        printf 'Updates__Certificate=/etc/letsencrypt/live/%s/fullchain.pem\n' "$name"
+        printf 'Updates__CertificateKey=/etc/letsencrypt/live/%s/privkey.pem\n' "$name"
+      fi
+    } > "$updates_env"
+  )
+}
+
+# Moves the port and the certificate of a container put on by item 30 before into the settings of the server.
+adopt_updates() {
+  if [ -f "$updates_env" ] || [ ! -f "$updates_dir/compose.yaml" ]; then
+    return 0
+  fi
+
+  settle_updates "$(updates_port)" "$(updates_certificate)"
+}
+
+# Writes the compose project of the client updates server: the network of the host, its settings and directories, and
+# the certificates of the host when it answers under one of them.
 write_updates_compose() {
-  local certificate=$1
+  local name
+  name=$(updates_certificate)
   {
     cat <<EOF
 name: amneziageo-updates
@@ -4061,19 +4245,16 @@ services:
   updates:
     image: $updates_image:\${AMNEZIAGEO_UPDATES_TAG:-latest}
     container_name: amneziageo-updates
-    ports:
-      - "\${AMNEZIAGEO_UPDATES_PORT:-8445}:8445"
+    network_mode: host
+    env_file:
+      - path: $updates_env
+        required: false
     volumes:
       - $updates_data:/var/lib/amneziageo-updates
       - $updates_etc:/etc/amneziageo-updates
 EOF
-    if [ -n "$certificate" ]; then
-      cat <<EOF
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    environment:
-      - Updates__Certificate=/etc/letsencrypt/live/$certificate/fullchain.pem
-      - Updates__CertificateKey=/etc/letsencrypt/live/$certificate/privkey.pem
-EOF
+    if [ -n "$name" ]; then
+      printf '      - /etc/letsencrypt:/etc/letsencrypt:ro\n'
     fi
 
     cat <<'EOF'
@@ -4087,112 +4268,938 @@ EOF
   } > "$updates_dir/compose.yaml"
 }
 
-# Puts the service on, or moves it to the newest release, and prints its token the first time.
-updates_install() {
-  local work found version port certificate names fresh=
-  need_docker || return 1
-  work=$(mktemp -d) || return 1
-  found=$(manifest stable "$work") || { rm -rf "$work"; return 1; }
-  rm -rf "$work"
-  version=${found#* }
-  port=$(updates_port)
-  if [ -z "$port" ]; then
-    port=$(ask "Port of the service [8445]:" 8445) || return 1
-    if ! [[ $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
-      bad "$port is not a port"
-      return 1
-    fi
-
-    if ! port_free t "$port"; then
-      bad "port $port is taken on this host"
-      return 1
-    fi
+# Takes the menu of the release the container runs onto a host that carries the client updates server alone.
+refresh_updates_menu() {
+  local work
+  work=$(mktemp -d) || return 0
+  if docker cp amneziageo-updates:/opt/amneziageo-updates/amneziageo-server "$work/menu" > /dev/null 2>&1 \
+    && bash -n "$work/menu" && ! cmp -s "$work/menu" "$self"; then
+    install -m 755 "$work/menu" "$self"
   fi
 
-  certificate=
-  names=$(certificates | awk '{print $1}')
-  if [ -n "$names" ]; then
-    say "certificates of the host: $(printf '%s' "$names" | tr '\n' ' ')"
-    certificate=$(ask "Certificate for the service (empty for one of its own):" "") || return 1
-    if [ -n "$certificate" ] && [ ! -f "/etc/letsencrypt/live/$certificate/fullchain.pem" ]; then
-      bad "there is no certificate $certificate"
-      return 1
+  rm -rf "$work"
+}
+
+# Puts the client updates server on as a container of the image of the newest release of a channel, or moves it there.
+updates_container() {
+  local channel=$1 work found version
+  step "the container"
+  need_docker
+  work=$(mktemp -d) || return 1
+  found=$(manifest "$channel" "$work") || { rm -rf "$work"; return 1; }
+  rm -rf "$work"
+  version=${found#* }
+  if [ "$version" = "$(updates_version)" ] && grep -qs 'network_mode: host' "$updates_dir/compose.yaml"; then
+    say "the host already runs $version"
+    return 0
+  fi
+
+  mkdir -p "$updates_dir"
+  adopt_updates
+  printf 'AMNEZIAGEO_UPDATES_TAG=%s\n' "$version" > "$updates_dir/.env"
+  write_updates_compose
+  ucompose pull && ucompose up -d || return 1
+  if [ "$(role)" = updates ]; then
+    refresh_updates_menu
+  fi
+
+  good "the container of $version runs from $updates_dir/compose.yaml"
+}
+
+# Downloads the client updates server of the newest release of a channel, checks it against the key of the releases and
+# puts it on as a package.
+updates_package() {
+  local channel=$1 work found tag version file want rc
+  step "the package"
+  work=$(mktemp -d) || return 1
+  found=$(manifest "$channel" "$work") || { rm -rf "$work"; return 1; }
+  tag=${found%% *}
+  version=${found#* }
+  if [ "$version" = "$(updates_version)" ]; then
+    rm -rf "$work"
+    say "the host already runs $version"
+    return 0
+  fi
+
+  file=amneziageo-updates-$version-linux-$(release_arch).tar.gz
+  want=$(manifest_sha "$work/update.json" "$file")
+  if [ -z "$want" ]; then
+    bad "$tag carries no client updates server"
+    rm -rf "$work"
+    return 1
+  fi
+
+  fetch "$tag" "$file" "$work" || { rm -rf "$work"; return 1; }
+  if ! (cd "$work" && printf '%s  %s\n' "$want" "$file" | sha256sum -c - > /dev/null 2>&1); then
+    bad "$file does not match the manifest of $tag"
+    rm -rf "$work"
+    return 1
+  fi
+
+  rc=0
+  tar -xzf "$work/$file" -C "$work" && "$work/amneziageo-updates/install.sh" || rc=$?
+  rm -rf "$work"
+  return $rc
+}
+
+# Waits up to a minute for the client updates server to answer.
+wait_updates() {
+  local port tries=0
+  port=$(updates_port)
+  while [ "$tries" -lt 30 ]; do
+    if curl -fsk --max-time 2 -o /dev/null "https://127.0.0.1:$port/health"; then
+      good "the client updates server answers on TCP $port, version $(updates_version)"
+      return 0
     fi
+
+    sleep 2
+    tries=$((tries + 1))
+  done
+
+  bad "the client updates server does not answer on TCP $port: its log tells why"
+  return 1
+}
+
+# Starts the client updates server and waits until it answers.
+updates_start() {
+  need_updates || return 1
+  if [ "$(updates_kind)" = package ]; then
+    systemctl start "$updates_unit" || return 1
+  else
+    ucompose up -d > /dev/null || return 1
+  fi
+
+  wait_updates
+}
+
+# Stops the client updates server.
+updates_stop() {
+  need_updates || return 1
+  if [ "$(updates_kind)" = package ]; then
+    systemctl stop "$updates_unit" || return 1
+  else
+    ucompose stop > /dev/null || return 1
+  fi
+
+  good "the client updates server is stopped"
+}
+
+# Starts the client updates server over on its settings and waits until it answers.
+updates_restart() {
+  need_updates || return 1
+  if [ "$(updates_kind)" = package ]; then
+    systemctl restart "$updates_unit" || return 1
+  else
+    ucompose up -d --force-recreate > /dev/null 2>&1 || return 1
+  fi
+
+  wait_updates
+}
+
+# Prints how many releases the client updates server keeps, their size and the room left, from its own answer.
+updates_releases_line() {
+  local answer
+  answer=$(printf 'Authorization: Bearer %s\n' "$(cat "$updates_etc/token" 2> /dev/null)" \
+    | curl -fsk --max-time 5 -H @- "https://127.0.0.1:$(updates_port)/status" 2> /dev/null) || { printf 'no answer'; return 0; }
+  printf '%s' "$answer" | python3 -c '
+import json, sys
+status = json.load(sys.stdin)
+def size(count):
+    for unit in ("B", "KB", "MB", "GB"):
+        if count < 1024:
+            return "%d %s" % (count, unit) if unit == "B" else "%.1f %s" % (count, unit)
+        count /= 1024
+    return "%.1f TB" % count
+print("%d, %s, %s free" % (status["releases"], size(status["bytes"]), size(status["freeBytes"])))
+' 2> /dev/null || printf 'no answer'
+}
+
+# Prints whether the client updates server starts with the host.
+updates_autostart_state() {
+  local policy
+  case $(updates_kind) in
+    package)
+      if systemctl is-enabled --quiet "$updates_unit" 2> /dev/null; then
+        printf 'on'
+      else
+        printf 'off'
+      fi
+      ;;
+    docker)
+      policy=$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' amneziageo-updates 2> /dev/null)
+      if [ -n "$policy" ] && [ "$policy" != no ]; then
+        printf 'on'
+      else
+        printf 'off'
+      fi
+      ;;
+    *)
+      printf 'off'
+      ;;
+  esac
+}
+
+# Reads what the host carries before the client updates server goes on, prints it and stops on what it cannot live with.
+assess_updates_host() {
+  local memory certs
+  # shellcheck disable=SC1090
+  . "$os_release"
+  seen[ipv4]=$(public_address)
+  seen[ipv6]=$(public_address6)
+  memory=$(awk '/^MemTotal/ {print int($2 / 1024)}' /proc/meminfo)
+  seen[disk]=$(df -Pm / 2> /dev/null | awk 'NR == 2 {print $4}')
+  seen[upgrades]=$(apt-get -s -o Debug::NoLocking=1 dist-upgrade 2> /dev/null | grep -c '^Inst ')
+  seen[docker]=
+  if command -v docker > /dev/null 2>&1; then
+    seen[docker]=$(docker version --format '{{.Server.Version}}' 2> /dev/null)
+  fi
+
+  if ! command -v ufw > /dev/null 2>&1; then
+    seen[ufw]=missing
+  elif ufw status 2> /dev/null | grep -q '^Status: active'; then
+    seen[ufw]=active
+  else
+    seen[ufw]=inactive
+  fi
+
+  certs=$(certificates | awk '{printf "%s%s until %s", (NR > 1 ? ", " : ""), $1, $2}')
+  step "the host"
+  say "system        ${PRETTY_NAME:-unknown}, $(uname -m)"
+  say "kernel        $(uname -r), ${seen[upgrades]} upgrades wait$(reboot_pending && printf ', a reboot is pending')"
+  say "memory        $memory MB, ${seen[disk]} MB free on /"
+  say "network       IPv4 ${seen[ipv4]:-none}, IPv6 ${seen[ipv6]:-none}"
+  say "docker        ${seen[docker]:-none}"
+  say "firewall      ufw ${seen[ufw]}"
+  say "listening     $(listeners | awk '{printf "%s%s/%s %s", (NR > 1 ? ", " : ""), $2, $1, $3}')"
+  say "certificates  ${certs:-none}"
+  if [ -z "$(release_arch)" ]; then
+    bad "there are no releases for $(uname -m)"
+    return 1
+  fi
+
+  if ! grep -qsE '^ID(_LIKE)?=.*(debian|ubuntu)' "$os_release"; then
+    bad "the installer knows Debian and Ubuntu"
+    confirm "Go on anyway?" || return 1
+  fi
+
+  if [ "${seen[disk]:-0}" -lt 4096 ]; then
+    bad "${seen[disk]} MB free on /: a release of the client takes about 800 MB"
+  fi
+}
+
+# Prints the ports the client updates server opens to the world, like 8445/tcp.
+updates_ports() {
+  local ports=("${given[port]}/tcp")
+  if [ "${given[certificate]:-none}" = new ]; then
+    ports+=(80/tcp)
+  fi
+
+  printf '%s' "${ports[*]}"
+}
+
+# Asks everything the client updates server needs before anything changes.
+ask_updates() {
+  local opening
+  step "questions"
+  ask_license updates || return 1
+  if [ -z "${given[kind]+set}" ]; then
+    say "  1. Package"
+    say "  2. Docker"
+  fi
+
+  answer kind "Install as" "$([ -n "${seen[docker]}" ] && printf 2 || printf 1)"
+  case ${given[kind]} in
+    2 | docker) given[kind]=docker ;;
+    *) given[kind]=package ;;
+  esac
+
+  if [ "${given[kind]}" = docker ]; then
+    need_docker
+  fi
+
+  ask_shortcut
+  if [ "${given[stage]:-}" != upgraded ]; then
+    answer_yes upgrade "Upgrade the system first (apt full-upgrade, ${seen[upgrades]:-0} packages)?" yes || true
+  fi
+
+  if [ -z "${given[channel]+set}" ]; then
+    say "  1. Stable"
+    say "  2. Test"
+  fi
+
+  answer channel "Channel" 1
+  case ${given[channel]} in
+    2 | test | beta) given[channel]='test' ;;
+    *) given[channel]='stable' ;;
+  esac
+
+  ask_certificate || return 1
+  answer_until port "Port of the client updates server" "$(free_port 8445 tcp)" panel_port_ok || return 1
+  opening=$(updates_ports)
+  if [ "${seen[ufw]}" = active ]; then
+    answer_yes ufw "Open $opening in ufw?" yes || true
+  else
+    if [ -z "${given[ufw_others]+set}" ]; then
+      given[ufw_others]=$(listeners | awk -v ssh="$(ssh_port)" '!($1 == "tcp" && $2 == ssh) {print $2 "/" $1}' | sort -u | tr '\n' ' ')
+      given[ufw_others]=${given[ufw_others]% }
+    fi
+
+    answer_yes ufw "Turn ufw on, letting in $(ssh_port)/tcp for ssh, $opening${given[ufw_others]:+ and what listens now: ${given[ufw_others]}}?" \
+      "$([ "${seen[ufw]}" = missing ] && printf yes || printf no)" || true
+  fi
+}
+
+# Prints what the installation of the client updates server is going to do.
+plan_updates() {
+  step "the plan"
+  if [ "${given[upgrade]:-no}" = yes ] && [ "${given[stage]:-}" != upgraded ]; then
+    say "- upgrade the system; with a new kernel reboot, and the same command goes on after it"
+  fi
+
+  if [ "${given[kind]}" = docker ]; then
+    say "- write $updates_dir/compose.yaml"
+  fi
+
+  say "- put the client updates server on as a ${given[kind]} of the newest ${given[channel]} release"
+  if [ -n "${given[shortcut]:-}" ]; then
+    say "- put the short command ${given[shortcut]} on the host, a link to $self"
+  fi
+
+  case ${given[certificate]} in
+    new) say "- get a certificate of Let's Encrypt for ${given[domain]}, renewed by certbot.timer" ;;
+    keep) say "- take the certificate the host holds for ${given[domain]}" ;;
+    *) say "- answer under a certificate of its own" ;;
+  esac
+
+  say "- answer on TCP ${given[port]} on every address: the releases at the root, the web interface under a path of its own"
+  if [ "${given[ufw]:-no}" = yes ]; then
+    if [ "${seen[ufw]}" = active ]; then
+      say "- open $(updates_ports) in ufw"
+    else
+      say "- turn ufw on with $(ssh_port)/tcp $(updates_ports) ${given[ufw_others]:-}"
+    fi
+  fi
+}
+
+# Opens in ufw the ports of the client updates server it does not let in yet, turning ufw on first when asked.
+guard_updates() {
+  local port opened=() first=()
+  if [ "${given[ufw]:-no}" != yes ]; then
+    return 0
+  fi
+
+  step "the firewall"
+  if [ "${seen[ufw]}" != active ]; then
+    if ! command -v ufw > /dev/null 2>&1; then
+      apt-get install -y ufw > /dev/null || return 1
+    fi
+
+    read -r -a first <<< "$(ssh_port)/tcp ${given[ufw_others]:-}"
+  fi
+
+  for port in "${first[@]}" $(updates_ports); do
+    if ! ufw_holds allow "$port" && ! ufw_lets "$port"; then
+      ufw allow "$port" > /dev/null && opened+=("$port")
+    fi
+  done
+
+  if [ "${seen[ufw]}" != active ]; then
+    ufw --force enable > /dev/null || return 1
+  fi
+
+  good "ufw lets in $(updates_ports)${opened[*]:+, opened now: ${opened[*]}}"
+}
+
+# Looks the host over, asks everything first, then puts the client updates server on as a package or a container.
+install_updates() {
+  local name= fresh=
+  assess_updates_host || return 1
+  ask_updates || return 1
+  plan_updates
+  answer_yes go "Go on?" yes || return 0
+  upgrade_system || return 1
+  step "the host"
+  apt-get update > /dev/null || return 1
+  apt-get install -y --no-install-recommends curl ca-certificates openssl python3 || return 1
+  if [ "${given[certificate]}" = new ]; then
+    step "the certificate"
+    certify "${given[domain]}" "${given[email]:-}" || return 1
+  fi
+
+  if [ "${given[certificate]}" != none ]; then
+    name=${given[domain]}
   fi
 
   if [ ! -s "$updates_etc/token" ]; then
     fresh=1
   fi
 
-  mkdir -p "$updates_dir" "$updates_data" "$updates_etc"
-  chmod 700 "$updates_etc"
-  printf 'AMNEZIAGEO_UPDATES_TAG=%s\nAMNEZIAGEO_UPDATES_PORT=%s\n' "$version" "$port" > "$updates_dir/.env"
-  write_updates_compose "$certificate"
-  ucompose pull && ucompose up -d || return 1
-  good "the service of $version runs from $updates_dir/compose.yaml"
-  say "address for the panel: https://${certificate:-$(public_address)}:$port/"
-  if [ -n "$fresh" ]; then
-    updates_show_token
-  fi
-}
-
-# Waits for the token the service writes at its first start and prints it once.
-updates_show_token() {
-  local tries=0
-  while [ ! -s "$updates_etc/token" ] && [ "$tries" -lt 30 ]; do
-    sleep 1
-    tries=$((tries + 1))
-  done
-
-  if [ -s "$updates_etc/token" ]; then
-    say "the token for the panel, shown once: $(cat "$updates_etc/token")"
+  settle_updates "${given[port]}" "$name"
+  printf '%s\n' "${given[channel]}" > "$updates_etc/channel"
+  if [ "${given[kind]}" = docker ]; then
+    updates_container "${given[channel]}" || return 1
   else
-    bad "the service did not write its token to $updates_etc/token"
+    updates_package "${given[channel]}" || return 1
+    systemctl start "$updates_unit" || return 1
+  fi
+
+  wait_updates || return 1
+  put_shortcut
+  guard_updates || bad "ufw did not take the port: item 18 of the menu opens it"
+  step "done"
+  good "the releases for the panels and the apps: $(updates_address)"
+  good "the web interface: $(updates_window)"
+  if [ -n "$fresh" ]; then
+    say "the token for the web interface and the panels, shown once: $(cat "$updates_etc/token")"
+  else
+    say "the token stays as it was: item 6 of the menu makes a new one"
+  fi
+
+  if [ "${given[kind]}" = docker ]; then
+    say "compose: $updates_dir/compose.yaml"
+  fi
+
+  say "the menu: amneziageo-server${made_shortcut:+, or $made_shortcut}"
+}
+
+# Items 2 and 3: moves the client updates server to the newest release of its channel, of the test channel for a beta.
+updates_update() {
+  case $(updates_kind) in
+    package)
+      updates_package "$1" || return 1
+      if [ "$(updates_state)" = running ]; then
+        wait_updates
+      fi
+      ;;
+    docker) updates_container "$1" && wait_updates ;;
+    *)
+      bad "the client updates server is not on this host"
+      return 1
+      ;;
+  esac
+}
+
+# Item 4: goes back to the release before the current one.
+updates_rollback() {
+  local current previous
+  need_updates || return 1
+  if [ "$(updates_kind)" = package ]; then
+    if [ ! -L "$updates_dir/previous" ]; then
+      bad "there is no release to go back to"
+      return 1
+    fi
+
+    confirm "Go back to $(cat "$updates_dir/previous/version" 2> /dev/null)?" || return 0
+    "$updates_dir/current/install.sh" --rollback
+    return
+  fi
+
+  current=$(updates_version)
+  previous=$(docker images "$updates_image" --format '{{.Tag}}' 2> /dev/null | grep -E '^[0-9]+(\.[0-9]+)+$' \
+    | { cat; printf '%s\n' "$current"; } | sort -uV | grep -B1 -x "$current" | head -1)
+  if [ -z "$previous" ] || [ "$previous" = "$current" ]; then
+    bad "the host keeps no image older than $current"
+    return 1
+  fi
+
+  confirm "Go back from $current to $previous?" || return 0
+  printf 'AMNEZIAGEO_UPDATES_TAG=%s\n' "$previous" > "$updates_dir/.env"
+  ucompose up -d > /dev/null && wait_updates
+}
+
+# Item 5: takes the client updates server off the host, its releases, token and settings too when asked.
+updates_uninstall() {
+  local kind keep=yes
+  need_updates || return 1
+  kind=$(updates_kind)
+  confirm "Remove the client updates server from this host?" || return 0
+  if confirm "Remove its releases, token and settings too?"; then
+    keep=no
+  fi
+
+  step "the client updates server"
+  if [ "$kind" = package ]; then
+    systemctl disable --now "$updates_unit" 2> /dev/null
+    rm -f "/etc/systemd/system/$updates_unit.service"
+    systemctl daemon-reload
+  else
+    ucompose down > /dev/null 2>&1
+    if confirm "Remove the images of the client updates server too?"; then
+      docker images -q "$updates_image" | sort -u | xargs -r docker rmi -f > /dev/null
+    fi
+  fi
+
+  rm -rf "$updates_dir"
+  if [ "$keep" = no ]; then
+    rm -rf "$updates_data" "$updates_etc"
+    good "removed the releases, the token and the settings"
+  else
+    say "the releases stay in $updates_data, the token and the settings in $updates_etc"
+  fi
+
+  drop_shortcuts
+  rm -f "$self"
+  good "the client updates server is off the host"
+  exit 0
+}
+
+# Item 6: gives the client updates server a new token and prints it once.
+updates_new_token() {
+  need_updates || return 1
+  confirm "Make a new token? The web interface and the panels lose the one they hold." || return 0
+  (
+    umask 077
+    openssl rand -hex 24 > "$updates_etc/token"
+  ) || return 1
+  updates_restart > /dev/null || return 1
+  say "the new token, shown once: $(cat "$updates_etc/token")"
+}
+
+# Item 7: gives the web interface of the client updates server a new path.
+updates_new_path() {
+  need_updates || return 1
+  (
+    umask 077
+    fresh_path > "$updates_etc/web-path"
+  ) || return 1
+  updates_restart > /dev/null || return 1
+  good "the web interface: $(updates_window)"
+}
+
+# Item 8: moves the client updates server to another port.
+updates_change_port() {
+  local port current
+  need_updates || return 1
+  current=$(updates_port)
+  port=$(ask "Port [$current]:" "$current")
+  if ! [[ $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+    bad "'$port' is not a port"
+    return 1
+  fi
+
+  if [ "$port" = "$current" ]; then
+    return 0
+  fi
+
+  if ! port_free tcp "$port"; then
+    bad "TCP port $port is taken on this host"
+    return 1
+  fi
+
+  adopt_updates
+  settle_updates "$port" "$(updates_certificate)"
+  if [ "$(updates_kind)" = docker ]; then
+    write_updates_compose
+  fi
+
+  updates_restart || return 1
+  if ufw_active && ! ufw_lets "$port/tcp" && agree "Open TCP port $port in ufw?"; then
+    ufw allow "$port/tcp" > /dev/null
+  fi
+
+  good "the releases: $(updates_address)"
+  good "the web interface: $(updates_window)"
+}
+
+# Item 9: the whole picture of the client updates server without its token.
+updates_view() {
+  local installed name end
+  need_updates || return 1
+  if [ "$(updates_kind)" = package ]; then
+    installed="package, release $(basename "$(readlink "$updates_dir/current" 2> /dev/null)")"
+  else
+    installed="docker, image $(docker inspect -f '{{.Config.Image}}' amneziageo-updates 2> /dev/null)"
+  fi
+
+  name=$(updates_certificate)
+  if [ -n "$name" ]; then
+    end=$(openssl x509 -enddate -noout -in "/etc/letsencrypt/live/$name/fullchain.pem" 2> /dev/null | cut -d= -f2)
+  fi
+
+  step "the client updates server"
+  say "installed      $installed"
+  say "state          $(updates_state), version $(updates_version), $(updates_channel) channel"
+  say "releases       $(updates_address)"
+  say "web interface  $(updates_window)"
+  say "port           TCP $(updates_port) on every address"
+  say "certificate    ${name:-its own}${end:+, until $end}"
+  say "directory      $updates_data"
+  say "releases kept  $(updates_releases_line)"
+  say "settings       $updates_env, the token in $updates_etc/token"
+  say "autostart      $(updates_autostart_state)"
+  say "firewall       $(ufw_active && printf 'ufw active' || printf 'ufw off')"
+}
+
+# Item 13: the service or the container of the client updates server, whether it and its web interface answer, its
+# certificate and its port in the firewall.
+updates_check() {
+  local port name
+  need_updates || return 1
+  port=$(updates_port)
+  step "the client updates server"
+  if [ "$(updates_kind)" = package ]; then
+    systemctl status "$updates_unit" --no-pager -n 0 2> /dev/null | head -4
+  else
+    docker ps -a --filter name='^amneziageo-updates$' --format '{{.Names}}  {{.Status}}  {{.Image}}'
+  fi
+
+  if curl -fsk --max-time 5 -o /dev/null "https://127.0.0.1:$port/health"; then
+    good "answers on TCP $port, version $(updates_version)"
+  else
+    bad "does not answer on TCP $port"
+  fi
+
+  if curl -fsk --max-time 5 "https://127.0.0.1:$port/$(cat "$updates_etc/web-path" 2> /dev/null)/" 2> /dev/null \
+    | grep -q 'amneziageo-releases'; then
+    good "the web interface answers"
+  else
+    bad "the web interface does not answer"
+  fi
+
+  name=$(updates_certificate)
+  if [ -z "$name" ]; then
+    say "answers under a certificate of its own"
+  elif openssl x509 -checkend 86400 -noout -in "/etc/letsencrypt/live/$name/fullchain.pem" > /dev/null 2>&1; then
+    good "the certificate of $name holds"
+  else
+    bad "the certificate of $name ends within a day: item 17 renews it"
+  fi
+
+  if ufw_active; then
+    if ufw_lets "$port/tcp"; then
+      good "ufw lets TCP $port in"
+    else
+      bad "ufw does not let TCP $port in: item 18 opens it"
+    fi
+  fi
+
+  say "autostart $(updates_autostart_state)"
+}
+
+# Item 14: the log of the client updates server.
+updates_logs_menu() {
+  local choice
+  need_updates || return 1
+  while true; do
+    step "Logs"
+    say "  1. Follow the log"
+    say "  2. The last 200 lines"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1)
+        if [ "$(updates_kind)" = package ]; then
+          journalctl -u "$updates_unit" -f
+        else
+          ucompose logs --tail 50 -f
+        fi
+        ;;
+      2)
+        if [ "$(updates_kind)" = package ]; then
+          journalctl -u "$updates_unit" -n 200 --no-pager
+        else
+          ucompose logs --tail 200
+        fi
+        ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
+# Items 15 and 16: lets the client updates server start with the host or not.
+updates_autostart() {
+  need_updates || return 1
+  if [ "$(updates_kind)" = package ]; then
+    if [ "$1" = on ]; then
+      systemctl enable "$updates_unit" 2> /dev/null
+    else
+      systemctl disable "$updates_unit" 2> /dev/null
+    fi
+  elif [ "$1" = on ]; then
+    docker update --restart unless-stopped amneziageo-updates > /dev/null
+  else
+    docker update --restart no amneziageo-updates > /dev/null
+  fi
+
+  good "autostart $(updates_autostart_state)"
+}
+
+# Puts the client updates server on a certificate of the host by its name, or on one of its own for none.
+updates_use_certificate() {
+  local name=$1
+  if [ -n "$name" ] && [ ! -f "/etc/letsencrypt/live/$name/fullchain.pem" ]; then
+    bad "there is no certificate $name"
+    return 1
+  fi
+
+  adopt_updates
+  settle_updates "$(updates_port)" "$name"
+  if [ "$(updates_kind)" = docker ]; then
+    write_updates_compose
+  fi
+
+  updates_restart || return 1
+  good "the releases: $(updates_address)"
+  good "the web interface: $(updates_window)"
+}
+
+# Lists the certificates of the host and the one the client updates server answers under.
+updates_certificates() {
+  local name
+  if command -v certbot > /dev/null 2>&1; then
+    certbot certificates 2> /dev/null
+  elif [ -d /etc/letsencrypt/live ]; then
+    say "certificates of the host: $(ls /etc/letsencrypt/live | grep -v README | tr '\n' ' ')"
+  fi
+
+  name=$(updates_certificate)
+  if [ -z "$name" ]; then
+    say "the client updates server answers under a certificate of its own"
+  else
+    say "the client updates server answers under the certificate of $name"
+    openssl x509 -noout -subject -enddate -in "/etc/letsencrypt/live/$name/fullchain.pem" 2> /dev/null
   fi
 }
 
-# Gives the service a new token and prints it once.
-updates_new_token() {
-  openssl rand -hex 24 > "$updates_etc/token" || return 1
-  chmod 600 "$updates_etc/token"
-  ucompose restart > /dev/null || return 1
-  say "the new token for the panel, shown once: $(cat "$updates_etc/token")"
+# Item 17: certificates of Let's Encrypt for the client updates server.
+updates_ssl_menu() {
+  local choice name
+  need_updates || return 1
+  while true; do
+    step "SSL Certificate Management"
+    say "  1. Get a Let's Encrypt certificate"
+    say "  2. Renew the certificates now"
+    say "  3. Certificates"
+    say "  4. Answer under a certificate of the host"
+    say "  5. Answer under a certificate of its own"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1)
+        name=$(ask "Name of the host, like updates.example.org:")
+        if [ -n "$name" ]; then
+          certify "$name" && updates_use_certificate "$name"
+        fi
+        ;;
+      2) certbot renew ;;
+      3) reading updates_certificates ;;
+      4)
+        say "certificates of the host: $(certificates | awk '{print $1}' | tr '\n' ' ')"
+        name=$(ask "Name of the certificate:")
+        if [ -n "$name" ]; then
+          updates_use_certificate "$name"
+        fi
+        ;;
+      5) updates_use_certificate "" ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
 }
 
-# Takes the service off the host, leaving its releases and its token.
+# Lists the firewall and the ports the client updates server needs open.
+updates_firewall_status() {
+  if command -v ufw > /dev/null 2>&1; then
+    ufw status verbose
+  else
+    say "ufw is not installed"
+  fi
+
+  step "ports the server needs"
+  say "TCP $(ssh_port)  ssh"
+  say "TCP $(updates_port)  the releases and the web interface"
+  if [ -d /etc/letsencrypt/live ]; then
+    say "TCP 80  renewals of Let's Encrypt"
+  fi
+}
+
+# Item 18: the firewall of the host and the port the client updates server needs.
+updates_firewall_menu() {
+  local choice port
+  need_updates || return 1
+  while true; do
+    port=$(updates_port)
+    step "Firewall Management"
+    say "  1. Status and the ports the server needs"
+    say "  2. Open the port of the server"
+    say "  3. Close the port of the server"
+    say "  4. Open a port"
+    say "  5. Close a port"
+    say "  6. Turn the firewall on"
+    say "  7. Turn the firewall off"
+    say "  0. Back"
+    choice=$(ask "Choose:") || return 0
+    case $choice in
+      1) reading updates_firewall_status ;;
+      2 | 3)
+        if ! command -v ufw > /dev/null 2>&1; then
+          bad "ufw is not installed: item 6 puts it on"
+        elif [ "$choice" = 2 ]; then
+          ufw allow "$port/tcp"
+        else
+          ufw delete allow "$port/tcp"
+        fi
+        ;;
+      4) ufw_port allow ;;
+      5) ufw_port delete ;;
+      6) ufw_on ;;
+      7) command -v ufw > /dev/null 2>&1 && ufw disable ;;
+      0 | "") return 0 ;;
+      *) bad "there is no item $choice" ;;
+    esac
+  done
+}
+
+# Draws the menu of the client updates server and runs the item chosen until the menu is left.
+updates_main_menu() {
+  local choice hold
+  while true; do
+    printf '\n%s\n' '╔───────────────────────────────────────────────╗'
+    row "AmneziaGeo Client Updates Server"
+    rule
+    entry 0 "Exit Script"
+    rule
+    entry 1 "Install"
+    entry 2 "Update"
+    entry 3 "Update Beta"
+    entry 4 "Roll Back"
+    entry 5 "Uninstall"
+    rule
+    entry 6 "New Token"
+    entry 7 "Reset UI Path"
+    entry 8 "Change Port"
+    entry 9 "View Current Settings"
+    rule
+    entry 10 "Start"
+    entry 11 "Stop"
+    entry 12 "Restart"
+    entry 13 "Check Status"
+    entry 14 "Logs"
+    rule
+    entry 15 "Enable Autostart"
+    entry 16 "Disable Autostart"
+    rule
+    entry 17 "SSL Certificate Management"
+    entry 18 "Firewall Management"
+    printf '%s\n' '╚───────────────────────────────────────────────╝'
+    reading updates_status_block
+    choice=$(ask "Choose [0-18]:") || exit 0
+    hold=1
+    case $choice in
+      0) exit 0 ;;
+      1) install_host ;;
+      2) updates_update "$(updates_channel)" ;;
+      3) updates_update test ;;
+      4) updates_rollback ;;
+      5) updates_uninstall ;;
+      6) updates_new_token ;;
+      7) updates_new_path ;;
+      8) updates_change_port ;;
+      9) reading updates_view ;;
+      10) updates_start ;;
+      11) updates_stop ;;
+      12) updates_restart ;;
+      13) updates_check ;;
+      14) updates_logs_menu && hold= ;;
+      15) updates_autostart on ;;
+      16) updates_autostart off ;;
+      17) updates_ssl_menu && hold= ;;
+      18) updates_firewall_menu && hold= ;;
+      "") hold= ;;
+      *) bad "there is no item $choice" ;;
+    esac
+
+    if [ -n "$hold" ]; then
+      pause
+    fi
+  done
+}
+
+# Writes the state of the client updates server under its menu.
+updates_status_block() {
+  local state line
+  state=$(updates_state)
+  line="$state, $(updates_kind) $(updates_version), $(updates_channel) channel"
+  case $state in
+    running) line="$green$line$plain" ;;
+    *) line="$red$line$plain" ;;
+  esac
+
+  printf 'Updates:    %s\n' "$line"
+  printf 'Autostart:  %s\n' "$(updates_autostart_state)"
+  if [ "$state" = running ]; then
+    printf 'Releases:   %s\n' "$(updates_releases_line)"
+  fi
+}
+
+# Runs the menu of the client updates server or one of its commands.
+updates_main() {
+  case ${1:-} in
+    "") updates_main_menu ;;
+    install) install_host ;;
+    update)
+      case ${2:-} in
+        "") updates_update "$(updates_channel)" ;;
+        beta) updates_update test ;;
+        *)
+          usage
+          return 1
+          ;;
+      esac
+      ;;
+    rollback) updates_rollback ;;
+    uninstall) updates_uninstall ;;
+    settings) updates_view ;;
+    start) updates_start ;;
+    stop) updates_stop ;;
+    restart) updates_restart ;;
+    status) updates_check ;;
+    log)
+      if [ "$(updates_kind)" = package ]; then
+        journalctl -u "$updates_unit" -f
+      else
+        ucompose logs --tail 50 -f
+      fi
+      ;;
+    enable) updates_autostart on ;;
+    disable) updates_autostart off ;;
+    token) updates_new_token ;;
+    path) updates_new_path ;;
+    *)
+      usage
+      return 1
+      ;;
+  esac
+}
+
+# Takes the container of the client updates server off a host of the panel, leaving its releases and its token.
 updates_remove() {
-  agree "Take the service off this host? Its releases in $updates_data stay." || return 0
+  agree "Take the service off this host? Its releases in $updates_data stay." || return 1
   ucompose down > /dev/null 2>&1
   rm -rf "$updates_dir"
   good "the service is off; the releases stay in $updates_data, the token in $updates_etc"
 }
 
+# Item 30 of the panel: the client updates server put on beside the panel by this item before, while it stays.
 updates_menu() {
   local choice
   host_only "the service of the client releases" || return 1
+  need_updates || return 1
   while true; do
     step "Client Updates Service"
     say "state: $(updates_state), port $(updates_port)"
-    say "  1. Install or update the service"
+    say "  1. Update the service"
     say "  2. New token"
     say "  3. Logs of the service"
     say "  4. Remove the service"
     say "  0. Back"
     choice=$(ask "Choose:") || return 0
     case $choice in
-      1) updates_install ;;
-      2 | 3 | 4)
-        if [ ! -d "$updates_dir" ]; then
-          bad "the service is not installed"
-          continue
-        fi
-
-        case $choice in
-          2) updates_new_token ;;
-          3) ucompose logs --tail 100 -f ;;
-          4) updates_remove ;;
-        esac
-        ;;
+      1) updates_update "$(updates_channel)" ;;
+      2) updates_new_token ;;
+      3) ucompose logs --tail 100 -f ;;
+      4) updates_remove && return 0 ;;
       0 | "") return 0 ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -4251,8 +5258,13 @@ status_block() {
 
 # Draws the menu and runs the item chosen until the menu is left.
 menu() {
-  local choice hold
+  local choice hold last
   while true; do
+    last=29
+    if [ "$(updates_kind)" != none ]; then
+      last=30
+    fi
+
     printf '\n%s\n' '╔───────────────────────────────────────────────╗'
     row "AmneziaGeo Server Management"
     rule
@@ -4293,15 +5305,18 @@ menu() {
     rule
     entry 28 "Update Geo Files"
     entry 29 "DNS for Clients"
-    rule
-    entry 30 "Client Updates Service"
+    if [ "$last" = 30 ]; then
+      rule
+      entry 30 "Client Updates Service"
+    fi
+
     printf '%s\n' '╚───────────────────────────────────────────────╝'
     reading status_block
-    choice=$(ask "Choose [0-30]:") || exit 0
+    choice=$(ask "Choose [0-$last]:") || exit 0
     hold=1
     case $choice in
       0) exit 0 ;;
-      1) install_panel ;;
+      1) install_host ;;
       2) update_panel ;;
       3) update_panel beta ;;
       4) rollback_panel ;;
@@ -4330,7 +5345,13 @@ menu() {
       27) bbr_item ;;
       28) need_panel && cli geo update ;;
       29) resolver_item ;;
-      30) updates_menu && hold= ;;
+      30)
+        if [ "$last" = 30 ]; then
+          updates_menu && hold=
+        else
+          bad "there is no item $choice"
+        fi
+        ;;
       "") hold= ;;
       *) bad "there is no item $choice" ;;
     esac
@@ -4347,8 +5368,10 @@ usage() {
 usage:
   amneziageo-server                    open the menu
   amneziageo-server install [--restore <file>] [--answers <file>]
-                                       look the host over, ask what the panel needs and put it on,
-                                       on a backup downloaded from a panel, with answers of a file
+                                       ask what goes on the host, the panel or the client updates
+                                       server alone, look the host over, ask what it needs and put
+                                       it on, the panel on a backup downloaded from a panel, with
+                                       answers of a file
   amneziageo-server restore <file>     put a backup downloaded from a panel in place of the database
   amneziageo-server update [beta]      move the panel to the newest release, of the test channel for beta
   amneziageo-server rollback           go back to the release before
@@ -4360,9 +5383,17 @@ usage:
   amneziageo-server bbr [on | off]     BBR with the fq queue for TCP
   amneziageo-server dns [on | off]     the resolver of the clients: on runs it whenever the routing needs it
   amneziageo-server dns open           let the clients of the endpoints reach the resolver through ufw
-  amneziageo-server updates            the service of the client releases, apart from the panel
+  amneziageo-server updates            the client updates server item 30 put on beside the panel
   amneziageo-server <command>          a command of the utility: user, role, token, panel, endpoint,
                                        import, device, family, geo, dns, init, login, whoami, update status
+
+on a host of the client updates server alone:
+  amneziageo-server                    open its menu
+  amneziageo-server update [beta]      move it to the newest release, of the test channel for beta
+  amneziageo-server rollback | uninstall | settings
+  amneziageo-server start | stop | restart | status | log | enable | disable
+  amneziageo-server token              give it a new token
+  amneziageo-server path               give its web interface a new path
 EOF
 }
 
@@ -4377,6 +5408,11 @@ main() {
 
   need_root
   locate_compose
+  if [ "$(role)" = updates ]; then
+    updates_main "$@"
+    return
+  fi
+
   case ${1:-} in
     "")
       follow_release
@@ -4406,7 +5442,7 @@ main() {
         shift 2 || { usage; return 1; }
       done
 
-      install_panel
+      install_host
       ;;
     restore) restore_file "${2:-}" ;;
     update)

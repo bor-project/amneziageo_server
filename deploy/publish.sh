@@ -1,23 +1,29 @@
 #!/usr/bin/env bash
 # Builds the panel into a package a server takes as it is, whole or its web interface alone; beside a whole package
-# lie its files packed one by one and their list. VERSION names the version of the build, RUNTIME the platform it
-# runs on.
+# lie its files packed one by one and their list. With --updates it builds the client updates server with its web
+# interface into a package of its own. VERSION names the version of the build, RUNTIME the platform it runs on.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 version=${VERSION:-}
 runtime=${RUNTIME:-linux-x64}
 kind=whole
-if [ "${1:-}" = --ui ]; then
-  kind=ui
-  shift
-fi
+case ${1:-} in
+  --ui)
+    kind=ui
+    shift
+    ;;
+  --updates)
+    kind=updates
+    shift
+    ;;
+esac
 
-if [ "$kind" = ui ]; then
-  out=${1:-$root/out/amneziageo-web}
-else
-  out=${1:-$root/out/amneziageo-server}
-fi
+case $kind in
+  ui) out=${1:-$root/out/amneziageo-web} ;;
+  updates) out=${1:-$root/out/amneziageo-updates} ;;
+  *) out=${1:-$root/out/amneziageo-server} ;;
+esac
 
 # Packs every file of a package on its own and lists them, so an update fetches only the files a host lacks.
 pack() {
@@ -66,6 +72,24 @@ fingerprint() {
 rm -rf "$out"
 mkdir -p "$out"
 date -u +%Y%m%d-%H%M%S-"$commit" > "$out/release"
+if [ "$kind" = updates ]; then
+  npm --prefix "$root/amneziageo-web" run build:updates
+  dotnet publish "$root/amneziageo-server/AmneziaGeo.Server.Updates.Host" \
+    --configuration Release \
+    --runtime "$runtime" \
+    --self-contained true \
+    --nologo \
+    ${version:+-p:Version=$version} \
+    --output "$out"
+  printf '%s\n' "${version:-$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$root/Directory.Build.props")}" > "$out/version"
+  install -m 755 "$root/deploy/updates-install.sh" "$out/install.sh"
+  install -m 644 "$root/deploy/amneziageo-updates.service" "$out/"
+  install -m 755 "$root/deploy/amneziageo-server" "$out/"
+  tar --owner=0 --group=0 --numeric-owner -czf "$out.tar.gz" -C "$(dirname "$out")" "$(basename "$out")"
+  echo "$(cat "$out/release") $(du -sh "$out.tar.gz" | cut -f1) $out.tar.gz"
+  exit 0
+fi
+
 fingerprint > "$out/server"
 
 npm --prefix "$root/amneziageo-web" run build
@@ -113,7 +137,7 @@ else
   install -m 755 "$root/deploy/amneziageo-server" "$out/"
 fi
 
-tar -czf "$out.tar.gz" -C "$(dirname "$out")" "$(basename "$out")"
+tar --owner=0 --group=0 --numeric-owner -czf "$out.tar.gz" -C "$(dirname "$out")" "$(basename "$out")"
 if [ "$kind" = whole ]; then
   pack "$out"
 fi

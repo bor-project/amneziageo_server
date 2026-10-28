@@ -1,9 +1,18 @@
 # syntax=docker/dockerfile:1
 
-# The service of the releases of the client, built from the repository root for amd64 and arm64:
+# The service of the releases of the client with its web interface, built from the repository root for amd64 and arm64:
 #   docker buildx build -f deploy/docker/Dockerfile.updates --platform linux/amd64,linux/arm64 -t amneziageo-updates:<version> .
 
 ARG DOTNET=10.0
+
+FROM --platform=$BUILDPLATFORM node:24-trixie-slim AS web
+WORKDIR /src
+COPY amneziageo-web/package.json amneziageo-web/package-lock.json amneziageo-web/
+RUN npm --prefix amneziageo-web ci --no-audit --no-fund
+COPY amneziageo-web/ amneziageo-web/
+COPY TERMS.md TERMS.ru.md PRIVACY.md PRIVACY.ru.md THIRD-PARTY.md THIRD-PARTY.ru.md ./
+RUN mkdir -p amneziageo-server/AmneziaGeo.Server.Updates.Host \
+ && npm --prefix amneziageo-web run build:updates
 
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:$DOTNET AS server
 ARG TARGETARCH
@@ -19,13 +28,16 @@ RUN --mount=type=cache,target=/root/.nuget/packages \
       *) echo "no build for $TARGETARCH" >&2; exit 1 ;; \
     esac \
  && dotnet publish amneziageo-server/AmneziaGeo.Server.Updates.Host -c Release -r "$rid" --self-contained false \
-      -p:Version="$VERSION" -o /out --nologo -v minimal
+      -p:Version="$VERSION" -o /out --nologo -v minimal \
+ && rm -rf /out/wwwroot
 
 FROM mcr.microsoft.com/dotnet/aspnet:$DOTNET
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl tini \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=server /out/ /opt/amneziageo-updates/
+COPY --from=web /src/amneziageo-server/AmneziaGeo.Server.Updates.Host/wwwroot/ /opt/amneziageo-updates/wwwroot/
+COPY --chmod=755 deploy/amneziageo-server /opt/amneziageo-updates/amneziageo-server
 ARG VERSION=0.0.1
 LABEL org.opencontainers.image.source=https://github.com/bor-project/amneziageo_server \
       org.opencontainers.image.version=$VERSION
@@ -37,5 +49,5 @@ WORKDIR /opt/amneziageo-updates
 VOLUME ["/var/lib/amneziageo-updates", "/etc/amneziageo-updates"]
 EXPOSE 8445
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s \
-  CMD curl -fsSk https://127.0.0.1:8445/health > /dev/null || exit 1
+  CMD port=${Updates__Listen__0##*:}; curl -fsSk "https://127.0.0.1:${port:-8445}/health" > /dev/null || exit 1
 ENTRYPOINT ["tini", "--", "/opt/amneziageo-updates/AmneziaGeo.Server.Updates.Host"]

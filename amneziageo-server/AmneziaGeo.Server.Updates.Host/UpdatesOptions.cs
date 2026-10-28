@@ -47,6 +47,11 @@ public sealed class UpdatesOptions
     public string TokenFile { get; set; } = string.Empty;
 
     /// <summary>
+    /// The path the web interface answers under, empty to read it from its file.
+    /// </summary>
+    public string WebPath { get; set; } = string.Empty;
+
+    /// <summary>
     /// The certificate chain the service answers under, in PEM; empty for one of its own.
     /// </summary>
     public string Certificate { get; set; } = string.Empty;
@@ -60,6 +65,11 @@ public sealed class UpdatesOptions
     /// Returns the file the token is kept in.
     /// </summary>
     public string TokenPath => TokenFile.Length > 0 ? TokenFile : System.IO.Path.Combine(Etc, "token");
+
+    /// <summary>
+    /// Returns the file the path of the web interface is kept in.
+    /// </summary>
+    public string WebPathFile => System.IO.Path.Combine(Etc, "web-path");
 
     /// <summary>
     /// Returns the addresses the service listens on, the port of the service on every address when none is named.

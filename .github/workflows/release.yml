@@ -1,7 +1,8 @@
 # Builds a release of the panel from a tag vX.Y.Z.W on master: the packages for x64 and arm64, each beside its files
-# packed one by one and their list, the image for both in ghcr.io, the image of the service of the client releases,
-# and update.json signed with UPDATE_SIGNING_KEY, which the panels read to update themselves. A tag with a fourth
-# number above zero, or with a suffix, makes a prerelease that only panels on the test channel take.
+# packed one by one and their list, the image for both in ghcr.io, the packages and the image of the service of the
+# client releases, and update.json signed with UPDATE_SIGNING_KEY, which the panels read to update themselves and the
+# menu checks the packages against. A tag with a fourth number above zero, or with a suffix, makes a prerelease that
+# only panels on the test channel take.
 name: release
 
 on:
@@ -93,6 +94,14 @@ jobs:
           for kind in tar.gz pack files; do
             mv "out/amneziageo-server.$kind" "dist/amneziageo-server-$VERSION-linux-${{ matrix.arch }}.$kind"
           done
+      - name: Package of the client updates server
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          RUNTIME: ${{ matrix.runtime }}
+        run: |
+          deploy/publish.sh --updates
+          mv out/amneziageo-updates.tar.gz "dist/amneziageo-updates-$VERSION-linux-${{ matrix.arch }}.tar.gz"
       - uses: actions/upload-artifact@v7
         with:
           name: package-${{ matrix.arch }}
@@ -229,6 +238,8 @@ jobs:
   updates-manifest:
     needs: [version, updates-image]
     runs-on: ubuntu-24.04
+    outputs:
+      digest: ${{ steps.merge.outputs.digest }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -241,7 +252,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - shell: bash
+      - id: merge
+        shell: bash
         working-directory: digests
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -258,9 +270,11 @@ jobs:
           done
 
           docker buildx imagetools create "${tags[@]}" "${sources[@]}"
+          digest=$(docker buildx imagetools inspect "$UPDATES_IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
   publish:
-    needs: [version, package, manifest]
+    needs: [version, package, manifest, updates-manifest]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -279,6 +293,7 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
           CHANNEL: ${{ needs.version.outputs.channel }}
           DIGEST: ${{ needs.manifest.outputs.digest }}
+          UPDATES_DIGEST: ${{ needs.updates-manifest.outputs.digest }}
           SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         run: |
           set -euo pipefail
@@ -306,6 +321,18 @@ jobs:
             done | jq -s .
           )
 
+          updates=$(
+            for file in amneziageo-updates-*.tar.gz; do
+              base=${file%.tar.gz}
+              jq -n \
+                --arg name "$file" \
+                --arg arch "${base##*-linux-}" \
+                --argjson size "$(stat -c %s "$file")" \
+                --arg sha256 "$(sha256sum "$file" | cut -d' ' -f1)" \
+                '{name: $name, arch: $arch, size: $size, sha256: $sha256}'
+            done | jq -s .
+          )
+
           jq -n \
             --arg version "$VERSION" \
             --arg channel "$CHANNEL" \
@@ -313,7 +340,10 @@ jobs:
             --arg commit "$GITHUB_SHA" \
             --arg image "$IMAGE@$DIGEST" \
             --argjson packages "$packages" \
-            '{version: $version, channel: $channel, published: $published, commit: $commit, image: $image, packages: $packages}' \
+            --arg updatesImage "$UPDATES_IMAGE@$UPDATES_DIGEST" \
+            --argjson updates "$updates" \
+            '{version: $version, channel: $channel, published: $published, commit: $commit, image: $image, packages: $packages,
+              updates: {image: $updatesImage, packages: $updates}}' \
             > update.json
 
           key=$RUNNER_TEMP/update-signing.pem
@@ -338,4 +368,4 @@ jobs:
 
           cp ../deploy/amneziageo-server amneziageo-server
           gh release create "$GITHUB_REF_NAME" "${flags[@]}" amneziageo-server-*.tar.gz amneziageo-server-*.pack \
-            amneziageo-server-*.files update.json update.json.sig amneziageo-server
+            amneziageo-server-*.files amneziageo-updates-*.tar.gz update.json update.json.sig amneziageo-server

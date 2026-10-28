@@ -7,6 +7,8 @@ import { connect, pause } from "./kit/cdp.mjs"
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = join(here, "..", "..")
 const stand = JSON.parse(readFileSync(join(here, "local", "stand.json"), "utf8"))
+// The window of the client updates server apart, for the jobs with app "updates".
+const updates = stand.updates ? { url: stand.updates.url, token: readFileSync(stand.updates.tokenFile, "utf8").trim() } : null
 const rules = JSON.parse(readFileSync(join(here, "local", "mask.json"), "utf8"))
 const languages = JSON.parse(readFileSync(join(here, "languages.json"), "utf8"))
 const maskSource = readFileSync(join(here, "kit", "mask.js"), "utf8")
@@ -82,7 +84,8 @@ async function settle(page) {
   }
 }
 
-const page = await connect(stand.port, stand.url)
+// The tab of the panel, or of the window of the updates server where an earlier shot left it.
+const page = await connect(stand.port, stand.url).catch((failure) => (updates ? connect(stand.port, updates.url) : Promise.reject(failure)))
 await page.viewport(view.width, view.height, view.scale)
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 const forbidden = rules
@@ -112,22 +115,39 @@ for (const code of langs) {
       continue
     }
     const frame = (await import(pathToFileURL(file).href)).default
-    const size = frame.view ?? view
-    await page.viewport(size.width, size.height, size.scale ?? view.scale)
-    await page.eval(`localStorage.setItem("amneziageo.language", ${JSON.stringify(code)}); localStorage.setItem("amneziageo.theme", "light")`)
-    const route = typeof frame.route === "function" ? frame.route(stand) : frame.route
-    await page.send("Page.navigate", { url: new URL(route, stand.url).href })
-    await pause(500)
-    await settle(page)
-    await page.eval(quiet)
-    if (await page.eval(`!document.body.innerText.includes(${JSON.stringify(t["nav.overview"])})`)) {
-      console.log(`${code} ${name}: the panel is not in ${code} or not signed in`)
+    const apart = frame.app === "updates"
+    const site = apart ? updates?.url : stand.url
+    if (!site) {
+      console.log(`${code} ${name}: local/stand.json names no ${apart ? "updates server" : "panel"}`)
       failed++
       continue
     }
-    const ctx = { page, t, pause, settle: () => settle(page), stand, lang }
+    const size = frame.view ?? view
+    // A view of the height "fit" is as tall as the page: a bar of a form stays where the page puts it.
+    await page.viewport(size.width, size.height === "fit" ? 400 : size.height, size.scale ?? view.scale)
+    if (new URL(await page.eval("location.href")).origin !== new URL(site).origin) {
+      await page.send("Page.navigate", { url: site })
+      await pause(1500)
+    }
+    await page.eval(`localStorage.setItem("amneziageo.language", ${JSON.stringify(code)}); localStorage.setItem("amneziageo.theme", "light")`)
+    const route = typeof frame.route === "function" ? frame.route(stand) : frame.route
+    await page.send("Page.navigate", { url: new URL(route, site).href })
+    await pause(500)
+    await settle(page)
+    await page.eval(quiet)
+    const mark = apart ? t["updates.title"] : t["nav.overview"]
+    if (await page.eval(`!document.body.innerText.includes(${JSON.stringify(mark)})`)) {
+      console.log(`${code} ${name}: the ${apart ? "window" : "panel"} is not in ${code} or not signed in`)
+      failed++
+      continue
+    }
+    const ctx = { page, t, pause, settle: () => settle(page), stand, lang, updates }
     if (frame.steps) {
       await frame.steps(ctx)
+    }
+    if (size.height === "fit") {
+      await page.viewport(size.width, await page.eval("document.documentElement.scrollHeight"), size.scale ?? view.scale)
+      await settle(page)
     }
     const keys = await page.eval(keepKeys)
     const own = rules.filter((r) => r.frames?.includes(name))

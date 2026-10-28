@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && vite build --config vite.subscription.config.ts",
+    "build:updates": "tsc -b && vite build --config vite.updates.config.ts",
     "lint": "oxlint",
     "preview": "vite preview"
   },

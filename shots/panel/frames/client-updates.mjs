@@ -7,7 +7,7 @@ export default {
   route: "/settings/client-updates",
   // The versions of the client releases read like addresses.
   publicAddresses: ["^1\\.1[01]\\.\\d+\\.\\d+$"],
-  view: { width: 1440, height: 1240 },
+  view: { width: 1440, height: "fit" },
   async steps({ page, settle }) {
     await page.waitFor(`document.getElementById("client-updates-path")`)
     await fill(page, { "client-updates-path": "q7m2x9k4w1z8c3v6" })

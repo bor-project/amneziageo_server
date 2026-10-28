@@ -1,7 +1,32 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
+import type { AxiosInstance } from "axios"
 import type { TextKey } from "@/i18n/en"
 import { client } from "./client"
+
+// Where the releases are reached: through the API of the panel, or at a service of the releases itself.
+export interface ReleaseRoad {
+  http: AxiosInstance
+  base: string
+  home: string
+}
+
+let road: ReleaseRoad = { http: client, base: "/client-updates", home: "/settings/client-updates" }
+
+export function takeReleaseRoad(next: ReleaseRoad): void {
+  road = next
+}
+
+// The address of a page of the releases, the list of them without a page named.
+export function releasePage(rest = ""): string {
+  const home = road.home.replace(/\/+$/, "")
+
+  if (rest.length === 0) {
+    return home.length === 0 ? "/" : home
+  }
+
+  return `${home}/${rest}`
+}
 
 export const own = "own"
 export const address = "address"
@@ -130,7 +155,7 @@ export function useClientReleases(page: number, enabled = true) {
   return useQuery({
     queryKey: ["client-releases", "page", page],
     queryFn: async () =>
-      (await client.get<ReleasePage>("/client-updates/releases", { params: { page, size: releasesPerPage } })).data,
+      (await road.http.get<ReleasePage>(`${road.base}/releases`, { params: { page, size: releasesPerPage } })).data,
     placeholderData: keepPreviousData,
     enabled,
   })
@@ -139,7 +164,7 @@ export function useClientReleases(page: number, enabled = true) {
 export function useClientRelease(tag: string | undefined) {
   return useQuery({
     queryKey: ["client-releases", "tag", tag],
-    queryFn: async () => (await client.get<ReleaseDetails>(`/client-updates/releases/${tag}`)).data,
+    queryFn: async () => (await road.http.get<ReleaseDetails>(`${road.base}/releases/${tag}`)).data,
     enabled: tag !== undefined,
   })
 }
@@ -148,24 +173,24 @@ export function useRemoveClientRelease() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (tag: string) => client.delete(`/client-updates/releases/${tag}`),
+    mutationFn: (tag: string) => road.http.delete(`${road.base}/releases/${tag}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["client-releases"] }),
   })
 }
 
 export async function createRelease(version: string, channel: ReleaseChannel, description: string): Promise<ReleaseDetails> {
-  return (await client.post<ReleaseDetails>("/client-updates/releases", { version, channel, description })).data
+  return (await road.http.post<ReleaseDetails>(`${road.base}/releases`, { version, channel, description })).data
 }
 
 export async function changeRelease(
   tag: string,
   change: { channel?: ReleaseChannel; description?: string; from?: Record<string, string> },
 ): Promise<ReleaseDetails> {
-  return (await client.patch<ReleaseDetails>(`/client-updates/releases/${tag}`, change)).data
+  return (await road.http.patch<ReleaseDetails>(`${road.base}/releases/${tag}`, change)).data
 }
 
 export async function dropReleaseFile(tag: string, name: string): Promise<ReleaseDetails> {
-  return (await client.delete<ReleaseDetails>(`/client-updates/releases/${tag}/files/${encodeURIComponent(name)}`)).data
+  return (await road.http.delete<ReleaseDetails>(`${road.base}/releases/${tag}/files/${encodeURIComponent(name)}`)).data
 }
 
 // Hands a file of a release to the panel, which checks it and puts it beside the manifest.
@@ -177,7 +202,7 @@ export async function putReleaseFile(
   progress: (share: number) => void,
 ): Promise<ReleaseDetails> {
   return (
-    await client.put<ReleaseDetails>(`/client-updates/releases/${tag}/files/${encodeURIComponent(name)}`, file, {
+    await road.http.put<ReleaseDetails>(`${road.base}/releases/${tag}/files/${encodeURIComponent(name)}`, file, {
       params: from.length > 0 ? { from } : {},
       headers: { "Content-Type": "application/octet-stream" },
       timeout: 0,
@@ -189,7 +214,7 @@ export async function putReleaseFile(
 // Hands a zip of a release to the panel, which checks every file in it and takes them all or none.
 export async function putReleaseArchive(tag: string, file: File, progress: (share: number) => void): Promise<ReleaseDetails> {
   return (
-    await client.post<ReleaseDetails>(`/client-updates/releases/${tag}/archive`, file, {
+    await road.http.post<ReleaseDetails>(`${road.base}/releases/${tag}/archive`, file, {
       headers: { "Content-Type": "application/zip" },
       timeout: 0,
       onUploadProgress: (event) => progress(event.total ? event.loaded / event.total : 0),

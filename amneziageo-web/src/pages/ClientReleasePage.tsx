@@ -13,6 +13,7 @@ import {
   isVersion,
   putReleaseArchive,
   putReleaseFile,
+  releasePage,
   shownTag,
   slotsOf,
   useClientRelease,
@@ -59,7 +60,7 @@ function ReleaseForm({ held }: { held: ReleaseDetails | null }) {
   const t = useText()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const back = useSpot("/settings/client-updates")
+  const back = useSpot(releasePage())
   const [params] = useSearchParams()
   const [made, setMade] = useState<ReleaseDetails | null>(held)
   const [version, setVersion] = useState(held?.release.version ?? "")

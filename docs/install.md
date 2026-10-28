@@ -21,7 +21,10 @@ chmod 755 /usr/local/bin/amneziageo-server
 amneziageo-server install
 ```
 
-`install` looks the host over first and prints what it carries: the system and the kernel, the upgrades waiting,
+`install` asks first what goes on the host: `1. Panel`, which serves the releases of the client itself, or
+`2. Client updates server`, the server of the releases of the client alone, see
+[The client updates server alone](#the-client-updates-server-alone). For the panel it looks the host over first and
+prints what it carries: the system and the kernel, the upgrades waiting,
 the module of AmneziaWG, memory and disk, Docker and its containers, forwarding and BBR, ufw, the ports taken and the
 services behind them, the interfaces of AmneziaWG and WireGuard, the certificates of Let's Encrypt. It stops on what
 the panel cannot live with: a release missing for the architecture, a container host without the module. The first
@@ -58,6 +61,7 @@ every key the installation runs without a question:
 
 | Key | Answer |
 |---|---|
+| `role` | `panel` or `updates`, the client updates server alone |
 | `upgrade` | `yes` upgrades the system first |
 | `kind` | `package` or `docker` |
 | `channel` | `stable` or `test` |
@@ -90,7 +94,7 @@ firewall, endpoints, websocket fronts, BBR and the resolver of the clients. Its 
 
 | Command | Does |
 |---|---|
-| `install` | looks the host over, asks what the panel needs and puts it on |
+| `install` | asks what goes on the host, looks it over, asks what the panel or the client updates server needs and puts it on |
 | `install --restore <file>` | puts the panel on the host on a backup a panel downloaded |
 | `install --answers <file>` | puts the panel on the host with the answers of a file |
 | `restore <file>` | puts a backup a panel downloaded in place of the database |
@@ -106,6 +110,37 @@ firewall, endpoints, websocket fronts, BBR and the resolver of the clients. Its 
 
 Any other command goes to the console of the panel, as in `amneziageo-server user list` or
 `amneziageo-server panel show`; `amneziageo-server help` lists them.
+
+## The client updates server alone
+
+The second answer of the first question, `2. Client updates server` (`role=updates` in a file of answers), puts on a
+host of its own the server the releases of the client lie on: the apps download them from it, the panels name it to
+their apps with the source `Address` and change its releases with its token. It takes no AmneziaWG, no forwarding
+and no panel; a host carries one of the two, and `install` on a host that carries one names it and puts nothing on.
+The look over the host is shorter, and the questions are the terms of use, a package or a container, the short
+command of the menu, the upgrade of the system, the channel, the name of the server for a certificate of Let's
+Encrypt (empty for a certificate of its own), the port, 8445 or the first free one above it, and ufw. It ends with
+the address of the releases, the address of the web interface and, the first time, the token.
+
+| | Package | Container |
+|---|---|---|
+| the program | `/opt/amneziageo-updates/releases/<release>`, `current` and `previous` links to two of them | the image `ghcr.io/bor-project/amneziageo-updates`, the compose project in `/opt/amneziageo-updates` on the network of the host |
+| the service | `amneziageo-updates.service` | the container `amneziageo-updates` |
+| the releases of the client | `/var/lib/amneziageo-updates` | the same, mounted |
+| the settings | `/etc/amneziageo-updates/updates.env`: `Updates__Listen__0` and the certificate | the same, mounted |
+| the token, the path of the web interface | `token`, `web-path` in `/etc/amneziageo-updates` | the same |
+
+The releases answer at the root of the port, `https://<name>:<port>/`. The web interface answers under a path of
+sixteen letters and digits of its own, `https://<name>:<port>/<path>/`; it is signed into with the token and shows the
+releases alone: their list, a new release of files or of a zip, a change and a removal. The menu on such a host is
+that of the server: install, update, update to a beta, roll back, uninstall, a new token, a new path of the web
+interface, the port, the settings, start, stop, restart, the status, the log, the autostart, the certificates of Let's
+Encrypt and the firewall. Its items go as commands too: `update`, `update beta`, `rollback`, `uninstall`, `settings`,
+`start`, `stop`, `restart`, `status`, `log`, `enable`, `disable`, `token`, `path`.
+
+`./deploy/publish.sh --updates` builds its package, `out/amneziageo-updates.tar.gz`, with the runtime inside it; the
+`install.sh` in it puts the package on as above, `--rollback` goes back a release. The guide of the site is at
+<https://bor-project.github.io/amneziageo_server/service/recipes/updates-service.html>.
 
 The rest of this page puts the panel on by hand.
 

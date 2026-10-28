@@ -1,6 +1,6 @@
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
-import { shownTag, useClientRelease, useRemoveClientRelease } from "@/api/clientUpdates"
+import { releasePage, shownTag, useClientRelease, useRemoveClientRelease } from "@/api/clientUpdates"
 import { useTail } from "@/components/crumbs"
 import { card, danger, secondary } from "@/components/styles"
 import { bytes } from "@/format"
@@ -10,7 +10,7 @@ import { useSpot } from "@/store/spots"
 export function ClientReleaseRemove() {
   const t = useText()
   const navigate = useNavigate()
-  const back = useSpot("/settings/client-updates")
+  const back = useSpot(releasePage())
   const { tag } = useParams()
   const release = useClientRelease(tag)
   const remove = useRemoveClientRelease()
@@ -20,7 +20,7 @@ export function ClientReleaseRemove() {
     held === undefined
       ? []
       : [
-          { label: shownTag(held.release.tag), to: `/settings/client-updates/${held.release.tag}/edit` },
+          { label: shownTag(held.release.tag), to: releasePage(`${held.release.tag}/edit`) },
           { label: t("releases.remove") },
         ],
   )

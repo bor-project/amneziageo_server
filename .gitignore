@@ -36,3 +36,4 @@ logs/
 appsettings.Local.json
 
 amneziageo-server/AmneziaGeo.Server.Api/wwwroot/
+amneziageo-server/AmneziaGeo.Server.Updates.Host/wwwroot/
