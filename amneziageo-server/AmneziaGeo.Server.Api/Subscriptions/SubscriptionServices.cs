@@ -45,7 +45,9 @@ public static class SubscriptionServices
             if (settings.IsEnabled
                 && settings.Separate
                 && settings.Port == panel.Port
-                && (SubscriptionAnswer.Asked(path, settings) ?? SubscriptionAnswer.AskedHold(path, settings)) is not null)
+                && (SubscriptionAnswer.Asked(path, settings)
+                    ?? SubscriptionAnswer.AskedHold(path, settings)
+                    ?? SubscriptionAnswer.AskedConfig(path, settings)?.Subscription) is not null)
             {
                 if (certificates.OnRequest(context.Request.Host.Host).IsGood)
                 {

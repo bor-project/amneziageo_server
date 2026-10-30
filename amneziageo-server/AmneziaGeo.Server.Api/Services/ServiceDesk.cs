@@ -370,10 +370,13 @@ public sealed class ServiceDesk
         }
 
         var subscriptions = _subscriptions.Current;
+        var asked = SubscriptionAnswer.Asked(path, subscriptions)
+            ?? SubscriptionAnswer.AskedHold(path, subscriptions)
+            ?? SubscriptionAnswer.AskedConfig(path, subscriptions)?.Subscription;
 
         return subscriptions.IsEnabled
             && !subscriptions.Separate
-            && (SubscriptionAnswer.Asked(path, subscriptions) ?? SubscriptionAnswer.AskedHold(path, subscriptions)) is not null
+            && asked is not null
             && _certificates?.OnRequest(context.Request.Host.Host).IsGood != false
             ? Wanted.Subscription
             : Wanted.None;
