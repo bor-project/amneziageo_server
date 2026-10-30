@@ -88,10 +88,20 @@ and `features` carries what the server offers this client, each under its name:
 | `subscription` | `url`, `revision`, `pin` | the subscriptions are on and the client has one: where it reads it and what it hands out now |
 | `sources` | `items`, each `name`, `kind` (`geoip` or `geosite`) and `url` | the panel has a geo source on: the sources the client adds when it holds none at the address, and moves to the address when it holds one under the name |
 | `presets` | `lists`, each `name`, `rules`, `allUdp`, `full`, `id`, `updated`, `default`, `source` and `readOnly`, and `only` | the template of the client names routing presets: the lists the client takes by `id`, each with the time it was last changed, whether it is on by default, the name the configuration of the client goes by and whether the client keeps it read-only; `only` keeps the configuration to these lists, see [templates.md](templates.md) |
+| `configs` | `items`, each `id`, `name`, `updated`, `revision`, `default`, `required` and `url` | the subscriptions are on and the client carries one: the configurations its subscription hands out, each with the identifier it is asked by at the address of the subscription, the time it was last changed, the mark of its file, whether the client makes it active while it has none, whether it takes a newer file without asking, and the address the file is fetched at, see [subscriptions.md](subscriptions.md) |
+| `default` | none | the endpoint is the one the panel marks default: the client makes the configuration of this hello the one it connects with while it has none, see [configs.md](configs.md) |
+| `update` | `required`, true | the endpoint is marked to be updated without asking: the client reads the file of its configuration again, replaces the one it holds and says the configuration was updated, see [configs.md](configs.md) |
 | `dns` | `mode`, `servers`, `resolver` | always: what the client, its template or the server picked for the `DNS` line of the file (`routing`, `panel`, `network`, `own` or `endpoint`), the name servers of that line, none for `network`, and the addresses the resolver of the panel answers the client on inside the tunnel while it runs, see [dns.md](dns.md#the-name-servers-of-a-file) |
 
 A client leaves out a feature or an argument it does not know, and takes a feature the answer leaves out as not
 offered: an application older than `id` reads `name`, `rules`, `allUdp` and `full` of a list and adds it by name.
+
+The mark of a configuration is the digest of the file its `url` hands out: a client that read the file before
+compares the mark of the hello with the one it holds and reads the address again only when the two differ. A file
+it does not hold is fetched and added to the catalogue of the application, and a configuration the server marks
+`default` becomes the one the application connects with while it has none. A configuration the server marks
+`update` with `required` is read again by the application itself, replaces the one it holds and is named to the
+user as updated, without a question.
 
 A token that does not hold is refused with `{ error, message, time }`:
 

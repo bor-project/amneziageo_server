@@ -61,7 +61,8 @@ public sealed record ConfigResponse(
     ObfuscationBody Obfuscation,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc,
-    bool IsDefault = false);
+    bool IsDefault = false,
+    bool RequireUpdate = false);
 
 /// <summary>
 /// An endpoint as the interface sends it; keep leaves a port the panel held open and holds no longer open in the
@@ -90,6 +91,7 @@ public sealed record ConfigRequest(
     string? WebSocketPath = null,
     bool? Keep = null,
     bool? IsDefault = null,
+    bool? RequireUpdate = null,
     IReadOnlyList<long>? Rules = null);
 
 /// <summary>
@@ -156,7 +158,8 @@ public static class ConfigAnswers
         Obfuscation(config.Obfuscation),
         config.CreatedUtc,
         config.UpdatedUtc,
-        config.IsDefault);
+        config.IsDefault,
+        config.RequireUpdate);
 
     /// <summary>
     /// Describes the obfuscation of an endpoint as the interface reads it.
@@ -204,6 +207,7 @@ public static class ConfigAnswers
         OfflineAfter = request.OfflineAfter ?? ConfigDefaults.OfflineAfter,
         IsEnabled = request.IsEnabled ?? true,
         IsDefault = request.IsDefault ?? held?.IsDefault ?? false,
+        RequireUpdate = request.RequireUpdate ?? held?.RequireUpdate ?? false,
         Nat = request.Nat ?? true,
         Opened = request.Opened ?? held?.Opened ?? false,
         Inbound = InboundName.Read(request.Inbound, ClientInbound.Off),

@@ -78,6 +78,31 @@ public static class SubscriptionAnswer
     }
 
     /// <summary>
+    /// Returns the configuration a path asks for, the subscription it belongs to and the identifier of the
+    /// configuration, null for a path that names no configuration.
+    /// </summary>
+    public static (string Subscription, string Config)? AskedConfig(PathString path, SubscriptionSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var text = path.Value ?? string.Empty;
+        var prefix = settings.Prefix;
+        if (!text.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var parts = text[prefix.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return parts.Length == 2
+            && ClientRules.IsSubscription(parts[0])
+            && long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var config)
+            && config > 0
+                ? (parts[0], parts[1])
+                : null;
+    }
+
+    /// <summary>
     /// Returns the subscription a hold is asked of, null for a path that is not one.
     /// </summary>
     public static string? AskedHold(PathString path, SubscriptionSettings settings)
@@ -103,6 +128,13 @@ public static class SubscriptionAnswer
         if (AskedHold(context.Request.Path, settings) is { } holding)
         {
             await HoldAsync(context, settings, scopes, holding).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (AskedConfig(context.Request.Path, settings) is { } one)
+        {
+            await WriteConfigAsync(context, settings, scopes, one.Subscription, one.Config).ConfigureAwait(false);
 
             return;
         }
@@ -154,6 +186,41 @@ public static class SubscriptionAnswer
 
         context.Response.ContentType = "text/plain; charset=utf-8";
         await context.Response.WriteAsync(feed.Body, context.RequestAborted).ConfigureAwait(false);
+    }
+
+    // Writes the file of one configuration of a subscription, 404 when the subscription carries no such one.
+    private static async Task WriteConfigAsync(
+        HttpContext context,
+        SubscriptionSettings settings,
+        IServiceScopeFactory scopes,
+        string id,
+        string config)
+    {
+        if (!HttpMethods.IsGet(context.Request.Method) || !Named(context, settings.Domains))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+
+            return;
+        }
+
+        using var scope = scopes.CreateScope();
+        var feed = await scope.ServiceProvider.GetRequiredService<SubscriptionFeed>()
+            .ReadAsync(id, context.Request.Host.Host, context.RequestAborted)
+            .ConfigureAwait(false);
+        var sheet = feed?.Sheets.FirstOrDefault(one => string.Equals(ConfigItems.Id(one.MemberId), config, StringComparison.Ordinal));
+        if (sheet is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+
+            return;
+        }
+
+        var headers = context.Response.Headers;
+        headers.CacheControl = "no-store";
+        headers.Vary = "Accept";
+        headers[MarkHeader] = MarkFormat;
+        context.Response.ContentType = "text/plain; charset=utf-8";
+        await context.Response.WriteAsync(sheet.Link, context.RequestAborted).ConfigureAwait(false);
     }
 
     /// <summary>

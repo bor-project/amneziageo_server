@@ -15,7 +15,7 @@ namespace AmneziaGeo.Server.Dal.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
             modelBuilder.Entity("AmneziaGeo.Server.Auth.AppRole", b =>
                 {
@@ -591,6 +591,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<string>("RekeyTimeout")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("RequireUpdate")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("S1")
                         .HasColumnType("INTEGER");

@@ -199,6 +199,11 @@ public sealed record ServerConfig
     public bool IsDefault { get; init; }
 
     /// <summary>
+    /// Whether the clients of the endpoint take a newer file of it without asking.
+    /// </summary>
+    public bool RequireUpdate { get; init; }
+
+    /// <summary>
     /// Whether what clients send out is masqueraded behind the address of the host.
     /// </summary>
     public bool Nat { get; init; } = true;

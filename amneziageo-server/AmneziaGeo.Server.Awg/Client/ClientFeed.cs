@@ -78,7 +78,12 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
                     ClientText.Endpoint(endpoint),
                     $"{ConfigName.File(name)}.conf",
                     ClientText.Text(endpoint, member, template, names, picked, files),
-                    link));
+                    link,
+                    member.Id,
+                    endpoint.Id,
+                    endpoint.UpdatedUtc,
+                    endpoint.IsDefault,
+                    endpoint.RequireUpdate));
                 shares.Add(new Share(used(member), member.DailyLimit));
             }
         }

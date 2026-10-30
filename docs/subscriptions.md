@@ -14,6 +14,7 @@ address.
 | `POST /api/subscription/open` | `access:write` |
 | `GET /<path>/<subscription>` | none, the name of the subscription is the secret |
 | `POST`, `DELETE /<path>/<subscription>/hold` | none, the device names itself in `X-Hwid`, see [devices.md](devices.md) |
+| `GET /<path>/<subscription>/<number>` | none, the name of the subscription is the secret: the file of one configuration of the subscription alone, in plain text, the way the hello names it in `configs`, see [services.md](services.md) |
 
 The subscription of a client is written out only to a caller that holds `clients:write`, the same as its
 private key: whoever reads a subscription takes the private keys of its clients.

@@ -456,6 +456,7 @@ public sealed class ConfigStore
         OfflineAfter = entity.OfflineAfter,
         IsEnabled = entity.IsEnabled,
         IsDefault = entity.IsDefault,
+        RequireUpdate = entity.RequireUpdate,
         Nat = entity.Nat,
         Opened = entity.Opened,
         Inbound = (ClientInbound)entity.Inbound,
@@ -483,6 +484,7 @@ public sealed class ConfigStore
         entity.Keepalive = config.Keepalive;
         entity.OfflineAfter = config.OfflineAfter;
         entity.IsEnabled = config.IsEnabled;
+        entity.RequireUpdate = config.RequireUpdate;
         entity.Nat = config.Nat;
         entity.Opened = config.Opened;
         entity.Inbound = (int)config.Inbound;

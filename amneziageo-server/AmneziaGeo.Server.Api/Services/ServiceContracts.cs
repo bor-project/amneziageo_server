@@ -157,6 +157,43 @@ public sealed record DnsFeature(string Mode, IReadOnlyList<string> Servers, IRea
 public sealed record UpdatesFeature(string Url, bool Default, string Pin);
 
 /// <summary>
+/// One configuration a subscription publishes.
+/// </summary>
+/// <param name="Id">The identifier the file of the configuration is asked by at the address of the subscription.</param>
+/// <param name="Name">The name the client shows the configuration under.</param>
+/// <param name="Updated">When the configuration was last changed.</param>
+/// <param name="Revision">The mark of the file, the digest of the text its address hands out.</param>
+/// <param name="Default">Whether the client makes the configuration active when none is.</param>
+/// <param name="Required">Whether the client takes a newer file of it without asking.</param>
+/// <param name="Url">The address the file of the configuration is fetched from.</param>
+public sealed record ConfigItem(
+    string Id,
+    string Name,
+    DateTimeOffset Updated,
+    string Revision,
+    bool Default,
+    bool Required,
+    string Url);
+
+/// <summary>
+/// Arguments of the configs feature.
+/// </summary>
+/// <param name="Items">The configurations the subscription of the client publishes, in its order.</param>
+public sealed record ConfigsFeature(IReadOnlyList<ConfigItem> Items);
+
+/// <summary>
+/// Arguments of the default feature, which the server offers for the configuration the client makes active when none
+/// is.
+/// </summary>
+public sealed record DefaultFeature();
+
+/// <summary>
+/// Arguments of the update feature.
+/// </summary>
+/// <param name="Required">Whether the client takes a newer file of its configuration without asking.</param>
+public sealed record UpdateFeature(bool Required);
+
+/// <summary>
 /// The client that proved its key and the request it asked with.
 /// </summary>
 /// <param name="Client">The client behind the key.</param>
@@ -245,4 +282,19 @@ public static class FeatureNames
     /// Where the client reads the releases of its own application.
     /// </summary>
     public const string Updates = "updates";
+
+    /// <summary>
+    /// The configurations the subscription of the client publishes.
+    /// </summary>
+    public const string Configs = "configs";
+
+    /// <summary>
+    /// The configuration the client makes active when none is.
+    /// </summary>
+    public const string Default = "default";
+
+    /// <summary>
+    /// Whether the client takes a newer file of its configuration without asking.
+    /// </summary>
+    public const string Update = "update";
 }

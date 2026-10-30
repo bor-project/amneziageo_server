@@ -59,6 +59,9 @@ public static class ServiceRegistration
         services.AddSingleton<IHelloFeature, PresetsOffer>();
         services.AddSingleton<IHelloFeature, DnsOffer>();
         services.AddSingleton<IHelloFeature, UpdatesOffer>();
+        services.AddSingleton<IHelloFeature, ConfigsOffer>();
+        services.AddSingleton<IHelloFeature, DefaultOffer>();
+        services.AddSingleton<IHelloFeature, UpdateOffer>();
         services.AddSingleton(new DisconnectSignal());
         services.AddSingleton<ServiceDesk>();
         services.AddSingleton<ServiceShare>();

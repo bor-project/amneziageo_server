@@ -467,3 +467,100 @@ public sealed class UpdatesOffer : IHelloFeature
             ? Convert.ToHexStringLower(SHA256.HashData(certificate.GetRawCertData()))
             : string.Empty;
 }
+
+/// <summary>
+/// Hands the client the configurations its subscription publishes: what each one is, when it changed and where its
+/// file lies.
+/// </summary>
+public sealed class ConfigsOffer : IHelloFeature
+{
+    private readonly SubscriptionState _state;
+
+    private readonly PanelSettings _panel;
+
+    private readonly WebOptions _options;
+
+    private readonly IServiceScopeFactory _scopes;
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public ConfigsOffer(SubscriptionState state, PanelSettings panel, WebOptions options, IServiceScopeFactory scopes)
+    {
+        _state = state;
+        _panel = panel;
+        _options = options;
+        _scopes = scopes;
+    }
+
+    /// <inheritdoc/>
+    public string Name => FeatureNames.Configs;
+
+    /// <inheritdoc/>
+    public async ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+
+        if (peer.Client.SubscriptionId.Length == 0)
+        {
+            return null;
+        }
+
+        var asked = peer.Context.Request.Host.Host;
+        var address = SubscriptionAnswer.Address(
+            _state.Current,
+            _panel,
+            Listening.Chain(_options, _panel).Length > 0,
+            asked,
+            peer.Endpoint,
+            peer.Client.SubscriptionId);
+        var host = Uri.TryCreate(address, UriKind.Absolute, out var named) ? named.Host : asked;
+
+        using var scope = _scopes.CreateScope();
+        var feed = await scope.ServiceProvider.GetRequiredService<SubscriptionFeed>()
+            .ReadAsync(peer.Client.SubscriptionId, host, ct)
+            .ConfigureAwait(false);
+        if (feed is null)
+        {
+            return null;
+        }
+
+        var items = ConfigItems.Of(feed.Sheets, address);
+
+        return items.Count == 0 ? null : new ConfigsFeature(items);
+    }
+}
+
+/// <summary>
+/// Marks the configuration the client makes active when none is.
+/// </summary>
+public sealed class DefaultOffer : IHelloFeature
+{
+    /// <inheritdoc/>
+    public string Name => FeatureNames.Default;
+
+    /// <inheritdoc/>
+    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+
+        return ValueTask.FromResult<object?>(peer.Endpoint.IsDefault ? new DefaultFeature() : null);
+    }
+}
+
+/// <summary>
+/// Asks the client to take a newer file of its configuration without asking.
+/// </summary>
+public sealed class UpdateOffer : IHelloFeature
+{
+    /// <inheritdoc/>
+    public string Name => FeatureNames.Update;
+
+    /// <inheritdoc/>
+    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+
+        return ValueTask.FromResult<object?>(peer.Endpoint.RequireUpdate ? new UpdateFeature(true) : null);
+    }
+}

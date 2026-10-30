@@ -9,4 +9,15 @@ namespace AmneziaGeo.Server.Awg.Client;
 /// <param name="FileName">The name the configuration is saved under.</param>
 /// <param name="Text">The configuration as a file.</param>
 /// <param name="Link">The configuration as a vpn:// link.</param>
-public sealed record ClientSheet(string Name, string Interface, string Endpoint, string FileName, string Text, string Link);
+public sealed record ClientSheet(
+    string Name,
+    string Interface,
+    string Endpoint,
+    string FileName,
+    string Text,
+    string Link,
+    long MemberId = 0,
+    long EndpointId = 0,
+    DateTimeOffset Updated = default,
+    bool Default = false,
+    bool Required = false);
