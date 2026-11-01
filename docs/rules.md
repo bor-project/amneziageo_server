@@ -196,3 +196,27 @@ opens at `/routing/test`. The ruleset
 as the host takes it belongs to the console: item 23 of the menu of the server, `amneziageo-server`, subitem 12
 prints the tables of the panel. The panel lays the ruleset when it starts, after every change and when the live
 outbounds change; `GET /api/rules/ruleset` returns it as it is written.
+
+## Taking the routing to another server
+
+The routing of the panel travels to another panel in one JSON file: the rules, the basic lists, the routing
+presets and the addresses of the geo sources. The channels, the balancers and the resolver of the host stay
+behind, every panel grows its own; a rule whose channel is missing on the other panel is taken in anyway and
+stays off the host until the channel is there.
+
+| Route | Right |
+|---|---|
+| `GET /api/routing/export` | `state:read` |
+| `POST /api/routing/import` | `routing:write` |
+| `POST /api/routing/import/apply` | `routing:write` |
+
+`GET /api/routing/export` answers the file, named `amneziageo-routing-<host>-<time>.json`. `POST
+/api/routing/import` takes a file in and answers the plan: what will be added, what will be replaced under the
+same name, whether the basic lists will be laid over, and which rules keep a link this panel does not hold.
+Nothing is written. `POST /api/routing/import/apply` takes the same file in, lays the plan over and answers
+what was taken in, what was replaced, what was refused and what stays off the host yet, then settles the
+ruleset. An import adds what the panel holds none under the name of, replaces the ones it does, lays the basic
+lists over and leaves everything else as it stood.
+
+The utility of the server does the same: `amneziageo-server routing export <file>` writes the file,
+`amneziageo-server routing import <file>` prints the plan, and `--apply` lays it over.

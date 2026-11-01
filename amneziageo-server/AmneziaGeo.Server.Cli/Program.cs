@@ -43,6 +43,7 @@ return arguments.At(0) switch
     "update" => await UpdateCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     "geo" => await GeoCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     "preset" => await PresetCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
+    "routing" => await RoutingCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     "template" => await TemplateCommands.RunAsync(context, arguments, ct).ConfigureAwait(false),
     _ => Usage(),
 };
@@ -66,6 +67,9 @@ static int Usage()
           amneziageo-server update status | check | apply [--beta]
           amneziageo-server geo update                 download the geo sources of the panel now
           amneziageo-server preset list | set <name> --readonly on | off
+          amneziageo-server routing export <file>      write the routing of the panel to a file
+          amneziageo-server routing import <file> [--apply]
+                                                       take a routing file in, showing the plan first
           amneziageo-server template list | set <name> --presets-only on | off
           amneziageo-server backup check <file>        look a backup of the database over
           amneziageo-server family [name]              resolve a netlink family

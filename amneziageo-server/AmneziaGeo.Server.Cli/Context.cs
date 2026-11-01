@@ -63,6 +63,9 @@ public sealed class Context : IDisposable
         Dns = scope.ServiceProvider.GetRequiredService<DnsStore>();
         Presets = scope.ServiceProvider.GetRequiredService<PresetStore>();
         Templates = scope.ServiceProvider.GetRequiredService<TemplateStore>();
+        Outbounds = scope.ServiceProvider.GetRequiredService<OutboundStore>();
+        Rules = scope.ServiceProvider.GetRequiredService<RouteStore>();
+        Geo = scope.ServiceProvider.GetRequiredService<GeoStore>();
     }
 
     public AuthOptions Options { get; }
@@ -94,6 +97,12 @@ public sealed class Context : IDisposable
     public PresetStore Presets { get; }
 
     public TemplateStore Templates { get; }
+
+    public OutboundStore Outbounds { get; }
+
+    public RouteStore Rules { get; }
+
+    public GeoStore Geo { get; }
 
     /// <summary>
     /// Opens the database, brings its schema up to date and reads the signing key.
