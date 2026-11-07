@@ -74,7 +74,7 @@ export function ConfigForm({
   const [asking, setAsking] = useState(false)
   const held = usePortHolders({ config: self })
   const taken = useServicesHolders()
-  const claimed = [...usePathHolders(), ...useSocketHolders({ config: self })]
+  const claimed = [...usePathHolders({ config: self }), ...useSocketHolders({ config: self })]
   const [draft, setDraft] = useState(start)
   const [shown, setShown] = useState(publicKey)
   const read = useImportConfig()
@@ -90,7 +90,7 @@ export function ConfigForm({
   const tcpMoved = saved === undefined || servicesAt !== servicesWere
   const udpAhead = able && opened && udpMoved
   const tcpAhead = able && opened && tcpMoved
-  const udp = usePortState(draft.listenPort, draft.isEnabled && !udpAhead && !opening, "udp")
+  const udp = usePortState(draft.listenPort, draft.isEnabled && !draft.udpPrivate && !udpAhead && !opening, "udp")
   const tcp = usePortState(servicesAt, draft.isEnabled && !tcpAhead && !opening)
   const running = saved !== undefined && saved.isEnabled ? saved : undefined
   const udpLabel = `${draft.listenPort}/udp`
@@ -98,7 +98,7 @@ export function ConfigForm({
   const previous =
     opened && saved?.isEnabled === true && draft.isEnabled
       ? [
-          ...(draft.listenPort !== start.listenPort ? [`${start.listenPort}/udp`] : []),
+          ...(!start.udpPrivate && !draft.udpPrivate && draft.listenPort !== start.listenPort ? [`${start.listenPort}/udp`] : []),
           ...(servicesAt !== servicesWere ? [`${servicesWere}/tcp`] : []),
         ]
       : []
@@ -201,7 +201,7 @@ export function ConfigForm({
           onChange={(value) => put({ listenPort: value })}
           fault={port}
           note={
-            draft.isEnabled && (
+            draft.isEnabled && !draft.udpPrivate && (
               <PortNote
                 port={udpLabel}
                 state={udp.data?.state}
@@ -214,6 +214,12 @@ export function ConfigForm({
               />
             )
           }
+        />
+        <Flag
+          id="config-udp-private"
+          caption={t("configs.udpPrivate")}
+          value={draft.udpPrivate}
+          onChange={(value) => put({ udpPrivate: value })}
         />
         <ListLine
           id="config-address"
@@ -245,15 +251,6 @@ export function ConfigForm({
           <option value="server">{t("clients.inboundServer")}</option>
           <option value="network">{t("clients.inboundNetwork")}</option>
         </Pick>
-        <div className="sm:col-span-2">
-          <Flag
-            id="config-websocket"
-            caption={<AppCaption caption={t("configs.webSocket")} what="webSocket" />}
-            value={draft.webSocket}
-            onChange={(value) => put({ webSocket: value })}
-          />
-          {proxy.length > 0 && <div className="mt-1 text-xs text-alarm">{proxy}</div>}
-        </div>
         <Count
           id="config-services-port"
           caption={<AppCaption caption={t("configs.servicesPort")} what="services" />}
@@ -276,14 +273,9 @@ export function ConfigForm({
             )
           }
         />
-        <Line
-          id="config-websocket-path"
-          caption={t("configs.webSocketPath")}
-          value={draft.webSocketPath}
-          onChange={(value) => put({ webSocketPath: value.trim() })}
-          fault={socket}
-        />
       </Part>
+
+      {proxy.length > 0 && <div className="text-sm text-alarm">{proxy}</div>}
 
       <Part title={t("configs.clients")}>
         {self !== undefined && (

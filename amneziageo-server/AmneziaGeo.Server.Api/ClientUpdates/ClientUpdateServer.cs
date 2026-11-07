@@ -146,7 +146,13 @@ public sealed class ClientUpdateServer : IHostedService, IAsyncDisposable
         {
             var before = _state.Current;
             _state.Current = settings;
-            if (!settings.Rebinds(before) && _state.Fault.Length == 0)
+            var shared = await SharedAsync(settings.PortOr(_panel.Port), ct).ConfigureAwait(false);
+            if (_app is not null && shared)
+            {
+                await HaltAsync().ConfigureAwait(false);
+            }
+
+            if (!settings.Rebinds(before) && _state.Fault.Length == 0 && (shared || !settings.IsEnabled || !settings.Own || settings.PortOr(_panel.Port) == _panel.Port || _app is not null))
             {
                 return string.Empty;
             }
@@ -251,7 +257,7 @@ public sealed class ClientUpdateServer : IHostedService, IAsyncDisposable
         }
 
         _state.Store = store;
-        if (settings.PortOr(_panel.Port) == _panel.Port)
+        if (settings.PortOr(_panel.Port) == _panel.Port || await SharedAsync(settings.PortOr(_panel.Port), CancellationToken.None).ConfigureAwait(false))
         {
             _logger.LogInformation("the releases of the client answer under {Path} on the port of the panel", settings.Prefix);
 
@@ -285,6 +291,32 @@ public sealed class ClientUpdateServer : IHostedService, IAsyncDisposable
 
             return ex is AddressInUseException || ex.InnerException is AddressInUseException ? "updates-port-busy" : "updates-failed";
         }
+    }
+
+    /// <summary>
+    /// Releases the port served by a shared listener.
+    /// </summary>
+    public async Task ReleaseSharedAsync(CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (_app is not null && await SharedAsync(_state.Current.PortOr(_panel.Port), ct).ConfigureAwait(false))
+            {
+                await HaltAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<bool> SharedAsync(int port, CancellationToken ct)
+    {
+        using var scope = _scopes.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ConfigStore>().ServesAsync(port, ct).ConfigureAwait(false)
+            || await scope.ServiceProvider.GetRequiredService<TransportProxyStore>().ServesAsync(port, ct).ConfigureAwait(false);
     }
 
     private WebApplication Build(ClientUpdateSettings settings)

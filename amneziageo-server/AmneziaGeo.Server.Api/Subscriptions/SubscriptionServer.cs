@@ -32,6 +32,20 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
 
     private WebApplication? _app;
 
+    private volatile Func<int, bool>? _shared;
+
+    private volatile bool _sharedChanging;
+
+    /// <summary>
+    /// Reads ports held by the shared listener.
+    /// </summary>
+    public void ShareWith(Func<int, bool> reader) => _shared = reader;
+
+    /// <summary>
+    /// Reserves shared ports during a listener change.
+    /// </summary>
+    public void ChangingShared(bool changing) => _sharedChanging = changing;
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -103,7 +117,13 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
         {
             var before = _state.Current;
             _state.Current = settings;
-            if (!settings.Rebinds(before) && _state.Fault.Length == 0)
+            var shared = await SharedAsync(settings.Port, ct).ConfigureAwait(false);
+            if (_app is not null && shared)
+            {
+                await HaltAsync().ConfigureAwait(false);
+            }
+
+            if (!settings.Rebinds(before) && _state.Fault.Length == 0 && (shared || !settings.IsEnabled || !settings.Separate || settings.Port == _panel.Port || _app is not null))
             {
                 return string.Empty;
             }
@@ -139,7 +159,7 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
     private async Task<string> ServeAsync(SubscriptionSettings settings)
     {
         await HaltAsync().ConfigureAwait(false);
-        if (!settings.IsEnabled || !settings.Separate || settings.Port == _panel.Port)
+        if (!settings.IsEnabled || !settings.Separate || settings.Port == _panel.Port || await SharedAsync(settings.Port, CancellationToken.None).ConfigureAwait(false))
         {
             return string.Empty;
         }
@@ -178,6 +198,63 @@ public sealed class SubscriptionServer : IHostedService, IAsyncDisposable
             _logger.LogWarning(ex, "the subscriptions stayed off port {Port}", settings.Port);
 
             return Fault(ex);
+        }
+    }
+
+    /// <summary>
+    /// Releases the port served by a shared listener.
+    /// </summary>
+    public async Task ReleaseSharedAsync(CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (_app is not null && await WantedSharedAsync(_state.Current.Port, ct).ConfigureAwait(false))
+            {
+                await HaltAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<bool> SharedAsync(int port, CancellationToken ct)
+    {
+        return !_sharedChanging && _shared is { } reader ? reader(port) : await WantedSharedAsync(port, ct).ConfigureAwait(false);
+    }
+
+    private async Task<bool> WantedSharedAsync(int port, CancellationToken ct)
+    {
+        using var scope = _scopes.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ConfigStore>().ServesAsync(port, ct).ConfigureAwait(false)
+            || await scope.ServiceProvider.GetRequiredService<TransportProxyStore>().ServesAsync(port, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Restores the subscription listener after ownership changes.
+    /// </summary>
+    public async Task<string> RestoreSharedAsync(CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var settings = _state.Current;
+            var own = settings.IsEnabled && settings.Separate && settings.Port != _panel.Port
+                && !await SharedAsync(settings.Port, ct).ConfigureAwait(false);
+            if ((_app is not null) == own)
+            {
+                _state.Fault = string.Empty;
+                return string.Empty;
+            }
+
+            _state.Fault = await ServeAsync(settings).ConfigureAwait(false);
+            return _state.Fault;
+        }
+        finally
+        {
+            _gate.Release();
         }
     }
 

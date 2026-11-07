@@ -40,6 +40,7 @@ public static class SubscriptionEndpoints
     }
 
     private static async Task<IResult> SaveAsync(
+        HttpContext context,
         SubscriptionRequest request,
         SubscriptionStore store,
         ConfigStore configs,
@@ -61,12 +62,16 @@ public static class SubscriptionEndpoints
         }
 
         if (draft.IsEnabled
-            && (!draft.Separate || draft.Port == panel.Port)
             && await configs.SocketUnderAsync(draft.Separate ? draft.Port : null, draft.Path, ct).ConfigureAwait(false) is { } socket)
         {
             return Refuse(
                 "subscription-path-taken",
                 $"the websocket of {socket.Name} comes under '/{ConfigServices.WebSocketPath(socket)}' on TCP port {ConfigServices.Port(socket)}");
+        }
+
+        if (await new TransportProxyStore(context.RequestServices.GetRequiredService<AppDbContext>()).UnderAsync(draft.Separate ? draft.Port : null, draft.Path, null, ct).ConfigureAwait(false) is { } proxy)
+        {
+            return Results.Json(new Failure("subscription-path-taken", "the path is used by proxy " + proxy.Name), statusCode: StatusCodes.Status400BadRequest);
         }
 
         var refused = await server.ApplyAsync(draft, ct).ConfigureAwait(false);
@@ -77,6 +82,7 @@ public static class SubscriptionEndpoints
 
         var previous = request.Keep == true ? await firewall.PlanAsync(ct).ConfigureAwait(false) : null;
         var saved = await store.SaveAsync(draft, ct).ConfigureAwait(false);
+        await context.RequestServices.GetRequiredService<AmneziaGeo.Server.Api.Services.ServiceServer>().SettleAsync(ct).ConfigureAwait(false);
         await firewall.SettleAsync(previous, ct).ConfigureAwait(false);
 
         return Results.Ok(SubscriptionAnswers.Settings(saved, state.Fault, options));

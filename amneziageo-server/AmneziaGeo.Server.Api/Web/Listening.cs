@@ -1,4 +1,6 @@
 using System.Globalization;
+using AmneziaGeo.Server.Api.Services;
+using AmneziaGeo.Server.Api.Proxies;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Security.Cryptography;
@@ -108,6 +110,8 @@ public static class Listening
         var plan = Bound(entries);
         var certificate = WebCertificate.Of(Chain(options, settings), Key(options, settings))
             ?? (PanelStore.ServesOn(path, settings.Port) ? WebCertificate.MadeUp() : null);
+        var proxyCertificates = new ProxyCertificates();
+        builder.Services.AddSingleton(proxyCertificates);
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(_ => new AnswerSlots(options.Requests));
         builder.Services.AddSingleton(settings);
@@ -120,12 +124,12 @@ public static class Listening
         {
             foreach (var port in plan.AnyPorts)
             {
-                kestrel.ListenAnyIP(port, listen => Secure(listen, certificate));
+                kestrel.ListenAnyIP(port, listen => Secure(listen, certificate, proxyCertificates, port));
             }
 
             foreach (var point in plan.Points)
             {
-                kestrel.Listen(point, listen => Secure(listen, certificate));
+                kestrel.Listen(point, listen => Secure(listen, certificate, proxyCertificates, point.Port));
             }
         });
         Inline(builder.WebHost, options);
@@ -354,13 +358,16 @@ public static class Listening
     /// <summary>
     /// Puts a listener under the certificate, leaving it plain without one.
     /// </summary>
-    internal static void Secure(ListenOptions listen, WebCertificate? certificate)
+    internal static void Secure(ListenOptions listen, WebCertificate? certificate, ProxyCertificates? proxies = null, int port = 0)
     {
         if (certificate is null)
         {
             return;
         }
 
-        listen.UseHttps(https => https.ServerCertificateSelector = (_, _) => certificate.Current());
+        var gate = new PlainGate(() => proxies?.AllowsHttp(port) == true);
+        listen.Use(next => connection => gate.SortAsync(connection, next));
+        listen.UseHttps(https => https.ServerCertificateSelector = (_, host) => proxies?.Pick(port, host) ?? certificate.Current());
+        listen.Use(gate.Keep);
     }
 }

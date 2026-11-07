@@ -8,6 +8,10 @@ export interface OutboundProbe {
   isReached: boolean
   falls: number
   at: string
+  health?: "unknown" | "healthy" | "degraded" | "unavailable"
+  attempts?: number
+  missed?: number
+  lastSuccess?: string | null
 }
 
 export interface OutboundState {
@@ -76,6 +80,7 @@ export function useOutbounds() {
   return useQuery({
     queryKey: ["outbounds"],
     queryFn: async () => (await client.get<Outbound[]>("/outbounds")).data,
+    refetchInterval: 15000,
   })
 }
 

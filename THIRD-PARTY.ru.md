@@ -6,6 +6,7 @@
 
 - Модуль ядра AmneziaWG (Amnezia VPN, WireGuard LLC): GPL-2.0.
 - wstunnel (Erèbe): BSD-3-Clause.
+- Xray-core v26.10.31 (участники XTLS): MPL-2.0. [Исходники](https://github.com/XTLS/Xray-core/tree/v26.10.31). Компонент поставляется отдельным исполняемым файлом с лицензией xray.LICENSE.
 
 ## Служба
 

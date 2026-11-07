@@ -119,6 +119,11 @@ public static class ClientUpdateEndpoints
             }
         }
 
+        if (await new TransportProxyStore(http.RequestServices.GetRequiredService<AppDbContext>()).UnderAsync(draft.PortOr(panel.Port), draft.Path, null, ct).ConfigureAwait(false) is { } proxy)
+        {
+            return Results.Json(new Failure("updates-path-taken", "the path is used by proxy " + proxy.Name), statusCode: StatusCodes.Status400BadRequest);
+        }
+
         var refused = await server.ApplyAsync(draft, ct).ConfigureAwait(false);
         if (refused.Length > 0)
         {

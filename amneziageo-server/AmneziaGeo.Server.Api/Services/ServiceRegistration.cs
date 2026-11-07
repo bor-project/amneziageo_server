@@ -1,4 +1,7 @@
 using AmneziaGeo.Server.Core.Panel;
+using AmneziaGeo.Server.Api.Web;
+using AmneziaGeo.Server.Routing.XHttp;
+using Microsoft.AspNetCore.Http.Features;
 using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Proxy;
@@ -39,6 +42,7 @@ public static class ServiceRegistration
         configuration.GetSection(FrontOptions.Section).Bind(options);
 
         services.AddSingleton(options);
+        services.AddScoped<AmneziaGeo.Server.Api.Proxies.ProxyRules>();
         services.AddSingleton<IProxyRunner>(provider => SystemdProxies.Runs
             ? new SystemdProxies(provider.GetRequiredService<IHostCommands>())
             : new ChildProxies(options.Directory));
@@ -46,9 +50,11 @@ public static class ServiceRegistration
             new ProxyHost(
                 provider.GetRequiredService<IHostNetwork>(),
                 provider.GetRequiredService<IProxyRunner>(),
-                options.Directory));
+                options.Directory,
+                provider.GetRequiredService<ILogger<ProxyHost>>()));
         services.AddSingleton<SpeedTickets>();
         services.AddSingleton<IHelloFeature, WebSocketOffer>();
+        services.AddSingleton<IHelloFeature, ProxyOffer>();
         services.AddSingleton<IHelloFeature, InboundOffer>();
         services.AddSingleton<IHelloFeature, DisconnectOffer>();
         services.AddSingleton<IHelloFeature, SpeedOffer>();
@@ -65,7 +71,12 @@ public static class ServiceRegistration
         services.AddSingleton(new DisconnectSignal());
         services.AddSingleton<ServiceDesk>();
         services.AddSingleton<ServiceShare>();
+        services.AddSingleton(provider => new XHttpHost(
+            configuration["XHttp:Directory"] ?? Path.Combine(options.Directory, "xhttp"),
+            configuration["XHttp:Executable"] ?? (File.Exists(Path.Combine(AppContext.BaseDirectory, "xray")) ? Path.Combine(AppContext.BaseDirectory, "xray") : "xray"),
+            provider.GetRequiredService<ILogger<XHttpHost>>()));
         services.AddSingleton<ServiceServer>();
+        services.AddHostedService<XHttpRefresh>();
         services.AddHostedService(provider => provider.GetRequiredService<ServiceServer>());
 
         return services;
@@ -84,6 +95,14 @@ public static class ServiceRegistration
         var under = settings.Prefix.Length > 1 ? new PathString(settings.Prefix.TrimEnd('/')) : PathString.Empty;
         app.Use(async (context, next) =>
         {
+            if (context.Features.Get<ITlsConnectionFeature>() is null && app.Services.GetService<PanelPlace>() is { Secure: true }
+                && share.Point?.Endpoints.Any(endpoint => endpoint.XHttp && endpoint.OriginHttp
+                    && context.Request.Path.StartsWithSegments("/" + endpoint.Path, StringComparison.Ordinal)) != true)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+
             var panel = under.HasValue && context.Request.Path.StartsWithSegments(under);
             if (!panel && share.Point is { } point && (desk.Takes(context, point) || desk.Strays(context, point)))
             {

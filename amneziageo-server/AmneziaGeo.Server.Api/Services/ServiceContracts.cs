@@ -234,6 +234,11 @@ public static class FeatureNames
     public const string WebSocket = "websocket";
 
     /// <summary>
+    /// The catalog of transport proxies.
+    /// </summary>
+    public const string Proxies = "proxies";
+
+    /// <summary>
     /// What the client takes from the tunnel.
     /// </summary>
     public const string Inbound = "inbound";

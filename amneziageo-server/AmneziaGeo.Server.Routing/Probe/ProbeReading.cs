@@ -6,4 +6,13 @@ namespace AmneziaGeo.Server.Routing.Probe;
 /// <param name="IsReached">Whether the outbound carries the probe.</param>
 /// <param name="Falls">How many probes missed in a row.</param>
 /// <param name="At">When the last probe went out.</param>
-public sealed record ProbeReading(bool IsReached, int Falls, DateTimeOffset At);
+public sealed record ProbeReading(bool IsReached, int Falls, DateTimeOffset At)
+{
+    public string Health { get; init; } = ProbeHealth.Unknown;
+
+    public int Attempts { get; init; }
+
+    public int Missed { get; init; }
+
+    public DateTimeOffset? LastSuccess { get; init; }
+}

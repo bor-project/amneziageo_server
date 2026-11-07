@@ -71,6 +71,10 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<SeedEntity> Seeds => Set<SeedEntity>();
 
+    public DbSet<TransportProxyEntity> TransportProxies => Set<TransportProxyEntity>();
+
+    public DbSet<ProxySourceEntity> ProxySources => Set<ProxySourceEntity>();
+
     /// <summary>
     /// Shapes the tables the server adds to the identity ones.
     /// </summary>
@@ -263,6 +267,17 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(rule => rule.Protocol).HasMaxLength(16);
             entity.Property(rule => rule.Outbound).HasMaxLength(ConfigRules.MaxNameLength);
             entity.HasIndex(rule => rule.Position);
+        });
+
+        builder.Entity<TransportProxyEntity>(entity =>
+        {
+            entity.Property(proxy => proxy.Name).HasMaxLength(64);
+            entity.Property(proxy => proxy.Transport).HasMaxLength(16);
+            entity.Property(proxy => proxy.Host).HasMaxLength(253);
+            entity.Property(proxy => proxy.Path).HasMaxLength(64);
+            entity.Property(proxy => proxy.TargetsJson).HasDefaultValue(string.Empty);
+            entity.HasIndex(proxy => proxy.Name).IsUnique();
+            entity.HasIndex(proxy => proxy.LegacyConfigId).IsUnique();
         });
 
         builder.Entity<SeedEntity>(entity =>

@@ -4,6 +4,7 @@ import type { Client } from "@/api/clients"
 import type { Config } from "@/api/configs"
 import type { Outbound } from "@/api/outbounds"
 import type { Preset } from "@/api/presets"
+import type { TransportProxy } from "@/api/proxies"
 import type { Role } from "@/api/roles"
 import type { Rule } from "@/api/rules"
 import type { Template } from "@/api/templates"
@@ -36,6 +37,14 @@ export function templateItems(templates: Template[], note?: (one: Template) => s
       to: `/clients/templates/${one.id}/edit`,
       ...(note === undefined ? {} : { note: note(one) }),
     }))
+}
+
+// Links to transport proxies by name.
+export function proxyItems(proxies: TransportProxy[]): LinkItem[] {
+  return [...proxies]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((one) => ({ key: String(one.id), name: one.name, to: `/routing/proxies/${one.id}/edit`,
+      note: `${one.transport === "xhttp" ? "XHTTP" : "WebSocket"} · ${one.host}:${one.port}/${one.path}` }))
 }
 
 // Links to presets by name.

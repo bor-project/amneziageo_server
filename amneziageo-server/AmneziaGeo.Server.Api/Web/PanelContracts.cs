@@ -81,7 +81,7 @@ public static class PanelAnswers
             PanelChoices.Domains(options.CertificateRoot),
             PanelChoices.Addresses(),
             options.CertificateRoot,
-            settings.Differs(running),
+            settings.Differs(running) || secure != answering.Secure,
             secure,
             answering);
     }

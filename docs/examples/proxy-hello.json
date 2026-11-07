@@ -1,0 +1,197 @@
+{
+  "empty": {
+    "server": "amneziageo",
+    "version": "0.0.3.1",
+    "client": "phone",
+    "features": {
+      "proxies": {
+        "version": 1,
+        "source": "286a6fc4-d184-4e58-a344-a25768c8206d",
+        "items": []
+      }
+    }
+  },
+  "one": {
+    "server": "amneziageo",
+    "version": "0.0.3.1",
+    "client": "phone",
+    "features": {
+      "proxies": {
+        "version": 1,
+        "source": "286a6fc4-d184-4e58-a344-a25768c8206d",
+        "items": [
+          {
+            "id": "1",
+            "name": "Shared WebSocket",
+            "transport": "websocket",
+            "host": "proxy.example.net",
+            "port": 443,
+            "path": "relay-ws",
+            "tls": {
+              "serverName": "proxy.example.net",
+              "pin": ""
+            },
+            "auth": {
+              "scheme": "bearer",
+              "credential": "example-transport-credential"
+            },
+            "updated": "2026-11-04T10:00:00Z",
+            "xhttp": null
+          }
+        ]
+      }
+    }
+  },
+  "multiple": {
+    "server": "amneziageo",
+    "version": "0.0.3.1",
+    "client": "phone",
+    "features": {
+      "proxies": {
+        "version": 1,
+        "source": "286a6fc4-d184-4e58-a344-a25768c8206d",
+        "items": [
+          {
+            "id": "1",
+            "name": "Shared WebSocket",
+            "transport": "websocket",
+            "host": "proxy.example.net",
+            "port": 443,
+            "path": "relay-ws",
+            "tls": {
+              "serverName": "proxy.example.net",
+              "pin": ""
+            },
+            "auth": {
+              "scheme": "bearer",
+              "credential": "example-transport-credential"
+            },
+            "updated": "2026-11-04T10:00:00Z",
+            "xhttp": null
+          },
+          {
+            "id": "2",
+            "name": "CDN GET",
+            "transport": "xhttp",
+            "host": "cdn.example.net",
+            "port": 443,
+            "path": "relay-get",
+            "tls": {
+              "serverName": "cdn.example.net",
+              "pin": ""
+            },
+            "auth": {
+              "scheme": "vless",
+              "credential": "3204d931-b4b1-429d-bea1-23972505b3f5"
+            },
+            "updated": "2026-11-04T10:00:00Z",
+            "xhttp": {
+              "mode": "packet-up",
+              "uplinkHTTPMethod": "GET",
+              "uplinkDataPlacement": "header"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "another-source": {
+    "server": "amneziageo",
+    "version": "0.0.3.1",
+    "client": "phone",
+    "features": {
+      "proxies": {
+        "version": 1,
+        "source": "a241c7dd-e467-4fac-9e4d-a4dc12644804",
+        "items": [
+          {
+            "id": "1",
+            "name": "Shared WebSocket",
+            "transport": "websocket",
+            "host": "proxy.example.net",
+            "port": 443,
+            "path": "relay-ws",
+            "tls": {
+              "serverName": "proxy.example.net",
+              "pin": ""
+            },
+            "auth": {
+              "scheme": "bearer",
+              "credential": "example-transport-credential"
+            },
+            "updated": "2026-11-04T10:00:00Z",
+            "xhttp": null
+          }
+        ]
+      }
+    }
+  },
+  "legacy-server": {
+    "server": "amneziageo",
+    "version": "0.0.3.0",
+    "client": "phone",
+    "features": {
+      "websocket": {
+        "port": 8443,
+        "path": "legacy-ws"
+      }
+    }
+  },
+  "compatibility": {
+    "server": "amneziageo",
+    "version": "0.0.3.1",
+    "client": "phone",
+    "features": {
+      "proxies": {
+        "version": 1,
+        "source": "286a6fc4-d184-4e58-a344-a25768c8206d",
+        "items": [
+          {
+            "id": "1",
+            "name": "Shared WebSocket",
+            "transport": "websocket",
+            "host": "proxy.example.net",
+            "port": 443,
+            "path": "relay-ws",
+            "tls": {
+              "serverName": "proxy.example.net",
+              "pin": ""
+            },
+            "auth": {
+              "scheme": "bearer",
+              "credential": "example-transport-credential"
+            },
+            "updated": "2026-11-04T10:00:00Z",
+            "xhttp": null
+          },
+          {
+            "id": "2",
+            "name": "CDN GET",
+            "transport": "xhttp",
+            "host": "cdn.example.net",
+            "port": 443,
+            "path": "relay-get",
+            "tls": {
+              "serverName": "cdn.example.net",
+              "pin": ""
+            },
+            "auth": {
+              "scheme": "vless",
+              "credential": "3204d931-b4b1-429d-bea1-23972505b3f5"
+            },
+            "updated": "2026-11-04T10:00:00Z",
+            "xhttp": {
+              "mode": "packet-up",
+              "uplinkHTTPMethod": "GET",
+              "uplinkDataPlacement": "header"
+            }
+          }
+        ]
+      },
+      "websocket": {
+        "port": 8443,
+        "path": "legacy-ws"
+      }
+    }
+  }
+}

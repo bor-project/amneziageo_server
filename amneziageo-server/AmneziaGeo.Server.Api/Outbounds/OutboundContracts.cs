@@ -8,7 +8,16 @@ namespace AmneziaGeo.Server.Api.Outbounds;
 /// <summary>
 /// What the probes of an outbound came to, as the interface reads it.
 /// </summary>
-public sealed record OutboundProbeBody(bool IsReached, int Falls, DateTimeOffset At);
+public sealed record OutboundProbeBody(bool IsReached, int Falls, DateTimeOffset At)
+{
+    public string Health { get; init; } = "unknown";
+
+    public int Attempts { get; init; }
+
+    public int Missed { get; init; }
+
+    public DateTimeOffset? LastSuccess { get; init; }
+}
 
 /// <summary>
 /// What the host holds for an outbound, as the interface reads it.
@@ -156,7 +165,13 @@ public static class OutboundAnswers
     /// Describes what the probes of an outbound came to.
     /// </summary>
     public static OutboundProbeBody? Probe(ProbeReading? reading) =>
-        reading is null ? null : new OutboundProbeBody(reading.IsReached, reading.Falls, reading.At);
+        reading is null ? null : new OutboundProbeBody(reading.IsReached, reading.Falls, reading.At)
+        {
+            Health = reading.Health,
+            Attempts = reading.Attempts,
+            Missed = reading.Missed,
+            LastSuccess = reading.LastSuccess,
+        };
 
     /// <summary>
     /// Reads the outbound an interface sends.

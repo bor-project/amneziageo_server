@@ -132,6 +132,7 @@ else
     exit 1
   fi
 
+  bash "$root/deploy/xray.sh" "$runtime" "$out"
   cp "$root/deploy/amneziageo-server.service" "$out/"
   cp "$root/deploy/amneziageo-proxy@.service" "$out/"
   install -m 755 "$root/deploy/amneziageo-server" "$out/"

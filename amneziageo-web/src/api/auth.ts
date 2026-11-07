@@ -22,6 +22,9 @@ export interface Session {
 }
 
 const complaints: Record<string, TextKey> = {
+  "bad-proxy-targets": "error.proxyTargets", "bad-proxy-host": "error.proxyHost", "bad-proxy-transport": "error.proxyTransport",
+  "bad-proxy-port": "error.badPort", "bad-proxy-path": "error.badWebSocketPath",
+  "proxy-path-taken": "error.pathTaken", "bad-proxy-name": "error.badName",
   "wrong-credentials": "error.wrongCredentials",
   "update-busy": "error.updateBusy",
   "update-unknown": "error.updateUnknown",
@@ -101,6 +104,7 @@ const complaints: Record<string, TextKey> = {
   "unknown-template": "error.unknownTemplate",
   "template-in-use": "error.templateInUse",
   "bad-preset-name": "error.badPresetName",
+  "too-many-proxies": "error.tooManyProxies",
   "unknown-preset": "error.unknownPreset",
   "preset-in-use": "error.presetInUse",
   "presets-only-without-presets": "error.presetsOnlyWithoutPresets",

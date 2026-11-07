@@ -104,6 +104,7 @@ public static class PanelEndpoints
     }
 
     private static async Task<IResult> SaveAsync(
+        HttpContext context,
         PanelRequest request,
         PanelStore store,
         ConfigStore configs,
@@ -133,6 +134,11 @@ public static class PanelEndpoints
                     "panel-path-taken",
                     $"the websocket of {socket.Name} comes under '/{ConfigServices.WebSocketPath(socket)}' on TCP port {draft.Port}"),
                 statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (await new TransportProxyStore(context.RequestServices.GetRequiredService<AppDbContext>()).UnderAsync(draft.Port, draft.Path, null, ct).ConfigureAwait(false) is { } proxy)
+        {
+            return Results.Json(new Failure("panel-path-taken", "the path is used by proxy " + proxy.Name), statusCode: StatusCodes.Status400BadRequest);
         }
 
         var previous = request.Keep == true ? await firewall.PlanAsync(ct).ConfigureAwait(false) : null;

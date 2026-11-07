@@ -3,6 +3,7 @@ export const scopes = {
   manageClients: "clients:write",
   manageInterfaces: "interfaces:write",
   manageRouting: "routing:write",
+  manageProxies: "proxies:write",
   manageAccess: "access:write",
   manageUpdates: "updates:write",
   manageClientUpdates: "client-updates:write",

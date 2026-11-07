@@ -1,4 +1,6 @@
 import { useConfigs } from "@/api/configs"
+import { useProxies } from "@/api/proxies"
+import { useClientUpdates } from "@/api/clientUpdates"
 import type { Config } from "@/api/configs"
 import { usePanel } from "@/api/panel"
 import { scopes } from "@/api/scopes"
@@ -20,27 +22,20 @@ export interface PathHolder {
 }
 
 export function useServicesHolders(): PortHolder[] {
-  const t = useText()
-  const user = useAppSelector((s) => s.auth.user)
-  const may = holds(user, scopes.manageAccess)
-  const panel = usePanel(may).data
-  const subscription = useSubscription(may).data
-  const held: PortHolder[] = []
-
-  if (subscription !== undefined && subscription.isEnabled && subscription.separate && subscription.port !== panel?.port) {
-    held.push({ port: subscription.port, name: t("ports.subscription") })
-  }
-
-  return held
+  return []
 }
 
-export function usePathHolders(): PathHolder[] {
+export function usePathHolders(mine: { proxy?: number; config?: number } = {}): PathHolder[] {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
   const may = holds(user, scopes.manageAccess)
   const panel = usePanel(may).data
   const subscription = useSubscription(may).data
-  const held: PathHolder[] = []
+  const proxies = useProxies().data ?? []
+  const updates = useClientUpdates(may && holds(user, scopes.manageClientUpdates)).data
+  const held: PathHolder[] = proxies
+    .filter((one) => one.id !== mine.proxy && (mine.config === undefined || one.legacyConfigId !== mine.config))
+    .map((one) => ({ port: one.listenPort || one.port, path: one.path, name: one.name }))
 
   if (panel !== undefined && bare(panel.path).length > 0) {
     held.push({ port: panel.port, path: bare(panel.path), name: t("ports.panel") })
@@ -50,8 +45,12 @@ export function usePathHolders(): PathHolder[] {
     held.push({ port: null, path: bare(subscription.path), name: t("ports.subscription") })
   }
 
-  if (subscription !== undefined && subscription.isEnabled && subscription.separate && subscription.port === panel?.port) {
+  if (subscription !== undefined && subscription.isEnabled && subscription.separate) {
     held.push({ port: subscription.port, path: bare(subscription.path), name: t("ports.subscription") })
+  }
+
+  if (updates !== undefined && updates.isEnabled && updates.source === "own") {
+    held.push({ port: updates.port > 0 ? updates.port : panel?.port ?? null, path: bare(updates.path), name: t("tab.clientUpdates") })
   }
 
   return held

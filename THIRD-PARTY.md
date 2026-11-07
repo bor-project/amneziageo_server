@@ -6,6 +6,7 @@ AmneziaGeo server is distributed under GPL-3.0 or later. It is built from the co
 
 - AmneziaWG kernel module (Amnezia VPN, WireGuard LLC): GPL-2.0.
 - wstunnel (Erèbe): BSD-3-Clause.
+- Xray-core v26.10.31 (XTLS contributors): MPL-2.0. [Source](https://github.com/XTLS/Xray-core/tree/v26.10.31). The component is a separate executable; its license is included as xray.LICENSE.
 
 ## Service
 

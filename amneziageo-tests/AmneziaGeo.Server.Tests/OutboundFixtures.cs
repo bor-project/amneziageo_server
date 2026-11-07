@@ -174,11 +174,11 @@ public sealed class Ledger : IHostNetwork
     /// <summary>
     /// Returns an inet table of the firewall in the JSON of nft, empty when the host holds no such table.
     /// </summary>
-    public Task<string> ReadFirewallAsync(string table, CancellationToken ct)
+    public async Task<string> ReadFirewallAsync(string table, CancellationToken ct)
     {
-        Steps.Add($"read {table}");
+        await Step($"read {table}").ConfigureAwait(false);
 
-        return Task.FromResult(Tables.GetValueOrDefault(table, string.Empty));
+        return Tables.GetValueOrDefault(table, string.Empty);
     }
 
     /// <summary>

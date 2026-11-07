@@ -610,6 +610,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<int>("ServicesPort")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("UdpPrivate")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTimeOffset>("UpdatedUtc")
                         .HasColumnType("TEXT");
 
@@ -1017,6 +1020,28 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.ToTable("Panel");
                 });
 
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.ProxySourceEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("IdentityKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("IdentityVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProxySources");
+                });
+
             modelBuilder.Entity("AmneziaGeo.Server.Dal.RefreshTokenEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -1389,6 +1414,10 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<bool>("PresetsOnly")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ProxyIds")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset?>("RefreshedUtc")
                         .HasColumnType("TEXT");
 
@@ -1461,6 +1490,90 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsUnique();
 
                     b.ToTable("Traffic");
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.TransportProxyEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Certificate")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CertificateKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Host")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LegacyConfigId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ListenPort")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Opened")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("OriginHttp")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Pin")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Port")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Secret")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ServerName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("Transport")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LegacyConfigId")
+                        .IsUnique();
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("TransportProxies");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<long>", b =>

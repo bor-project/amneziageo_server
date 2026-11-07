@@ -54,7 +54,8 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         IReadOnlyList<ServerConfig> configs,
         PanelSettings panel,
         SubscriptionSettings subscriptions,
-        DnsSettings? resolver = null)
+        DnsSettings? resolver = null,
+        IReadOnlyList<FirewallPort>? proxies = null)
     {
         ArgumentNullException.ThrowIfNull(configs);
         ArgumentNullException.ThrowIfNull(panel);
@@ -64,7 +65,10 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         var interfaces = new List<string>();
         foreach (var config in configs.Where(one => one.IsEnabled && one.Opened))
         {
-            Take(ports, new FirewallPort(Udp, config.ListenPort, config.Name));
+            if (!config.UdpPrivate)
+            {
+                Take(ports, new FirewallPort(Udp, config.ListenPort, config.Name));
+            }
             Take(ports, new FirewallPort(Tcp, ConfigServices.Port(config), config.Name));
             Take(ports, new FirewallPort(Tcp, ConfigServices.Former(config), config.Name));
             if (resolver is not null && Answers(resolver, config))
@@ -84,6 +88,11 @@ public sealed record FirewallPlan(IReadOnlyList<FirewallPort> Ports, IReadOnlyLi
         if (subscriptions.IsEnabled && subscriptions.Separate && subscriptions.Opened && Reached(subscriptions.Listen))
         {
             Take(ports, new FirewallPort(Tcp, subscriptions.Port, Subscriptions));
+        }
+
+        foreach (var proxy in proxies ?? [])
+        {
+            Take(ports, proxy);
         }
 
         return new FirewallPlan(ports, interfaces);
