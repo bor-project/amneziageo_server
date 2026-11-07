@@ -179,15 +179,10 @@ public static class ConfigEndpoints
         }
 
         var previous = request.Keep == true ? await firewall.PlanAsync(ct).ConfigureAwait(false) : null;
-        var result = await store.ChangeAsync(id, draft, ct).ConfigureAwait(false);
+        var result = await store.ChangeAsync(id, draft, (previous, stop) => host.WithdrawAsync(previous.Name, stop), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
-        }
-
-        if (held is not null && !string.Equals(held.Name, result.Record!.Name, StringComparison.Ordinal))
-        {
-            await host.WithdrawAsync(held.Name, ct).ConfigureAwait(false);
         }
 
         await RuleNaming.NameAsync(rules, RuleSide.Inbounds, result.Record!.Name, request.Rules, ct).ConfigureAwait(false);
@@ -278,13 +273,12 @@ public static class ConfigEndpoints
         CancellationToken ct)
     {
         using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
-        var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
+        var result = await store.RemoveAsync(id, (previous, stop) => host.WithdrawAsync(previous.Name, stop), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
-        await host.WithdrawAsync(result.Record!.Name, ct).ConfigureAwait(false);
         await FirewallAsync(store, clients, host, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);

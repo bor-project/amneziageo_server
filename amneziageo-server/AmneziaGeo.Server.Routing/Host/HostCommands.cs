@@ -73,6 +73,7 @@ public sealed class HostCommands : IHostCommands
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+        start.Environment["LC_ALL"] = "C";
 
         if (_sudo)
         {

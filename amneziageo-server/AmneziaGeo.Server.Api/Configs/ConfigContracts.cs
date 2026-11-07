@@ -62,7 +62,8 @@ public sealed record ConfigResponse(
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc,
     bool IsDefault = false,
-    bool RequireUpdate = false);
+    bool RequireUpdate = false,
+    bool UdpPrivate = false);
 
 /// <summary>
 /// An endpoint as the interface sends it; keep leaves a port the panel held open and holds no longer open in the
@@ -92,7 +93,8 @@ public sealed record ConfigRequest(
     bool? Keep = null,
     bool? IsDefault = null,
     bool? RequireUpdate = null,
-    IReadOnlyList<long>? Rules = null);
+    IReadOnlyList<long>? Rules = null,
+    bool? UdpPrivate = null);
 
 /// <summary>
 /// What a request to turn an endpoint on or off carries.
@@ -159,7 +161,8 @@ public static class ConfigAnswers
         config.CreatedUtc,
         config.UpdatedUtc,
         config.IsDefault,
-        config.RequireUpdate);
+        config.RequireUpdate,
+        config.UdpPrivate);
 
     /// <summary>
     /// Describes the obfuscation of an endpoint as the interface reads it.
@@ -199,6 +202,7 @@ public static class ConfigAnswers
         Name = (request.Name ?? string.Empty).Trim(),
         Host = (request.Host ?? string.Empty).Trim(),
         ListenPort = request.ListenPort,
+        UdpPrivate = request.UdpPrivate ?? held?.UdpPrivate ?? false,
         Address = request.Address ?? [],
         Dns = request.Dns ?? [],
         AllowedIps = request.AllowedIps ?? [],
@@ -211,9 +215,9 @@ public static class ConfigAnswers
         Nat = request.Nat ?? true,
         Opened = request.Opened ?? held?.Opened ?? false,
         Inbound = InboundName.Read(request.Inbound, ClientInbound.Off),
-        WebSocket = request.WebSocket ?? false,
-        ServicesPort = request.ServicesPort ?? 0,
-        WebSocketPath = (request.WebSocketPath ?? string.Empty).Trim().Trim('/'),
+        WebSocket = request.WebSocket ?? held?.WebSocket ?? false,
+            ServicesPort = request.ServicesPort ?? held?.ServicesPort ?? 0,
+        WebSocketPath = (request.WebSocketPath ?? held?.WebSocketPath ?? string.Empty).Trim().Trim('/'),
         Blocked = request.Blocked ?? [],
         PrivateKey = (request.PrivateKey ?? string.Empty).Trim(),
         PresharedKey = (request.PresharedKey ?? string.Empty).Trim(),

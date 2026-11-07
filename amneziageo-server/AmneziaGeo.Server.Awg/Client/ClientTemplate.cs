@@ -63,6 +63,11 @@ public sealed record ClientTemplate
     public IReadOnlyList<long> Presets { get; init; } = [];
 
     /// <summary>
+    /// The transport proxies published to the clients.
+    /// </summary>
+    public IReadOnlyList<long> ProxyIds { get; init; } = [];
+
+    /// <summary>
     /// Whether the application of a client routes the configuration by the routing presets of the template alone.
     /// </summary>
     public bool PresetsOnly { get; init; }

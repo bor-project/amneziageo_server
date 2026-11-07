@@ -19,7 +19,7 @@ public class EndpointHostTests
 
         Assert.True(sync.IsDone);
         Assert.Equal(
-            ["forwarding", "add awg0", "address awg0 10.0.0.1/24 fd42:6d79:7670::cafe:1/112", "up awg0 1360"],
+            ["forwarding", "add awg0", "address awg0 10.0.0.1/24 fd42:6d79:7670::cafe:1/112", "up awg0 1360", "read amneziageo_udp_awg0"],
             ledger.Steps);
         Assert.Equal("awg0", Assert.Single(kernel.Updates).Name);
     }
@@ -63,7 +63,7 @@ public class EndpointHostTests
         var sync = await host.ApplyAsync(Endpoint() with { IsEnabled = false }, CancellationToken.None);
 
         Assert.True(sync.IsDone);
-        Assert.Equal(["remove awg0"], ledger.Steps);
+        Assert.Equal(["remove awg0", "read amneziageo_udp_awg0"], ledger.Steps);
     }
 
     [Fact]

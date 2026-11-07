@@ -76,6 +76,7 @@ public static class ServerDatabase
         services.AddScoped<PanelStore>();
         services.AddScoped<TermsStore>();
         services.AddScoped<TemplateStore>();
+        services.AddScoped<TransportProxyStore>();
         services.AddScoped<PresetStore>();
         services.AddScoped<SubscriptionStore>();
         services.AddScoped<ClientUpdateStore>();
@@ -119,6 +120,7 @@ public static class ServerDatabase
                 return await configs.SplitPathsAsync(ct).ConfigureAwait(false);
             },
             ct).ConfigureAwait(false);
+        await scope.ServiceProvider.GetRequiredService<TransportProxyStore>().MigrateLegacyAsync(ct).ConfigureAwait(false);
         var logger = loggers.CreateLogger(typeof(ServerDatabase).FullName!);
         foreach (var moved in split)
         {

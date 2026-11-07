@@ -276,7 +276,17 @@ public sealed class IpHostNetwork : IHostNetwork
         var result = await _commands.RunAsync(Nft, ["-j", "list", "table", "inet", table], null, ct)
             .ConfigureAwait(false);
 
-        return result.IsOk ? result.Output : string.Empty;
+        if (result.IsOk)
+        {
+            return result.Output;
+        }
+
+        if (result.Complaint.Contains("No such file or directory", StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        throw new HostNetworkException($"the firewall table could not be read: {result.Complaint}");
     }
 
     /// <summary>

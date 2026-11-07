@@ -230,6 +230,8 @@ public interface IObfuscated
 /// </summary>
 public sealed class ConfigEntity : IObfuscated
 {
+    public bool UdpPrivate { get; set; }
+
     public long Id { get; set; }
 
     public string Name { get; set; } = string.Empty;
@@ -769,6 +771,8 @@ public sealed class TemplateEntity
     public int DnsMode { get; set; }
 
     public string Presets { get; set; } = string.Empty;
+
+    public string ProxyIds { get; set; } = string.Empty;
 
     public bool PresetsOnly { get; set; }
 

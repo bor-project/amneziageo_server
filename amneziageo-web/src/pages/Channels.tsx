@@ -19,6 +19,8 @@ import { useAppSelector } from "@/store/hooks"
 
 type Line = { kind: "channel"; channel: Outbound } | { kind: "group"; group: Balancer }
 
+type ChannelStatus = { text: TextKey; tone: string; rank: number }
+
 export function Channels() {
   const t = useText()
   const language = useLanguage()
@@ -210,38 +212,86 @@ export function Channels() {
 }
 
 function ChannelState({ outbound, t, language }: { outbound: Outbound; t: Text; language: string }) {
+  const status = channelStatus(outbound)
+  return (
+    <span className={status.tone} title={channelTitle(outbound, status, t, language)}>
+      {t(status.text)}
+    </span>
+  )
+}
+
+function channelStatus(outbound: Outbound): ChannelStatus {
+  if (!outbound.isEnabled) {
+    return { text: "outbounds.off", tone: "text-muted", rank: 7 }
+  }
+
   const state = outbound.state
   if (state === null) {
-    return <span className="text-muted">{t("outbounds.unknown")}</span>
+    return { text: "outbounds.unknown", tone: "text-muted", rank: 3 }
   }
 
   if (state.fault.length > 0) {
-    return (
-      <span className="text-alarm" title={state.fault}>
-        {t("outbounds.faulted")}
-      </span>
-    )
+    return { text: "outbounds.faulted", tone: "text-alarm", rank: 1 }
   }
 
   if (!state.hasLink) {
-    return <span className="text-muted">{t("outbounds.notUp")}</span>
+    return { text: "outbounds.notUp", tone: "text-muted", rank: 2 }
   }
 
-  if (state.probe !== null && !state.probe.isReached) {
-    return <span className="text-alarm">{t("outbounds.noProbe")}</span>
+  if (outbound.kind !== "local") {
+    if (state.lastHandshake === null) {
+      return { text: "outbounds.noHandshake", tone: "text-muted", rank: 5 }
+    }
+
+    if (!state.isAlive) {
+      return { text: "outbounds.staleHandshake", tone: "text-muted", rank: 5 }
+    }
   }
 
-  if (outbound.kind !== "wg") {
-    return <span className="text-good">{t("outbounds.ready")}</span>
+  if (outbound.probe.trim() === "") {
+    return { text: "outbounds.probeOff", tone: "text-muted", rank: 3 }
   }
 
-  return (
-    <span className={state.isAlive ? "text-ink" : "text-muted"}>
-      {state.lastHandshake === null
-        ? t("outbounds.noHandshake")
-        : new Date(state.lastHandshake).toLocaleString(language)}
-    </span>
-  )
+  const probe = state.probe
+  if (probe === null) {
+    return { text: "outbounds.unknown", tone: "text-muted", rank: 3 }
+  }
+
+  const health = probe.health ?? (probe.isReached ? "healthy" : "unavailable")
+  if (health === "degraded") {
+    return { text: "outbounds.probeDegraded", tone: "text-warn", rank: 6 }
+  }
+
+  if (health === "unavailable") {
+    return { text: "outbounds.noProbe", tone: "text-alarm", rank: 4 }
+  }
+
+  return health === "healthy"
+    ? { text: "outbounds.ready", tone: "text-good", rank: 0 }
+    : { text: "outbounds.unknown", tone: "text-muted", rank: 3 }
+}
+
+function channelTitle(outbound: Outbound, status: ChannelStatus, t: Text, language: string): string | undefined {
+  const state = outbound.state
+  if (status.text === "outbounds.faulted") {
+    return state?.fault
+  }
+
+  if (status.text === "outbounds.probeDegraded" || status.text === "outbounds.noProbe") {
+    const probe = state?.probe
+    return probe?.attempts !== undefined && probe.missed !== undefined && probe.attempts > 0
+      ? t("outbounds.probeMissed", { missed: probe.missed, attempts: probe.attempts })
+      : undefined
+  }
+
+  if (status.text === "outbounds.unknown" && state?.hasLink && outbound.probe.trim() !== "") {
+    return t("outbounds.probePending")
+  }
+
+  return state?.lastHandshake != null
+    && (status.text === "outbounds.ready" || status.text === "outbounds.staleHandshake" || status.text === "outbounds.probeOff")
+    ? new Date(state.lastHandshake).toLocaleString(language)
+    : undefined
 }
 
 function GroupState({ balancer, t }: { balancer: Balancer; t: Text }) {
@@ -298,29 +348,7 @@ function named(t: Text, line: Line): string {
 }
 
 function channelRank(outbound: Outbound): number {
-  const state = outbound.state
-
-  if (state === null) {
-    return 3
-  }
-
-  if (state.fault.length > 0) {
-    return 1
-  }
-
-  if (!state.hasLink) {
-    return 2
-  }
-
-  if (state.probe !== null && !state.probe.isReached) {
-    return 4
-  }
-
-  if (outbound.kind !== "wg") {
-    return 0
-  }
-
-  return state.lastHandshake === null ? 5 : 0
+  return channelStatus(outbound).rank
 }
 
 function groupRank(balancer: Balancer): number {

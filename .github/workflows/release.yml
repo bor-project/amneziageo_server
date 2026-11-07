@@ -1,13 +1,15 @@
-# Builds a release of the panel from a tag vX.Y.Z.W on master: the packages for x64 and arm64, each beside its files
-# packed one by one and their list, the image for both in ghcr.io, the packages and the image of the service of the
-# client releases, and update.json signed with UPDATE_SIGNING_KEY, which the panels read to update themselves and the
-# menu checks the packages against. A tag with a fourth number above zero, or with a suffix, makes a prerelease that
-# only panels on the test channel take.
+# Builds the matching release branch from a tag or manual run.
 name: release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag: vX.Y.Z.0, vX.Y.Z.W-beta.N or vX.Y.Z.W-test.N'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -21,36 +23,33 @@ jobs:
   version:
     runs-on: ubuntu-24.04
     outputs:
-      version: ${{ steps.read.outputs.version }}
-      channel: ${{ steps.read.outputs.channel }}
+      version: ${{ steps.policy.outputs.version }}
+      channel: ${{ steps.policy.outputs.channel }}
+      release_tag: ${{ steps.policy.outputs.release_tag }}
+      source_commit: ${{ steps.policy.outputs.source_commit }}
+      tag_exists: ${{ steps.policy.outputs.tag_exists }}
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
-      - id: read
+      - name: Check release policy
+        run: python3 -m unittest discover -s .github/tests -p test_release_policy.py
+      - name: Validate release source
+        id: policy
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
         shell: bash
         run: |
-          if ! git merge-base --is-ancestor "$GITHUB_SHA^{commit}" origin/master; then
-            echo "the tag $GITHUB_REF_NAME stands on a commit outside master" >&2
-            exit 1
-          fi
-
-          tag=${GITHUB_REF_NAME#v}
-          version=${tag%%-*}
-          if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "the tag $GITHUB_REF_NAME names no version of four numbers" >&2
-            exit 1
-          fi
-
-          channel=stable
-          if [[ $tag == *-* || ${version##*.} != 0 ]]; then
-            channel=test
-          fi
-
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          python3 .github/scripts/release_policy.py prepare \
+            --event "$GITHUB_EVENT_NAME" --ref "$GITHUB_REF" --sha "$GITHUB_SHA" --tag "$INPUT_TAG"
 
   package:
+    env:
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
+      RELEASE_TAG: ${{ needs.version.outputs.release_tag }}
+      SOURCE_COMMIT: ${{ needs.version.outputs.source_commit }}
+      TAG_EXISTS: ${{ needs.version.outputs.tag_exists }}
     needs: version
     strategy:
       matrix:
@@ -67,6 +66,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ needs.version.outputs.source_commit }}
           submodules: recursive
       - uses: actions/setup-dotnet@v6
         with:
@@ -109,6 +109,11 @@ jobs:
           if-no-files-found: error
 
   image:
+    env:
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
+      RELEASE_TAG: ${{ needs.version.outputs.release_tag }}
+      SOURCE_COMMIT: ${{ needs.version.outputs.source_commit }}
+      TAG_EXISTS: ${{ needs.version.outputs.tag_exists }}
     needs: version
     strategy:
       matrix:
@@ -123,6 +128,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ needs.version.outputs.source_commit }}
           submodules: recursive
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
@@ -154,6 +160,11 @@ jobs:
           if-no-files-found: error
 
   manifest:
+    env:
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
+      RELEASE_TAG: ${{ needs.version.outputs.release_tag }}
+      SOURCE_COMMIT: ${{ needs.version.outputs.source_commit }}
+      TAG_EXISTS: ${{ needs.version.outputs.tag_exists }}
     needs: [version, image]
     runs-on: ubuntu-24.04
     outputs:
@@ -178,6 +189,9 @@ jobs:
           CHANNEL: ${{ needs.version.outputs.channel }}
         run: |
           tags=(-t "$IMAGE:$VERSION")
+          if [ "${RELEASE_TAG#v}" != "$VERSION" ]; then
+            tags+=(-t "$IMAGE:${RELEASE_TAG#v}")
+          fi
           if [ "$CHANNEL" = stable ]; then
             tags+=(-t "$IMAGE:latest")
           fi
@@ -188,11 +202,16 @@ jobs:
           done
 
           docker buildx imagetools create "${tags[@]}" "${sources[@]}"
-          digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
+          digest=$(docker buildx imagetools inspect "$IMAGE:${RELEASE_TAG#v}" --format '{{json .Manifest}}' | jq -r .digest)
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
   # The service of the client releases, an image of its own from the same tag.
   updates-image:
+    env:
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
+      RELEASE_TAG: ${{ needs.version.outputs.release_tag }}
+      SOURCE_COMMIT: ${{ needs.version.outputs.source_commit }}
+      TAG_EXISTS: ${{ needs.version.outputs.tag_exists }}
     needs: version
     strategy:
       matrix:
@@ -206,6 +225,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.source_commit }}
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -236,6 +257,11 @@ jobs:
           if-no-files-found: error
 
   updates-manifest:
+    env:
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
+      RELEASE_TAG: ${{ needs.version.outputs.release_tag }}
+      SOURCE_COMMIT: ${{ needs.version.outputs.source_commit }}
+      TAG_EXISTS: ${{ needs.version.outputs.tag_exists }}
     needs: [version, updates-image]
     runs-on: ubuntu-24.04
     outputs:
@@ -260,6 +286,9 @@ jobs:
           CHANNEL: ${{ needs.version.outputs.channel }}
         run: |
           tags=(-t "$UPDATES_IMAGE:$VERSION")
+          if [ "${RELEASE_TAG#v}" != "$VERSION" ]; then
+            tags+=(-t "$UPDATES_IMAGE:${RELEASE_TAG#v}")
+          fi
           if [ "$CHANNEL" = stable ]; then
             tags+=(-t "$UPDATES_IMAGE:latest")
           fi
@@ -270,17 +299,29 @@ jobs:
           done
 
           docker buildx imagetools create "${tags[@]}" "${sources[@]}"
-          digest=$(docker buildx imagetools inspect "$UPDATES_IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
+          digest=$(docker buildx imagetools inspect "$UPDATES_IMAGE:${RELEASE_TAG#v}" --format '{{json .Manifest}}' | jq -r .digest)
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
   publish:
+    env:
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
+      RELEASE_TAG: ${{ needs.version.outputs.release_tag }}
+      SOURCE_COMMIT: ${{ needs.version.outputs.source_commit }}
+      TAG_EXISTS: ${{ needs.version.outputs.tag_exists }}
     needs: [version, package, manifest, updates-manifest]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: deploy/amneziageo-server
+          ref: ${{ needs.version.outputs.source_commit }}
+          sparse-checkout: |
+            deploy/amneziageo-server
+            .github/scripts/release_policy.py
           sparse-checkout-cone-mode: false
+      - name: Verify the release tag still matches
+        shell: bash
+        run: python3 .github/scripts/release_policy.py verify-tag --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --required "$TAG_EXISTS"
+
       - uses: actions/download-artifact@v8
         with:
           pattern: package-*
@@ -337,7 +378,7 @@ jobs:
             --arg version "$VERSION" \
             --arg channel "$CHANNEL" \
             --arg published "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --arg commit "$GITHUB_SHA" \
+            --arg commit "$SOURCE_COMMIT" \
             --arg image "$IMAGE@$DIGEST" \
             --argjson packages "$packages" \
             --arg updatesImage "$UPDATES_IMAGE@$UPDATES_DIGEST" \
@@ -359,13 +400,13 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
           CHANNEL: ${{ needs.version.outputs.channel }}
         run: |
-          flags=(--repo "$GITHUB_REPOSITORY" --title "$VERSION" --generate-notes --verify-tag)
-          if [ "$CHANNEL" = test ]; then
-            flags+=(--prerelease)
+          flags=(--repo "$GITHUB_REPOSITORY" --title "$VERSION" --generate-notes --target "$SOURCE_COMMIT")
+          if [ "$CHANNEL" != stable ]; then
+            flags+=(--prerelease --latest=false)
           else
             flags+=(--latest)
           fi
 
           cp ../deploy/amneziageo-server amneziageo-server
-          gh release create "$GITHUB_REF_NAME" "${flags[@]}" amneziageo-server-*.tar.gz amneziageo-server-*.pack \
+          gh release create "$RELEASE_TAG" "${flags[@]}" amneziageo-server-*.tar.gz amneziageo-server-*.pack \
             amneziageo-server-*.files amneziageo-updates-*.tar.gz update.json update.json.sig amneziageo-server

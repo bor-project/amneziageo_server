@@ -23,7 +23,7 @@ using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 
 namespace AmneziaGeo.Server.Tests;
 
-public class ServiceTests
+public partial class ServiceTests
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
@@ -541,6 +541,8 @@ public class ServiceTests
         Assert.Equal("milena", root.GetProperty("client").GetString());
         Assert.Equal(endpoint.ListenPort, features.GetProperty("websocket").GetProperty("port").GetInt32());
         Assert.Equal(endpoint.WebSocketPath, features.GetProperty("websocket").GetProperty("path").GetString());
+        Assert.Empty(features.GetProperty("proxies").GetProperty("items").EnumerateArray());
+        Assert.Equal(1, features.GetProperty("proxies").GetProperty("version").GetInt32());
         Assert.False(features.TryGetProperty("routing", out _));
         Assert.StartsWith($"http://10.8.0.1:{endpoint.ListenPort}/api/speed/down?", features.GetProperty("speed").GetProperty("inside").GetProperty("down").GetString(), StringComparison.Ordinal);
         Assert.StartsWith($"https://vpn.example:{endpoint.ListenPort}/api/speed/up?", features.GetProperty("speed").GetProperty("outside").GetProperty("up").GetString(), StringComparison.Ordinal);
@@ -1426,6 +1428,54 @@ public class ServiceTests
         Assert.Equal("network||10.8.0.1", network);
     }
 
+#pragma warning disable xUnit1030
+    [Fact]
+    public async Task ASeparateSubscriptionSharesAProxyAndEndpointPort()
+    {
+        using var bench = new Bench();
+        var port = Free();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example.net", ServicesPort = port },
+            CancellationToken.None).ConfigureAwait(false)).Record!;
+        var client = (await bench.Clients.AddAsync(ClientDefaults.Fresh(endpoint.Id, "phone"), CancellationToken.None).ConfigureAwait(false)).Record!;
+        var store = new AmneziaGeo.Server.Dal.TransportProxyStore(bench.Db);
+        await store.SaveAsync(0, new AmneziaGeo.Server.Dal.TransportProxyEntity
+        {
+            Name = "relay", Host = "proxy.example.net", Port = port, Path = "relay",
+        }, CancellationToken.None).ConfigureAwait(false);
+        var state = new SubscriptionState();
+        var folder = Path.Combine(Path.GetTempPath(), $"amneziageo-shared-proxy-{Guid.NewGuid():N}");
+        var services = new ServiceServer(
+            bench.Scopes, Desk(bench, new SpeedTickets(bench.Clock), subscriptions: state),
+            new ProxyHost(new Ledger(), new Fronts(string.Empty), folder), new WebOptions(),
+            PanelDefaults.Settings, new ServiceShare(), NullLogger<ServiceServer>.Instance, state);
+        var subscriptions = new SubscriptionServer(bench.Scopes, state, PanelDefaults.Settings,
+            new WebOptions(), NullLogger<SubscriptionServer>.Instance);
+        try
+        {
+            await services.SettleAsync(CancellationToken.None).ConfigureAwait(false);
+            var fault = await subscriptions.ApplyAsync(SubscriptionDefaults.Settings with
+            {
+                IsEnabled = true, Separate = true, Port = port, Path = "sub",
+            }, CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(string.Empty, fault);
+            using var tls = Trusting();
+            using var response = await tls.GetAsync($"https://127.0.0.1:{port}/sub/{client.SubscriptionId}").ConfigureAwait(false);
+            Assert.Equal(StatusCodes.Status200OK, (int)response.StatusCode);
+        }
+        finally
+        {
+            await subscriptions.DisposeAsync().ConfigureAwait(false);
+            await services.DisposeAsync().ConfigureAwait(false);
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
+#pragma warning restore xUnit1030
+
     private static ServiceDesk Desk(
         Bench bench,
         SpeedTickets tickets,
@@ -1436,7 +1486,8 @@ public class ServiceTests
         AnswerSlots? slots = null,
         DnsState? resolver = null,
         SubscriptionCertificates? certificates = null,
-        ServiceShare? share = null)
+        ServiceShare? share = null,
+        ProxyHost? fronts = null)
     {
         var state = subscriptions ?? new SubscriptionState();
 
@@ -1445,6 +1496,7 @@ public class ServiceTests
             tickets,
             [
                 new WebSocketOffer(),
+                new ProxyOffer(bench.Scopes),
                 new InboundOffer(),
                 new DisconnectOffer(),
                 new SpeedOffer(tickets, share),
@@ -1461,7 +1513,8 @@ public class ServiceTests
             logger ?? NullLogger<ServiceDesk>.Instance,
             hold,
             slots,
-            certificates);
+            certificates,
+            fronts: fronts);
     }
 
     // Tells under which certificate the subscriptions answer, the roots standing in for the ones of the host.

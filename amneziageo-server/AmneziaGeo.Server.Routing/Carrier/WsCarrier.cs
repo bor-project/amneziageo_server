@@ -88,6 +88,8 @@ public sealed class WsCarrier : IDisposable
     private readonly WsEndpoint _front;
     private readonly IPAddress _address;
     private readonly int _targetPort;
+    private readonly string? _targetHost;
+    private readonly string? _certificatePin;
     private readonly Func<string>? _token;
     private readonly Func<Socket, bool>? _bypass;
     private readonly Action<string, Exception?>? _note;
@@ -106,11 +108,13 @@ public sealed class WsCarrier : IDisposable
     /// ctor
     /// </summary>
     private WsCarrier(
-        WsEndpoint front, IPAddress address, int targetPort, Func<string>? token, Func<Socket, bool>? bypass, Action<string, Exception?>? note)
+        WsEndpoint front, IPAddress address, int targetPort, Func<string>? token, Func<Socket, bool>? bypass, Action<string, Exception?>? note, string? targetHost = null, string? certificatePin = null)
     {
         _front = front;
         _address = address;
         _targetPort = targetPort;
+        _targetHost = targetHost;
+        _certificatePin = certificatePin;
         _token = token;
         _bypass = bypass;
         _note = note;
@@ -129,9 +133,9 @@ public sealed class WsCarrier : IDisposable
     /// caller, because a lookup made after the tunnel is built would travel inside it and answer nothing.
     /// </summary>
     public static WsCarrier Start(
-        WsEndpoint front, IPAddress address, int targetPort, Func<string>? token, Func<Socket, bool>? bypass, Action<string, Exception?>? note)
+        WsEndpoint front, IPAddress address, int targetPort, Func<string>? token, Func<Socket, bool>? bypass, Action<string, Exception?>? note, string? targetHost = null, string? certificatePin = null)
     {
-        var carrier = new WsCarrier(front, address, targetPort, token, bypass, note);
+        var carrier = new WsCarrier(front, address, targetPort, token, bypass, note, targetHost, certificatePin);
         _ = Task.Run(() => carrier.PumpAsync(carrier._cts.Token));
         return carrier;
     }
@@ -159,7 +163,7 @@ public sealed class WsCarrier : IDisposable
     /// <summary>
     /// The upgrade request the front expects: what to open travels as a token in the protocol header.
     /// </summary>
-    public static string Handshake(WsEndpoint front, int targetPort, string key, string? authorization)
+    public static string Handshake(WsEndpoint front, int targetPort, string key, string? authorization, string? targetHost = null)
     {
         var prefix = front.PathPrefix.Length > 0 ? front.PathPrefix : DefaultPrefix;
         var request = new StringBuilder();
@@ -169,7 +173,13 @@ public sealed class WsCarrier : IDisposable
         request.Append("Connection: Upgrade\r\n");
         request.Append($"Sec-WebSocket-Key: {key}\r\n");
         request.Append("Sec-WebSocket-Version: 13\r\n");
-        request.Append($"Sec-WebSocket-Protocol: {ProtocolToken}, {BearerPrefix}{Token(targetPort)}\r\n");
+        request.Append($"Sec-WebSocket-Protocol: {ProtocolToken}, {BearerPrefix}{Token(targetPort, targetHost ?? TargetHost)}\r\n");
+        if (targetHost is not null)
+        {
+            var host = targetHost.Contains(':', StringComparison.Ordinal) ? "[" + targetHost + "]" : targetHost;
+            request.Append($"X-AmneziaGeo-Target: {host}:{targetPort}\r\n");
+        }
+
         if (front.Credentials.Length > 0)
         {
             request.Append($"Authorization: Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes(front.Credentials))}\r\n");
@@ -184,11 +194,11 @@ public sealed class WsCarrier : IDisposable
     }
 
     // The tunnel to open, as the front reads it: a UDP forward to the server's own loopback with no idle timeout.
-    private static string Token(int targetPort)
+    private static string Token(int targetPort, string targetHost)
     {
         var header = Web("""{"typ":"JWT","alg":"HS256"}"""u8);
         var claims = Web(Encoding.UTF8.GetBytes(
-            $"{{\"id\":\"{Guid.NewGuid()}\",\"p\":{{\"Udp\":{{\"timeout\":null}}}},\"r\":\"{TargetHost}\",\"rp\":{targetPort}}}"));
+            $"{{\"id\":\"{Guid.NewGuid()}\",\"p\":{{\"Udp\":{{\"timeout\":null}}}},\"r\":{System.Text.Json.JsonSerializer.Serialize(targetHost)},\"rp\":{targetPort}}}"));
         var signed = Web(HMACSHA256.HashData(Secret, Encoding.ASCII.GetBytes($"{header}.{claims}")));
         return $"{header}.{claims}.{signed}";
     }
@@ -395,9 +405,9 @@ public sealed class WsCarrier : IDisposable
     /// carried, so an address can be checked before a tunnel is built on it.
     /// </summary>
     public static async Task<(WsFrontOutcome Outcome, string Detail)> ProbeAsync(
-        WsEndpoint front, IPAddress address, int targetPort, Func<string>? token, Func<Socket, bool>? bypass, CancellationToken ct)
+        WsEndpoint front, IPAddress address, int targetPort, Func<string>? token, Func<Socket, bool>? bypass, CancellationToken ct, string? targetHost = null, string? certificatePin = null)
     {
-        var dial = await DialAsync(front, address, targetPort, token, bypass, ct).ConfigureAwait(false);
+        var dial = await DialAsync(front, address, targetPort, token, bypass, ct, targetHost, certificatePin).ConfigureAwait(false);
         if (dial.Stream is { } stream)
         {
             await stream.DisposeAsync().ConfigureAwait(false);
@@ -408,7 +418,7 @@ public sealed class WsCarrier : IDisposable
 
     // One websocket to the front: a connect to the resolved address, TLS, the upgrade.
     private static async Task<(Stream? Stream, WsFrontOutcome Outcome, string Detail, Exception? Error)> DialAsync(
-        WsEndpoint front, IPAddress address, int targetPort, Func<string>? token, Func<Socket, bool>? bypass, CancellationToken ct)
+        WsEndpoint front, IPAddress address, int targetPort, Func<string>? token, Func<Socket, bool>? bypass, CancellationToken ct, string? targetHost = null, string? certificatePin = null)
     {
         var authorization = front.Credentials.Length > 0 ? null : token?.Invoke();
         var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
@@ -420,14 +430,20 @@ public sealed class WsCarrier : IDisposable
             await socket.ConnectAsync(new IPEndPoint(address, front.Port), deadline.Token).ConfigureAwait(false);
             var tls = new SslStream(new NetworkStream(socket, ownsSocket: true));
             var options = new SslClientAuthenticationOptions { TargetHost = front.Host };
-            if (authorization is not null)
+            if (!string.IsNullOrEmpty(certificatePin))
+            {
+                var pin = Convert.FromHexString(certificatePin);
+                options.RemoteCertificateValidationCallback = (_, certificate, _, _) => certificate is not null
+                    && CryptographicOperations.FixedTimeEquals(certificate.GetCertHash(HashAlgorithmName.SHA256), pin);
+            }
+            else if (targetHost is null && authorization is not null)
             {
                 options.RemoteCertificateValidationCallback = Presented;
             }
 
             await tls.AuthenticateAsClientAsync(options, deadline.Token).ConfigureAwait(false);
             var key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
-            await tls.WriteAsync(Encoding.ASCII.GetBytes(Handshake(front, targetPort, key, authorization)), deadline.Token).ConfigureAwait(false);
+            await tls.WriteAsync(Encoding.ASCII.GetBytes(Handshake(front, targetPort, key, authorization, targetHost)), deadline.Token).ConfigureAwait(false);
             var answer = await HeaderAsync(tls, deadline.Token).ConfigureAwait(false);
             if (!Accepted(answer, key))
             {
@@ -461,7 +477,7 @@ public sealed class WsCarrier : IDisposable
     // The carrier's own dial, with the outcome written to the log the way the tunnel reads it.
     private async Task<Stream?> OpenAsync(CancellationToken ct)
     {
-        var dial = await DialAsync(_front, _address, _targetPort, _token, _bypass, ct).ConfigureAwait(false);
+        var dial = await DialAsync(_front, _address, _targetPort, _token, _bypass, ct, _targetHost, _certificatePin).ConfigureAwait(false);
         var front = $"{_front.Host}:{_front.Port}";
         switch (dial.Outcome)
         {

@@ -39,6 +39,7 @@ export interface Config {
   name: string
   host: string
   listenPort: number
+  udpPrivate: boolean
   address: string[]
   dns: string[]
   allowedIps: string[]
@@ -66,6 +67,7 @@ export interface ConfigDraft {
   name: string
   host: string
   listenPort: number
+  udpPrivate: boolean
   address: string[]
   dns: string[]
   allowedIps: string[]
@@ -193,6 +195,7 @@ export function draftOf(config: Config): ConfigDraft {
     name: config.name,
     host: config.host,
     listenPort: config.listenPort,
+    udpPrivate: config.udpPrivate ?? false,
     address: config.address,
     dns: config.dns,
     allowedIps: config.allowedIps,

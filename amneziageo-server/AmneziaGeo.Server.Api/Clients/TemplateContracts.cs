@@ -24,7 +24,8 @@ public sealed record TemplateResponse(
     DateTimeOffset UpdatedUtc,
     string DnsMode = DnsChoiceName.Auto,
     IReadOnlyList<long>? ClientIds = null,
-    bool PresetsOnly = false);
+    bool PresetsOnly = false,
+    IReadOnlyList<long>? ProxyIds = null);
 
 /// <summary>
 /// The settings a client template is added or changed with.
@@ -39,7 +40,8 @@ public sealed record TemplateRequest(
     bool? StandIns = null,
     string? DnsMode = null,
     IReadOnlyList<long>? Clients = null,
-    bool? PresetsOnly = null);
+    bool? PresetsOnly = null,
+    IReadOnlyList<long>? ProxyIds = null);
 
 /// <summary>
 /// The entries the panel asks what they come out as.
@@ -117,7 +119,8 @@ public static class TemplateAnswers
             template.UpdatedUtc,
             DnsChoiceName.Of(template.DnsMode),
             clients,
-            template.PresetsOnly);
+            template.PresetsOnly,
+            template.ProxyIds);
     }
 
     /// <summary>
@@ -159,6 +162,7 @@ public static class TemplateAnswers
             Mtu = request.Mtu,
             Keepalive = request.Keepalive,
             Presets = [.. (request.Presets ?? []).Distinct()],
+            ProxyIds = [.. (request.ProxyIds ?? []).Distinct()],
             PresetsOnly = request.PresetsOnly ?? false,
             StandIns = request.StandIns ?? false,
         };
@@ -178,6 +182,7 @@ public static class TemplateAnswers
         return asked with
         {
             StandIns = request.StandIns ?? held.StandIns,
+            ProxyIds = request.ProxyIds is null ? held.ProxyIds : asked.ProxyIds,
             PresetsOnly = request.PresetsOnly ?? (held.PresetsOnly && asked.Presets.Count > 0),
         };
     }

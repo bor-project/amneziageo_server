@@ -61,6 +61,10 @@ export const clients: Item[] = [
 
 export const routing: Item[] = [
   {
+    to: "/routing/proxies", label: "proxies.title", icon: "route", scope: scopes.readState,
+    add: { to: "/routing/proxies/new", scope: scopes.manageProxies },
+  },
+  {
     to: "/routing/rules",
     label: "tab.rules",
     about: "about.rules",

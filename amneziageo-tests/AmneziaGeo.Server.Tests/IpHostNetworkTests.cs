@@ -218,6 +218,32 @@ public class IpHostNetworkTests
         Assert.Empty(await network.ReadFirewallAsync("nope", CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData("Operation not permitted (you must be root)")]
+    [InlineData("netlink: Error: cache initialization failed: Device or resource busy")]
+    [InlineData("netlink: Error: cache initialization failed: Interrupted system call")]
+    [InlineData("")]
+    public async Task AFailedFirewallReadIsNotReportedAsAnAbsentTable(string complaint)
+    {
+        var tools = new Tools();
+        tools.Answers["nft -j list table inet amneziageo_udp_awg0"] = new CommandResult(1, string.Empty, complaint);
+
+        var refused = await Assert.ThrowsAsync<HostNetworkException>(
+            () => new IpHostNetwork(tools).ReadFirewallAsync("amneziageo_udp_awg0", CancellationToken.None));
+
+        Assert.Contains("firewall table could not be read", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HostToolsReportErrorsInTheInvariantLocale()
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+        var result = await new HostCommands().RunAsync("/usr/bin/printenv", ["LC_ALL"], null, CancellationToken.None).ConfigureAwait(false);
+
+        Assert.True(result.IsOk);
+        Assert.Equal("C", result.Output.Trim());
+    }
+
     [Fact]
     public async Task ACounterIsReadFromTheKernelWithoutATool()
     {

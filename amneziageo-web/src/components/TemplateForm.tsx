@@ -2,6 +2,7 @@ import { useState } from "react"
 import { complaint } from "@/api/auth"
 import { useClients } from "@/api/clients"
 import { useDnsCheck, useResolver } from "@/api/dns"
+import { useProxies } from "@/api/proxies"
 import { usePresets } from "@/api/presets"
 import { useTemplateDefaults, useTemplatePreview, useTemplates } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
@@ -10,7 +11,7 @@ import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { choiceKey, lacksServers } from "@/components/dnsWords"
 import { EntryList } from "@/components/EntryList"
 import { Hinted, Line, Links, Part, Switch } from "@/components/fields"
-import { clientItems, presetItems } from "@/components/members"
+import { clientItems, presetItems, proxyItems } from "@/components/members"
 import { ResolverTrouble } from "@/components/ResolverTrouble"
 import { troubleOf } from "@/components/trouble"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
@@ -41,6 +42,7 @@ export function TemplateForm({
   const t = useText()
   const defaults = useTemplateDefaults().data
   const presets = usePresets().data ?? []
+  const proxies = useProxies()
   const templates = useTemplates().data ?? []
   const titles = new Map(templates.map((one): [number, string] => [one.id, one.name]))
   const members = clientItems(useClients().data ?? [], (one) =>
@@ -92,6 +94,19 @@ export function TemplateForm({
             placeholder={t("templates.addClient")}
             onChange={(keys) => put({ clients: keys.map(Number) })}
           />
+        </div>
+      </Part>
+
+      <Part title={t("templates.partProxies")}>
+        <div className="sm:col-span-2">
+          <Links
+            id="template-proxies"
+            value={draft.proxyIds.map(String)}
+            items={proxyItems(proxies.data ?? [])}
+            placeholder={t("templates.addProxy")}
+            onChange={(keys) => put({ proxyIds: keys.map(Number) })}
+          />
+          {proxies.error !== null && <div className="mt-2 text-sm text-alarm">{t(complaint(proxies.error))}</div>}
         </div>
       </Part>
 

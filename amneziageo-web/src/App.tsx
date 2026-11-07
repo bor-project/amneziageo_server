@@ -52,6 +52,8 @@ import { Rules } from "@/pages/Rules"
 import { PresetPage } from "@/pages/PresetPage"
 import { PresetRemove } from "@/pages/PresetRemove"
 import { Presets } from "@/pages/Presets"
+import { Proxies } from "@/pages/Proxies"
+import { ProxyPage, ProxyRemove } from "@/pages/ProxyPage"
 import { PanelCertificates, PanelServer } from "@/pages/Settings"
 import { Subscriptions } from "@/pages/Subscriptions"
 import { TemplatePage } from "@/pages/TemplatePage"
@@ -66,7 +68,7 @@ import { useAppearance } from "@/theme/theme"
 
 const moved: { from: string; to: string }[] = [
   { from: "configs", to: "/interfaces" },
-  { from: "proxies", to: "/interfaces" },
+  { from: "proxies", to: "/routing/proxies" },
   { from: "rules", to: "/routing" },
   { from: "outbounds", to: "/routing/channels" },
   { from: "balancers", to: "/routing/channels" },
@@ -149,6 +151,12 @@ const router = createBrowserRouter(
                 <Route path="geo/new" element={<GeoPage />} />
                 <Route path="geo/:sourceId/edit" element={<GeoPage />} />
                 <Route path="geo/:sourceId/delete" element={<GeoRemove />} />
+              </Route>
+              <Route path="proxies" element={<Proxies />} />
+              <Route element={<RequireScope scope={scopes.manageProxies} />}>
+                <Route path="proxies/new" element={<ProxyPage />} />
+                <Route path="proxies/:proxyId/edit" element={<ProxyPage />} />
+                <Route path="proxies/:proxyId/delete" element={<ProxyRemove />} />
               </Route>
               <Route path="dns" element={<Dns />} />
             </Route>

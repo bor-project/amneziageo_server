@@ -67,6 +67,10 @@ stage_release() {
   local target=$base/releases/$release
   if [ -d "$target" ]; then
     [ -x "$target/wstunnel" ] || install -m 755 "$here/wstunnel" "$target/wstunnel"
+    if [ -f "$here/xray" ]; then
+      install -m 755 "$here/xray" "$target/xray"
+      install -m 644 "$here/xray.LICENSE" "$here/xray.README.md" "$target/"
+    fi
     return 0
   fi
 
@@ -75,6 +79,10 @@ stage_release() {
   rm -rf "$target.new/wwwroot"
   cp "$here/install.sh" "$here/release" "$here/server" "$target.new/"
   install -m 755 "$here/wstunnel" "$target.new/"
+  if [ -f "$here/xray" ]; then
+    install -m 755 "$here/xray" "$target.new/"
+    install -m 644 "$here/xray.LICENSE" "$here/xray.README.md" "$target.new/"
+  fi
   if [ -f "$here/amneziageo-server" ]; then
     install -m 755 "$here/amneziageo-server" "$target.new/"
   fi

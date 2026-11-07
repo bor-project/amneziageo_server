@@ -1,4 +1,6 @@
 using System.Net;
+using AmneziaGeo.Server.Routing.XHttp;
+using AmneziaGeo.Server.Api.Proxies;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -7,6 +9,7 @@ using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
+using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Proxy;
 using Microsoft.AspNetCore.Connections;
@@ -29,6 +32,22 @@ public sealed record ServiceEndpoint(long ConfigId, string Name, bool WebSocket,
     /// The addresses the endpoint holds inside the tunnel, where its services answer plain as well.
     /// </summary>
     public IReadOnlyList<IPAddress> Inside { get; init; } = [];
+
+    public long ProxyId { get; init; }
+
+    public long PolicyProxyId { get; init; }
+
+    public bool XHttp { get; init; }
+
+    public bool OriginHttp { get; init; }
+
+    public string PublicHost { get; init; } = string.Empty;
+
+    public string Certificate { get; init; } = string.Empty;
+
+    public string CertificateKey { get; init; } = string.Empty;
+
+    public ProxyTargets? Targets { get; init; }
 
     /// <summary>
     /// Whether the port is the one of the endpoint, where a file without the line of the services asks after they
@@ -180,11 +199,27 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 
     private readonly ClientUpdateState? _updates;
 
+    private readonly ProxyCertificates? _proxyCertificates;
+
+    private readonly XHttpHost? _xhttp;
+
+    private volatile IReadOnlyDictionary<long, string> _xhttpFaults = new Dictionary<long, string>();
+
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    private readonly SemaphoreSlim _settling = new(1, 1);
+
+    private readonly SemaphoreSlim _xhttpGate = new(1, 1);
 
     private readonly Dictionary<int, Served> _served = [];
 
+    private volatile IReadOnlySet<int> _listening = new HashSet<int>();
+
     private volatile IReadOnlyDictionary<int, string> _refused = new Dictionary<int, string>();
+
+    private volatile IReadOnlyDictionary<long, string> _faults = new Dictionary<long, string>();
+
+    private readonly Dictionary<long, int> _proxyPorts = [];
 
     private bool _sourcesForgotten;
 
@@ -202,7 +237,9 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         ServiceShare share,
         ILogger<ServiceServer> logger,
         SubscriptionState? subscriptions = null,
-        ClientUpdateState? updates = null)
+        ClientUpdateState? updates = null,
+        ProxyCertificates? proxyCertificates = null,
+        XHttpHost? xhttp = null)
     {
         _scopes = scopes;
         _desk = desk;
@@ -213,12 +250,25 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         _logger = logger;
         _subscriptions = subscriptions;
         _updates = updates;
+        _proxyCertificates = proxyCertificates;
+        _xhttp = xhttp;
     }
 
     /// <summary>
     /// The TCP ports of the services the host did not let the panel bind, with why.
     /// </summary>
     public IReadOnlyDictionary<int, string> Refused => _refused;
+
+    /// <summary>
+    /// Reports whether the shared listener serves a port.
+    /// </summary>
+    public bool ListensOn(int port) => _listening.Contains(port) || _share.Point?.Port == port;
+
+    /// <summary>
+    /// Returns the service faults by endpoint id.
+    /// </summary>
+    public IReadOnlyDictionary<long, string> Faults => _faults.Concat(_xhttpFaults)
+        .GroupBy(one => one.Key).ToDictionary(group => group.Key, group => group.Last().Value);
 
     /// <summary>
     /// Serves the services of the endpoints the database holds.
@@ -250,6 +300,59 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
     /// </summary>
     public async Task<IReadOnlyDictionary<long, string>> SettleAsync(CancellationToken ct)
     {
+        await _settling.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            var subscriptions = scope.ServiceProvider.GetService<SubscriptionServer>();
+            if (subscriptions is not null)
+            {
+                subscriptions.ShareWith(ListensOn);
+                subscriptions.ChangingShared(true);
+            }
+
+            try
+            {
+                if (subscriptions is not null)
+                {
+                    await subscriptions.ReleaseSharedAsync(ct).ConfigureAwait(false);
+                }
+
+                return await SettlePointsAsync(ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (subscriptions is not null)
+                {
+                    subscriptions.ChangingShared(false);
+                    try
+                    {
+                        var fault = await subscriptions.RestoreSharedAsync(CancellationToken.None).ConfigureAwait(false);
+                        if (fault.Length > 0)
+                        {
+                            _logger.LogWarning("the subscriptions did not take their listener after the services changed: {Fault}", fault);
+                        }
+                    }
+                    catch (Exception ex) when (ex is IOException or SocketException or InvalidOperationException or OperationCanceledException or CryptographicException)
+                    {
+                        if (_subscriptions is not null)
+                        {
+                            _subscriptions.Fault = ex.Message;
+                        }
+
+                        _logger.LogWarning(ex, "the subscriptions did not recover their listener after the services changed");
+                    }
+                }
+            }
+        }
+        finally
+        {
+            _settling.Release();
+        }
+    }
+
+    private async Task<IReadOnlyDictionary<long, string>> SettlePointsAsync(CancellationToken ct)
+    {
         using var scope = _scopes.CreateScope();
         var configs = await scope.ServiceProvider.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false);
         var panel = await scope.ServiceProvider.GetRequiredService<PanelStore>().ReadAsync(ct).ConfigureAwait(false);
@@ -258,11 +361,61 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             .Where(point => !point.Former || !apart.Contains(point.Port))
             .ToList();
 
+        var proxies = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
+        var registered = await proxies.ListAsync(ct).ConfigureAwait(false);
+        var linked = registered.Where(proxy => proxy.LegacyConfigId is not null)
+            .GroupBy(proxy => proxy.LegacyConfigId!.Value).ToDictionary(group => group.Key, group => group.First());
+        var unambiguous = registered.Where(proxy => proxy.LegacyConfigId is not null)
+            .GroupBy(proxy => proxy.LegacyConfigId!.Value).Where(group => group.Count() == 1)
+            .Select(group => group.Single());
+        _fronts.ApplyLegacyPolicies(unambiguous.Where(proxy => proxy.IsEnabled)
+            .Join(configs.Where(config => config.IsEnabled), proxy => proxy.LegacyConfigId, config => (long?)config.Id,
+                (proxy, config) => (proxy.Id, Policy: (ProxyTargetRules.Read(proxy.TargetsJson), config.ListenPort)))
+            .ToDictionary(pair => pair.Id, pair => pair.Policy));
+        wanted = [.. wanted.Select(point => point with
+        {
+            Endpoints = [.. point.Endpoints.Select(endpoint => endpoint.ProxyId == 0 && linked.TryGetValue(endpoint.ConfigId, out var proxy)
+                ? endpoint with { PolicyProxyId = proxy.Id } : endpoint)],
+        })];
+        _proxyCertificates?.Update(registered);
+        foreach (var proxy in registered.Where(proxy => proxy.IsEnabled && (proxy.Transport == "websocket" || proxy.Transport == "xhttp")))
+        {
+            var front = ProxyPort(proxy.Id);
+
+            var endpoint = new ServiceEndpoint(-proxy.Id, "transport-proxy-" + proxy.Id, proxy.Transport == "websocket", front, 0, proxy.Path)
+            {
+                ProxyId = proxy.Id, XHttp = proxy.Transport == "xhttp", OriginHttp = proxy.OriginHttp,
+                PublicHost = proxy.Host, Certificate = proxy.Certificate, CertificateKey = proxy.CertificateKey,
+                Targets = ProxyTargetRules.Read(proxy.TargetsJson),
+            };
+            var listenPort = proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort;
+            var at = wanted.FindIndex(point => point.Port == listenPort);
+            if (at >= 0)
+            {
+                wanted[at] = wanted[at] with { Endpoints = [.. wanted[at].Endpoints, endpoint] };
+            }
+            else
+            {
+                wanted.Add(new ServicePoint(listenPort, [endpoint], Listening.Chain(_options, panel), Listening.Key(_options, panel)));
+            }
+        }
+
+        var subscriptions = await scope.ServiceProvider.GetRequiredService<SubscriptionStore>().ReadAsync(ct).ConfigureAwait(false);
+        if (subscriptions is { IsEnabled: true, Separate: true } && subscriptions.Certificate.Length > 0)
+        {
+            var at = wanted.FindIndex(point => point.Port == subscriptions.Port && point.Port != _running.Port);
+            if (at >= 0)
+            {
+                wanted[at] = wanted[at] with { Chain = subscriptions.Certificate, Key = subscriptions.CertificateKey };
+            }
+        }
+
         var faults = new Dictionary<long, string>();
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             await FrontsAsync(wanted, faults, ct).ConfigureAwait(false);
+            await RefreshXHttpAsync(ct).ConfigureAwait(false);
             var mine = wanted.FirstOrDefault(point => point.Port == _running.Port);
             if (mine is not null && !string.Equals(_share.Point?.Names, mine.Names, StringComparison.Ordinal))
             {
@@ -295,13 +448,14 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
                 }
 
                 refused[point.Port] = fault;
-                foreach (var endpoint in point.Endpoints.Where(one => one.WebSocket))
+                foreach (var endpoint in point.Endpoints.Where(one => one.WebSocket || one.XHttp))
                 {
                     faults.TryAdd(endpoint.ConfigId, fault);
                 }
             }
 
             _refused = refused;
+            _faults = faults;
         }
         finally
         {
@@ -322,6 +476,8 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         }
 
         _gate.Dispose();
+        _settling.Dispose();
+        _xhttpGate.Dispose();
     }
 
     // Returns the ports the subscriptions and the releases of the client take apart from the panel.
@@ -365,8 +521,8 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 
         foreach (var endpoint in kept)
         {
-            var state = await _fronts.ApplyAsync(endpoint.Name, endpoint.Front, endpoint.Target, endpoint.Path, ct).ConfigureAwait(false);
-            if (!state.IsRunning)
+            var state = await _fronts.ApplyAsync(endpoint.Name, endpoint.Front, endpoint.Target, endpoint.Path, ct, endpoint.Targets).ConfigureAwait(false);
+            if (!state.IsRunning || state.Message.Length > 0)
             {
                 _logger.LogWarning("the websocket front of {Name} is down: {Reason}", endpoint.Name, state.Message);
                 faults[endpoint.ConfigId] = state.Message.Length > 0 ? state.Message : FrontDown;
@@ -386,6 +542,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
                 await app.StartAsync(CancellationToken.None).ConfigureAwait(false);
                 served.App = app;
                 _served[point.Port] = served;
+                _listening = _served.Keys.ToHashSet();
                 if (point.Former)
                 {
                     _logger.LogInformation(
@@ -443,7 +600,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             kestrel.Limits.MaxRequestBodySize = SpeedTickets.MaxBytes;
             kestrel.ListenAnyIP(point.Port, listen =>
             {
-                listen.Protocols = HttpProtocols.Http1;
+                listen.Protocols = HttpProtocols.Http1AndHttp2;
                 var gate = new PlainGate(() => served.Point);
                 listen.Use(next => connection =>
                 {
@@ -451,25 +608,105 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 
                     return gate.SortAsync(connection, next);
                 });
-                listen.UseHttps(https => https.ServerCertificateSelector = (_, _) => Pick(certificate));
+                listen.UseHttps(https => https.ServerCertificateSelector = (_, name) => PickProxy(served.Point, name) ?? Pick(certificate));
                 listen.Use(gate.Keep);
             });
         });
 
         var app = builder.Build();
-        app.Run(context =>
+        app.Run(async context =>
         {
-            if (!context.Request.IsHttps && !PlainInside.Serves(context.Request))
+            if (!context.Request.IsHttps && !PlainInside.Reaches(context, served.Point)
+                && !served.Point.Endpoints.Any(endpoint => endpoint.XHttp && endpoint.OriginHttp && context.Request.Path.StartsWithSegments("/" + endpoint.Path, StringComparison.Ordinal)))
             {
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
 
-                return Task.CompletedTask;
+                return;
             }
 
-            return _desk.AnswerAsync(context, served.Point);
+            if (_updates?.Current is { IsEnabled: true, Own: true } updates
+                && updates.PortOr(_running.Port) == served.Point.Port
+                && await AmneziaGeo.Server.Updates.UpdateApi.TryAnswerAsync(context, updates.Prefix, _updates.Store,
+                    asking => AmneziaGeo.Server.Updates.UpdateToken.Holds(asking, updates.Token)).ConfigureAwait(false))
+            {
+                return;
+            }
+
+            await _desk.AnswerAsync(context, served.Point).ConfigureAwait(false);
         });
 
         return app;
+    }
+
+    /// <summary>
+    /// Updates the XHTTP processes and client credentials.
+    /// </summary>
+    public async Task RefreshXHttpAsync(CancellationToken ct)
+    {
+        if (_xhttp is null)
+        {
+            return;
+        }
+
+        await _xhttpGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            var store = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
+            var registered = await store.ListAsync(ct).ConfigureAwait(false);
+            var wanted = new List<XHttpProxy>();
+            foreach (var proxy in registered.Where(proxy => proxy.IsEnabled && proxy.Transport == "xhttp"))
+            {
+                var credentials = await store.CredentialsAsync(proxy, ct).ConfigureAwait(false);
+                wanted.Add(new XHttpProxy(proxy.Id, ProxyPort(proxy.Id), proxy.Path, credentials, ProxyTargetRules.Read(proxy.TargetsJson)));
+            }
+
+            var faults = await _xhttp.ApplyAsync(wanted, ct).ConfigureAwait(false);
+            _xhttpFaults = faults.ToDictionary(one => -one.Key, one => one.Value);
+        }
+        finally
+        {
+            _xhttpGate.Release();
+        }
+    }
+
+    private int ProxyPort(long id)
+    {
+        lock (_proxyPorts)
+        {
+            if (_proxyPorts.TryGetValue(id, out var held))
+            {
+                return held;
+            }
+
+            while (true)
+            {
+                using var listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                if (!_proxyPorts.ContainsValue(port))
+                {
+                    _proxyPorts[id] = port;
+                    return port;
+                }
+            }
+        }
+    }
+
+    private X509Certificate2? PickProxy(ServicePoint point, string? name)
+    {
+        foreach (var endpoint in point.Endpoints.Where(endpoint => endpoint.ProxyId > 0 && endpoint.Certificate.Length > 0))
+        {
+            var certificate = Pick(new WebCertificate(endpoint.Certificate,
+                endpoint.CertificateKey.Length > 0 ? endpoint.CertificateKey : endpoint.Certificate));
+            if (string.Equals(endpoint.PublicHost, name, StringComparison.OrdinalIgnoreCase)
+                || !string.IsNullOrEmpty(name) && certificate.MatchesHostname(name))
+            {
+                return certificate;
+            }
+        }
+
+        return null;
     }
 
     private async Task HaltAsync(int port)
@@ -478,6 +715,8 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         {
             return;
         }
+
+        _listening = _served.Keys.ToHashSet();
 
         using var limit = new CancellationTokenSource(StopFor);
         await app.StopAsync(limit.Token).ConfigureAwait(false);
