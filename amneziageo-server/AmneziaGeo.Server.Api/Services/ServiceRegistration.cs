@@ -73,7 +73,7 @@ public static class ServiceRegistration
         services.AddSingleton<ServiceShare>();
         services.AddSingleton(provider => new XHttpHost(
             configuration["XHttp:Directory"] ?? Path.Combine(options.Directory, "xhttp"),
-            configuration["XHttp:Executable"] ?? (File.Exists(Path.Combine(AppContext.BaseDirectory, "xray")) ? Path.Combine(AppContext.BaseDirectory, "xray") : "xray"),
+            configuration["XHttp:Executable"] ?? Path.Combine(AppContext.BaseDirectory, "wstunnel-get"),
             provider.GetRequiredService<ILogger<XHttpHost>>()));
         services.AddSingleton<ServiceServer>();
         services.AddHostedService<XHttpRefresh>();

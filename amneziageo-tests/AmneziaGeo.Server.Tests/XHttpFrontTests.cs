@@ -127,7 +127,7 @@ public sealed class XHttpFrontTests
             var builder = WebApplication.CreateSlimBuilder();
             builder.Configuration["Database:Path"] = _bench.DatabasePath;
             builder.Configuration["Proxy:Directory"] = _directory;
-            builder.Configuration["XHttp:Executable"] = Path.Combine(_directory, "missing-xray");
+            builder.Configuration["XHttp:Executable"] = Path.Combine(_directory, "missing-get");
             builder.Configuration["Web:Proxies:0"] = "127.0.0.1";
             builder.AddListening();
             builder.Services.AddSingleton(TimeProvider.System);

@@ -106,7 +106,7 @@ The selected proxy receives the UDP host and port from the active VPN
 configuration, independently of its publishing server and interface. WebSocket
 v1 uses `Authorization: Bearer <credential>` and `X-AmneziaGeo-Target: host:port`
 (bracketed IPv6) on its upgrade and the destination in the wstunnel JWT (`r` and `rp`).
-XHTTP carries that UDP destination in VLESS.
+The experimental GET carrier passes that UDP destination in the open query.
 The server validates proxy authorization before opening a UDP destination.
 One proxy can serve multiple destinations, including external hosts.
 
@@ -130,14 +130,14 @@ transport-level probe completes, `Available` after TLS and transport authorizati
 succeed, and `Unavailable` after a classified transport failure. TCP connect
 alone is not an availability probe.
 
-XHTTP availability uses `GET /<path>/_amneziageo/probe/<32-hex-nonce>` with the
-current VLESS UUID in `Authorization: Bearer`. The request has no body, transfer
-encoding or upgrade. A successful response has `Cache-Control: no-store` and JSON
-containing the matching nonce, `transport: "xhttp"` and `running: true`. Disabled
-or revoked credentials receive 401; an unavailable managed Xray receives 503.
-The probe does not require a reachable WG peer. Client TLS negotiates HTTP/2,
-keeps the published Host independent of SNI, and never falls back to HTTP/1.1.
-The CDN-to-origin connection may use plain HTTP/1.1 on its configured origin port.
+The experimental GET availability probe uses authenticated wire version 2.
+A signed challenge initializes the server epoch and monotonic time; the subsequent
+bodyless GET to `/<path>/_amneziageo/probe/<32-hex-nonce>` binds its target query,
+nonce and response to the current credential. The credential is not sent in Bearer
+or URL fields. Replies are signed and marked no-store. HTTP/1.1 is used on the
+current carrier; plain HTTP and HTTPS are selected explicitly. Public Host and TLS
+SNI remain independent. See [HTTP GET component](http-get-component.md) for the
+wire protocol. The WebSocket probe retains its existing authorization and transport.
 
 ## Compatibility and migration
 
@@ -181,3 +181,7 @@ Persistence and publication foundations are implemented with AG-686. Public CRUD
 legacy record migration and WebSocket runtime routing are delivered in AG-687; selection
 editing in AG-688; common client storage and legacy aliases in AG-690; runtime
 adapters and UI in AG-691/692. Apple runtime changes remain AG-694.
+
+## Experimental GET carrier
+
+The feature/http-get-proxy prototype retains the catalog xhttp identifier and credential layout, but replaces VLESS/XHTTP with authenticated GET wire v2. It requires the paired experimental client and server. See [HTTP GET component](http-get-component.md). UDP and WebSocket are preserved.

@@ -12,30 +12,18 @@ public sealed class XHttpFileTests
     private const string SecondUser = "694e2645-a27f-448a-b550-58afc5f4a4ab";
 
     [Fact]
-    public void RendersGetWithoutBodyAndALoopbackHttpListener()
+    public void RendersGetListenerWithoutLegacyRuntimeSettings()
     {
         using var document = JsonDocument.Parse(XHttpFile.Render(new XHttpProxy(7, 18080, "/tunnel/", [FirstUser])));
-        var inbound = document.RootElement.GetProperty("inbounds")[0];
-        Assert.Equal("127.0.0.1", inbound.GetProperty("listen").GetString());
-        Assert.Equal(18080, inbound.GetProperty("port").GetInt32());
-        Assert.Equal("vless", inbound.GetProperty("protocol").GetString());
-        Assert.Equal("none", inbound.GetProperty("settings").GetProperty("decryption").GetString());
-        var stream = inbound.GetProperty("streamSettings");
-        Assert.Equal("none", stream.GetProperty("security").GetString());
-        Assert.Equal("xhttp", stream.GetProperty("network").GetString());
-        Assert.False(stream.TryGetProperty("tlsSettings", out _));
-        var xhttp = stream.GetProperty("xhttpSettings");
-        Assert.Equal("/tunnel/", xhttp.GetProperty("path").GetString());
-        Assert.Equal("packet-up", xhttp.GetProperty("mode").GetString());
-        Assert.False(xhttp.TryGetProperty("host", out _));
-        var extra = xhttp.GetProperty("extra");
-        Assert.Equal("GET", extra.GetProperty("uplinkHTTPMethod").GetString());
-        Assert.Equal("header", extra.GetProperty("uplinkDataPlacement").GetString());
-        Assert.Equal(2048, extra.GetProperty("scMaxEachPostBytes").GetInt32());
-        Assert.Equal(2048, extra.GetProperty("uplinkChunkSize").GetInt32());
-        Assert.Equal(8192, extra.GetProperty("serverMaxHeaderBytes").GetInt32());
-        Assert.Equal("100-100", extra.GetProperty("xPaddingBytes").GetString());
-        Assert.False(extra.TryGetProperty("noSSEHeader", out _));
+        var root = document.RootElement;
+        Assert.Single(root.EnumerateObject());
+        var listener = root.GetProperty("httpGet");
+        Assert.Equal(2, listener.GetProperty("version").GetInt32());
+        Assert.Equal(18080, listener.GetProperty("port").GetInt32());
+        Assert.Equal("/tunnel/", listener.GetProperty("path").GetString());
+        Assert.Equal(FirstUser, Assert.Single(listener.GetProperty("credentials").EnumerateArray()).GetString());
+        Assert.False(listener.GetProperty("restricted").GetBoolean());
+        Assert.Empty(listener.GetProperty("destinations").EnumerateArray());
     }
 
     [Fact]
@@ -45,25 +33,23 @@ public sealed class XHttpFileTests
         var second = XHttpFile.Render(new XHttpProxy(1, 18080, "/tunnel/", [SecondUser, Guid.Parse(FirstUser).ToString("N")]));
         Assert.Equal(first, second);
         using var document = JsonDocument.Parse(first);
-        var clients = document.RootElement.GetProperty("inbounds")[0].GetProperty("settings").GetProperty("clients");
+        var clients = document.RootElement.GetProperty("httpGet").GetProperty("credentials");
         Assert.Equal(2, clients.GetArrayLength());
-        Assert.Equal(SecondUser, clients[0].GetProperty("id").GetString());
-        Assert.Equal(FirstUser, clients[1].GetProperty("id").GetString());
+        Assert.Equal(SecondUser, clients[0].GetString());
+        Assert.Equal(FirstUser, clients[1].GetString());
     }
 
     [Fact]
-    public void AllowsUdpToLocalAndRemoteTargetsAndBlocksOtherNetworks()
+    public void PreservesRestrictedDestinationPolicy()
     {
-        using var document = JsonDocument.Parse(XHttpFile.Render(new XHttpProxy(1, 18080, "tunnel", [FirstUser])));
-        var outbound = document.RootElement.GetProperty("outbounds")[0];
-        Assert.Equal("freedom", outbound.GetProperty("protocol").GetString());
-        Assert.False(outbound.GetProperty("settings").TryGetProperty("redirect", out _));
-        var rules = outbound.GetProperty("settings").GetProperty("finalRules");
-        Assert.Equal("allow", rules[0].GetProperty("action").GetString());
-        Assert.Equal("udp", rules[0].GetProperty("network").GetString());
-        Assert.False(rules[0].TryGetProperty("ip", out _));
-        Assert.False(rules[0].TryGetProperty("port", out _));
-        Assert.Equal("block", rules[1].GetProperty("action").GetString());
+        var policy = new AmneziaGeo.Server.Core.Proxy.ProxyTargets(true,
+            [new AmneziaGeo.Server.Core.Proxy.ProxyDestination("127.0.0.1", 51820)]);
+        using var document = JsonDocument.Parse(XHttpFile.Render(new XHttpProxy(1, 18080, "tunnel", [FirstUser], policy)));
+        var listener = document.RootElement.GetProperty("httpGet");
+        Assert.True(listener.GetProperty("restricted").GetBoolean());
+        var target = Assert.Single(listener.GetProperty("destinations").EnumerateArray());
+        Assert.Equal("127.0.0.1", target.GetProperty("host").GetString());
+        Assert.Equal(51820, target.GetProperty("port").GetInt32());
     }
 
     [Theory]
@@ -108,7 +94,7 @@ public sealed class XHttpFileTests
     public async Task EmptyUsersProduceAPerListenerFaultWithoutStartingTheExecutable()
     {
         var directory = Path.Combine(Path.GetTempPath(), "xhttp-" + Guid.NewGuid().ToString("N"));
-        await using var host = new XHttpHost(directory, Path.Combine(directory, "missing-xray"), NullLogger<XHttpHost>.Instance);
+        await using var host = new XHttpHost(directory, Path.Combine(directory, "missing-get"), NullLogger<XHttpHost>.Instance);
         var faults = await host.ApplyAsync([new XHttpProxy(7, 18080, "tunnel", [])], default).ConfigureAwait(false);
         Assert.Contains(7L, faults.Keys);
         Assert.Contains("at least one user", faults[7], StringComparison.Ordinal);
@@ -122,7 +108,7 @@ public sealed class XHttpFileTests
     public async Task OneInvalidListenerDoesNotPreventProcessingTheOtherListeners()
     {
         var directory = Path.Combine(Path.GetTempPath(), "xhttp-" + Guid.NewGuid().ToString("N"));
-        await using var host = new XHttpHost(directory, Path.Combine(directory, "missing-xray"), NullLogger<XHttpHost>.Instance);
+        await using var host = new XHttpHost(directory, Path.Combine(directory, "missing-get"), NullLogger<XHttpHost>.Instance);
         var faults = await host.ApplyAsync(
             [new XHttpProxy(1, 18080, "one", []), new XHttpProxy(2, 18081, "two", [FirstUser])], default).ConfigureAwait(false);
         Assert.Equal(2, faults.Count);

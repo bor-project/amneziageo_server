@@ -391,8 +391,8 @@ public sealed class ProxyGenerationTests
 
         public XHttpHost Host(Action<Process> kill, ILogger<XHttpHost>? logger = null)
         {
-            var file = Path.Combine(Root, "fake-xray");
-            File.WriteAllText(file, "#!/bin/sh\nif [ \"$1\" = version ]; then echo 'Xray 26.10.31'; exit 0; fi\nexec sleep 60\n");
+            var file = Path.Combine(Root, "fake-get");
+            File.WriteAllText(file, "#!/bin/sh\nif [ \"$2\" = --help ]; then echo 'get-server'; exit 0; fi\nexec sleep 60\n");
             if (OperatingSystem.IsLinux())
             {
                 File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);

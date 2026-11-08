@@ -168,14 +168,17 @@ public sealed class ProxyTargetTests
         var unlimited = XHttpFile.Render(new XHttpProxy(1, 18080, "relay", [user]));
         Assert.Equal(unlimited, XHttpFile.Render(new XHttpProxy(1, 18080, "relay", [user], new ProxyTargets(false, [new("vpn.example", 443)]))));
         using var document = JsonDocument.Parse(XHttpFile.Render(new XHttpProxy(1, 18080, "relay", [user], targets)));
-        var routing = document.RootElement.GetProperty("routing");
-        Assert.Equal("AsIs", routing.GetProperty("domainStrategy").GetString());
-        var policies = routing.GetProperty("rules");
-        Assert.Equal(3, policies.GetArrayLength());
-        Assert.Equal("target-denied", policies[2].GetProperty("outboundTag").GetString());
-        Assert.Equal("blackhole", document.RootElement.GetProperty("outbounds")[1].GetProperty("protocol").GetString());
+        var listener = document.RootElement.GetProperty("httpGet");
+        Assert.True(listener.GetProperty("restricted").GetBoolean());
+        var destinations = listener.GetProperty("destinations").EnumerateArray().ToArray();
+        Assert.Equal(2, destinations.Length);
+        Assert.Contains(destinations, destination => destination.GetProperty("host").GetString() == "127.0.0.1"
+            && destination.GetProperty("port").GetInt32() == 51820);
+        Assert.Contains(destinations, destination => destination.GetProperty("host").GetString() == "vpn.example"
+            && destination.GetProperty("port").GetInt32() == 443);
         using var denied = JsonDocument.Parse(XHttpFile.Render(new XHttpProxy(1, 18080, "relay", [user], ProxyTargetRules.Denied)));
-        Assert.Single(denied.RootElement.GetProperty("routing").GetProperty("rules").EnumerateArray());
+        Assert.True(denied.RootElement.GetProperty("httpGet").GetProperty("restricted").GetBoolean());
+        Assert.Empty(denied.RootElement.GetProperty("httpGet").GetProperty("destinations").EnumerateArray());
     }
 
     [Theory]

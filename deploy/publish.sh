@@ -124,7 +124,7 @@ else
     cargo build --release \
     --manifest-path "$root/wstunnel/wstunnel/Cargo.toml" \
     --package wstunnel-cli \
-    --features jemalloc \
+    --no-default-features --features ring,jemalloc \
     --target "$target"
   cp "$root/wstunnel/wstunnel/target/$target/release/wstunnel" "$out/"
   if readelf -lW "$out/wstunnel" | grep -q 'program interpreter'; then
@@ -132,7 +132,8 @@ else
     exit 1
   fi
 
-  bash "$root/deploy/xray.sh" "$runtime" "$out"
+  "$out/wstunnel" get-server --help >/dev/null
+  cp "$out/wstunnel" "$out/wstunnel-get"
   cp "$root/deploy/amneziageo-server.service" "$out/"
   cp "$root/deploy/amneziageo-proxy@.service" "$out/"
   install -m 755 "$root/deploy/amneziageo-server" "$out/"

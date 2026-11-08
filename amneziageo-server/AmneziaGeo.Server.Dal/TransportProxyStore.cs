@@ -260,7 +260,8 @@ public sealed class TransportProxyStore
     /// </summary>
     public static string Credential(TransportProxyEntity proxy, long clientId)
     {
-        var name = "transport-proxy-v1:" + clientId.ToString(CultureInfo.InvariantCulture);
+        var version = proxy.Transport == "xhttp" ? "v2" : "v1";
+        var name = "transport-proxy-" + version + ":" + clientId.ToString(CultureInfo.InvariantCulture);
         var digest = HMACSHA256.HashData(Convert.FromBase64String(proxy.Secret), Encoding.UTF8.GetBytes(name));
         return proxy.Transport == "xhttp"
             ? new Guid(digest.AsSpan(0, 16)).ToString("D")

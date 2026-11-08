@@ -356,12 +356,6 @@ public sealed class ServiceDesk
         }
 
         var endpoint = endpoints[0];
-        if (XHttpProbe.Nonce(context.Request.Path, endpoint.Path, out var nonce))
-        {
-            await ProbeAsync(context, endpoint, nonce).ConfigureAwait(false);
-            return;
-        }
-
         if (!XHttpRelay.Accepts(context))
         {
             return;
