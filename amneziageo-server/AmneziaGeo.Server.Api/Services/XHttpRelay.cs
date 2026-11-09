@@ -24,16 +24,17 @@ public static class XHttpRelay
     /// <summary>
     /// Checks the request envelope.
     /// </summary>
-    public static bool Accepts(HttpContext context)
+    public static bool Accepts(HttpContext context, string method = "GET")
     {
-        if (!HttpMethods.IsGet(context.Request.Method))
+        if (context.Request.Method != method || method is not ("GET" or "POST"))
         {
-            context.Response.Headers.Allow = "GET";
+            context.Response.Headers.Allow = method;
             context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
             return false;
         }
 
-        if (context.Request.ContentLength is > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding")
+        if ((method == "GET" && (context.Request.ContentLength is > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding")))
+            || context.Request.ContentLength is > 4096 || (method == "POST" && context.Request.Headers.ContainsKey("X-WG-Data"))
             || context.Request.Headers.ContainsKey("Upgrade"))
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -46,12 +47,12 @@ public static class XHttpRelay
     /// <summary>
     /// Streams a GET response through the front.
     /// </summary>
-    public static async Task PassAsync(HttpContext context, int port, ILogger? logger = null, CancellationToken runtimeStopping = default)
+    public static async Task PassAsync(HttpContext context, int port, ILogger? logger = null, CancellationToken runtimeStopping = default, string method = "GET")
     {
         using var ending = runtimeStopping.CanBeCanceled
             ? CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, runtimeStopping) : null;
         var ct = ending?.Token ?? context.RequestAborted;
-        if (!Accepts(context))
+        if (!Accepts(context, method))
         {
             return;
         }
@@ -62,12 +63,36 @@ public static class XHttpRelay
             excluded.Add(name);
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Get,
+        using var request = new HttpRequestMessage(new HttpMethod(method),
             $"http://127.0.0.1:{port}{context.Request.PathBase}{context.Request.Path}{context.Request.QueryString}")
         {
             Version = HttpVersion.Version11,
             VersionPolicy = HttpVersionPolicy.RequestVersionExact,
         };
+        if (method == "POST")
+        {
+            var body = new byte[4097];
+            var length = 0;
+            while (length < body.Length)
+            {
+                var read = await context.Request.Body.ReadAsync(body.AsMemory(length), ct).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                length += read;
+            }
+
+            if (length > 4096)
+            {
+                context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+                return;
+            }
+
+            request.Content = new ByteArrayContent(body, 0, length);
+        }
+
         foreach (var header in context.Request.Headers.Where(header => !excluded.Contains(header.Key)
             && !header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase)
             && !header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)))

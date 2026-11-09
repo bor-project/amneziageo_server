@@ -13,6 +13,10 @@ case ${1:-} in
     kind=ui
     shift
     ;;
+  --proxy)
+    kind=proxy
+    shift
+    ;;
   --updates)
     kind=updates
     shift
@@ -21,6 +25,7 @@ esac
 
 case $kind in
   ui) out=${1:-$root/out/amneziageo-web} ;;
+  proxy) out=${1:-$root/out/amneziageo-proxy} ;;
   updates) out=${1:-$root/out/amneziageo-updates} ;;
   *) out=${1:-$root/out/amneziageo-server} ;;
 esac
@@ -90,6 +95,19 @@ if [ "$kind" = updates ]; then
   exit 0
 fi
 
+if [ "$kind" = proxy ]; then
+  dotnet publish "$root/amneziageo-server/AmneziaGeo.Server.Proxy.Host" --configuration Release --runtime "$runtime" \
+    --self-contained true --nologo -p:StaticWebAssetsEnabled=false ${version:+-p:Version=$version} --output "$out"
+  bash "$root/deploy/build-proxy-tools.sh" "$runtime" "$out"
+  install -m 755 "$root/deploy/proxy-install.sh" "$out/install.sh"
+  install -m 755 "$root/deploy/proxy-install.sh" "$out/proxy-install.sh"
+  install -m 644 "$root/deploy/amneziageo-proxy.service" "$out/"
+  printf '%s\n' "${version:-$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$root/Directory.Build.props")}" > "$out/version"
+  tar --owner=0 --group=0 --numeric-owner -czf "$out.tar.gz" -C "$(dirname "$out")" "$(basename "$out")"
+  echo "$out.tar.gz"
+  exit 0
+fi
+
 fingerprint > "$out/server"
 
 npm --prefix "$root/amneziageo-web" run build
@@ -99,7 +117,7 @@ chmod +x "$out/install.sh"
 if [ "$kind" = ui ]; then
   cp -a "$root/amneziageo-server/AmneziaGeo.Server.Api/wwwroot" "$out/wwwroot"
 else
-  for project in Api Cli; do
+  for project in Api Cli Proxy.Host; do
     dotnet publish "$root/amneziageo-server/AmneziaGeo.Server.$project" \
       --configuration Release \
       --runtime "$runtime" \
@@ -109,32 +127,10 @@ else
       --output "$out/publish"
   done
 
-  case $runtime in
-    linux-x64) target=x86_64-unknown-linux-musl page=12 atomics= ;;
-    linux-arm64) target=aarch64-unknown-linux-musl page=14 atomics=-mno-outline-atomics ;;
-    *)
-      echo "no websocket tool for $runtime" >&2
-      exit 1
-      ;;
-  esac
-  compiler=CC_${target//-/_}
-  flags=CFLAGS_${target//-/_}
-  env PATH="$HOME/.cargo/bin:$PATH" "$compiler=${!compiler:-musl-gcc}" "$flags=${!flags:-} $atomics" \
-    JEMALLOC_SYS_WITH_LG_PAGE=$page \
-    cargo build --release \
-    --manifest-path "$root/wstunnel/wstunnel/Cargo.toml" \
-    --package wstunnel-cli \
-    --features jemalloc \
-    --target "$target"
-  cp "$root/wstunnel/wstunnel/target/$target/release/wstunnel" "$out/"
-  if readelf -lW "$out/wstunnel" | grep -q 'program interpreter'; then
-    echo "wstunnel is linked dynamically" >&2
-    exit 1
-  fi
-
-  bash "$root/deploy/xray.sh" "$runtime" "$out"
+  bash "$root/deploy/build-proxy-tools.sh" "$runtime" "$out"
   cp "$root/deploy/amneziageo-server.service" "$out/"
   cp "$root/deploy/amneziageo-proxy@.service" "$out/"
+  cp "$root/deploy/amneziageo-proxy.service" "$root/deploy/proxy-install.sh" "$out/"
   install -m 755 "$root/deploy/amneziageo-server" "$out/"
 fi
 

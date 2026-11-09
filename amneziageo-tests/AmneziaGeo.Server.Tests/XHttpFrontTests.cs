@@ -115,7 +115,7 @@ public sealed class XHttpFrontTests
             await new TransportProxyStore(_bench.Db).SaveAsync(0, new TransportProxyEntity
             {
                 Name = "XHTTP origin",
-                Transport = "xhttp",
+                Transport = "xhttp", ProtocolVersion = 2,
                 Host = "cdn.example.net",
                 Port = 443,
                 ListenPort = _port,
@@ -127,7 +127,7 @@ public sealed class XHttpFrontTests
             var builder = WebApplication.CreateSlimBuilder();
             builder.Configuration["Database:Path"] = _bench.DatabasePath;
             builder.Configuration["Proxy:Directory"] = _directory;
-            builder.Configuration["XHttp:Executable"] = Path.Combine(_directory, "missing-xray");
+            builder.Configuration["XHttp:Executable"] = Path.Combine(_directory, "missing-get");
             builder.Configuration["Web:Proxies:0"] = "127.0.0.1";
             builder.AddListening();
             builder.Services.AddSingleton(TimeProvider.System);

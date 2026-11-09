@@ -23,14 +23,8 @@ WORKDIR /src
 COPY wstunnel/wstunnel/ ./
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release --package wstunnel-cli \
+    cargo build --release --package wstunnel-cli --no-default-features --features ring \
  && cp target/release/wstunnel /wstunnel
-
-FROM --platform=$BUILDPLATFORM debian:trixie-slim AS xhttp
-ARG TARGETARCH
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip && rm -rf /var/lib/apt/lists/*
-COPY deploy/xray.sh /src/xray.sh
-RUN bash /src/xray.sh "$TARGETARCH" /out
 
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:$DOTNET AS server
 ARG TARGETARCH
@@ -61,8 +55,7 @@ RUN apt-get update \
  && ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose \
  && ln -s /usr/local/share/amneziageo-server/amneziageo-server /usr/local/bin/amneziageo-server
 COPY --from=tunnel /wstunnel /usr/local/bin/wstunnel
-COPY --from=xhttp /out/xray /usr/local/bin/xray
-COPY --from=xhttp /out/xray.LICENSE /out/xray.README.md /usr/local/share/licenses/xray/
+COPY --from=tunnel /wstunnel /opt/amneziageo-server/wstunnel-get
 COPY --chmod=755 deploy/docker/entrypoint.sh /usr/local/bin/amneziageo-server-entrypoint
 COPY --chmod=755 deploy/docker/update.sh /usr/local/bin/amneziageo-server-update
 COPY --from=server /out/deps/ /opt/amneziageo-server/

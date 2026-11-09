@@ -29,11 +29,31 @@ public static class ProxyEndpoints
         var writing = routes.MapGroup("/api/proxies").RequireScope(Scopes.ManageProxies);
         writing.MapGet("/draft", (PanelSettings panel) => Results.Ok(ProxyResponse.Of(new TransportProxyEntity
         {
-            Port = panel.Port, Path = ConfigDefaults.WebSocketPath(),
+            Port = panel.Port, Path = ConfigDefaults.WebSocketPath(), UseCertificate = true,
         })));
         writing.MapPost("/", (ProxyRequest draft, HttpContext context, CancellationToken ct) => SaveAsync(0, draft, context, ct));
         writing.MapPut("/{id:long}", SaveAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
+        writing.MapGet("/{id:long}/export", async (long id, TransportProxyStore store, HttpContext context, CancellationToken ct) =>
+        {
+            var proxy = await store.FindAsync(id, ct).ConfigureAwait(false);
+            if (proxy is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (proxy.IsHttp && !proxy.IsHttpV2)
+            {
+                return Refuse("proxy-protocol", "convert the legacy proxy before exporting it", 409);
+            }
+
+            var catalog = new ProxyCatalog(1, [new ProxyServiceEntry(proxy.Id, proxy.Name, proxy.IsHttpV2 ? "http" : proxy.Transport,
+                proxy.Host, proxy.Port, proxy.Path, await store.CredentialsAsync(proxy, ct).ConfigureAwait(false), proxy.UsesCertificate,
+                proxy.HttpMethod, proxy.ProtocolVersion, proxy.ListenPort, proxy.Certificate, proxy.CertificateKey, proxy.OriginHttp,
+                ProxyTargetRules.Read(proxy.TargetsJson))]);
+            context.Response.Headers.CacheControl = "no-store";
+            return Results.Json(catalog, ProxyCatalog.Json);
+        });
         return routes;
     }
 
@@ -55,9 +75,14 @@ public static class ProxyEndpoints
             return Refuse(fault.Error, fault.Message);
         }
 
-        if (CertificateFiles.Check(draft.Certificate, draft.CertificateKey, logger) is { } certificate)
+        if (draft.Hosted && draft.UsesCertificate && CertificateFiles.Check(draft.Certificate, draft.CertificateKey, logger) is { } certificate)
         {
             return Refuse(certificate.Code, certificate.Message);
+        }
+
+        if (await services.GetRequiredService<ProxyRules>().QuicConflictAsync(draft, id, ct).ConfigureAwait(false) is { } udp)
+        {
+            return Refuse("proxy-quic-port-taken", udp, 409);
         }
 
         var all = await store.ListAsync(ct).ConfigureAwait(false);
@@ -112,7 +137,7 @@ public static class ProxyEndpoints
 /// Carries proxy settings from the panel.
 /// </summary>
 public sealed record ProxyRequest(string Name, string Transport, string Host, int Port, string Path,
-    bool IsEnabled, string Certificate = "", string CertificateKey = "", string ServerName = "", string Pin = "", bool? Opened = null, bool? Keep = null, int? ListenPort = null, bool? OriginHttp = null, ProxyTargets? Targets = null)
+    bool IsEnabled, string Certificate = "", string CertificateKey = "", string ServerName = "", string Pin = "", bool? Opened = null, bool? Keep = null, int? ListenPort = null, bool? OriginHttp = null, ProxyTargets? Targets = null, bool? UseCertificate = null, string? HttpMethod = null, int? ProtocolVersion = null, bool? Hosted = null)
 {
     /// <summary>
     /// Returns the proxy settings.
@@ -120,7 +145,11 @@ public sealed record ProxyRequest(string Name, string Transport, string Host, in
     public TransportProxyEntity Draft(TransportProxyEntity? held = null) => new()
     {
         Name = Name ?? "", Transport = Transport ?? "", Host = Host ?? "", Port = Port,
-        ListenPort = ListenPort ?? held?.ListenPort ?? 0, OriginHttp = Transport == "xhttp" && (OriginHttp ?? held?.OriginHttp ?? false), Path = Path ?? "",
+        ListenPort = ListenPort ?? held?.ListenPort ?? 0, OriginHttp = Transport is "http" or "xhttp" && (OriginHttp ?? held?.OriginHttp ?? false), Path = Path ?? "",
+        Hosted = Hosted ?? held?.Hosted ?? true,
+        UseCertificate = UseCertificate ?? held?.UseCertificate,
+        HttpMethod = HttpMethod ?? held?.HttpMethod ?? "GET",
+        ProtocolVersion = ProtocolVersion ?? (Transport == "http" ? 2 : held?.ProtocolVersion ?? 0),
         IsEnabled = IsEnabled, Opened = Opened ?? held?.Opened ?? false, Certificate = Certificate ?? "", CertificateKey = CertificateKey ?? "",
         ServerName = ServerName ?? "", Pin = Pin ?? "",
         TargetsJson = Targets is null ? held?.TargetsJson ?? string.Empty : ProxyTargetRules.Write(
@@ -132,12 +161,12 @@ public sealed record ProxyRequest(string Name, string Transport, string Host, in
 /// Describes a proxy without its transport secret.
 /// </summary>
 public sealed record ProxyResponse(long Id, string Name, string Transport, string Host, int Port, string Path,
-    bool IsEnabled, string Certificate, string CertificateKey, string ServerName, string Pin, long? LegacyConfigId, bool Opened, string Fault = "", int ListenPort = 0, bool OriginHttp = false, ProxyTargets? Targets = null)
+    bool IsEnabled, string Certificate, string CertificateKey, string ServerName, string Pin, long? LegacyConfigId, bool Opened, string Fault = "", int ListenPort = 0, bool OriginHttp = false, ProxyTargets? Targets = null, bool? UseCertificate = null, string? HttpMethod = null, int? ProtocolVersion = null, bool? Hosted = null)
 {
     /// <summary>
     /// Returns the public proxy settings.
     /// </summary>
     public static ProxyResponse Of(TransportProxyEntity proxy) => new(
         proxy.Id, proxy.Name, proxy.Transport, proxy.Host, proxy.Port, proxy.Path, proxy.IsEnabled,
-        proxy.Certificate, proxy.CertificateKey, proxy.ServerName, proxy.Pin, proxy.LegacyConfigId, proxy.Opened, "", proxy.ListenPort, proxy.OriginHttp, ProxyTargetRules.Read(proxy.TargetsJson));
+        proxy.Certificate, proxy.CertificateKey, proxy.ServerName, proxy.Pin, proxy.LegacyConfigId, proxy.Opened, "", proxy.ListenPort, proxy.OriginHttp, ProxyTargetRules.Read(proxy.TargetsJson), proxy.UseCertificate, proxy.HttpMethod, proxy.ProtocolVersion, proxy.Hosted);
 }

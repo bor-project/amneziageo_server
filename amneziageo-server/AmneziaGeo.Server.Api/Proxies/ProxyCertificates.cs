@@ -18,8 +18,9 @@ public sealed class ProxyCertificates
     /// </summary>
     public void Update(IEnumerable<TransportProxyEntity> proxies)
     {
+        proxies = proxies.Where(proxy => proxy.IsEnabled && proxy.Hosted && (proxy.Transport == "websocket" || proxy.IsHttpV2)).ToArray();
         var selected = new Dictionary<(int, string), WebCertificate>();
-        foreach (var proxy in proxies.Where(proxy => proxy.IsEnabled && proxy.Certificate.Length > 0))
+        foreach (var proxy in proxies.Where(proxy => proxy.UsesCertificate && proxy.Certificate.Length > 0))
         {
             var key = (proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort, proxy.Host.ToLowerInvariant());
             selected.TryAdd(key, new WebCertificate(proxy.Certificate,
@@ -27,7 +28,7 @@ public sealed class ProxyCertificates
         }
 
         Volatile.Write(ref _certificates, selected);
-        Volatile.Write(ref _plain, proxies.Where(proxy => proxy.IsEnabled && proxy.OriginHttp && proxy.Transport == "xhttp")
+        Volatile.Write(ref _plain, proxies.Where(proxy => proxy.OriginHttp || !proxy.UsesCertificate)
             .Select(proxy => proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort).ToHashSet());
     }
 

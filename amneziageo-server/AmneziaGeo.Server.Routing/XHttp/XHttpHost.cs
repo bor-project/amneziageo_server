@@ -13,7 +13,7 @@ namespace AmneziaGeo.Server.Routing.XHttp;
 public sealed record XHttpState(bool IsRunning, string Fault);
 
 /// <summary>
-/// Runs the Xray children of the server.
+/// Runs the HTTP GET children of the server.
 /// </summary>
 public sealed class XHttpHost : IAsyncDisposable
 {
@@ -54,6 +54,8 @@ public sealed class XHttpHost : IAsyncDisposable
     /// <summary>
     /// Returns the state of a listener.
     /// </summary>
+    public string ConfigurationDirectory => _directory;
+
     public XHttpState State(long id)
     {
         if (_children.TryGetValue(id, out var child))
@@ -204,7 +206,7 @@ public sealed class XHttpHost : IAsyncDisposable
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
                 {
-                    var fault = $"The Xray listener did not start: {ex.GetType().Name}.";
+                    var fault = $"The HTTP GET listener did not start: {ex.GetType().Name}.";
                     if (!_states.TryGetValue(id, out var previous) || previous.Fault != fault)
                     {
                         _logger.LogError(ex, "The XHTTP listener {ProxyId} did not start", id);
@@ -234,7 +236,7 @@ public sealed class XHttpHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Stops the Xray children of the server.
+    /// Stops the HTTP GET children of the server.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
@@ -284,12 +286,12 @@ public sealed class XHttpHost : IAsyncDisposable
 
     private Child Start(XHttpProxy proxy, string text, string file)
     {
-        var process = new Process { StartInfo = Command("run", "-c", file) };
+        var process = new Process { StartInfo = Command("get-server", "-c", file) };
         try
         {
             if (!process.Start())
             {
-                throw new InvalidOperationException("Xray did not create a process.");
+                throw new InvalidOperationException("HTTP GET did not create a process.");
             }
 
             return new Child(process, text, file, proxy.Credentials, _logger, _kill);
@@ -304,10 +306,10 @@ public sealed class XHttpHost : IAsyncDisposable
 
     private async Task<string> CheckVersionAsync(CancellationToken ct)
     {
-        using var process = new Process { StartInfo = Command("version") };
+        using var process = new Process { StartInfo = Command("get-server", "--help") };
         if (!process.Start())
         {
-            return "The Xray version command did not start.";
+            return "The HTTP GET version command did not start.";
         }
 
         var child = new Child(process, string.Empty, string.Empty, [], _logger);
@@ -318,14 +320,14 @@ public sealed class XHttpHost : IAsyncDisposable
             await process.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
             await child.DrainAsync().ConfigureAwait(false);
             var output = child.Output;
-            return process.ExitCode == 0 && Regex.IsMatch(output, $@"(?m)^Xray {Regex.Escape(XHttpFile.Version)}(?:\s|$)")
+            return process.ExitCode == 0 && output.Contains("get-server", StringComparison.Ordinal)
                 ? string.Empty
-                : $"Xray v{XHttpFile.Version} is required; the installed executable did not report that version.";
+                : $"wstunnel GET is required; the installed executable does not support get-server.";
         }
         catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
         {
-            _logger.LogWarning(ex, "Reading the Xray version timed out");
-            return "The Xray version command timed out.";
+            _logger.LogWarning(ex, "Reading the HTTP GET version timed out");
+            return "The HTTP GET version command timed out.";
         }
         finally
         {
@@ -494,7 +496,7 @@ public sealed class XHttpHost : IAsyncDisposable
             lock (_processLock)
             {
                 var code = _processDisposed ? _exitCode : Process.HasExited ? Process.ExitCode : default(int?);
-                return Fault.Length > 0 ? Fault : $"Xray exited with code {code}: {Output.Trim()}";
+                return Fault.Length > 0 ? Fault : $"HTTP GET exited with code {code}: {Output.Trim()}";
             }
         }
 
@@ -523,7 +525,7 @@ public sealed class XHttpHost : IAsyncDisposable
             }
             catch (TimeoutException ex)
             {
-                _logger.LogDebug(ex, "Reading the Xray output timed out");
+                _logger.LogDebug(ex, "Reading the HTTP GET output timed out");
                 _readers.Cancel();
             }
         }
@@ -540,7 +542,7 @@ public sealed class XHttpHost : IAsyncDisposable
                     }
                     catch (InvalidOperationException ex) when (!IsRunning)
                     {
-                        _logger.LogDebug(ex, "The Xray child exited before termination");
+                        _logger.LogDebug(ex, "The HTTP GET child exited before termination");
                     }
                 }
 
@@ -551,13 +553,13 @@ public sealed class XHttpHost : IAsyncDisposable
             }
             catch (OperationCanceledException ex)
             {
-                _logger.LogWarning(ex, "Stopping an Xray child timed out");
-                return "The Xray child did not stop within five seconds.";
+                _logger.LogWarning(ex, "Stopping an HTTP GET child timed out");
+                return "The HTTP GET child did not stop within five seconds.";
             }
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or NotSupportedException)
             {
-                _logger.LogWarning(ex, "Stopping an Xray child failed");
-                return $"The Xray child could not stop: {ex.GetType().Name}.";
+                _logger.LogWarning(ex, "Stopping an HTTP GET child failed");
+                return $"The HTTP GET child could not stop: {ex.GetType().Name}.";
             }
             finally
             {
@@ -590,11 +592,11 @@ public sealed class XHttpHost : IAsyncDisposable
             }
             catch (OperationCanceledException ex) when (_readers.IsCancellationRequested)
             {
-                _logger.LogDebug(ex, "Reading the Xray output was canceled");
+                _logger.LogDebug(ex, "Reading the HTTP GET output was canceled");
             }
             catch (Exception ex) when (ex is IOException or ObjectDisposedException)
             {
-                _logger.LogDebug(ex, "Reading the Xray output failed");
+                _logger.LogDebug(ex, "Reading the HTTP GET output failed");
             }
         }
     }

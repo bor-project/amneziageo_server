@@ -346,6 +346,11 @@ public sealed class ProxyGenerationTests
 
         Assert.True(state.IsRunning);
         Assert.NotEmpty(state.Message);
+        while (File.ReadAllLines(Path.Combine(place.Root, "runs")).Length < 2 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25).ConfigureAwait(false);
+        }
+
         var runs = File.ReadAllLines(Path.Combine(place.Root, "runs")).Length;
         Assert.True(runs >= 2);
         var unchanged = await host.ApplyAsync("catalog", 61001, 0, "relay", default).ConfigureAwait(false);
@@ -391,8 +396,8 @@ public sealed class ProxyGenerationTests
 
         public XHttpHost Host(Action<Process> kill, ILogger<XHttpHost>? logger = null)
         {
-            var file = Path.Combine(Root, "fake-xray");
-            File.WriteAllText(file, "#!/bin/sh\nif [ \"$1\" = version ]; then echo 'Xray 26.10.31'; exit 0; fi\nexec sleep 60\n");
+            var file = Path.Combine(Root, "fake-get");
+            File.WriteAllText(file, "#!/bin/sh\nif [ \"$2\" = --help ]; then echo 'get-server'; exit 0; fi\nexec sleep 60\n");
             if (OperatingSystem.IsLinux())
             {
                 File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);

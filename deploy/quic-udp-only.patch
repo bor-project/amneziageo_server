@@ -1,0 +1,17 @@
+--- a/wstunnel/src/tunnel/server/server.rs
++++ b/wstunnel/src/tunnel/server/server.rs
+@@ -440,6 +440,14 @@
+ 
+         // Bind server and run forever to serve incoming connections.
+         let restrictions = RestrictionsRulesReloader::new(restrictions, self.config.restriction_config.clone())?;
++        if self.config.enable_webtransport {
++            if self.config.tls.is_none() {
++                return Err(anyhow!("QUIC requires TLS"));
++            }
++            return handler_webtransport::run_webtransport_server(
++                self.clone(), restrictions.restrictions_rules().clone(),
++            ).await;
++        }
+         let listener = TcpListener::bind(&self.config.bind)
+             .await
+             .with_context(|| format!("Failed to bind to socket on {}", self.config.bind))?;

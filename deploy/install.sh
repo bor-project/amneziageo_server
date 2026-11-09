@@ -8,6 +8,7 @@ unit=amneziageo-server
 here=$(cd "$(dirname "$0")" && pwd)
 release=$(cat "$here/release" 2>/dev/null || date -u +%Y%m%d-%H%M%S)
 force=
+proxy_choice=
 
 fail() {
   echo "$*" >&2
@@ -21,6 +22,9 @@ usage:
   install.sh --ui         put the web interface on alone, the server keeps running
   install.sh --rollback   go back to the release before the current one
   install.sh --list       show the releases the host keeps
+  install.sh --with-proxy install the VPN panel and independent proxy service
+  install.sh --without-proxy disable the proxy service for this VPN installation
+  install.sh --proxy-only install only the independent proxy service
   --force                 put the package on where the host already runs it, or runs another server
 EOF
   exit 2
@@ -67,9 +71,8 @@ stage_release() {
   local target=$base/releases/$release
   if [ -d "$target" ]; then
     [ -x "$target/wstunnel" ] || install -m 755 "$here/wstunnel" "$target/wstunnel"
-    if [ -f "$here/xray" ]; then
-      install -m 755 "$here/xray" "$target/xray"
-      install -m 644 "$here/xray.LICENSE" "$here/xray.README.md" "$target/"
+    if [ -f "$here/wstunnel-get" ]; then
+      install -m 755 "$here/wstunnel-get" "$target/wstunnel-get"
     fi
     return 0
   fi
@@ -79,9 +82,8 @@ stage_release() {
   rm -rf "$target.new/wwwroot"
   cp "$here/install.sh" "$here/release" "$here/server" "$target.new/"
   install -m 755 "$here/wstunnel" "$target.new/"
-  if [ -f "$here/xray" ]; then
-    install -m 755 "$here/xray" "$target.new/"
-    install -m 644 "$here/xray.LICENSE" "$here/xray.README.md" "$target.new/"
+  if [ -f "$here/wstunnel-get" ]; then
+    install -m 755 "$here/wstunnel-get" "$target.new/"
   fi
   if [ -f "$here/amneziageo-server" ]; then
     install -m 755 "$here/amneziageo-server" "$target.new/"
@@ -130,7 +132,7 @@ own() {
 # Puts the services and the menu in place where they differ, and drops the unit of the relays.
 shared() {
   local reload= file
-  for file in amneziageo-server.service amneziageo-proxy@.service; do
+  for file in amneziageo-server.service; do
     if put 644 "$here/$file" "/etc/systemd/system/$file"; then
       reload=1
     fi
@@ -252,6 +254,7 @@ whole() {
   stage_release
   stage_web "$here/publish/wwwroot"
   shared
+  configure_proxy
   was=$(systemctl is-active "$unit" || true)
   if [ "$was" = active ]; then
     systemctl stop "$unit"
@@ -377,6 +380,33 @@ list() {
   ls -1 "$base/releases" "$base/web" 2>/dev/null || true
 }
 
+# Selects the proxy service of the installation.
+configure_proxy() {
+  local choice=$proxy_choice file=/etc/amneziageo-server/server.env
+  if [ -z "$choice" ]; then
+    if grep -q '^Proxy__Enabled=false$' "$file"; then choice=off
+    elif [ -L "$base/previous" ] || [ -L "$base/current" ]; then choice=on
+    else choice=off; fi
+  fi
+  if [ "$choice" = on ]; then
+    bash "$here/proxy-install.sh"
+  elif systemctl list-unit-files amneziageo-proxy.service --no-legend | grep -q '^amneziageo-proxy.service'; then
+    bash "$here/proxy-install.sh" --disable
+  fi
+  sed '/^Proxy__Enabled=/d; /^Proxy__Isolated=/d' "$file" > "$file.next"
+  if [ "$choice" = on ]; then
+    printf 'Proxy__Enabled=true\nProxy__Isolated=true\n' >> "$file.next"
+  else
+    printf 'Proxy__Enabled=false\nProxy__Isolated=false\n' >> "$file.next"
+  fi
+  chmod 600 "$file.next"
+  mv -f "$file.next" "$file"
+}
+
+proxy_only() {
+  exec bash "$here/proxy-install.sh"
+}
+
 mode=whole
 for word in "$@"; do
   case $word in
@@ -384,6 +414,9 @@ for word in "$@"; do
     --rollback) mode=rollback ;;
     --list) mode=list ;;
     --force) force=1 ;;
+    --with-proxy) proxy_choice=on ;;
+    --without-proxy) proxy_choice=off ;;
+    --proxy-only) mode=proxy_only ;;
     *) usage ;;
   esac
 done

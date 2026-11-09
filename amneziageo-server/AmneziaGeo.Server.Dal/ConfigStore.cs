@@ -192,6 +192,12 @@ public sealed class ConfigStore
                 $"the panel already carries an endpoint called '{draft.Name}'");
         }
 
+        if (await _db.TransportProxies.AnyAsync(proxy => proxy.IsEnabled && proxy.Hosted && proxy.Transport == "quic"
+            && (proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort) == draft.ListenPort, ct).ConfigureAwait(false))
+        {
+            return ConfigResult.No(ConfigOutcome.PortTaken, "port-taken", "the UDP port belongs to a QUIC proxy");
+        }
+
         if (await _db.Configs.AnyAsync(config => config.ListenPort == draft.ListenPort, ct).ConfigureAwait(false))
         {
             return ConfigResult.No(
@@ -249,6 +255,12 @@ public sealed class ConfigStore
                 ConfigOutcome.NameTaken,
                 "name-taken",
                 $"the panel already carries an endpoint called '{draft.Name}'");
+        }
+
+        if (await _db.TransportProxies.AnyAsync(proxy => proxy.IsEnabled && proxy.Hosted && proxy.Transport == "quic"
+            && (proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort) == draft.ListenPort, ct).ConfigureAwait(false))
+        {
+            return ConfigResult.No(ConfigOutcome.PortTaken, "port-taken", "the UDP port belongs to a QUIC proxy");
         }
 
         if (await _db.Configs.AnyAsync(config => config.ListenPort == draft.ListenPort && config.Id != id, ct)

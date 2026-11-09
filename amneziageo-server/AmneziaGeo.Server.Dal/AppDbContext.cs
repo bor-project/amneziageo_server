@@ -273,6 +273,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
         {
             entity.Property(proxy => proxy.Name).HasMaxLength(64);
             entity.Property(proxy => proxy.Transport).HasMaxLength(16);
+            entity.Property(proxy => proxy.Hosted).HasDefaultValue(true);
+            entity.Property(proxy => proxy.HttpMethod).HasMaxLength(4).HasDefaultValue("GET");
             entity.Property(proxy => proxy.Host).HasMaxLength(253);
             entity.Property(proxy => proxy.Path).HasMaxLength(64);
             entity.Property(proxy => proxy.TargetsJson).HasDefaultValue(string.Empty);

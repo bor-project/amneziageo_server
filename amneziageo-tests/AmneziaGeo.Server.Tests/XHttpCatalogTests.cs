@@ -22,7 +22,7 @@ public sealed class XHttpCatalogTests
         var store = new TransportProxyStore(bench.Db);
         var proxy = await store.SaveAsync(0, new TransportProxyEntity
         {
-            Name = "CDN", Transport = "xhttp", Host = "cdn.example.net", Port = 443,
+            Name = "CDN", Transport = "xhttp", ProtocolVersion = 2, Host = "cdn.example.net", Port = 443,
             ListenPort = 18080, OriginHttp = true, Path = "relay",
         }, default).ConfigureAwait(false);
         var feature = Assert.IsType<ProxiesFeature>(await new ProxyOffer(bench.Scopes).OfferAsync(new HelloPeer(

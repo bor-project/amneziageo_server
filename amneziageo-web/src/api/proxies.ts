@@ -6,12 +6,16 @@ export interface ProxyTargets { restricted: boolean; destinations: ProxyDestinat
 
 export interface ProxyDraft {
   name: string
-  transport: "websocket" | "xhttp"
+  transport: "websocket" | "http" | "quic" | "xhttp"
   host: string
   port: number
   path: string
   listenPort: number
+  hosted: boolean
   originHttp: boolean
+  useCertificate: boolean | null
+  httpMethod: "GET" | "POST"
+  protocolVersion: number
   isEnabled: boolean
   opened: boolean
   certificate: string

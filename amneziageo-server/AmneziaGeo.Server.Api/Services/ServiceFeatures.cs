@@ -17,7 +17,7 @@ namespace AmneziaGeo.Server.Api.Services;
 /// <summary>
 /// Offers the tunnel inside a websocket on the port of the services.
 /// </summary>
-public sealed class WebSocketOffer : IHelloFeature
+public sealed class WebSocketOffer(FrontOptions? options = null) : IHelloFeature
 {
     /// <inheritdoc/>
     public string Name => FeatureNames.WebSocket;
@@ -28,7 +28,7 @@ public sealed class WebSocketOffer : IHelloFeature
         ArgumentNullException.ThrowIfNull(peer);
 
         return ValueTask.FromResult<object?>(
-            peer.Endpoint.WebSocket
+            peer.Endpoint.WebSocket && options?.Enabled != false
                 ? new WebSocketFeature(ConfigServices.Port(peer.Endpoint), ConfigServices.WebSocketPath(peer.Endpoint))
                 : null);
     }

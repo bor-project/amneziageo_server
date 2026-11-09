@@ -13,17 +13,21 @@ namespace AmneziaGeo.Server.Api.Services;
 public sealed class ProxyOffer : IHelloFeature
 {
     private readonly IServiceScopeFactory _scopes;
+    private readonly bool _modern;
+    private readonly FrontOptions? _options;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public ProxyOffer(IServiceScopeFactory scopes)
+    public ProxyOffer(IServiceScopeFactory scopes, bool modern = false, FrontOptions? options = null)
     {
         _scopes = scopes;
+        _modern = modern;
+        _options = options;
     }
 
     /// <inheritdoc/>
-    public string Name => FeatureNames.Proxies;
+    public string Name => _modern ? "proxiesV2" : FeatureNames.Proxies;
 
     /// <inheritdoc/>
     public async ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
@@ -31,20 +35,37 @@ public sealed class ProxyOffer : IHelloFeature
         using var scope = _scopes.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
         var identity = await store.IdentityAsync(ct).ConfigureAwait(false);
-        var selected = await store.SelectedAsync(peer.Template?.ProxyIds ?? [], ct).ConfigureAwait(false);
+        var selected = _options?.Enabled == false ? [] : await store.SelectedAsync(peer.Template?.ProxyIds ?? [], ct).ConfigureAwait(false);
         var named = selected.Select(proxy => (Proxy: proxy, Host: proxy.Host.Length > 0 ? proxy.Host : peer.Context.Request.Host.Host.Trim('[', ']')))
             .Where(item => Uri.CheckHostName(item.Host) != UriHostNameType.Unknown);
-        var items = named.Where(item => item.Proxy.Transport is "websocket" or "xhttp").Select(item =>
+        if (_modern)
+        {
+            var modern = named.Where(item => item.Proxy.Transport is "websocket" or "quic" || item.Proxy.IsHttpV2).Select(item =>
+            {
+                var proxy = item.Proxy;
+                return new ProxyItemV2(proxy.Id.ToString(CultureInfo.InvariantCulture), proxy.Name,
+                    proxy.IsHttp ? "http" : proxy.Transport, item.Host, proxy.Port, proxy.Path,
+                    new ProxyTlsV2(proxy.UsesCertificate, proxy.ServerName.Length > 0 ? proxy.ServerName : item.Host, proxy.UsesCertificate ? proxy.Pin : string.Empty),
+                    new ProxyAuth(proxy.IsHttp ? "hmac-sha256-v2" : "bearer", TransportProxyStore.Credential(proxy, peer.Client.Id)),
+                    proxy.UpdatedUtc, proxy.IsHttp ? new ProxyHttp(2, proxy.HttpMethod, proxy.HttpMethod == "GET" ? "header" : "body") : null,
+                    proxy.Transport == "quic" ? new ProxyQuic(1, "webtransport", "framed-stream") : null,
+                    ProxyTargetRules.Read(proxy.TargetsJson) is { Restricted: true } targets ? targets : null);
+            }).ToArray();
+            return new ProxiesFeatureV2(2, identity.Source, modern, Proof(identity, peer));
+        }
+
+        var items = named.Where(item => item.Proxy.Transport == "websocket" && item.Proxy.UsesCertificate
+            || item.Proxy.IsHttpV2 && item.Proxy.HttpMethod == "GET").Select(item =>
         {
             var proxy = item.Proxy;
             return
             new ProxyItem(
-                proxy.Id.ToString(CultureInfo.InvariantCulture), proxy.Name, proxy.Transport,
+                proxy.Id.ToString(CultureInfo.InvariantCulture), proxy.Name, proxy.IsHttp ? "xhttp" : proxy.Transport,
                 item.Host, proxy.Port, proxy.Path,
-                new ProxyTls(proxy.ServerName.Length > 0 ? proxy.ServerName : item.Host, proxy.Pin),
-                new ProxyAuth(proxy.Transport == "xhttp" ? "vless" : "bearer", TransportProxyStore.Credential(proxy, peer.Client.Id)),
+                new ProxyTls(proxy.ServerName.Length > 0 ? proxy.ServerName : item.Host, proxy.UsesCertificate ? proxy.Pin : string.Empty),
+                new ProxyAuth(proxy.IsHttp ? "vless" : "bearer", TransportProxyStore.Credential(proxy, peer.Client.Id)),
                 proxy.UpdatedUtc,
-                proxy.Transport == "xhttp" ? new ProxyXHttp("packet-up", "GET", "header") : null,
+                proxy.IsHttp ? new ProxyXHttp("packet-up", "GET", "header", proxy.UsesCertificate ? "https" : "http") : null,
                 ProxyTargetRules.Read(proxy.TargetsJson) is { Restricted: true } targets ? targets : null);
         }).ToArray();
         return new ProxiesFeature(1, identity.Source, items, Proof(identity, peer));
@@ -114,4 +135,16 @@ public sealed record ProxyAuth(string Scheme, string Credential);
 public sealed record ProxyXHttp(
     string Mode,
     [property: System.Text.Json.Serialization.JsonPropertyName("uplinkHTTPMethod")] string UplinkHttpMethod,
-    string UplinkDataPlacement);
+    string UplinkDataPlacement, string Scheme = "https", int Version = 2);
+
+
+public sealed record ProxiesFeatureV2(int Version, string Source, IReadOnlyList<ProxyItemV2> Items, ProxySourceProof? Proof);
+
+public sealed record ProxyItemV2(string Id, string Name, string Transport, string Host, int Port, string Path,
+    ProxyTlsV2 Tls, ProxyAuth Auth, DateTimeOffset Updated, ProxyHttp? Http, ProxyQuic? Quic, ProxyTargets? Targets);
+
+public sealed record ProxyTlsV2(bool Enabled, string ServerName, string Pin);
+
+public sealed record ProxyHttp(int Version, string Method, string DataPlacement);
+
+public sealed record ProxyQuic(int Version, string Protocol, string Datagrams);
