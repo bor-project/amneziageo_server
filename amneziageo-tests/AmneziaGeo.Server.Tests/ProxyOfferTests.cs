@@ -136,7 +136,7 @@ public sealed class ProxyOfferTests
 
     private static TransportProxyEntity Proxy(string name, string transport) => new()
     {
-        Name = name, Transport = transport, Host = "cdn.example.net", Port = 443, Path = "transport",
+        Name = name, Transport = transport, ProtocolVersion = transport == "xhttp" ? 2 : 0, Host = "cdn.example.net", Port = 443, Path = "transport",
         Secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
         CertificateKey = "/tls/private-server-key.pem", UpdatedUtc = DateTimeOffset.Parse("2026-11-04T10:00:00Z", null),
     };

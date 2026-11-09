@@ -13,6 +13,19 @@ public sealed class TransportProxyEntity
     public int Port { get; set; }
     public int ListenPort { get; set; }
     public bool OriginHttp { get; set; }
+    public bool Hosted { get; set; } = true;
+    public bool? UseCertificate { get; set; }
+    public string HttpMethod { get; set; } = "GET";
+    public int ProtocolVersion { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public bool UsesCertificate => UseCertificate ?? true;
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public bool IsHttp => Transport is "http" or "xhttp";
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public bool IsHttpV2 => IsHttp && ProtocolVersion == 2;
     public string Path { get; set; } = string.Empty;
     public string Certificate { get; set; } = string.Empty;
     public string CertificateKey { get; set; } = string.Empty;

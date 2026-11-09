@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using AmneziaGeo.Server.Awg.Config;
 using System.Security.Cryptography;
 using System.Text;
@@ -12,13 +14,15 @@ namespace AmneziaGeo.Server.Dal;
 public sealed class TransportProxyStore
 {
     private readonly AppDbContext _db;
+    private readonly ILogger<TransportProxyStore>? _logger;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public TransportProxyStore(AppDbContext db)
+    public TransportProxyStore(AppDbContext db, ILogger<TransportProxyStore>? logger = null)
     {
         _db = db;
+        _logger = logger;
     }
 
     /// <summary>
@@ -124,7 +128,7 @@ public sealed class TransportProxyStore
     /// Reports whether a proxy uses a port.
     /// </summary>
     public Task<bool> ServesAsync(int port, CancellationToken ct) =>
-        _db.TransportProxies.AnyAsync(proxy => proxy.IsEnabled && (proxy.Transport == "websocket" || proxy.Transport == "xhttp") && (proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort) == port, ct);
+        _db.TransportProxies.AnyAsync(proxy => proxy.IsEnabled && proxy.Hosted && (proxy.Transport == "websocket" || proxy.Transport == "http" || (proxy.Transport == "xhttp" && proxy.ProtocolVersion == 2)) && (proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort) == port, ct);
 
     /// <summary>
     /// Returns the proxy that owns a path.
@@ -148,6 +152,10 @@ public sealed class TransportProxyStore
         held.Port = draft.Port;
         held.ListenPort = draft.ListenPort;
         held.OriginHttp = draft.OriginHttp;
+        held.UseCertificate = draft.UseCertificate;
+        held.HttpMethod = draft.HttpMethod;
+        held.Hosted = draft.Hosted;
+        held.ProtocolVersion = draft.ProtocolVersion;
         held.Path = draft.Path.Trim().Trim('/');
         held.Certificate = draft.Certificate.Trim();
         held.CertificateKey = draft.CertificateKey.Trim();
@@ -252,6 +260,47 @@ public sealed class TransportProxyStore
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
     }, ct);
 
+    /// <summary>
+    /// Identifies persisted GET profiles of the prototype.
+    /// </summary>
+    public async Task AdoptHttpGetAsync(string directory, CancellationToken ct)
+    {
+        var legacy = await _db.TransportProxies.Where(proxy => proxy.Transport == "xhttp" && proxy.ProtocolVersion == 0)
+            .ToListAsync(ct).ConfigureAwait(false);
+        var clients = await _db.Clients.AsNoTracking().Select(client => client.Id).ToListAsync(ct).ConfigureAwait(false);
+        foreach (var proxy in legacy)
+        {
+            var file = Path.Combine(directory, $"xhttp-{proxy.Id}.json");
+            if (!File.Exists(file) || new FileInfo(file).Length > 1_048_576)
+            {
+                continue;
+            }
+
+            try
+            {
+                using var profile = JsonDocument.Parse(await File.ReadAllTextAsync(file, ct).ConfigureAwait(false));
+                var known = clients.Select(id => Credential(proxy, id)).ToHashSet(StringComparer.Ordinal);
+                if (!profile.RootElement.TryGetProperty("httpGet", out var transport)
+                    || !transport.TryGetProperty("version", out var version) || !version.TryGetInt32(out var number) || number != 2
+                    || !transport.TryGetProperty("path", out var path) || path.GetString() != "/" + proxy.Path.Trim('/') + "/"
+                    || !transport.TryGetProperty("credentials", out var credentials) || credentials.ValueKind != JsonValueKind.Array
+                    || credentials.GetArrayLength() == 0 || credentials.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.String || !known.Contains(value.GetString()!)))
+                {
+                    continue;
+                }
+
+                proxy.ProtocolVersion = 2;
+                proxy.HttpMethod = "GET";
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or FormatException)
+            {
+                _logger?.LogWarning(ex, "The legacy proxy profile {ProxyId} could not be identified", proxy.Id);
+            }
+        }
+
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
     private static IReadOnlyList<long> Numbers(string text) => [.. text.Split(',', StringSplitOptions.RemoveEmptyEntries)
         .Select(part => long.TryParse(part.Trim(), out var id) ? id : 0).Where(id => id > 0).Distinct()];
 
@@ -260,10 +309,10 @@ public sealed class TransportProxyStore
     /// </summary>
     public static string Credential(TransportProxyEntity proxy, long clientId)
     {
-        var version = proxy.Transport == "xhttp" ? "v2" : "v1";
+        var version = proxy.IsHttp ? "v2" : "v1";
         var name = "transport-proxy-" + version + ":" + clientId.ToString(CultureInfo.InvariantCulture);
         var digest = HMACSHA256.HashData(Convert.FromBase64String(proxy.Secret), Encoding.UTF8.GetBytes(name));
-        return proxy.Transport == "xhttp"
+        return proxy.IsHttp
             ? new Guid(digest.AsSpan(0, 16)).ToString("D")
             : Convert.ToBase64String(digest).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }

@@ -18,6 +18,10 @@ public sealed class FrontOptions
     /// </summary>
     public const string Section = "Proxy";
 
+    public bool Enabled { get; set; } = true;
+
+    public bool Isolated { get; set; }
+
     /// <summary>
     /// The directory the fronts take their files from.
     /// </summary>
@@ -43,7 +47,9 @@ public static class ServiceRegistration
 
         services.AddSingleton(options);
         services.AddScoped<AmneziaGeo.Server.Api.Proxies.ProxyRules>();
-        services.AddSingleton<IProxyRunner>(provider => SystemdProxies.Runs
+        services.AddSingleton<IProxyRunner>(provider => options.Isolated
+            ? new ChildProxies(options.Directory, Path.Combine(AppContext.BaseDirectory, "AmneziaGeo.Server.Proxy.Host"))
+            : SystemdProxies.Runs
             ? new SystemdProxies(provider.GetRequiredService<IHostCommands>())
             : new ChildProxies(options.Directory));
         services.AddSingleton(provider =>
@@ -55,6 +61,7 @@ public static class ServiceRegistration
         services.AddSingleton<SpeedTickets>();
         services.AddSingleton<IHelloFeature, WebSocketOffer>();
         services.AddSingleton<IHelloFeature, ProxyOffer>();
+        services.AddSingleton<IHelloFeature>(provider => new ProxyOffer(provider.GetRequiredService<IServiceScopeFactory>(), true, options));
         services.AddSingleton<IHelloFeature, InboundOffer>();
         services.AddSingleton<IHelloFeature, DisconnectOffer>();
         services.AddSingleton<IHelloFeature, SpeedOffer>();
@@ -73,8 +80,11 @@ public static class ServiceRegistration
         services.AddSingleton<ServiceShare>();
         services.AddSingleton(provider => new XHttpHost(
             configuration["XHttp:Directory"] ?? Path.Combine(options.Directory, "xhttp"),
-            configuration["XHttp:Executable"] ?? Path.Combine(AppContext.BaseDirectory, "wstunnel-get"),
+            configuration["XHttp:Executable"] ?? Path.Combine(AppContext.BaseDirectory, options.Isolated ? "AmneziaGeo.Server.Proxy.Host" : "wstunnel-get"),
             provider.GetRequiredService<ILogger<XHttpHost>>()));
+        services.AddSingleton(provider => new AmneziaGeo.Server.Api.Proxies.QuicHost(Path.Combine(options.Directory, "quic"),
+            Path.Combine(AppContext.BaseDirectory, options.Isolated ? "AmneziaGeo.Server.Proxy.Host" : "wstunnel-quic"),
+            provider.GetRequiredService<ILoggerFactory>().CreateLogger("QuicHost")));
         services.AddSingleton<ServiceServer>();
         services.AddHostedService<XHttpRefresh>();
         services.AddHostedService(provider => provider.GetRequiredService<ServiceServer>());
@@ -96,7 +106,7 @@ public static class ServiceRegistration
         app.Use(async (context, next) =>
         {
             if (context.Features.Get<ITlsConnectionFeature>() is null && app.Services.GetService<PanelPlace>() is { Secure: true }
-                && share.Point?.Endpoints.Any(endpoint => endpoint.XHttp && endpoint.OriginHttp
+                && share.Point?.Endpoints.Any(endpoint => (endpoint.XHttp || endpoint.WebSocket) && endpoint.OriginHttp
                     && context.Request.Path.StartsWithSegments("/" + endpoint.Path, StringComparison.Ordinal)) != true)
             {
                 context.Response.StatusCode = StatusCodes.Status404NotFound;

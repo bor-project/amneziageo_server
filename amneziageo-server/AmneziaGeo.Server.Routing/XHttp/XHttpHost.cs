@@ -54,6 +54,8 @@ public sealed class XHttpHost : IAsyncDisposable
     /// <summary>
     /// Returns the state of a listener.
     /// </summary>
+    public string ConfigurationDirectory => _directory;
+
     public XHttpState State(long id)
     {
         if (_children.TryGetValue(id, out var child))

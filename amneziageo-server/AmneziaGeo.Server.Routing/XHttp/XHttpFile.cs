@@ -6,7 +6,7 @@ namespace AmneziaGeo.Server.Routing.XHttp;
 /// <summary>
 /// Defines an HTTP GET listener and its users.
 /// </summary>
-public sealed record XHttpProxy(long Id, int Port, string Path, IReadOnlyList<string> Credentials, ProxyTargets? Targets = null);
+public sealed record XHttpProxy(long Id, int Port, string Path, IReadOnlyList<string> Credentials, ProxyTargets? Targets = null, string Method = "GET");
 
 /// <summary>
 /// Renders the configuration of an HTTP GET listener.
@@ -28,6 +28,11 @@ public static class XHttpFile
         if (proxy.Port is < 1 or > 65535)
         {
             throw new ArgumentOutOfRangeException(nameof(proxy), "The listener port must be between 1 and 65535.");
+        }
+
+        if (proxy.Method is not ("GET" or "POST"))
+        {
+            throw new ArgumentException("The HTTP method must be GET or POST.", nameof(proxy));
         }
 
         ArgumentNullException.ThrowIfNull(proxy.Path);
@@ -54,6 +59,7 @@ public static class XHttpFile
             httpGet = new
             {
                 version = 2,
+                method = proxy.Method,
                 port = proxy.Port,
                 path = $"/{path}/",
                 credentials = users,

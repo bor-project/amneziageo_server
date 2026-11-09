@@ -100,7 +100,17 @@ public sealed class ServiceDesk
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(point);
 
-        switch (Route(context, point))
+        var route = Route(context, point);
+        var proxyRoute = point.Endpoints.FirstOrDefault(endpoint => endpoint.ProxyId > 0
+            && (route == Wanted.XHttp && endpoint.XHttp || route == Wanted.Front && endpoint.WebSocket || route == Wanted.Probe && endpoint.WebSocket)
+            && context.Request.Path.StartsWithSegments("/" + endpoint.Path, StringComparison.Ordinal));
+        if (proxyRoute?.UseCertificate is { } secure && secure != context.Request.IsHttps && (!secure || !proxyRoute.OriginHttp))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        switch (route)
         {
             case Wanted.XHttp:
                 await XHttpAsync(context, point).ConfigureAwait(false);
@@ -356,7 +366,7 @@ public sealed class ServiceDesk
         }
 
         var endpoint = endpoints[0];
-        if (!XHttpRelay.Accepts(context))
+        if (!XHttpRelay.Accepts(context, endpoint.HttpMethod))
         {
             return;
         }
@@ -368,7 +378,7 @@ public sealed class ServiceDesk
         }
 
         using var held = lease;
-        await XHttpRelay.PassAsync(context, endpoint.Front, _logger, held.Stopped).ConfigureAwait(false);
+        await XHttpRelay.PassAsync(context, endpoint.Front, _logger, held.Stopped, endpoint.HttpMethod).ConfigureAwait(false);
     }
 
     private async Task ProbeAsync(HttpContext context, ServicePoint point)
@@ -520,6 +530,11 @@ public sealed class ServiceDesk
     {
         var path = context.Request.Path;
         var method = context.Request.Method;
+        if (point.Endpoints.Any(one => one.WebSocket && Under(path, one.Path)) && Upgrades(context))
+        {
+            return Wanted.Front;
+        }
+
         if (point.Endpoints.Any(one => one.XHttp && Under(path, one.Path)))
         {
             return Wanted.XHttp;
@@ -528,11 +543,6 @@ public sealed class ServiceDesk
         if (point.Endpoints.Any(one => one.ProxyId > 0 && one.WebSocket && XHttpProbe.Nonce(path, one.Path, out _)))
         {
             return Wanted.Probe;
-        }
-
-        if (point.Endpoints.Any(one => one.WebSocket && Under(path, one.Path)) && Upgrades(context))
-        {
-            return Wanted.Front;
         }
 
         if (path.Equals(HelloPath, StringComparison.Ordinal) && HttpMethods.IsPost(method))

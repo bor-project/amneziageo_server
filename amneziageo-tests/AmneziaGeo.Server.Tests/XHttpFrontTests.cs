@@ -115,7 +115,7 @@ public sealed class XHttpFrontTests
             await new TransportProxyStore(_bench.Db).SaveAsync(0, new TransportProxyEntity
             {
                 Name = "XHTTP origin",
-                Transport = "xhttp",
+                Transport = "xhttp", ProtocolVersion = 2,
                 Host = "cdn.example.net",
                 Port = 443,
                 ListenPort = _port,

@@ -136,7 +136,7 @@ internal sealed class PlainGate
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(tls);
 
-        if (_plain is { } plain && (_allows?.Invoke() == true || _point?.Invoke().Endpoints.Any(endpoint => endpoint.XHttp && endpoint.OriginHttp) == true || Inside(connection.LocalEndPoint)) && await OpensPlainAsync(connection).ConfigureAwait(false))
+        if (_plain is { } plain && (_allows?.Invoke() == true || _point?.Invoke().Endpoints.Any(endpoint => (endpoint.XHttp || endpoint.WebSocket) && endpoint.OriginHttp) == true || Inside(connection.LocalEndPoint)) && await OpensPlainAsync(connection).ConfigureAwait(false))
         {
             await plain(connection).ConfigureAwait(false);
 

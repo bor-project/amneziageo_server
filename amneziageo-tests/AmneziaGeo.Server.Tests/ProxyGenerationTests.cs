@@ -346,6 +346,11 @@ public sealed class ProxyGenerationTests
 
         Assert.True(state.IsRunning);
         Assert.NotEmpty(state.Message);
+        while (File.ReadAllLines(Path.Combine(place.Root, "runs")).Length < 2 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25).ConfigureAwait(false);
+        }
+
         var runs = File.ReadAllLines(Path.Combine(place.Root, "runs")).Length;
         Assert.True(runs >= 2);
         var unchanged = await host.ApplyAsync("catalog", 61001, 0, "relay", default).ConfigureAwait(false);

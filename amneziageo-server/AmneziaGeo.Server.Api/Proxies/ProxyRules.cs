@@ -69,7 +69,7 @@ public sealed class ProxyRules
             return new Failure("bad-proxy-name", "the proxy name must contain 1 to 64 characters");
         }
 
-        if (proxy.Transport is not ("websocket" or "xhttp"))
+        if (proxy.Transport is not ("websocket" or "http" or "quic" or "xhttp"))
         {
             return new Failure("bad-proxy-transport", "the proxy transport is unknown");
         }
@@ -84,9 +84,14 @@ public sealed class ProxyRules
             return new Failure("bad-proxy-port", "the TCP port must be between 1 and 65535");
         }
 
-        if (proxy.OriginHttp && proxy.Transport != "xhttp")
+        if (proxy.OriginHttp && !proxy.IsHttp)
         {
-            return new Failure("bad-proxy-transport", "HTTP origin requires XHTTP");
+            return new Failure("bad-proxy-transport", "HTTP origin requires an HTTP proxy");
+        }
+
+        if (proxy.Transport == "quic" && !proxy.UsesCertificate)
+        {
+            return new("proxy-quic-tls", "QUIC requires a TLS certificate");
         }
 
         var path = proxy.Path.Trim().Trim('/');
@@ -95,6 +100,22 @@ public sealed class ProxyRules
         {
             return new Failure("bad-proxy-path", "the proxy path must be one segment of letters, digits, dashes or underscores");
         }
+
+        if (proxy.IsHttp && (proxy.HttpMethod is not ("GET" or "POST") || proxy.ProtocolVersion != 2))
+        {
+            return new("proxy-protocol", "select HTTP GET or POST version 2 to convert a legacy proxy");
+        }
+
+        if (!proxy.IsHttp && proxy.ProtocolVersion is not (0 or 1))
+        {
+            return new("proxy-protocol", "the proxy protocol version is unsupported");
+        }
+
+        if (!proxy.IsHttp && proxy.HttpMethod != "GET")
+        {
+            return new("proxy-method", "the HTTP method belongs to HTTP proxies");
+        }
+
 
         if (proxy.ServerName.Length > 0 && Uri.CheckHostName(proxy.ServerName) == UriHostNameType.Unknown)
         {
@@ -108,6 +129,30 @@ public sealed class ProxyRules
 
         return proxy.Pin.Length > 0 && (proxy.Pin.Length != 64 || !proxy.Pin.All(char.IsAsciiHexDigit))
             ? new Failure("bad-proxy-pin", "the certificate pin must be a SHA-256 digest") : null;
+    }
+
+    /// <summary>
+    /// Returns the owner of a conflicting QUIC socket.
+    /// </summary>
+    public async Task<string?> QuicConflictAsync(TransportProxyEntity proxy, long id, CancellationToken ct)
+    {
+        if (proxy.Transport != "quic" || !proxy.IsEnabled || !proxy.Hosted)
+        {
+            return null;
+        }
+
+        var port = proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort;
+        var endpoint = await db.Configs.AsNoTracking().FirstOrDefaultAsync(one => one.IsEnabled && one.ListenPort == port, ct).ConfigureAwait(false);
+        if (endpoint is not null)
+        {
+            return "UDP port is used by " + endpoint.Name;
+        }
+
+        var peers = await db.TransportProxies.AsNoTracking().Where(one => one.Id != id && one.IsEnabled && one.Hosted && one.Transport == "quic")
+            .ToListAsync(ct).ConfigureAwait(false);
+        return peers.Any(one => (one.ListenPort == 0 ? one.Port : one.ListenPort) == port
+            && (one.Certificate != proxy.Certificate || one.CertificateKey != proxy.CertificateKey))
+            ? "QUIC proxies on one UDP port require the same certificate" : null;
     }
 
     private static bool Same(string left, string right) => string.Equals(left.Trim('/'), right, StringComparison.OrdinalIgnoreCase);

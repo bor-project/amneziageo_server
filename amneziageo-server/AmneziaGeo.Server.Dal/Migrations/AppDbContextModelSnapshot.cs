@@ -1506,10 +1506,22 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Hosted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("Host")
                         .IsRequired()
                         .HasMaxLength(253)
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("HttpMethod")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(4)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("GET");
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("INTEGER");
@@ -1543,6 +1555,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<int>("Port")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("ProtocolVersion")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Secret")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -1564,6 +1579,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
 
                     b.Property<DateTimeOffset>("UpdatedUtc")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool?>("UseCertificate")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
