@@ -48,6 +48,11 @@ public sealed record DnsWorld
     public IReadOnlyList<RouteRule> Rules { get; init; } = [];
 
     /// <summary>
+    /// The address groups.
+    /// </summary>
+    public IReadOnlyList<AddressGroup> Groups { get; init; } = [];
+
+    /// <summary>
     /// Tells whether the routing needs the resolver.
     /// </summary>
     public bool Needed => Rules.Count > 0 || Templates.Any(template => template.StandIns);

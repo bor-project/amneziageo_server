@@ -41,6 +41,16 @@ public sealed record RouteRule
     public IReadOnlyList<string> Targets { get; init; } = [];
 
     /// <summary>
+    /// Names the address groups.
+    /// </summary>
+    public IReadOnlyList<long> Groups { get; init; } = [];
+
+    /// <summary>
+    /// Identifies a destination filter.
+    /// </summary>
+    public bool HasTargets => Targets.Count > 0 || Groups.Count > 0;
+
+    /// <summary>
     /// The clients of the panel the traffic comes from, by name.
     /// </summary>
     public IReadOnlyList<string> Clients { get; init; } = [];

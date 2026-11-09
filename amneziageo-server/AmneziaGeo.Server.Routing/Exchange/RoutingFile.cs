@@ -17,7 +17,7 @@ public static class RoutingFile
     /// <summary>
     /// The schema version this build writes and can read.
     /// </summary>
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     /// <summary>
     /// The JSON settings the file is written and read by.
@@ -60,7 +60,9 @@ public static class RoutingFile
             doc.Rules ?? [],
             doc.Basic ?? new BasicBlock([], []),
             doc.Presets ?? [],
-            doc.Sources ?? []);
+            doc.Sources ?? [],
+            doc.AddressGroups ?? [],
+            doc.Unified);
 
         if (!string.Equals(doc.Format, FormatTag, StringComparison.Ordinal))
         {
@@ -112,7 +114,14 @@ public sealed record RoutingDoc(
     IReadOnlyList<RuleBlock> Rules,
     BasicBlock Basic,
     IReadOnlyList<PresetBlock> Presets,
-    IReadOnlyList<SourceBlock> Sources);
+    IReadOnlyList<SourceBlock> Sources,
+    IReadOnlyList<AddressGroupBlock>? AddressGroups = null,
+    bool Unified = false);
+
+/// <summary>
+/// Transfers an address group.
+/// </summary>
+public sealed record AddressGroupBlock(string Name, IReadOnlyList<string> Targets);
 
 /// <summary>
 /// One routing rule as the file carries it.
@@ -128,7 +137,9 @@ public sealed record RuleBlock(
     IReadOnlyList<string> Inbounds,
     IReadOnlyList<string> Ports,
     IReadOnlyList<string> SourcePorts,
-    string Protocol);
+    string Protocol,
+    IReadOnlyList<string>? Groups = null,
+    long? LegacyId = null);
 
 /// <summary>
 /// The basic lists as the file carries them.

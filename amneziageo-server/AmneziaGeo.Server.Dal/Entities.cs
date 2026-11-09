@@ -488,6 +488,8 @@ public sealed class RouteRuleEntity
 
     public string Targets { get; set; } = string.Empty;
 
+    public string Groups { get; set; } = string.Empty;
+
     public string Clients { get; set; } = string.Empty;
 
     public string Inbounds { get; set; } = string.Empty;
@@ -513,6 +515,22 @@ public sealed class RouteBasicEntity
     public string Direct { get; set; } = string.Empty;
 
     public string Block { get; set; } = string.Empty;
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// Stores an address group.
+/// </summary>
+public sealed class AddressGroupEntity
+{
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Targets { get; set; } = string.Empty;
+
+    public DateTimeOffset CreatedUtc { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }
 }

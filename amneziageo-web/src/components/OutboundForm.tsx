@@ -6,7 +6,7 @@ import type { OutboundDraft, OutboundKind } from "@/api/outbounds"
 import { WayUse } from "@/components/Holders"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { Count, Flag, Line, ListLine, Part, Switch } from "@/components/fields"
-import { danger, field, footer, label, primary, secondary } from "@/components/styles"
+import { danger, field, footer, footerUnder, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { same } from "@/store/draftSlice"
@@ -20,6 +20,7 @@ export function OutboundForm({
   onSave,
   onClose,
   onRemove,
+  embedded = false,
 }: {
   start: OutboundDraft
   publicKey: string
@@ -29,6 +30,7 @@ export function OutboundForm({
   onSave: (draft: OutboundDraft) => void
   onClose: () => void
   onRemove?: () => void
+  embedded?: boolean
 }) {
   const t = useText()
   const keys = useOutboundKeys()
@@ -265,13 +267,13 @@ export function OutboundForm({
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
 
-      <div className={footer}>
+      <div className={embedded ? footerUnder + " routing-form-footer" : footer}>
         {onRemove !== undefined && (
           <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
             {t("outbounds.remove")}
           </button>
         )}
-        <button type="button" onClick={onClose} disabled={!edited || pending} className={secondary}>
+        <button type="button" onClick={onClose} disabled={pending} className={secondary}>
           {t("outbounds.cancel")}
         </button>
         <button

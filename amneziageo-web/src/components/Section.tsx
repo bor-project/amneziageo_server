@@ -29,11 +29,13 @@ export function Sectioned({
   to,
   items,
   tabbed = false,
+  wrapTabs = false,
 }: {
   title: TextKey
   to: string
   items: Item[]
   tabbed?: boolean
+  wrapTabs?: boolean
 }) {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
@@ -84,6 +86,7 @@ export function Sectioned({
 
       {tabbed && listed && tabs.length > 1 && (
         <Tabs
+          wrap={wrapTabs}
           items={tabs.map((one) => ({
             to: spotIn(spots, one.to),
             label: t(one.label),

@@ -192,7 +192,7 @@ public sealed class RouteTester
             return null;
         }
 
-        var rules = await _rules.ListAsync(ct).ConfigureAwait(false);
+        var rules = await _rules.TableAsync(ct).ConfigureAwait(false);
         var place = rules.Select((rule, at) => (rule.Id, Place: at + 1)).FirstOrDefault(one => one.Id == leg.Rule.Id).Place;
 
         return new RouteTestRule(leg.Rule.Id, leg.Rule.Name, place, leg.Rule.Action, leg.Rule.Outbound);

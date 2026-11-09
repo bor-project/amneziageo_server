@@ -196,16 +196,16 @@ public static class DnsChecks
 
         if (request.Rule is { } rule)
         {
-            var draft = RouteAnswers.Draft(rule) with { Id = id };
+            var draft = RouteAnswers.Draft(rule, world.Rules.FirstOrDefault(one => one.Id == id)) with { Id = id };
             var rules = world.Rules.Where(one => one.Id != id).ToList();
-            if (draft.IsEnabled && ByName(draft))
+            if (draft.IsEnabled && ByName(draft, world.Groups))
             {
                 rules.Add(draft);
             }
 
             var ruled = world with { Rules = rules };
 
-            return Answer(ruled, null, DnsConflicts.Of(ruled).Findings.Where(one => Names(one, "rule", id)));
+            return Answer(ruled, null, DnsConflicts.Of(ruled).Findings.Where(one => Names(one, id < 0 ? "basic" : "rule", id)));
         }
 
         if (request.Dns is { } dns)
@@ -286,6 +286,7 @@ public static class DnsChecks
             Templates = await templates.ListAsync(ct).ConfigureAwait(false),
             Clients = await clients.ListAsync(ct).ConfigureAwait(false),
             Holders = await clients.ResolverHeldAsync(ct).ConfigureAwait(false),
+            Groups = plans.Held?.Groups ?? [],
             Rules = plans.Held is { } plan
                 ? [.. plan.Legs.Where(leg => leg.IsOnHost && leg.Domains.Count > 0).Select(leg => leg.Rule)]
                 : [],
@@ -334,6 +335,7 @@ public static class DnsChecks
     private static bool Names(DnsFinding finding, string kind, long id) =>
         finding.Subjects.Any(subject => subject.Kind == kind && subject.Id == id);
 
-    private static bool ByName(RouteRule rule) =>
-        rule.Targets.Select(RouteRules.Target).Any(target => target?.Kind is GeoRuleKind.Domain or GeoRuleKind.GeoSite);
+    private static bool ByName(RouteRule rule, IReadOnlyList<AddressGroup> groups) =>
+        rule.Targets.Concat(groups.Where(group => rule.Groups.Contains(group.Id)).SelectMany(group => group.Targets))
+            .Select(RouteRules.Target).Any(target => target?.Kind is GeoRuleKind.Domain or GeoRuleKind.GeoSite);
 }

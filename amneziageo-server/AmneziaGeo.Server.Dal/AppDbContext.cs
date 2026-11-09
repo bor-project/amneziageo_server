@@ -47,6 +47,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<RouteBasicEntity> RouteBasics => Set<RouteBasicEntity>();
 
+    public DbSet<AddressGroupEntity> AddressGroups => Set<AddressGroupEntity>();
+
     public DbSet<BalancerEntity> Balancers => Set<BalancerEntity>();
 
     public DbSet<DnsSettingsEntity> Resolver => Set<DnsSettingsEntity>();
@@ -267,6 +269,13 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(rule => rule.Protocol).HasMaxLength(16);
             entity.Property(rule => rule.Outbound).HasMaxLength(ConfigRules.MaxNameLength);
             entity.HasIndex(rule => rule.Position);
+            entity.Property(rule => rule.Groups).HasDefaultValue(string.Empty);
+        });
+
+        builder.Entity<AddressGroupEntity>(entity =>
+        {
+            entity.Property(group => group.Name).HasMaxLength(RouteRules.MaxNameLength);
+            entity.HasIndex(group => group.Name).IsUnique();
         });
 
         builder.Entity<TransportProxyEntity>(entity =>

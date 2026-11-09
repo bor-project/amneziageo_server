@@ -286,7 +286,7 @@ public static class RouteRuleset
     {
         ArgumentNullException.ThrowIfNull(leg);
 
-        if (leg.Rule.Targets.Count == 0 && !leg.IsBySource)
+        if (!leg.Rule.HasTargets && !leg.IsBySource)
         {
             return Plain(leg, journal);
         }
@@ -309,7 +309,7 @@ public static class RouteRuleset
                 lines.Add($"{head}{family} daddr @{set} {tail}");
             }
 
-            if (leg.Rule.Targets.Count == 0)
+            if (!leg.Rule.HasTargets)
             {
                 lines.Add(head + tail);
             }

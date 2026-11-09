@@ -59,46 +59,22 @@ export const clients: Item[] = [
   },
 ]
 
+export const routingTabs: Item[] = [
+  { to: "/routing/rules", label: "tab.rules", icon: "fork", scope: scopes.readState },
+  { to: "/routing/channels", label: "routing.directions", icon: "route", scope: scopes.readState },
+  { to: "/routing/balancers", label: "routing.balancers", icon: "fork", scope: scopes.readState },
+  { to: "/routing/address-groups", label: "routing.addressGroups", icon: "list", scope: scopes.readState },
+]
+
 export const routing: Item[] = [
-  {
-    to: "/routing/proxies", label: "proxies.title", icon: "route", scope: scopes.readState,
-    add: { to: "/routing/proxies/new", scope: scopes.manageProxies },
-  },
-  {
-    to: "/routing/rules",
-    label: "tab.rules",
-    about: "about.rules",
-    icon: "fork",
-    scope: scopes.readState,
-    add: { to: "/routing/rules/new", scope: scopes.manageRouting },
-  },
-  { to: "/routing/basic", label: "tab.basic", about: "about.basic", icon: "list", scope: scopes.readState },
-  {
-    to: "/routing/test",
-    label: "tab.test",
-    about: "about.test",
-    icon: "flask",
-    scope: scopes.readState,
-    unlisted: true,
-  },
-  {
-    to: "/routing/channels",
-    label: "tab.channels",
-    about: "about.channels",
-    icon: "route",
-    scope: scopes.readState,
-    add: { to: "/routing/channels/new", scope: scopes.manageRouting },
-  },
-  {
-    to: "/routing/geo",
-    label: "tab.geo",
-    about: "about.geo",
-    icon: "map",
-    scope: scopes.readState,
-    add: { to: "/routing/geo/new", scope: scopes.manageRouting },
-    only: "geo",
-  },
-  { to: "/routing/dns", label: "tab.dns", about: "about.dns", icon: "globe", scope: scopes.readState },
+  ...routingTabs,
+  { to: "/routing/basic", label: "tab.basic", icon: "list", scope: scopes.readState, unlisted: true },
+  { to: "/routing/test", label: "tab.test", icon: "flask", scope: scopes.readState, unlisted: true },
+  { to: "/routing/proxies", label: "proxies.title", icon: "route", scope: scopes.readState,
+    add: { to: "/routing/proxies/new", scope: scopes.manageProxies } },
+  { to: "/routing/geo", label: "tab.geo", icon: "map", scope: scopes.readState,
+    add: { to: "/routing/geo/new", scope: scopes.manageRouting }, only: "geo" },
+  { to: "/routing/dns", label: "tab.dns", icon: "globe", scope: scopes.readState },
 ]
 
 export const settings: Item[] = [

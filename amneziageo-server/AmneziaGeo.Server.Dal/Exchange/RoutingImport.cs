@@ -31,7 +31,12 @@ public sealed record RoutingPlan(
     IReadOnlyList<string> ReplacedSources,
     IReadOnlyList<string> MissingOutbounds,
     IReadOnlyList<string> MissingClients,
-    IReadOnlyList<string> Detached);
+    IReadOnlyList<string> Detached)
+{
+    public IReadOnlyList<string> NewGroups { get; init; } = [];
+
+    public IReadOnlyList<string> ReplacedGroups { get; init; } = [];
+}
 
 /// <summary>
 /// What an import that was applied left behind.
@@ -73,26 +78,79 @@ public static class RoutingImport
         var added = new List<string>();
         var replaced = new List<string>();
         var refused = new List<string>();
+        var existingGroups = (await rules.GroupsAsync(ct).ConfigureAwait(false)).Select(group => group.Name).ToHashSet(StringComparer.Ordinal);
+        var failedGroups = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var group in plan.Doc.AddressGroups ?? [])
+        {
+            var result = await rules.ImportGroupAsync(new AddressGroup { Name = group.Name, Targets = group.Targets ?? [] }, ct).ConfigureAwait(false);
+            Keep(result.Fault is null, existingGroups.Contains(group.Name) ? replaced : added, refused, $"address group '{group.Name}'", result.Fault?.Message ?? string.Empty);
+            if (result.Fault is not null)
+            {
+                failedGroups.Add(group.Name);
+            }
+        }
+
+        var groupIds = (await rules.GroupsAsync(ct).ConfigureAwait(false)).ToDictionary(group => group.Name, group => group.Id, StringComparer.Ordinal);
+        var ordered = new List<long>();
 
         var held = await rules.ListAsync(ct).ConfigureAwait(false);
         var byName = held.GroupBy(rule => rule.Name, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         foreach (var one in plan.Doc.Rules.OrderBy(rule => rule.Position))
         {
-            var draft = ToRule(one);
+            if ((one.Groups ?? []).Any(name => !groupIds.ContainsKey(name) || failedGroups.Contains(name)))
+            {
+                refused.Add($"rule '{one.Name}': an address group is missing");
+                continue;
+            }
+
+            var draft = ToRule(one) with { Groups = [.. (one.Groups ?? []).Select(name => groupIds[name])] };
+            if (one.LegacyId is { } legacy)
+            {
+                var result = await rules.ImportExceptionAsync(draft with { Id = legacy }, ct).ConfigureAwait(false);
+                Keep(result.IsOk, replaced, refused, $"rule '{one.Name}'", result.Message);
+                if (result.IsOk)
+                {
+                    ordered.Add(result.Record!.Id);
+                }
+
+                continue;
+            }
+
             if (byName.TryGetValue(one.Name, out var found))
             {
                 var result = await rules.ChangeAsync(found.Id, draft, ct).ConfigureAwait(false);
                 Keep(result.IsOk, replaced, refused, $"rule '{one.Name}'", result.Message);
+                if (result.IsOk)
+                {
+                    ordered.Add(result.Record!.Id);
+                }
                 continue;
             }
 
             var took = await rules.AddAsync(draft, ct).ConfigureAwait(false);
             Keep(took.IsOk, added, refused, $"rule '{one.Name}'", took.Message);
+            if (took.IsOk)
+            {
+                ordered.Add(took.Record!.Id);
+            }
+        }
+
+        if (plan.Doc.Unified)
+        {
+            foreach (var id in new[] { RouteBasic.BlockId, RouteBasic.DirectId }.Where(id => !plan.Doc.Rules.Any(rule => rule.LegacyId == id)))
+            {
+                await rules.RemoveAsync(id, ct).ConfigureAwait(false);
+            }
+
+            for (var at = 0; at < ordered.Count; at++)
+            {
+                await rules.PlaceAsync(ordered[at], at + 1, ct, table: true).ConfigureAwait(false);
+            }
         }
 
         var basicReplaced = false;
-        if (plan.ReplacesBasic)
+        if (plan.ReplacesBasic && !plan.Doc.Unified)
         {
             var fault = await rules.SaveBasicAsync(
                 new RouteBasic { Direct = plan.Doc.Basic.Direct, Block = plan.Doc.Basic.Block },
@@ -105,6 +163,10 @@ public static class RoutingImport
             {
                 refused.Add($"basic lists: {fault.Message}");
             }
+        }
+        else if (plan.Doc.Unified)
+        {
+            basicReplaced = true;
         }
 
         var heldPresets = await presets.ListAsync(ct).ConfigureAwait(false);
@@ -165,8 +227,9 @@ public static class RoutingImport
         ArgumentNullException.ThrowIfNull(outbounds);
         ArgumentNullException.ThrowIfNull(clients);
 
-        var held = await rules.ListAsync(ct).ConfigureAwait(false);
+        var held = await rules.TableAsync(ct).ConfigureAwait(false);
         var heldNames = held.Select(rule => rule.Name).ToHashSet(StringComparer.Ordinal);
+        var heldGroups = (await rules.GroupsAsync(ct).ConfigureAwait(false)).Select(group => group.Name).ToHashSet(StringComparer.Ordinal);
         var heldPresets = (await presets.ListAsync(ct).ConfigureAwait(false))
             .Select(one => one.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var heldSources = (await sources.ListAsync(ct).ConfigureAwait(false))
@@ -214,14 +277,18 @@ public static class RoutingImport
             doc,
             newRules,
             replacedRules,
-            doc.Basic.Direct.Count > 0 || doc.Basic.Block.Count > 0,
+            doc.Unified || doc.Basic.Direct.Count > 0 || doc.Basic.Block.Count > 0,
             newPresets,
             replacedPresets,
             newSources,
             replacedSources,
             [.. missingOutbounds],
             [.. missingClients],
-            detached);
+            detached)
+        {
+            NewGroups = [.. (doc.AddressGroups ?? []).Where(group => !heldGroups.Contains(group.Name)).Select(group => group.Name)],
+            ReplacedGroups = [.. (doc.AddressGroups ?? []).Where(group => heldGroups.Contains(group.Name)).Select(group => group.Name)],
+        };
     }
 
     private static void Keep(bool took, List<string> landed, List<string> refused, string line, string message)

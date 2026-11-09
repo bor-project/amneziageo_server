@@ -10,7 +10,7 @@ import { useSpot } from "@/store/spots"
 export function BalancerRemove() {
   const t = useText()
   const navigate = useNavigate()
-  const back = useSpot("/routing/channels")
+  const back = useSpot("/routing/balancers")
   const { balancerId } = useParams()
   const balancers = useBalancers()
   const remove = useRemoveBalancer()

@@ -409,7 +409,7 @@ public static class ClientEndpoints
         ClientSignals signals,
         CancellationToken ct)
     {
-        var before = await rules.ListAsync(ct).ConfigureAwait(false);
+        var before = await rules.TableAsync(ct).ConfigureAwait(false);
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -479,7 +479,7 @@ public static class ClientEndpoints
             return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a removal of many clients needs the ids");
         }
 
-        var before = await rules.ListAsync(ct).ConfigureAwait(false);
+        var before = await rules.TableAsync(ct).ConfigureAwait(false);
         var batch = await store.RemoveAllAsync(ids, ct).ConfigureAwait(false);
         foreach (var client in batch.Done)
         {

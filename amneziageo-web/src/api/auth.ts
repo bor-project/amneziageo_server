@@ -22,6 +22,9 @@ export interface Session {
 }
 
 const complaints: Record<string, TextKey> = {
+  "unknown-address-group": "routing.unknownGroup",
+  "empty-address-group": "routing.emptyGroup",
+  "address-group-in-use": "routing.groupInUse",
   "bad-proxy-targets": "error.proxyTargets", "bad-proxy-host": "error.proxyHost", "bad-proxy-transport": "error.proxyTransport",
   "bad-proxy-port": "error.badPort", "bad-proxy-path": "error.badWebSocketPath",
   "proxy-path-taken": "error.pathTaken", "bad-proxy-name": "error.badName",

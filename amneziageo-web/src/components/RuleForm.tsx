@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { complaint } from "@/api/auth"
+import { useAddressGroups } from "@/api/addressGroups"
 import { useBalancers } from "@/api/balancers"
 import { useClients } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
@@ -10,7 +11,7 @@ import type { RuleAction, RuleDraft, RuleProtocol } from "@/api/rules"
 import { DnsNotes } from "@/components/DnsMark"
 import { Line, ListArea, ListLine, Multi, Part, Switch } from "@/components/fields"
 import { clientTo, configTo, wayTo } from "@/components/members"
-import { danger, field, footer, label, primary, secondary } from "@/components/styles"
+import { danger, field, footer, footerUnder, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { same } from "@/store/draftSlice"
@@ -23,6 +24,7 @@ export function RuleForm({
   onSave,
   onClose,
   onRemove,
+  embedded = false,
 }: {
   start: RuleDraft
   self?: number
@@ -31,9 +33,11 @@ export function RuleForm({
   onSave: (draft: RuleDraft) => void
   onClose: () => void
   onRemove?: () => void
+  embedded?: boolean
 }) {
   const t = useText()
   const outbounds = useOutbounds()
+  const addressGroups = useAddressGroups()
   const balancers = useBalancers()
   const clients = useClients()
   const configs = useConfigs()
@@ -62,57 +66,43 @@ export function RuleForm({
 
         <div>
           <label className={label} htmlFor="rule-action">
-            {t("rules.action")}
+              {t("rules.outbound")}
           </label>
           <select
             id="rule-action"
-            value={draft.action}
-            onChange={(e) => put({ action: e.target.value as RuleAction })}
+            value={draft.action === "out" ? "out:" + draft.outbound : draft.action}
+            onChange={(e) => {
+              const selected = e.target.value
+              put(selected.startsWith("out:")
+                ? { action: "out", outbound: selected.slice(4) }
+                : { action: selected as RuleAction })
+            }}
             className={`mt-1 ${field}`}
           >
-            <option value="out">{t("rules.actionOut")}</option>
+            <option value="out:">{t("rules.pick")}</option>
             <option value="direct">{t("rules.actionDirect")}</option>
             <option value="block">{t("rules.actionBlock")}</option>
+            <optgroup label={t("rules.outbounds")}>
+              {(outbounds.data ?? []).map((outbound) => (
+                <option key={outbound.id} value={"out:" + outbound.name}>{outbound.name}</option>
+              ))}
+            </optgroup>
+            {(balancers.data ?? []).length > 0 && (
+              <optgroup label={t("rules.balancers")}>
+                {(balancers.data ?? []).map((balancer) => (
+                  <option key={balancer.id} value={"out:" + balancer.name}>{balancer.name}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
 
-        {draft.action === "out" && (
-          <div>
-            <label className={label} htmlFor="rule-outbound">
-              {t("rules.outbound")}
-            </label>
-            <select
-              id="rule-outbound"
-              value={draft.outbound}
-              onChange={(e) => put({ outbound: e.target.value })}
-              className={`mt-1 ${field}`}
-            >
-              <option value="">{t("rules.pick")}</option>
-              <optgroup label={t("rules.outbounds")}>
-                {(outbounds.data ?? []).map((outbound) => (
-                  <option key={outbound.id} value={outbound.name}>
-                    {outbound.name}
-                  </option>
-                ))}
-              </optgroup>
-              {(balancers.data ?? []).length > 0 && (
-                <optgroup label={t("rules.balancers")}>
-                  {(balancers.data ?? []).map((balancer) => (
-                    <option key={balancer.id} value={balancer.name}>
-                      {balancer.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            {way !== undefined && (
+        {draft.action === "out" && way !== undefined && (
               <div className="mt-1 flex justify-end">
                 <Link to={way} className="text-sm text-brand-ink hover:text-brand-lit">
                   {t("action.goTo")}
                 </Link>
               </div>
-            )}
-          </div>
         )}
 
         <div>
@@ -147,6 +137,18 @@ export function RuleForm({
       </Part>
 
       <Part title={t("rules.partAddresses")}>
+        <div>
+          <label className={label} htmlFor="rule-groups">{t("routing.addressGroups")}</label>
+          <div className="mt-1">
+            <Multi
+              id="rule-groups"
+              value={(draft.groups ?? []).map((id) => addressGroups.data?.find((group) => group.id === id)?.name ?? String(id))}
+              offers={(addressGroups.data ?? []).map((group) => group.name)}
+              placeholder={t("routing.noGroup")}
+              onChange={(names) => put({ groups: names.map((name) => addressGroups.data?.find((group) => group.name === name)?.id ?? Number(name)) })}
+            />
+          </div>
+        </div>
         <ListArea
           id="rule-targets"
           caption={t("rules.targets")}
@@ -195,13 +197,13 @@ export function RuleForm({
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
 
-      <div className={footer}>
+      <div className={embedded ? footerUnder + " routing-form-footer" : footer}>
         {onRemove !== undefined && (
           <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
             {t("rules.remove")}
           </button>
         )}
-        <button type="button" onClick={onClose} disabled={!edited || pending} className={secondary}>
+        <button type="button" onClick={onClose} disabled={pending} className={secondary}>
           {t("rules.cancel")}
         </button>
         <button
