@@ -1,10 +1,11 @@
+import { kindKey } from "@/components/routeKind"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { useBalancers } from "@/api/balancers"
 import type { Balancer, BalancerMember } from "@/api/balancers"
 import { useFailure } from "@/api/failure"
 import { useMoveOutbound, useOutbounds } from "@/api/outbounds"
-import type { Outbound, OutboundKind, OutboundState } from "@/api/outbounds"
+import type { Outbound, OutboundState } from "@/api/outbounds"
 import { scopes } from "@/api/scopes"
 import { Move } from "@/components/Move"
 import { RowActions } from "@/components/RowActions"
@@ -211,7 +212,7 @@ export function Channels() {
   )
 }
 
-function ChannelState({ outbound, t, language }: { outbound: Outbound; t: Text; language: string }) {
+export function ChannelState({ outbound, t, language }: { outbound: Outbound; t: Text; language: string }) {
   const status = channelStatus(outbound)
   return (
     <span className={status.tone} title={channelTitle(outbound, status, t, language)}>
@@ -294,7 +295,7 @@ function channelTitle(outbound: Outbound, status: ChannelStatus, t: Text, langua
     : undefined
 }
 
-function GroupState({ balancer, t }: { balancer: Balancer; t: Text }) {
+export function GroupState({ balancer, t }: { balancer: Balancer; t: Text }) {
   if (!balancer.isEnabled) {
     return <span className="text-muted">{t("balancers.off")}</span>
   }
@@ -306,7 +307,7 @@ function GroupState({ balancer, t }: { balancer: Balancer; t: Text }) {
   return <span className="text-good">{t("balancers.live")}</span>
 }
 
-function Members({ members }: { members: BalancerMember[] }) {
+export function Members({ members }: { members: BalancerMember[] }) {
   return (
     <span className="flex flex-wrap gap-2">
       {members.map((member) => (
@@ -357,14 +358,6 @@ function groupRank(balancer: Balancer): number {
   }
 
   return balancer.state.isLive ? 0 : 1
-}
-
-function kindKey(kind: OutboundKind): TextKey {
-  if (kind === "wg") {
-    return "outbounds.kindWg"
-  }
-
-  return kind === "ws" ? "outbounds.kindWs" : "outbounds.kindLocal"
 }
 
 function strategy(balancer: Balancer): TextKey {

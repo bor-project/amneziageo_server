@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
 
 export interface ExchangePlan {
+  newGroups?: string[]
+  replacedGroups?: string[]
   newRules: string[]
   replacedRules: string[]
   replacesBasic: boolean
@@ -17,6 +19,7 @@ export interface ExchangePlan {
     basic: { direct: string[]; block: string[] }
     presets: { name: string }[]
     sources: { name: string }[]
+    addressGroups?: { name: string }[]
   }
 }
 
@@ -73,6 +76,7 @@ export function useRoutingApply() {
     },
     onSuccess: async () => {
       await keep.invalidateQueries({ queryKey: ["rules"] })
+      await keep.invalidateQueries({ queryKey: ["address-groups"] })
       await keep.invalidateQueries({ queryKey: ["presets"] })
       await keep.invalidateQueries({ queryKey: ["geo"] })
     },

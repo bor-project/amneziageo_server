@@ -68,6 +68,7 @@ public static class ServerDatabase
         services.AddScoped<GeoStore>();
         services.AddScoped<OutboundStore>();
         services.AddScoped<RouteStore>();
+        services.AddScoped<AddressGroupStore>();
         services.AddScoped<BalanceStore>();
         services.AddScoped<DnsStore>();
         services.AddScoped<DnsStandingStore>();
@@ -101,7 +102,17 @@ public static class ServerDatabase
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var database = db.Database;
         var loggers = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+        var existed = File.Exists(database.GetDbConnection().DataSource);
+        var pending = await database.GetPendingMigrationsAsync(ct).ConfigureAwait(false);
+        if (pending.Any(name => name.EndsWith("_RoutingTable", StringComparison.Ordinal))
+            && existed)
+        {
+            var backup = await scope.ServiceProvider.GetRequiredService<DatabaseBackup>().CopyAsync(ct).ConfigureAwait(false);
+            loggers.CreateLogger(typeof(ServerDatabase).FullName!).LogInformation("routing upgrade backup: {Path}", backup);
+        }
+
         await database.MigrateAsync(ct).ConfigureAwait(false);
+        await scope.ServiceProvider.GetRequiredService<RouteStore>().MigrateBasicAsync(ct).ConfigureAwait(false);
         var moves = await db.AloneAsync(() => RuleSources.MoveAsync(db, ct), ct).ConfigureAwait(false);
         DatabaseFiles.Hide(database.GetDbConnection().DataSource, loggers.CreateLogger(typeof(DatabaseFiles).FullName!));
         var roles = scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();

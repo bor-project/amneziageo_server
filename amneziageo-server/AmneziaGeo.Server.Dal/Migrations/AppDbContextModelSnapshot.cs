@@ -179,6 +179,35 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.ToTable("Access");
                 });
 
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.AddressGroupEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Targets")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("AddressGroups");
+                });
+
             modelBuilder.Entity("AmneziaGeo.Server.Dal.ApiTokenEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -1120,6 +1149,12 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Groups")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<string>("Inbounds")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -1506,15 +1541,15 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("Hosted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(true);
-
                     b.Property<string>("Host")
                         .IsRequired()
                         .HasMaxLength(253)
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("Hosted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("HttpMethod")
                         .IsRequired()

@@ -20,6 +20,7 @@ public static class RouteEndpoints
 
         var reading = routes.MapGroup("/api/rules").RequireScope(Scopes.ReadState);
         reading.MapGet("/", ListAsync);
+        reading.MapGet("/table", TableAsync);
         reading.MapGet("/{id:long}", FindAsync);
         reading.MapGet("/basic", BasicAsync);
         reading.MapPost("/test", TestAsync);
@@ -31,11 +32,29 @@ public static class RouteEndpoints
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapPost("/{id:long}/switch", SwitchAsync);
         writing.MapPost("/{id:long}/move", MoveAsync);
+        writing.MapPost("/table/{id:long}/move", MoveTableAsync);
         writing.MapPost("/apply", ApplyAsync);
         writing.MapPut("/basic", ChangeBasicAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
-        return routes;
+        return routes.MapAddressGroups();
+    }
+
+    private static async Task<IResult> TableAsync(RouteStore store, RouteApplier applier, CancellationToken ct)
+    {
+        var found = await store.TableAsync(ct).ConfigureAwait(false);
+        var plan = await applier.ReadAsync(ct).ConfigureAwait(false);
+
+        return Results.Ok(found.Select(rule => RouteAnswers.Rule(rule, Leg(plan, rule.Id))).ToArray());
+    }
+
+    private static async Task<IResult> MoveTableAsync(long id, RouteMoveRequest request, RouteStore store, RouteApplier applier, CancellationToken ct)
+    {
+        var result = request.To is { } place
+            ? await store.PlaceAsync(id, place, ct, table: true).ConfigureAwait(false)
+            : await store.MoveAsync(id, request.Up, ct, table: true).ConfigureAwait(false);
+
+        return await AnswerAsync(result, applier, ct).ConfigureAwait(false);
     }
 
     private static async Task<IResult> ListAsync(RouteStore store, RouteApplier applier, CancellationToken ct)

@@ -28,7 +28,7 @@ public static class RuleNaming
             return null;
         }
 
-        var held = RuleSides.Naming(await store.ListAsync(ct).ConfigureAwait(false), side, name);
+        var held = RuleSides.Naming(await store.TableAsync(ct).ConfigureAwait(false), side, name);
 
         return [.. listed.Concat(held).Distinct()];
     }
@@ -48,7 +48,7 @@ public static class RuleNaming
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(store);
 
-        if (wanted is null || Same(RuleSides.Naming(await store.ListAsync(ct).ConfigureAwait(false), side, name), wanted))
+        if (wanted is null || Same(RuleSides.Naming(await store.TableAsync(ct).ConfigureAwait(false), side, name), wanted))
         {
             return null;
         }
@@ -79,7 +79,7 @@ public static class RuleNaming
     {
         ArgumentNullException.ThrowIfNull(store);
 
-        if (wanted is null || Same(RuleSides.Naming(await store.ListAsync(ct).ConfigureAwait(false), side, name), wanted))
+        if (wanted is null || Same(RuleSides.Naming(await store.TableAsync(ct).ConfigureAwait(false), side, name), wanted))
         {
             return false;
         }

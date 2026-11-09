@@ -27,17 +27,28 @@ public static class RoutingExport
         ArgumentNullException.ThrowIfNull(sources);
 
         var held = await rules.ListAsync(ct).ConfigureAwait(false);
+        var table = await rules.TableAsync(ct).ConfigureAwait(false);
+        var groups = await rules.GroupsAsync(ct).ConfigureAwait(false);
+        var groupNames = groups.ToDictionary(group => group.Id, group => group.Name);
         var basic = await rules.ReadBasicAsync(ct).ConfigureAwait(false);
         var lists = await presets.ListAsync(ct).ConfigureAwait(false);
         var geo = await sources.ListAsync(ct).ConfigureAwait(false);
+        var legacy = basic.Rules().Concat(held).Select(rule => rule.Id).SequenceEqual(table.Select(rule => rule.Id))
+            && table.Where(rule => RouteBasic.Holds(rule.Id)).All(rule =>
+                rule.IsEnabled && rule.Groups.Count == 0 && rule.Clients.Count == 0 && rule.Inbounds.Count == 0
+                && rule.Ports.Count == 0 && rule.SourcePorts.Count == 0 && rule.Protocol == RouteProtocol.Any
+                && rule.Action == (rule.Id == RouteBasic.BlockId ? RouteAction.Block : RouteAction.Direct)
+                && rule.Name == (rule.Id == RouteBasic.BlockId ? RouteBasic.BlockName : RouteBasic.DirectName));
 
         return new RoutingDoc(
             RoutingFile.FormatTag,
             RoutingFile.CurrentVersion,
-            [.. held.OrderBy(rule => rule.Position).Select(ToRule)],
-            new BasicBlock([.. basic.Direct], [.. basic.Block]),
+            [.. (legacy ? held : table).OrderBy(rule => rule.Position).Select(rule => ToRule(rule, groupNames))],
+            legacy ? new BasicBlock([.. basic.Direct], [.. basic.Block]) : new BasicBlock([], []),
             [.. lists.OrderBy(one => one.Name, StringComparer.OrdinalIgnoreCase).Select(ToPreset)],
-            [.. geo.OrderBy(one => one.Position).Select(ToSource)]);
+            [.. geo.OrderBy(one => one.Position).Select(ToSource)],
+            [.. groups.Select(group => new AddressGroupBlock(group.Name, group.Targets))],
+            !legacy);
     }
 
     /// <summary>
@@ -46,7 +57,7 @@ public static class RoutingExport
     public static string Text(RoutingDoc doc) =>
         JsonSerializer.Serialize(doc, RoutingFile.Options);
 
-    private static RuleBlock ToRule(RouteRule rule) => new(
+    private static RuleBlock ToRule(RouteRule rule, IReadOnlyDictionary<long, string> groups) => new(
         rule.Name,
         rule.Position,
         rule.IsEnabled,
@@ -57,7 +68,9 @@ public static class RoutingExport
         rule.Inbounds,
         rule.Ports,
         rule.SourcePorts,
-        rule.Protocol);
+        rule.Protocol,
+        [.. rule.Groups.Select(id => groups.TryGetValue(id, out var name) ? name : "#" + id)],
+        RouteBasic.Holds(rule.Id) ? rule.Id : null);
 
     private static PresetBlock ToPreset(RoutingPreset one) => new(
         one.Name,

@@ -58,12 +58,12 @@ public sealed record RouteBasic
         var rules = new List<RouteRule>();
         if (Block.Count > 0)
         {
-            rules.Add(new RouteRule { Id = BlockId, Name = BlockName, Action = RouteAction.Block, Targets = Block });
+            rules.Add(new RouteRule { Id = BlockId, Name = BlockName, Position = int.MinValue, Action = RouteAction.Block, Targets = Block });
         }
 
         if (Direct.Count > 0)
         {
-            rules.Add(new RouteRule { Id = DirectId, Name = DirectName, Action = RouteAction.Direct, Targets = Direct });
+            rules.Add(new RouteRule { Id = DirectId, Name = DirectName, Position = int.MinValue + 1, Action = RouteAction.Direct, Targets = Direct });
         }
 
         return rules;
