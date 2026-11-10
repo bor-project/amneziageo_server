@@ -34,6 +34,8 @@ public sealed record RouteLeg(
     /// </summary>
     public uint Mark => Exit.Mark;
 
+    public DomainMatcher? DnsMatcher { get; init; }
+
     /// <summary>
     /// Tells whether the rule goes on the host.
     /// </summary>
@@ -111,6 +113,10 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
     /// </summary>
     public IReadOnlyList<AddressGroup> Groups { get; init; } = [];
 
+    public IReadOnlyDictionary<long, DomainMatcher> DnsGroups { get; init; } = new Dictionary<long, DomainMatcher>();
+
+    public IReadOnlyList<DnsOrigin> DnsOrigins { get; init; } = [];
+
     /// <summary>
     /// The resolver the clients of the tunnels are given.
     /// </summary>
@@ -180,9 +186,17 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
             .Concat(rules)
             .OrderBy(rule => rule.Position)
             .Select(rule => Leg(rule, ways, index, known, named))
+            .Select(leg => dns?.Selection == DnsSelection.Routing ? leg with { DnsMatcher = new DomainMatcher(leg.Domains) } : leg)
             .ToArray();
 
-        return new RoutePlan(legs, interfaces) { Dns = dns ?? DnsDefaults.Settings, Ways = ways, Groups = groups ?? [] };
+        return new RoutePlan(legs, interfaces)
+        {
+            Dns = dns ?? DnsDefaults.Settings,
+            Ways = ways,
+            Groups = groups ?? [],
+            DnsGroups = named.Values.Where(group => group.Dns.Count > 0).ToDictionary(group => group.Id, group => new DomainMatcher(
+                GeoMaterializer.Materialize(group.Targets.Select(RouteRules.Target).OfType<GeoRule>().ToArray(), index).Domains)),
+        };
     }
 
     private static RouteLeg Leg(RouteRule rule, RouteWays ways, GeoIndex index, RouteKnown known, IReadOnlyDictionary<long, AddressGroup> groups)

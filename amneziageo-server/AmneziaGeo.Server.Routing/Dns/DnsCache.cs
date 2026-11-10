@@ -31,16 +31,16 @@ public sealed class DnsCache
     /// <summary>
     /// Returns the answer to a question marked with the number the asking side used, or null.
     /// </summary>
-    public byte[]? Take(string question, DnsRecordType type, ushort id)
+    public byte[]? Take(string question, DnsRecordType type, ushort id, string scope = "")
     {
-        if (_size == 0 || !_held.TryGetValue(Key(question, type), out var found))
+        if (_size == 0 || !_held.TryGetValue(Key(question, type, scope), out var found))
         {
             return null;
         }
 
         if (found.Until <= _time.GetUtcNow())
         {
-            _held.TryRemove(Key(question, type), out _);
+            _held.TryRemove(Key(question, type, scope), out _);
 
             return null;
         }
@@ -54,7 +54,7 @@ public sealed class DnsCache
     /// <summary>
     /// Holds an answer back for as long as it stays good.
     /// </summary>
-    public void Keep(string question, DnsRecordType type, ReadOnlySpan<byte> answer, TimeSpan lifetime)
+    public void Keep(string question, DnsRecordType type, ReadOnlySpan<byte> answer, TimeSpan lifetime, string scope = "")
     {
         if (_size == 0 || lifetime <= TimeSpan.Zero || question.Length == 0)
         {
@@ -66,7 +66,7 @@ public sealed class DnsCache
             Sweep();
         }
 
-        _held[Key(question, type)] = new Held(answer.ToArray(), _time.GetUtcNow() + lifetime);
+        _held[Key(question, type, scope)] = new Held(answer.ToArray(), _time.GetUtcNow() + lifetime);
     }
 
     /// <summary>
@@ -96,8 +96,8 @@ public sealed class DnsCache
         }
     }
 
-    private static string Key(string question, DnsRecordType type) =>
-        ((int)type).ToString(CultureInfo.InvariantCulture) + "|" + question.ToLowerInvariant();
+    private static string Key(string question, DnsRecordType type, string scope) =>
+        scope + "\0" + ((int)type).ToString(CultureInfo.InvariantCulture) + "|" + question.ToLowerInvariant();
 
     private readonly record struct Held(byte[] Answer, DateTimeOffset Until);
 }

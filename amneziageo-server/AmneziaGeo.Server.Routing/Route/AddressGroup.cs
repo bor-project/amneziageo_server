@@ -11,6 +11,8 @@ public sealed record AddressGroup
 
     public IReadOnlyList<string> Targets { get; init; } = [];
 
+    public IReadOnlyList<string> Dns { get; init; } = [];
+
     public DateTimeOffset CreatedUtc { get; init; }
 
     public DateTimeOffset UpdatedUtc { get; init; }

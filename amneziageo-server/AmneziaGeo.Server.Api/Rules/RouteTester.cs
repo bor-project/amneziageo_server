@@ -92,7 +92,7 @@ public sealed class RouteTester
             return (fault, null);
         }
 
-        var addresses = bare is null ? await AskAsync(name, ct).ConfigureAwait(false) : new[] { bare };
+        var addresses = bare is null ? await AskAsync(name, sources.FirstOrDefault(), inbound, ct).ConfigureAwait(false) : new[] { bare };
         var plan = await _applier.ReadAsync(ct).ConfigureAwait(false);
         var query = new RouteQuery
         {
@@ -167,9 +167,9 @@ public sealed class RouteTester
         return (null, sources, configs.FirstOrDefault(config => config.Id == found.ConfigId)?.Name ?? string.Empty);
     }
 
-    private async Task<IReadOnlyList<IPAddress>> AskAsync(string name, CancellationToken ct)
+    private async Task<IReadOnlyList<IPAddress>> AskAsync(string name, IPAddress? client, string inbound, CancellationToken ct)
     {
-        var answered = await _dns.AskAsync(name, ct).ConfigureAwait(false);
+        var answered = await _dns.AskAsync(name, ct, client, inbound).ConfigureAwait(false);
         if (answered is not null)
         {
             return [.. answered.Distinct()];

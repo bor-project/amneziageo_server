@@ -35,6 +35,8 @@ public sealed record Balancer
     /// </summary>
     public IReadOnlyList<string> Members { get; init; } = [];
 
+    public IReadOnlyList<string> Dns { get; init; } = [];
+
     /// <summary>
     /// The seed the addresses of the clients are spread with.
     /// </summary>

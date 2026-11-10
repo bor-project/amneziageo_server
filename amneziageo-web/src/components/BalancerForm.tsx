@@ -3,7 +3,7 @@ import { Link } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import type { BalanceStrategy, BalancerDraft } from "@/api/balancers"
 import { useOutbounds } from "@/api/outbounds"
-import { Line, Part, Switch } from "@/components/fields"
+import { Line, ListArea, Part, Switch } from "@/components/fields"
 import { WayUse } from "@/components/Holders"
 import { wayTo } from "@/components/members"
 import { danger, field, footer, footerUnder, label, primary, quiet, secondary } from "@/components/styles"
@@ -143,6 +143,12 @@ export function BalancerForm({
               </div>
             )}
           </div>
+        </div>
+      </Part>
+
+      <Part title={t("tab.dns")}>
+        <div className="sm:col-span-2">
+          <ListArea id="balancer-dns" caption={t("dns.override")} value={draft.dns} onChange={(dns) => put({ dns })} />
         </div>
       </Part>
 

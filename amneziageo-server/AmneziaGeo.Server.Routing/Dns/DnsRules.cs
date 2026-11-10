@@ -46,6 +46,16 @@ public static class DnsRules
     {
         ArgumentNullException.ThrowIfNull(settings);
 
+        if (!DnsSelection.Known(settings.Selection))
+        {
+            return new DnsFault("bad-dns-selection", "the DNS selection mode is unknown");
+        }
+
+        if (settings.Selection == DnsSelection.Outbound && string.IsNullOrWhiteSpace(settings.Outbound))
+        {
+            return new DnsFault("no-dns-outbound", "the DNS selection names no outbound");
+        }
+
         if (settings.Port is < 1 or > 65535)
         {
             return new DnsFault("bad-port", "the port of the resolver is outside 1 to 65535");
@@ -177,6 +187,18 @@ public static class DnsRules
         point = new IPEndPoint(address, port);
 
         return true;
+    }
+
+    public static DnsFault? Servers(IReadOnlyList<string> servers)
+    {
+        if (servers.Count > MaxUpstreams)
+        {
+            return new DnsFault("bad-dns", $"at most {MaxUpstreams} name servers are accepted");
+        }
+
+        return servers.FirstOrDefault(one => !Server(one, out _)) is { } wrong
+            ? new DnsFault("bad-dns", $"'{wrong}' is not a name server")
+            : null;
     }
 
     private static DnsFault? Files(DnsSettings settings)

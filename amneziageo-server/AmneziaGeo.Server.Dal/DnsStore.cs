@@ -101,6 +101,7 @@ public sealed class DnsStore
         Port = row.Port,
         Upstreams = Parts(row.Upstreams),
         Outbound = row.Outbound,
+        Selection = row.Selection,
         Listen = Parts(row.Listen),
         NameMinutes = row.NameMinutes,
         CacheSize = row.CacheSize,
@@ -116,6 +117,7 @@ public sealed class DnsStore
         row.Port = settings.Port;
         row.Upstreams = string.Join(",", settings.Upstreams);
         row.Outbound = settings.Outbound;
+        row.Selection = settings.Selection;
         row.Listen = string.Join(",", settings.Listen);
         row.NameMinutes = settings.NameMinutes;
         row.CacheSize = settings.CacheSize;

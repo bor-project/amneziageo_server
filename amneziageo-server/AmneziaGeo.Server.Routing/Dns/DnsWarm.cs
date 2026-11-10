@@ -72,13 +72,14 @@ public static class DnsWarm
     public static async Task<IReadOnlyList<(DnsWarmName Name, IPAddress Address)>> AskAsync(
         IDnsUpstream upstream,
         IReadOnlyList<DnsWarmName> names,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<DnsWarmName, IDnsUpstream>? select = null)
     {
         ArgumentNullException.ThrowIfNull(upstream);
         ArgumentNullException.ThrowIfNull(names);
 
         using var gate = new SemaphoreSlim(Parallel);
-        var answers = await Task.WhenAll(names.Select(one => OneAsync(upstream, one, gate, ct))).ConfigureAwait(false);
+        var answers = await Task.WhenAll(names.Select(one => OneAsync(select?.Invoke(one) ?? upstream, one, gate, ct))).ConfigureAwait(false);
 
         return [.. answers.SelectMany(found => found)];
     }

@@ -34,6 +34,8 @@ public sealed class DnsResolver
 
     private readonly IDnsRelay? _relay;
 
+    private readonly DnsRoutes? _routes;
+
     private readonly Lock _sync = new();
 
     private readonly Dictionary<IPAddress, long> _quiet = [];
@@ -56,9 +58,11 @@ public sealed class DnsResolver
         Action<IPAddress?, DnsMessage>? heard = null,
         DnsStandIns? standIns = null,
         Func<IPAddress, DomainMatcher?>? standing = null,
-        IDnsRelay? relay = null)
+        IDnsRelay? relay = null,
+        DnsRoutes? routes = null)
     {
         _relay = relay;
+        _routes = routes;
         _upstream = upstream;
         _cache = cache;
         _sets = sets;
@@ -101,7 +105,7 @@ public sealed class DnsResolver
         }
 
         _state.Asked();
-        if (server is not null && _relay is { } relay && !Quiet(server))
+        if (_settings.Selection == DnsSelection.Global && server is not null && _relay is { } relay && !Quiet(server))
         {
             var relayed = await RelayAsync(relay, question, stream, client, server, asked, ct).ConfigureAwait(false);
             if (relayed is not null)
@@ -110,15 +114,25 @@ public sealed class DnsResolver
             }
         }
 
-        var held = _cache.Take(asked.Question, asked.Type, asked.Id);
+        var selected = _routes?.Select(asked.Question, client);
+        if (selected?.Way.Fault is not null)
+        {
+            _state.Lost();
+
+            return DnsMessage.Refusal(question.Span, DnsMessage.ServerFailure);
+        }
+
+        var held = _cache.Take(asked.Question, asked.Type, asked.Id, selected?.Key ?? string.Empty);
         if (held is not null)
         {
             _state.Held();
 
-            return await TellAsync(question, stream, client, asked, held, DnsMessage.Read(held), ct).ConfigureAwait(false);
+            return await TellAsync(question, stream, client, asked, held, DnsMessage.Read(held), ct, selected?.Key ?? string.Empty).ConfigureAwait(false);
         }
 
-        var answer = await _upstream.AskAsync(question, stream, ct).ConfigureAwait(false);
+        var answer = selected is null
+            ? await _upstream.AskAsync(question, stream, ct).ConfigureAwait(false)
+            : await _routes!.AskAsync(selected, question, stream, ct).ConfigureAwait(false);
         if (answer is null)
         {
             _state.Lost();
@@ -132,9 +146,9 @@ public sealed class DnsResolver
             return Carried(question, stream, answer);
         }
 
-        _cache.Keep(read.Question, read.Type, answer, Lifetime(read));
+        _cache.Keep(read.Question, read.Type, answer, Lifetime(read), selected?.Key ?? string.Empty);
 
-        return await TellAsync(question, stream, client, asked, answer, read, ct).ConfigureAwait(false);
+        return await TellAsync(question, stream, client, asked, answer, read, ct, selected?.Key ?? string.Empty).ConfigureAwait(false);
     }
 
     // Returns the answer of the private name server the client asked, kept out of the cache and handed on as an answer
@@ -219,10 +233,11 @@ public sealed class DnsResolver
         DnsMessage asked,
         byte[] answer,
         DnsMessage? read,
-        CancellationToken ct)
+        CancellationToken ct,
+        string scope = "")
     {
         Heard(client, read);
-        var stood = Stood(question.Span, client, asked, read, out var waiting);
+        var stood = Stood(question.Span, client, asked, read, out var waiting, scope);
         await LandAsync(read, waiting, ct).ConfigureAwait(false);
 
         return stood ?? Carried(question, stream, answer);
@@ -230,7 +245,7 @@ public sealed class DnsResolver
 
     // Returns the answer with the stand-in address of the name, an empty one for the other kinds of addresses, or
     // null when the client is answered as it is.
-    private byte[]? Stood(ReadOnlySpan<byte> question, IPAddress? client, DnsMessage asked, DnsMessage? read, out bool waiting)
+    private byte[]? Stood(ReadOnlySpan<byte> question, IPAddress? client, DnsMessage asked, DnsMessage? read, out bool waiting, string scope)
     {
         waiting = false;
         if (_standIns is null
@@ -254,7 +269,7 @@ public sealed class DnsResolver
             return null;
         }
 
-        var address = _standIns.Take(asked.Question, real, out waiting);
+        var address = _standIns.Take(asked.Question, real, out waiting, scope);
 
         return DnsMessage.Single(question, address, StandInLife(read));
     }

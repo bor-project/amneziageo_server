@@ -52,6 +52,8 @@ public sealed class DnsHost : BackgroundService
 
     private DnsUpstream? _upstream;
 
+    private DnsRoutes? _routes;
+
     private readonly SemaphoreSlim _poke = new(0, 1);
 
     private readonly Dictionary<DnsWarmName, DnsWarmTry> _asked = new();
@@ -115,10 +117,26 @@ public sealed class DnsHost : BackgroundService
     public string Asking => _settings.IsEnabled ? _settings.Outbound : string.Empty;
 
     /// <summary>
-    /// Returns the addresses a name answers with through the way out of the resolver, or null when it is not running.
+    /// Returns the addresses a name answers with through its DNS policy.
     /// </summary>
-    public async Task<IReadOnlyList<IPAddress>?> AskAsync(string name, CancellationToken ct) =>
-        _upstream is { } upstream ? await DnsLookup.AskAsync(upstream, name, ct).ConfigureAwait(false) : null;
+    public async Task<IReadOnlyList<IPAddress>?> AskAsync(
+        string name,
+        CancellationToken ct,
+        IPAddress? client = null,
+        string? inbound = null)
+    {
+        if (_routes is { } routes)
+        {
+            return await DnsLookup.AskAsync(routes.ForClient(name, client, inbound), name, ct).ConfigureAwait(false);
+        }
+
+        if (_settings.Selection != DnsSelection.Global)
+        {
+            return [];
+        }
+
+        return _upstream is { } upstream ? await DnsLookup.AskAsync(upstream, name, ct).ConfigureAwait(false) : null;
+    }
 
     /// <summary>
     /// Takes the settings anew and starts the resolver over.
@@ -144,6 +162,7 @@ public sealed class DnsHost : BackgroundService
             }
 
             Volatile.Write(ref _settings, _settings with { Outbound = anew });
+            _routes?.Follow(old, anew);
             _state.Took(_settings, DnsNeed.Running(_settings, DnsNeed.Kept(_state.Needed, _state.Holders, _state.Picked)));
         }
         finally
@@ -258,6 +277,7 @@ public sealed class DnsHost : BackgroundService
             _settings.Upstreams,
             DnsDefaults.Wait,
             () => Way(Volatile.Read(ref _settings), Interlocked.Increment(ref _turns)).Mark);
+        var routes = _settings.Selection == DnsSelection.Global ? null : new DnsRoutes(() => _plans.Held, _settings);
         var resolver = new DnsResolver(
             upstream,
             new DnsCache(_settings.CacheSize, _time),
@@ -269,7 +289,8 @@ public sealed class DnsHost : BackgroundService
             _names.Hear,
             _standIns,
             _book.For,
-            new DnsRelay(DnsDefaults.Wait));
+            new DnsRelay(DnsDefaults.Wait),
+            routes);
 
         var server = new DnsServer(resolver, ConntrackOrigin.Find);
         var taken = default(IReadOnlyList<IPAddress>);
@@ -280,6 +301,7 @@ public sealed class DnsHost : BackgroundService
         catch (SocketException ex)
         {
             upstream.Dispose();
+            routes?.Dispose();
             _state.Stopped(ex.Message);
             _logger.LogWarning(ex, "the resolver did not take the addresses of the tunnels");
             return;
@@ -287,6 +309,7 @@ public sealed class DnsHost : BackgroundService
 
         _server = server;
         _upstream = upstream;
+        _routes = routes;
         _asked.Clear();
         _state.Started([.. taken.Select(address => address.ToString())], _time.GetUtcNow());
         _logger.LogInformation(
@@ -303,6 +326,8 @@ public sealed class DnsHost : BackgroundService
     {
         var upstream = _upstream;
         _upstream = null;
+        _routes?.Dispose();
+        _routes = null;
         upstream?.Dispose();
     }
 
@@ -476,7 +501,7 @@ public sealed class DnsHost : BackgroundService
             return;
         }
 
-        var way = Way(_settings, 0).Fault?.Message;
+        var way = _routes is null ? Way(_settings, 0).Fault?.Message : _routes.Fault;
         var fault = way ?? upstream.Fault;
         if (fault == _state.Way)
         {
@@ -522,7 +547,7 @@ public sealed class DnsHost : BackgroundService
             return;
         }
 
-        var found = await DnsWarm.AskAsync(upstream, wanted, ct).ConfigureAwait(false);
+        var found = await DnsWarm.AskAsync(upstream, wanted, ct, _routes is { } routes ? routes.ForRule : null).ConfigureAwait(false);
         var answered = found.Select(one => one.Name).ToHashSet();
         var now = _time.GetUtcNow();
         foreach (var one in wanted)

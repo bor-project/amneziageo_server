@@ -47,7 +47,7 @@ public static class RoutingExport
             legacy ? new BasicBlock([.. basic.Direct], [.. basic.Block]) : new BasicBlock([], []),
             [.. lists.OrderBy(one => one.Name, StringComparer.OrdinalIgnoreCase).Select(ToPreset)],
             [.. geo.OrderBy(one => one.Position).Select(ToSource)],
-            [.. groups.Select(group => new AddressGroupBlock(group.Name, group.Targets))],
+            [.. groups.Select(group => new AddressGroupBlock(group.Name, group.Targets, group.Dns))],
             !legacy);
     }
 

@@ -317,6 +317,7 @@ public sealed class BalanceStore
         IsEnabled = entity.IsEnabled,
         Strategy = entity.Strategy,
         Members = Parts(entity.Members),
+        Dns = Parts(entity.Dns),
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
     };
@@ -328,6 +329,7 @@ public sealed class BalanceStore
         entity.IsEnabled = balancer.IsEnabled;
         entity.Strategy = balancer.Strategy;
         entity.Members = string.Join(", ", balancer.Members);
+        entity.Dns = string.Join(", ", balancer.Dns);
     }
 
     private static IReadOnlyList<string> Parts(string text) =>
