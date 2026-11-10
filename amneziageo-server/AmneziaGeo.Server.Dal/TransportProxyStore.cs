@@ -108,7 +108,7 @@ public sealed class TransportProxyStore
         var selected = await _db.TransportProxies.AsNoTracking()
             .Where(proxy => proxy.IsEnabled && ids.Contains(proxy.Id))
             .ToListAsync(ct).ConfigureAwait(false);
-        var byId = selected.ToDictionary(proxy => proxy.Id);
+        var byId = selected.Where(proxy => proxy.UsesTls).ToDictionary(proxy => proxy.Id);
         return [.. ids.Distinct().Where(byId.ContainsKey).Select(id => byId[id])];
     }
 

@@ -4,6 +4,7 @@ using AmneziaGeo.Server.Routing.Firewall;
 using AmneziaGeo.Server.Api.ClientUpdates;
 using AmneziaGeo.Server.Api.Services;
 using AmneziaGeo.Server.Api.Subscriptions;
+using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
@@ -47,10 +48,19 @@ public static class ProxyEndpoints
                 return Refuse("proxy-protocol", "convert the legacy proxy before exporting it", 409);
             }
 
+            var panel = context.RequestServices.GetRequiredService<PanelSettings>();
+            var options = context.RequestServices.GetRequiredService<WebOptions>();
+            if (ProxySecurity.Check(proxy, Listening.Chain(options, panel), Listening.Key(options, panel)) is { } fault)
+            {
+                return Refuse(fault.Code, fault.Message, 409);
+            }
+
             var catalog = new ProxyCatalog(1, [new ProxyServiceEntry(proxy.Id, proxy.Name, proxy.IsHttpV2 ? "http" : proxy.Transport,
                 proxy.Host, proxy.Port, proxy.Path, await store.CredentialsAsync(proxy, ct).ConfigureAwait(false), proxy.UsesCertificate,
-                proxy.HttpMethod, proxy.ProtocolVersion, proxy.ListenPort, proxy.Certificate, proxy.CertificateKey, proxy.OriginHttp,
-                ProxyTargetRules.Read(proxy.TargetsJson))]);
+                proxy.HttpMethod, proxy.ProtocolVersion, proxy.ListenPort,
+                proxy.Certificate.Length > 0 ? proxy.Certificate : Listening.Chain(options, panel),
+                proxy.CertificateKey.Length > 0 ? proxy.CertificateKey : proxy.Certificate.Length > 0 ? proxy.Certificate : Listening.Key(options, panel),
+                false, ProxyTargetRules.Read(proxy.TargetsJson), proxy.ServerName, proxy.Pin)]);
             context.Response.Headers.CacheControl = "no-store";
             return Results.Json(catalog, ProxyCatalog.Json);
         });
@@ -75,7 +85,9 @@ public static class ProxyEndpoints
             return Refuse(fault.Error, fault.Message);
         }
 
-        if (draft.Hosted && draft.UsesCertificate && CertificateFiles.Check(draft.Certificate, draft.CertificateKey, logger) is { } certificate)
+        var panel = services.GetRequiredService<PanelSettings>();
+        var options = services.GetRequiredService<WebOptions>();
+        if (ProxySecurity.Check(draft, Listening.Chain(options, panel), Listening.Key(options, panel), logger) is { } certificate)
         {
             return Refuse(certificate.Code, certificate.Message);
         }
@@ -137,7 +149,7 @@ public static class ProxyEndpoints
 /// Carries proxy settings from the panel.
 /// </summary>
 public sealed record ProxyRequest(string Name, string Transport, string Host, int Port, string Path,
-    bool IsEnabled, string Certificate = "", string CertificateKey = "", string ServerName = "", string Pin = "", bool? Opened = null, bool? Keep = null, int? ListenPort = null, bool? OriginHttp = null, ProxyTargets? Targets = null, bool? UseCertificate = null, string? HttpMethod = null, int? ProtocolVersion = null, bool? Hosted = null)
+    bool IsEnabled, string? Certificate = null, string? CertificateKey = null, string? ServerName = null, string? Pin = null, bool? Opened = null, bool? Keep = null, int? ListenPort = null, bool? OriginHttp = null, ProxyTargets? Targets = null, bool? UseCertificate = null, string? HttpMethod = null, int? ProtocolVersion = null, bool? Hosted = null)
 {
     /// <summary>
     /// Returns the proxy settings.
@@ -145,13 +157,13 @@ public sealed record ProxyRequest(string Name, string Transport, string Host, in
     public TransportProxyEntity Draft(TransportProxyEntity? held = null) => new()
     {
         Name = Name ?? "", Transport = Transport ?? "", Host = Host ?? "", Port = Port,
-        ListenPort = ListenPort ?? held?.ListenPort ?? 0, OriginHttp = Transport is "http" or "xhttp" && (OriginHttp ?? held?.OriginHttp ?? false), Path = Path ?? "",
+        ListenPort = ListenPort ?? held?.ListenPort ?? 0, OriginHttp = OriginHttp ?? held?.OriginHttp ?? false, Path = Path ?? "",
         Hosted = Hosted ?? held?.Hosted ?? true,
         UseCertificate = UseCertificate ?? held?.UseCertificate,
         HttpMethod = HttpMethod ?? held?.HttpMethod ?? "GET",
         ProtocolVersion = ProtocolVersion ?? (Transport == "http" ? 2 : held?.ProtocolVersion ?? 0),
-        IsEnabled = IsEnabled, Opened = Opened ?? held?.Opened ?? false, Certificate = Certificate ?? "", CertificateKey = CertificateKey ?? "",
-        ServerName = ServerName ?? "", Pin = Pin ?? "",
+        IsEnabled = IsEnabled, Opened = Opened ?? held?.Opened ?? false, Certificate = Certificate ?? held?.Certificate ?? "", CertificateKey = CertificateKey ?? held?.CertificateKey ?? "",
+        ServerName = ServerName ?? held?.ServerName ?? "", Pin = Pin ?? held?.Pin ?? "",
         TargetsJson = Targets is null ? held?.TargetsJson ?? string.Empty : ProxyTargetRules.Write(
             ProxyTargetRules.TryNormalize(Targets, out var normalized) ? normalized : Targets),
     };

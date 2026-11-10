@@ -4,6 +4,9 @@ using System.Text;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Api.Proxies;
+using AmneziaGeo.Server.Api.Web;
+using AmneziaGeo.Server.Core.Panel;
 
 namespace AmneziaGeo.Server.Api.Services;
 
@@ -36,6 +39,10 @@ public sealed class ProxyOffer : IHelloFeature
         var store = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
         var identity = await store.IdentityAsync(ct).ConfigureAwait(false);
         var selected = _options?.Enabled == false ? [] : await store.SelectedAsync(peer.Template?.ProxyIds ?? [], ct).ConfigureAwait(false);
+        var panel = scope.ServiceProvider.GetService<PanelSettings>() ?? new PanelSettings();
+        var options = scope.ServiceProvider.GetService<WebOptions>() ?? new WebOptions();
+        selected = selected.Where(proxy => ProxySecurity.Check(proxy, Listening.Chain(options, panel), Listening.Key(options, panel),
+            publicName: peer.Context.Request.Host.Host.Trim('[', ']')) is null).ToArray();
         var named = selected.Select(proxy => (Proxy: proxy, Host: proxy.Host.Length > 0 ? proxy.Host : peer.Context.Request.Host.Host.Trim('[', ']')))
             .Where(item => Uri.CheckHostName(item.Host) != UriHostNameType.Unknown);
         if (_modern)

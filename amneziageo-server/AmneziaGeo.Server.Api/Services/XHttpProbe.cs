@@ -25,28 +25,27 @@ public static class XHttpProbe
     public static async Task AnswerAsync(HttpContext context, string nonce, Func<Task<bool>> authorized, bool running,
         Func<ProxyTargets?>? targets = null, string transport = "xhttp", Func<bool>? stillRunning = null)
     {
-        context.Response.Headers.CacheControl = "no-store";
         if (!HttpMethods.IsGet(context.Request.Method))
         {
-            context.Response.Headers.Allow = "GET";
-            context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
 
         if (context.Request.ContentLength is > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding")
             || context.Request.Headers.ContainsKey("Upgrade"))
         {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
 
         if (!await authorized().ConfigureAwait(false))
         {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
 
         var destination = default(ProxyDestination?);
+        context.Response.Headers.CacheControl = "no-store";
         if (context.Request.Query.ContainsKey("host") || context.Request.Query.ContainsKey("port"))
         {
             var host = context.Request.Query["host"];

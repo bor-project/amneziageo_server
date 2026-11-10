@@ -23,7 +23,7 @@ WORKDIR /src
 COPY wstunnel/wstunnel/ ./
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release --package wstunnel-cli --no-default-features --features ring \
+    cargo build --locked --release --package wstunnel-cli --no-default-features --features ring \
  && cp target/release/wstunnel /wstunnel
 
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:$DOTNET AS server

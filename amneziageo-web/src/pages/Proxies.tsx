@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { complaint } from "@/api/auth"
+import { complaint, reason } from "@/api/auth"
 import { useProxies } from "@/api/proxies"
 import { scopes } from "@/api/scopes"
 import { AppSign } from "@/components/AppMark"
@@ -22,7 +22,7 @@ export function Proxies() {
       { key: "name", caption: t("proxies.name"), lead: true, sort: (one) => one.name, cell: (one) => may ? <Link className="font-semibold hover:text-brand-ink" to={`/routing/proxies/${one.id}/edit`}>{one.name}</Link> : one.name },
       { key: "transport", caption: t("proxies.transport"), cell: (one) => <span className="inline-flex items-center gap-1">{one.transport === "quic" ? "QUIC" : one.transport === "http" || one.transport === "xhttp" && one.protocolVersion === 2 ? `HTTP ${one.httpMethod}` : one.transport === "xhttp" ? "XHTTP" : "WebSocket"}{(one.transport === "http" || one.transport === "xhttp" && one.protocolVersion === 2) && one.httpMethod === "GET" && <AppSign className="size-3.5" />}</span> },
       { key: "address", caption: t("proxies.host"), cell: (one) => `${one.host.includes(":") ? `[${one.host}]` : one.host}:${one.port}/${one.path}` },
-      { key: "enabled", caption: t("geo.enabled"), cell: (one) => one.fault ? <span className="text-alarm">{one.fault}</span> : t(one.isEnabled ? "proxies.on" : "proxies.off") },
+      { key: "enabled", caption: t("geo.enabled"), cell: (one) => one.fault ? <span className="text-alarm" title={one.fault}>{one.fault.startsWith("proxy-certificate-") || one.fault === "proxy-tls-required" ? t(reason(one.fault)) : one.fault}</span> : t(one.isEnabled ? "proxies.on" : "proxies.off") },
     ]} />}
   </div>
 }

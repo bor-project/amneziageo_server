@@ -17,20 +17,30 @@ namespace AmneziaGeo.Server.Api.Services;
 /// <summary>
 /// Offers the tunnel inside a websocket on the port of the services.
 /// </summary>
-public sealed class WebSocketOffer(FrontOptions? options = null) : IHelloFeature
+public sealed class WebSocketOffer(FrontOptions? options = null, IServiceScopeFactory? scopes = null) : IHelloFeature
 {
     /// <inheritdoc/>
     public string Name => FeatureNames.WebSocket;
 
     /// <inheritdoc/>
-    public ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
+    public async ValueTask<object?> OfferAsync(HelloPeer peer, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(peer);
 
-        return ValueTask.FromResult<object?>(
-            peer.Endpoint.WebSocket && options?.Enabled != false
-                ? new WebSocketFeature(ConfigServices.Port(peer.Endpoint), ConfigServices.WebSocketPath(peer.Endpoint))
-                : null);
+        if (!peer.Endpoint.WebSocket || options?.Enabled == false || scopes is null)
+        {
+            return null;
+        }
+
+        using var scope = scopes.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
+        var proxy = (await store.ListAsync(ct).ConfigureAwait(false)).SingleOrDefault(one => one.LegacyConfigId == peer.Endpoint.Id);
+        var panel = scope.ServiceProvider.GetRequiredService<PanelSettings>();
+        var web = scope.ServiceProvider.GetRequiredService<WebOptions>();
+        return proxy is { IsEnabled: true }
+            && AmneziaGeo.Server.Api.Proxies.ProxySecurity.Check(proxy, Listening.Chain(web, panel), Listening.Key(web, panel),
+                publicName: peer.Context.Request.Host.Host.Trim('[', ']')) is null
+                ? new WebSocketFeature(ConfigServices.Port(peer.Endpoint), ConfigServices.WebSocketPath(peer.Endpoint)) : null;
     }
 }
 

@@ -16,15 +16,14 @@ namespace AmneziaGeo.Server.Tests;
 public sealed class ProxyModeTests
 {
     [Theory]
-    [InlineData("GET", false)]
     [InlineData("GET", true)]
-    [InlineData("POST", false)]
     [InlineData("POST", true)]
     public async Task HttpModeAndCertificateSurviveSaving(string method, bool certificate)
     {
         using var bench = new Bench();
         var store = new TransportProxyStore(bench.Db);
         var draft = Draft("http");
+        draft.Hosted = true;
         draft.HttpMethod = method;
         draft.UseCertificate = certificate;
         Assert.Null(ProxyRules.Check(draft));
@@ -43,6 +42,19 @@ public sealed class ProxyModeTests
         Assert.Equal(method, configuration.RootElement.GetProperty("httpGet").GetProperty("method").GetString());
     }
 
+    [Theory]
+    [InlineData("websocket", false, false)]
+    [InlineData("http", false, false)]
+    [InlineData("http", true, true)]
+    [InlineData("quic", false, false)]
+    public void PublicModesRejectPlaintext(string transport, bool certificate, bool origin)
+    {
+        var draft = Draft(transport);
+        draft.UseCertificate = certificate;
+        draft.OriginHttp = origin;
+        Assert.Equal("proxy-tls-required", ProxyRules.Check(draft)!.Error);
+    }
+
     [Fact]
     public void LegacyHttpOriginKeepsPublicTlsUntilExplicitlyChanged()
     {
@@ -50,6 +62,8 @@ public sealed class ProxyModeTests
         legacy.UseCertificate = null;
         legacy.OriginHttp = true;
         Assert.True(legacy.UsesCertificate);
+        Assert.False(legacy.UsesTls);
+        Assert.Equal("proxy-tls-required", ProxyRules.Check(legacy)!.Error);
         legacy.UseCertificate = false;
         Assert.False(legacy.UsesCertificate);
     }
@@ -120,7 +134,7 @@ public sealed class ProxyModeTests
     }
 
     [Fact]
-    public async Task PlainGetUsesALegacyCompatibleSchemeWithoutATlsPin()
+    public async Task PlainGetIsRetainedWithoutPublishingCredentials()
     {
         using var bench = new Bench();
         var endpoint = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), default).ConfigureAwait(false)).Record!;
@@ -131,11 +145,18 @@ public sealed class ProxyModeTests
         var peer = new HelloPeer(new TunnelClient { Id = 7, Name = "phone" }, endpoint,
             new ClientTemplate { Name = "selected", ProxyIds = [proxy.Id] }, new DefaultHttpContext());
         var feature = Assert.IsType<ProxiesFeature>(await new ProxyOffer(bench.Scopes).OfferAsync(peer, default).ConfigureAwait(false));
-        var item = Assert.Single(feature.Items);
-        Assert.Equal("xhttp", item.Transport);
-        Assert.Equal("http", item.Xhttp!.Scheme);
-        Assert.Equal(2, item.Xhttp.Version);
-        Assert.Empty(item.Tls.Pin);
+        Assert.Empty(feature.Items);
+        var modern = Assert.IsType<ProxiesFeatureV2>(await new ProxyOffer(bench.Scopes, true).OfferAsync(peer, default).ConfigureAwait(false));
+        Assert.Empty(modern.Items);
+        var credential = TransportProxyStore.Credential(proxy, 7);
+        var secret = proxy.Secret;
+        proxy.UseCertificate = true;
+        var repaired = await new TransportProxyStore(bench.Db).SaveAsync(proxy.Id, proxy, default).ConfigureAwait(false);
+        Assert.Equal(proxy.Id, repaired.Id);
+        Assert.Equal(secret, repaired.Secret);
+        Assert.Equal(credential, TransportProxyStore.Credential(repaired, 7));
+        var recovered = Assert.IsType<ProxiesFeature>(await new ProxyOffer(bench.Scopes).OfferAsync(peer, default).ConfigureAwait(false));
+        Assert.Equal("https", Assert.Single(recovered.Items).Xhttp!.Scheme);
     }
 
     [Fact]
@@ -231,14 +252,14 @@ public sealed class ProxyModeTests
         var old = new ProxyRequest("old", "xhttp", legacy.Host, legacy.Port, legacy.Path, true).Draft(legacy);
         Assert.Equal(0, old.ProtocolVersion);
         Assert.NotNull(ProxyRules.Check(old));
-        var converted = new ProxyRequest("new", "http", legacy.Host, legacy.Port, legacy.Path, true, UseCertificate: false, HttpMethod: "GET").Draft(legacy);
+        var converted = new ProxyRequest("new", "http", legacy.Host, legacy.Port, legacy.Path, true, UseCertificate: true, HttpMethod: "GET").Draft(legacy);
         Assert.Equal(2, converted.ProtocolVersion);
         Assert.Null(ProxyRules.Check(converted));
     }
 
     private static TransportProxyEntity Draft(string transport) => new()
     {
-        Name = transport, Transport = transport, Host = "proxy.example.net", Port = 18443, Path = transport,
+        Hosted = false, Name = transport, Transport = transport, Host = "proxy.example.net", Port = 18443, Path = transport,
         UseCertificate = true, ProtocolVersion = transport == "http" ? 2 : 0,
     };
 }

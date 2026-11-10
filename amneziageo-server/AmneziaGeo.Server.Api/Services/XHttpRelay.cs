@@ -28,8 +28,7 @@ public static class XHttpRelay
     {
         if (context.Request.Method != method || method is not ("GET" or "POST"))
         {
-            context.Response.Headers.Allow = method;
-            context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
             return false;
         }
 
@@ -37,7 +36,7 @@ public static class XHttpRelay
             || context.Request.ContentLength is > 4096 || (method == "POST" && context.Request.Headers.ContainsKey("X-WG-Data"))
             || context.Request.Headers.ContainsKey("Upgrade"))
         {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
             return false;
         }
 
@@ -71,22 +70,34 @@ public static class XHttpRelay
         };
         if (method == "POST")
         {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            deadline.CancelAfter(TimeSpan.FromSeconds(5));
             var body = new byte[4097];
             var length = 0;
-            while (length < body.Length)
+            try
             {
-                var read = await context.Request.Body.ReadAsync(body.AsMemory(length), ct).ConfigureAwait(false);
-                if (read == 0)
+                while (length < body.Length)
                 {
-                    break;
-                }
+                    var read = await context.Request.Body.ReadAsync(body.AsMemory(length), deadline.Token).ConfigureAwait(false);
+                    if (read == 0)
+                    {
+                        break;
+                    }
 
-                length += read;
+                    length += read;
+                }
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or IOException)
+            {
+                (logger ?? context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(XHttpRelay)))
+                    .LogDebug(ex, "the HTTP proxy request body did not finish");
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
             }
 
             if (length > 4096)
             {
-                context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
             }
 
@@ -124,8 +135,6 @@ public static class XHttpRelay
                 context.Response.Headers[header.Key] = header.Value.ToArray();
             }
 
-            context.Response.Headers.CacheControl = "no-store";
-            context.Response.Headers["X-Accel-Buffering"] = "no";
             await context.Response.StartAsync(ct).ConfigureAwait(false);
             await context.Response.Body.FlushAsync(ct).ConfigureAwait(false);
             var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
@@ -160,7 +169,7 @@ public static class XHttpRelay
                 }
                 else
                 {
-                    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
                 }
             }
         }
@@ -173,7 +182,7 @@ public static class XHttpRelay
             }
             else
             {
-                context.Response.StatusCode = StatusCodes.Status502BadGateway;
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
             }
         }
     }

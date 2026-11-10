@@ -22,6 +22,9 @@ public sealed class TransportProxyEntity
     public bool UsesCertificate => UseCertificate ?? true;
 
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public bool UsesTls => UsesCertificate && !OriginHttp;
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public bool IsHttp => Transport is "http" or "xhttp";
 
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]

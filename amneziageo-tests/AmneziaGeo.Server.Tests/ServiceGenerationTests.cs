@@ -24,6 +24,7 @@ public partial class ServiceTests
     public async Task ModernWsRevokesAnAlreadyUpgradedConnectionWhenPolicyRestartFails()
     {
         using var bench = new Bench();
+        using var identity = new ServiceTlsFixture();
         using var front = new Front(held: true);
         var folder = Path.Combine(Path.GetTempPath(), "service-generation-" + Guid.NewGuid().ToString("N"));
         var runner = new GenerationRunner();
@@ -33,10 +34,10 @@ public partial class ServiceTests
             var config = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("generation"), default).ConfigureAwait(false)).Record!;
             var client = (await bench.Clients.AddAsync(ClientDefaults.Fresh(config.Id, "client"), default).ConfigureAwait(false)).Record!;
             var store = new TransportProxyStore(bench.Db);
-            var proxy = await store.SaveAsync(0, new TransportProxyEntity
+            var proxy = await store.SaveAsync(0, identity.Secure(new TransportProxyEntity
             {
                 Name = "catalog", Host = "localhost", Port = 443, Path = "relay", IsEnabled = true,
-            }, default).ConfigureAwait(false);
+            }), default).ConfigureAwait(false);
             var template = new TemplateEntity { Name = "selected", ProxyIds = proxy.Id.ToString() };
             bench.Db.Templates.Add(template);
             await bench.Db.SaveChangesAsync().ConfigureAwait(false);
@@ -85,6 +86,7 @@ public partial class ServiceTests
     public async Task MigratedLegacyWsCannotBypassCatalogRestrictionOrKeepAnOldUnrestrictedFlow(string change)
     {
         using var bench = new Bench();
+        using var identity = new ServiceTlsFixture();
         using var front = new Front(held: true);
         var folder = Path.Combine(Path.GetTempPath(), "legacy-generation-" + Guid.NewGuid().ToString("N"));
         var runner = new GenerationRunner { Fail = true };
@@ -93,10 +95,10 @@ public partial class ServiceTests
         {
             var config = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("migrated"), default).ConfigureAwait(false)).Record!;
             var store = new TransportProxyStore(bench.Db);
-            var proxy = await store.SaveAsync(0, new TransportProxyEntity
+            var proxy = await store.SaveAsync(0, identity.Secure(new TransportProxyEntity
             {
                 Name = "migrated", Host = "localhost", Port = 443, Path = "relay", IsEnabled = true,
-            }, default).ConfigureAwait(false);
+            }), default).ConfigureAwait(false);
             proxy.LegacyConfigId = config.Id;
             await bench.Db.SaveChangesAsync().ConfigureAwait(false);
             host.ApplyLegacyPolicies(new Dictionary<long, (ProxyTargets?, int)> { [proxy.Id] = (null, 51820) });
@@ -162,21 +164,23 @@ public partial class ServiceTests
     public async Task SettleLinksMigratedLegacyPolicyAndExposesFaultOfPhysicallyRunningModernBackend()
     {
         using var bench = new Bench();
+        using var identity = new ServiceTlsFixture();
         var port = Free();
         var config = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("migrated") with
         {
-            ListenPort = port, WebSocket = true, WebSocketPath = "relay",
+            Host = "localhost", ListenPort = port, WebSocket = true, WebSocketPath = "relay",
         }, default).ConfigureAwait(false)).Record!;
         var store = new TransportProxyStore(bench.Db);
         await store.MigrateLegacyAsync(default).ConfigureAwait(false);
         var proxy = Assert.Single(await store.ListAsync(default).ConfigureAwait(false));
+        await store.SaveAsync(proxy.Id, identity.Secure(proxy), default).ConfigureAwait(false);
         var folder = Path.Combine(Path.GetTempPath(), "settle-generation-" + Guid.NewGuid().ToString("N"));
         var runner = new GenerationRunner();
         var host = new ProxyHost(new Ledger(), runner, folder);
         var share = new ServiceShare();
         var desk = new ServiceDesk(bench.Scopes, new SpeedTickets(), [], new SubscriptionState(), Life(),
             Options.Create(new JsonOptions()), NullLogger<ServiceDesk>.Instance, fronts: host);
-        var services = new ServiceServer(bench.Scopes, desk, host, new WebOptions(),
+        var services = new ServiceServer(bench.Scopes, desk, host, identity.Options,
             PanelDefaults.Settings with { Port = port }, share, NullLogger<ServiceServer>.Instance);
         try
         {

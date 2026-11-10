@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "source_repository": "https://github.com/bor-project/wstunnel.git",
+  "source_commit": "d4d62ff967860687177ef3ea3388ea31a10e2d59",
+  "patch_order": [
+    "quic-udp-only.patch",
+    "quic-dependencies.patch"
+  ],
+  "patches": {
+    "quic-udp-only.patch": "cfca0758e3715850d38e3899512f8fbf649f00d52ede590b37e70542614f6f84",
+    "quic-dependencies.patch": "5e1dec51d9cd1416641b548a9f028072fc1836153edc497c995f9bd1eaa0cb91"
+  },
+  "patched_files_sha256": {
+    "Cargo.lock": "4ac29819ec060ee8a9a5b62ea2c14363d6b01dcaf337942b8d8a6d2422f7b17d",
+    "wstunnel/Cargo.toml": "ce16530ad86e06c4bd98198e4c42ff2d348fc48eae94e96fa72b7e4fa3072b71",
+    "wstunnel-cli/Cargo.toml": "fcd2436e4bc62637acdc02d0f05ba90eb24d2c8bef3ac8da556bfa10fdd48a38"
+  },
+  "build_package": "wstunnel-cli",
+  "default_features": false,
+  "features": [
+    "ring",
+    "jemalloc"
+  ],
+  "supported_build_targets": [
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-musl"
+  ],
+  "locked": true,
+  "dependency_changes": {
+    "hickory-net": {
+      "before": [
+        "0.26.1"
+      ],
+      "after": [
+        "0.26.2"
+      ]
+    },
+    "hickory-proto": {
+      "before": [
+        "0.26.1"
+      ],
+      "after": [
+        "0.26.2"
+      ]
+    },
+    "hickory-resolver": {
+      "before": [
+        "0.26.1"
+      ],
+      "after": [
+        "0.26.2"
+      ]
+    },
+    "quinn-proto": {
+      "before": [
+        "0.11.17"
+      ],
+      "after": [
+        "0.11.18"
+      ]
+    },
+    "rustls": {
+      "before": [
+        "0.23.43"
+      ],
+      "after": [
+        "0.23.46"
+      ]
+    },
+    "rustls-webpki": {
+      "before": [
+        "0.103.15"
+      ],
+      "after": [
+        "0.103.16"
+      ]
+    },
+    "tokio": {
+      "before": [
+        "1.53.1"
+      ],
+      "after": [
+        "1.53.3"
+      ]
+    },
+    "webpki-root-certs": {
+      "before": [
+        "1.0.9"
+      ],
+      "after": [
+        "1.0.10"
+      ]
+    }
+  },
+  "scope": "Dependency patch provenance; target build and runtime evidence is recorded separately."
+}

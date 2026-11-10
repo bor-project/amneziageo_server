@@ -52,7 +52,8 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
         Func<ServerConfig, IReadOnlyList<string>>? resolver = null,
         Func<ServerConfig, TunnelClient, string>? title = null,
         Func<ServerConfig, IReadOnlyList<string>>? panel = null,
-        DnsFiles? files = null)
+        DnsFiles? files = null,
+        Func<ServerConfig, ServiceTlsIdentity?>? services = null)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentNullException.ThrowIfNull(members);
@@ -70,14 +71,15 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
                 var names = resolver?.Invoke(endpoint);
                 var picked = panel?.Invoke(endpoint);
                 var name = title?.Invoke(endpoint, member) ?? ClientText.Title(endpoint, member);
-                var link = ClientLink.Link(endpoint, member, template, names, name, picked, files);
+                var identity = services?.Invoke(endpoint);
+                var link = ClientLink.Link(endpoint, member, template, names, name, picked, files, identity);
                 links.Add(link);
                 sheets.Add(new ClientSheet(
                     name,
                     endpoint.Name,
                     ClientText.Endpoint(endpoint),
                     $"{ConfigName.File(name)}.conf",
-                    ClientText.Text(endpoint, member, template, names, picked, files),
+                    ClientText.Text(endpoint, member, template, names, picked, files, identity),
                     link,
                     member.Id,
                     endpoint.Id,

@@ -1,4 +1,5 @@
 using System.Buffers;
+using AmneziaGeo.Server.Core.Panel;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -104,7 +105,8 @@ public sealed class ServiceDesk
         var proxyRoute = point.Endpoints.FirstOrDefault(endpoint => endpoint.ProxyId > 0
             && (route == Wanted.XHttp && endpoint.XHttp || route == Wanted.Front && endpoint.WebSocket || route == Wanted.Probe && endpoint.WebSocket)
             && context.Request.Path.StartsWithSegments("/" + endpoint.Path, StringComparison.Ordinal));
-        if (proxyRoute?.UseCertificate is { } secure && secure != context.Request.IsHttps && (!secure || !proxyRoute.OriginHttp))
+        if (route is Wanted.XHttp or Wanted.Front or Wanted.Probe
+            && (context.Features.Get<ITlsConnectionFeature>() is null || proxyRoute is { UseCertificate: false } or { OriginHttp: true }))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
@@ -308,7 +310,7 @@ public sealed class ServiceDesk
             using var scope = _scopes.CreateScope();
             var proxy = await scope.ServiceProvider.GetRequiredService<TransportProxyStore>()
                 .FindAsync(named[0].PolicyProxyId, context.RequestAborted).ConfigureAwait(false);
-            if (proxy is not { IsEnabled: true } || proxy.LegacyConfigId != named[0].ConfigId
+            if (proxy is not { IsEnabled: true, UsesTls: true } || !Usable(scope.ServiceProvider, proxy) || proxy.LegacyConfigId != named[0].ConfigId
                 || !ProxyTargetRules.Allows(ProxyTargetRules.Read(proxy.TargetsJson), ProxyDefaults.Loopback, named[0].Target))
             {
                 await XHttpProbe.RefuseAsync(context, 403, "proxy-target-denied").ConfigureAwait(false);
@@ -359,7 +361,7 @@ public sealed class ServiceDesk
     private async Task XHttpAsync(HttpContext context, ServicePoint point)
     {
         var endpoints = point.Endpoints.Where(endpoint => endpoint.XHttp && Under(context.Request.Path, endpoint.Path)).ToList();
-        if (endpoints.Count != 1 || context.Features.Get<ITlsConnectionFeature>() is null && !endpoints[0].OriginHttp)
+        if (endpoints.Count != 1 || context.Features.Get<ITlsConnectionFeature>() is null)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
@@ -373,7 +375,7 @@ public sealed class ServiceDesk
 
         if (_xhttp is null || !_xhttp.TryLease(endpoint.ProxyId, out var lease))
         {
-            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
 
@@ -426,7 +428,7 @@ public sealed class ServiceDesk
         using var scope = _scopes.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
         var proxy = await store.FindAsync(endpoint.ProxyId, context.RequestAborted).ConfigureAwait(false);
-        if (proxy is not { IsEnabled: true })
+        if (proxy is not { IsEnabled: true, UsesTls: true } || !Usable(scope.ServiceProvider, proxy))
         {
             return null;
         }
@@ -435,6 +437,13 @@ public sealed class ServiceDesk
         var credentials = await store.CredentialsAsync(proxy, context.RequestAborted).ConfigureAwait(false);
         return credentials.Any(credential => CryptographicOperations.FixedTimeEquals(digest,
             SHA256.HashData(Encoding.UTF8.GetBytes(credential)))) ? proxy : null;
+    }
+
+    private static bool Usable(IServiceProvider services, TransportProxyEntity proxy)
+    {
+        var panel = services.GetService<PanelSettings>() ?? new PanelSettings();
+        var options = services.GetService<WebOptions>() ?? new WebOptions();
+        return AmneziaGeo.Server.Api.Proxies.ProxySecurity.Check(proxy, Listening.Chain(options, panel), Listening.Key(options, panel)) is null;
     }
 
     // Counts a websocket refused to an address and writes down the start of a row and the start of the holding.

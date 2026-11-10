@@ -363,6 +363,13 @@ public sealed class TemplateStore
         }
 
         var named = draft.ProxyIds.ToList();
+        var previous = id == 0 ? "" : await _db.Templates.Where(one => one.Id == id).Select(one => one.ProxyIds).FirstOrDefaultAsync(ct).ConfigureAwait(false) ?? "";
+        var added = named.Except(Numbers(previous)).ToArray();
+        if (await _db.TransportProxies.AnyAsync(proxy => added.Contains(proxy.Id)
+            && (!proxy.IsEnabled || proxy.UseCertificate == false || proxy.OriginHttp), ct).ConfigureAwait(false))
+        {
+            return TemplateResult.No(TemplateOutcome.Invalid, "proxy-tls-required", "the selected proxy requires TLS");
+        }
         var held = await _db.TransportProxies.Where(proxy => named.Contains(proxy.Id))
             .Select(proxy => proxy.Id).ToListAsync(ct).ConfigureAwait(false);
         if (named.Where(id => !held.Contains(id)).Select(id => (long?)id).FirstOrDefault() is { } missingProxy)

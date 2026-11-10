@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using AmneziaGeo.Server.Api.Services;
@@ -89,10 +90,63 @@ public sealed class ProxyOfferTests
     [Fact]
     public async Task TheLegacyWebSocketFeatureKeepsItsOriginalShape()
     {
-        var peer = Peer(null);
-        var feature = await new WebSocketOffer().OfferAsync(peer, default).ConfigureAwait(false);
+        using var bench = new Bench();
+        using var identity = new ProxyTlsFixture("origin.example.net");
+        var source = Peer(null);
+        var endpoint = (await bench.Configs.AddAsync(source.Endpoint, default).ConfigureAwait(false)).Record!;
+        var peer = new HelloPeer(source.Client, endpoint, null, source.Context);
+        var proxy = identity.Proxy();
+        proxy.LegacyConfigId = endpoint.Id;
+        proxy.Path = endpoint.WebSocketPath;
+        var store = new TransportProxyStore(bench.Db);
+        proxy.Secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        bench.Db.TransportProxies.Add(proxy);
+        await bench.Db.SaveChangesAsync().ConfigureAwait(false);
+        var saved = proxy;
+        var services = new ServiceCollection();
+        services.AddSingleton(store);
+        services.AddSingleton(new AmneziaGeo.Server.Core.Panel.PanelSettings());
+        services.AddSingleton(new AmneziaGeo.Server.Api.Web.WebOptions());
+        using var provider = services.BuildServiceProvider();
+        var offer = new WebSocketOffer(scopes: provider.GetRequiredService<IServiceScopeFactory>());
+        var feature = await offer.OfferAsync(peer, default).ConfigureAwait(false);
         Assert.Equal(new WebSocketFeature(8443, "legacy-path"), feature);
         Assert.Equal("{\"port\":8443,\"path\":\"legacy-path\"}", JsonSerializer.Serialize(feature, Web));
+        saved.UseCertificate = false;
+        await store.SaveAsync(saved.Id, saved, default).ConfigureAwait(false);
+        Assert.Null(await offer.OfferAsync(peer, default).ConfigureAwait(false));
+    }
+
+    [Fact]
+    public async Task LegacyEmptyHostUsesHelloNameWithoutChangingStoredIdentity()
+    {
+        using var bench = new Bench();
+        using var identity = new ProxyTlsFixture("origin.example.net");
+        var source = Peer(null);
+        var endpoint = (await bench.Configs.AddAsync(source.Endpoint with { Host = "" }, default).ConfigureAwait(false)).Record!;
+        var proxy = identity.Proxy();
+        proxy.Host = "";
+        proxy.LegacyConfigId = endpoint.Id;
+        proxy.Secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        bench.Db.TransportProxies.Add(proxy);
+        await bench.Db.SaveChangesAsync().ConfigureAwait(false);
+        var secret = proxy.Secret;
+        var credential = TransportProxyStore.Credential(proxy, source.Client.Id);
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("origin.example.net");
+        var peer = new HelloPeer(source.Client, endpoint, new ClientTemplate { Name = "selected", ProxyIds = [proxy.Id] }, context);
+        Assert.Null(AmneziaGeo.Server.Api.Proxies.ProxySecurity.Check(proxy));
+        var feature = Assert.IsType<ProxiesFeatureV2>(await new ProxyOffer(bench.Scopes, true).OfferAsync(peer, default).ConfigureAwait(false));
+        Assert.Equal("origin.example.net", Assert.Single(feature.Items).Host);
+        context.Request.Host = new HostString("other.example.net");
+        var refused = Assert.IsType<ProxiesFeatureV2>(await new ProxyOffer(bench.Scopes, true).OfferAsync(peer, default).ConfigureAwait(false));
+        Assert.Empty(refused.Items);
+        var stored = (await new TransportProxyStore(bench.Db).FindAsync(proxy.Id, default).ConfigureAwait(false))!;
+        Assert.Empty(stored.Host);
+        Assert.Equal(proxy.Id, stored.Id);
+        Assert.Equal(endpoint.Id, stored.LegacyConfigId);
+        Assert.Equal(secret, stored.Secret);
+        Assert.Equal(credential, TransportProxyStore.Credential(stored, source.Client.Id));
     }
 
     [Fact]
@@ -136,6 +190,7 @@ public sealed class ProxyOfferTests
 
     private static TransportProxyEntity Proxy(string name, string transport) => new()
     {
+        Hosted = false,
         Name = name, Transport = transport, ProtocolVersion = transport == "xhttp" ? 2 : 0, Host = "cdn.example.net", Port = 443, Path = "transport",
         Secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
         CertificateKey = "/tls/private-server-key.pem", UpdatedUtc = DateTimeOffset.Parse("2026-11-04T10:00:00Z", null),

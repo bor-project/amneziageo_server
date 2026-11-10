@@ -16,14 +16,16 @@ namespace AmneziaGeo.Server.Tests;
 public sealed class XHttpCatalogTests
 {
     [Fact]
-    public async Task PublicOfferAndOriginListenerKeepDifferentPorts()
+    public async Task PublicOfferAndTlsListenerKeepDifferentPorts()
     {
         using var bench = new Bench();
         var store = new TransportProxyStore(bench.Db);
+        using var identity = new ProxyTlsFixture("cdn.example.net");
         var proxy = await store.SaveAsync(0, new TransportProxyEntity
         {
             Name = "CDN", Transport = "xhttp", ProtocolVersion = 2, Host = "cdn.example.net", Port = 443,
-            ListenPort = 18080, OriginHttp = true, Path = "relay",
+            ListenPort = 18080, OriginHttp = false, Path = "relay",
+            Certificate = identity.Chain, CertificateKey = identity.Key, Pin = identity.Pin,
         }, default).ConfigureAwait(false);
         var feature = Assert.IsType<ProxiesFeature>(await new ProxyOffer(bench.Scopes).OfferAsync(new HelloPeer(
             new TunnelClient { Id = 7, Name = "client" }, ConfigDefaults.Fresh("vpn"),
@@ -39,7 +41,7 @@ public sealed class XHttpCatalogTests
         var older = new ProxyRequest(proxy.Name, proxy.Transport, proxy.Host, proxy.Port, proxy.Path, true);
         var retained = older.Draft(proxy);
         Assert.Equal(18080, retained.ListenPort);
-        Assert.True(retained.OriginHttp);
+        Assert.False(retained.OriginHttp);
         var cleared = (older with { ListenPort = 0, OriginHttp = false }).Draft(proxy);
         Assert.Equal(0, cleared.ListenPort);
         Assert.False(cleared.OriginHttp);

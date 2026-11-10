@@ -108,8 +108,7 @@ public static class Listening
         var entries = held is null ? options.Listen : settings.Entries.ToArray();
 
         var plan = Bound(entries);
-        var certificate = WebCertificate.Of(Chain(options, settings), Key(options, settings))
-            ?? (PanelStore.ServesOn(path, settings.Port) ? WebCertificate.MadeUp() : null);
+        var certificate = WebCertificate.Of(Chain(options, settings), Key(options, settings));
         var proxyCertificates = new ProxyCertificates();
         builder.Services.AddSingleton(proxyCertificates);
         builder.Services.AddSingleton(options);
@@ -360,14 +359,10 @@ public static class Listening
     /// </summary>
     internal static void Secure(ListenOptions listen, WebCertificate? certificate, ProxyCertificates? proxies = null, int port = 0)
     {
-        if (certificate is null)
-        {
-            return;
-        }
-
-        var gate = new PlainGate(() => proxies?.AllowsHttp(port) == true);
+        var gate = new PlainGate(() => certificate is null);
         listen.Use(next => connection => gate.SortAsync(connection, next));
-        listen.UseHttps(https => https.ServerCertificateSelector = (_, host) => proxies?.Pick(port, host) ?? certificate.Current());
+        listen.UseHttps(https => https.ServerCertificateSelector = (_, host) => proxies?.Pick(port, host)
+            ?? (certificate is null && string.IsNullOrEmpty(host) ? proxies?.Default(port) : null) ?? certificate?.Current());
         listen.Use(gate.Keep);
     }
 }

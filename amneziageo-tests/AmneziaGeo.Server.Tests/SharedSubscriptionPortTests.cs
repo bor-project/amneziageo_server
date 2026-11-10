@@ -64,13 +64,13 @@ public partial class ServiceTests
         await fixture.EchoAsync("legacy", "awg1").ConfigureAwait(false);
 
         var movedPort = Free();
-        await fixture.Bench.Configs.ChangeAsync(endpoint.Id, endpoint with { ListenPort = movedPort, ServicesPort = movedPort }, default).ConfigureAwait(false);
+        await fixture.MoveEndpointAsync(endpoint with { ListenPort = movedPort, ServicesPort = movedPort }).ConfigureAwait(false);
         Assert.Empty(await fixture.Services.SettleAsync(default).ConfigureAwait(false));
         await fixture.SubscriptionAsync(fixture.Port, "sub", client.SubscriptionId).ConfigureAwait(false);
         using var answer = await fixture.Tls.PostAsync($"https://localhost:{fixture.Port}/api/hello", new StringContent("{}", Encoding.UTF8, "application/json")).ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.NotFound, answer.StatusCode);
 
-        await fixture.Bench.Configs.ChangeAsync(endpoint.Id, endpoint, default).ConfigureAwait(false);
+        await fixture.MoveEndpointAsync(endpoint).ConfigureAwait(false);
         Assert.Empty(await fixture.Services.SettleAsync(default).ConfigureAwait(false));
         await fixture.SubscriptionAsync(fixture.Port, "sub", client.SubscriptionId).ConfigureAwait(false);
         await fixture.EchoAsync("legacy", "awg1").ConfigureAwait(false);
@@ -197,7 +197,7 @@ public partial class ServiceTests
         private readonly ScopeOverrides _scopes;
         private readonly EchoFronts _fronts;
         private readonly WebOptions _options;
-        private readonly string _thumbprint;
+        private readonly ServiceTlsFixture _identity = new();
         private TcpListener? _blocker;
         private WebApplication? _api;
         private HttpClient? _control;
@@ -216,19 +216,7 @@ public partial class ServiceTests
         private SharedPortFixture()
         {
             Directory.CreateDirectory(_folder);
-            using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-            var request = new CertificateRequest("CN=localhost", key, HashAlgorithmName.SHA256);
-            var names = new SubjectAlternativeNameBuilder();
-            names.AddDnsName("localhost");
-            names.AddIpAddress(IPAddress.Loopback);
-            request.CertificateExtensions.Add(names.Build());
-            using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddDays(1));
-            var chain = Path.Combine(_folder, "chain.pem");
-            var privateKey = Path.Combine(_folder, "key.pem");
-            File.WriteAllText(chain, certificate.ExportCertificatePem());
-            File.WriteAllText(privateKey, key.ExportPkcs8PrivateKeyPem());
-            _thumbprint = certificate.Thumbprint;
-            _options = new WebOptions { Certificate = chain, CertificateKey = privateKey };
+            _options = _identity.Options;
             _scopes = new ScopeOverrides(Bench.Scopes);
             _fronts = new EchoFronts(_folder);
             Subscriptions = new SubscriptionServer(_scopes, State, PanelDefaults.Settings, _options, NullLogger<SubscriptionServer>.Instance);
@@ -241,11 +229,8 @@ public partial class ServiceTests
                     _blocker?.Dispose();
                     _blocker = null;
                 }), State);
-            Tls = new HttpClient(new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (_, received, _, errors) => received?.Thumbprint == _thumbprint
-                    && (errors & SslPolicyErrors.RemoteCertificateNameMismatch) == 0,
-            }) { Timeout = TimeSpan.FromSeconds(15) };
+            Tls = _identity.Client();
+            Tls.Timeout = TimeSpan.FromSeconds(15);
         }
 
         public static async Task<SharedPortFixture> CreateAsync()
@@ -267,14 +252,25 @@ public partial class ServiceTests
             Bench.Db.ChangeTracker.Clear();
             endpoint = (await Bench.Configs.FindAsync(id, default).ConfigureAwait(false))!;
             var client = (await Bench.Clients.AddAsync(ClientDefaults.Fresh(endpoint.Id, "phone"), default).ConfigureAwait(false)).Record!;
+            await _identity.PrepareLegacyAsync(Bench).ConfigureAwait(false);
             return (endpoint, client);
         }
 
+        public async Task MoveEndpointAsync(ServerConfig endpoint)
+        {
+            await Bench.Configs.ChangeAsync(endpoint.Id, endpoint, default).ConfigureAwait(false);
+            var store = new TransportProxyStore(Bench.Db);
+            var proxy = Assert.Single(await store.ListAsync(default).ConfigureAwait(false), proxy => proxy.LegacyConfigId == endpoint.Id);
+            proxy.Port = ConfigServices.Port(endpoint);
+            await store.SaveAsync(proxy.Id, proxy, default).ConfigureAwait(false);
+        }
+
         public async Task<TransportProxyEntity> ProxyAsync(string path, string transport = "websocket", bool enabled = true) =>
-            await new TransportProxyStore(Bench.Db).SaveAsync(0, new TransportProxyEntity
+            await new TransportProxyStore(Bench.Db).SaveAsync(0, _identity.Secure(new TransportProxyEntity
             {
                 Name = path, Host = "localhost", Port = Port, Path = path, Transport = transport, IsEnabled = enabled,
-            }, default).ConfigureAwait(false);
+                ProtocolVersion = transport is "http" or "xhttp" ? 2 : 0,
+            }), default).ConfigureAwait(false);
 
         public async Task AuthorizeAsync(TransportProxyEntity proxy, TunnelClient client)
         {
@@ -332,8 +328,8 @@ public partial class ServiceTests
         public async Task EchoAsync(string path, string expected, string? secret = null)
         {
             using var socket = new ClientWebSocket();
-            socket.Options.RemoteCertificateValidationCallback = (_, certificate, _, errors) => certificate?.GetCertHashString() == _thumbprint
-                && (errors & SslPolicyErrors.RemoteCertificateNameMismatch) == 0;
+            socket.Options.RemoteCertificateValidationCallback = (_, certificate, _, _) => certificate is X509Certificate2 leaf
+                && _identity.Accepts(leaf, "localhost");
             if (secret is not null)
             {
                 socket.Options.SetRequestHeader("Authorization", "Bearer " + secret);
@@ -393,6 +389,7 @@ public partial class ServiceTests
             await Services.DisposeAsync().ConfigureAwait(false);
             await _fronts.DisposeAsync().ConfigureAwait(false);
             Bench.Dispose();
+            _identity.Dispose();
             Directory.Delete(_folder, recursive: true);
         }
 

@@ -182,7 +182,7 @@ public sealed class ProxyGenerationTests
         Assert.True(await accepted.GetStream().ReadAsync(bytes).ConfigureAwait(false) > 0);
         lifetime.Dispose();
         await relay.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-        Assert.Equal(503, context.Response.StatusCode);
+        Assert.Equal(404, context.Response.StatusCode);
     }
 
     [Fact]
@@ -371,16 +371,26 @@ public sealed class ProxyGenerationTests
     private static async Task RefusesFrontAsync(XHttpHost host, XHttpProxy proxy)
     {
         using var bench = new Bench();
+        using var identity = new ServiceTlsFixture();
+        var registered = identity.Secure(new AmneziaGeo.Server.Dal.TransportProxyEntity
+        {
+            Id = proxy.Id, Name = "catalog", Host = "localhost", Port = proxy.Port, Path = proxy.Path,
+            Transport = "http", ProtocolVersion = 2,
+        });
+        bench.Db.TransportProxies.Add(registered);
+        await bench.Db.SaveChangesAsync(default).ConfigureAwait(false);
         var desk = new ServiceDesk(bench.Scopes, new SpeedTickets(), [], new SubscriptionState(),
             new Life(), Options.Create(new JsonOptions()), NullLogger<ServiceDesk>.Instance, xhttp: host);
         var endpoint = new ServiceEndpoint(0, "catalog", false, proxy.Port, 0, proxy.Path)
         {
-            ProxyId = proxy.Id, XHttp = true, OriginHttp = true,
+            ProxyId = proxy.Id, XHttp = true, UseCertificate = true,
         };
         var context = Get();
+        ServiceTlsFixture.SecureConnection(context);
+        context.Request.Scheme = "https";
         context.Request.Path = "/" + proxy.Path + "/session/0";
         await desk.AnswerAsync(context, new ServicePoint(80, [endpoint], "", "")).ConfigureAwait(false);
-        Assert.Equal(503, context.Response.StatusCode);
+        Assert.Equal(404, context.Response.StatusCode);
     }
 
     private sealed class Place : IDisposable

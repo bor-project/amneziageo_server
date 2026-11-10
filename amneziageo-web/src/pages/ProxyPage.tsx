@@ -44,7 +44,7 @@ function ProxyForm({ start }: { start: TransportProxy }) {
   const paths = [...usePathHolders({ proxy: start.id, config: start.legacyConfigId ?? undefined }), ...useSocketHolders({ config: start.legacyConfigId ?? undefined })]
   const listenPort = draft.listenPort || draft.port
   const path = pathFault(t, draft.path, listenPort, paths)
-  const valid = draft.transport !== "xhttp" && draft.name.trim().length > 0 && draft.host.trim().length > 0 && draft.port >= 1 && draft.port <= 65535 && draft.listenPort >= 0 && draft.listenPort <= 65535 && path.length === 0 && targetsValid
+  const valid = draft.useCertificate === true && !draft.originHttp && draft.transport !== "xhttp" && draft.name.trim().length > 0 && draft.host.trim().length > 0 && draft.port >= 1 && draft.port <= 65535 && draft.listenPort >= 0 && draft.listenPort <= 65535 && path.length === 0 && targetsValid
   function put(change: Partial<ProxyDraft>) { setDraft({ ...draft, ...change }) }
   function destination(index: number, change: Partial<{ host: string; port: number }>) {
     put({ targets: { ...targets, destinations: targets.destinations.map((one, at) => at === index ? { ...one, ...change } : one) } })
@@ -66,8 +66,8 @@ function ProxyForm({ start }: { start: TransportProxy }) {
     <Part title={t("proxies.main")}>
       <div className="sm:col-span-2"><Switch id="proxy-enabled" caption={t("geo.enabled")} value={draft.isEnabled} onChange={(isEnabled) => put({ isEnabled })} /></div>
       <Line id="proxy-name" caption={t("proxies.name")} value={draft.name} onChange={(name) => put({ name })} />
-      <Pick id="proxy-transport" caption={t("proxies.transport")} value={draft.transport} onChange={(transport) => put({ transport: transport as ProxyDraft["transport"], originHttp: transport === "http" && draft.originHttp,
-        protocolVersion: transport === "http" ? 2 : 0, httpMethod: "GET", useCertificate: transport === "quic" ? true : draft.useCertificate })}>
+      <Pick id="proxy-transport" caption={t("proxies.transport")} value={draft.transport} onChange={(transport) => put({ transport: transport as ProxyDraft["transport"],
+        protocolVersion: transport === "http" ? 2 : 0, httpMethod: "GET" })}>
         <option value="websocket">WebSocket</option><option value="http">HTTP</option><option value="quic">QUIC</option>
         {draft.transport === "xhttp" && <option value="xhttp">XHTTP</option>}
       </Pick>
@@ -79,7 +79,6 @@ function ProxyForm({ start }: { start: TransportProxy }) {
         <Pick id="proxy-http-method" caption={<span className="flex items-center gap-1">{t("proxies.httpMethod")}{draft.httpMethod === "GET" && <AppSign className="size-3.5" />}</span>} value={draft.httpMethod} onChange={(httpMethod) => put({ httpMethod: httpMethod as "GET" | "POST" })}>
           <option value="GET">GET</option><option value="POST">POST</option>
         </Pick>
-        <Switch id="proxy-origin-http" caption={t("proxies.originHttp")} value={draft.originHttp} onChange={(originHttp) => put({ originHttp })} />
       </>}
       <Line id="proxy-path" caption={t("proxies.path")} value={draft.path} onChange={(value) => put({ path: value.trim().replace(/^\/+|\/+$/g, "") })} fault={path}
         after={<Regenerate title={t("proxies.generate")} onClick={() => put({ path: [...crypto.getRandomValues(new Uint8Array(8))].map((one) => one.toString(16).padStart(2, "0")).join("") })} />} />
@@ -97,8 +96,7 @@ function ProxyForm({ start }: { start: TransportProxy }) {
       <div className="sm:col-span-2"><button type="button" className={secondary} disabled={targets.destinations.length >= 64} onClick={() => put({ targets: { ...targets, destinations: [...targets.destinations, { host: "", port: 51820 }] } })}>{t("action.add")}</button></div>
     </Part>
     <Part title={t("settings.partCertificate")}>
-      <div className="sm:col-span-2"><Switch id="proxy-use-certificate" caption={t("proxies.useCertificate")} value={draft.useCertificate ?? true} disabled={draft.transport === "quic"} onChange={(useCertificate) => put({ useCertificate })} /></div>
-      {draft.useCertificate && <>
+      {(!draft.useCertificate || draft.originHttp) && <div className="sm:col-span-2"><button type="button" className={secondary} onClick={() => put({ useCertificate: true, originHttp: false })}>{t("proxies.enableTls")}</button></div>}
       <Pick id="proxy-certificate-domain" caption={t("settings.domain")} value={domain} onChange={certificate}>
         <option value="">{t("proxies.panelCertificate")}</option>
         <option value="__own">{t("settings.ownCertificate")}</option>
@@ -106,7 +104,8 @@ function ProxyForm({ start }: { start: TransportProxy }) {
       </Pick><div />
       <Line id="proxy-certificate" caption={t("settings.certificate")} value={draft.certificate} onChange={(value) => put({ certificate: value })} wide />
       <Line id="proxy-certificate-key" caption={t("settings.certificateKey")} value={draft.certificateKey} onChange={(value) => put({ certificateKey: value })} wide />
-      </>}
+      <Line id="proxy-server-name" caption={t("proxies.serverName")} value={draft.serverName} onChange={(serverName) => put({ serverName })} />
+      <Line id="proxy-pin" caption={t("proxies.pin")} value={draft.pin} onChange={(pin) => put({ pin })} />
     </Part>
     {save.error !== null && <div className="text-sm text-alarm">{conflict === undefined ? t(complaint(save.error)) : t("error.pathTaken", { name: conflict })}</div>}
     <div className={footer}>

@@ -6,13 +6,14 @@ pin=$(tr -d '\n\r' < "$root/deploy/quic.commit")
 [[ $pin =~ ^[0-9a-f]{40}$ ]] || exit 2
 repository=$root/wstunnel/wstunnel
 git -C "$repository" cat-file -e "$pin^{commit}" 2>/dev/null || git -C "$repository" fetch --depth=1 origin "$pin"
-patch_hash=$(sha256sum "$root/deploy/quic-udp-only.patch" | cut -c1-16)
+patch_hash=$(cat "$root/deploy/quic-udp-only.patch" "$root/deploy/quic-dependencies.patch" "$root/deploy/quic-dependencies.json" | sha256sum | cut -c1-16)
 stage=${QUIC_BUILD_ROOT:-$root/.local/quic}/$pin-$patch_hash
 if [ ! -f "$stage/.prepared" ]; then
   [ ! -e "$stage" ] || { echo "unfinished QUIC source stage: $stage" >&2; exit 1; }
   mkdir -p "$stage"
   git -C "$repository" archive "$pin" | tar -x -C "$stage"
   patch --batch -d "$stage" -p1 < "$root/deploy/quic-udp-only.patch"
+  patch --batch -d "$stage" -p1 < "$root/deploy/quic-dependencies.patch"
   printf '%s\n' "$pin" > "$stage/.prepared"
 fi
 target=${QUIC_TARGET:-x86_64-unknown-linux-musl}
