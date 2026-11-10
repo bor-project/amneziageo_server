@@ -17,7 +17,7 @@ public static class RoutingFile
     /// <summary>
     /// The schema version this build writes and can read.
     /// </summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     /// <summary>
     /// The JSON settings the file is written and read by.
@@ -121,7 +121,7 @@ public sealed record RoutingDoc(
 /// <summary>
 /// Transfers an address group.
 /// </summary>
-public sealed record AddressGroupBlock(string Name, IReadOnlyList<string> Targets);
+public sealed record AddressGroupBlock(string Name, IReadOnlyList<string> Targets, IReadOnlyList<string>? Dns = null);
 
 /// <summary>
 /// One routing rule as the file carries it.

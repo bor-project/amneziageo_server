@@ -5,12 +5,14 @@ export interface AddressGroup {
   id: number
   name: string
   targets: string[]
+  dns: string[]
   rules: number[]
 }
 
 export interface AddressGroupDraft {
   name: string
   targets: string[]
+  dns: string[]
 }
 
 export function useAddressGroups() {

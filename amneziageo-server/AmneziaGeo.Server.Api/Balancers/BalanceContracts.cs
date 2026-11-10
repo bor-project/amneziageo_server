@@ -25,7 +25,8 @@ public sealed record BalanceResponse(
     IReadOnlyList<string> Members,
     BalanceStateBody State,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    IReadOnlyList<string>? Dns = null);
 
 /// <summary>
 /// The settings a balancer is added or changed with.
@@ -35,7 +36,8 @@ public sealed record BalanceRequest(
     bool IsEnabled,
     string? Strategy,
     IReadOnlyList<string>? Members,
-    IReadOnlyList<long>? Rules = null);
+    IReadOnlyList<long>? Rules = null,
+    IReadOnlyList<string>? Dns = null);
 
 /// <summary>
 /// Whether a balancer is on.
@@ -72,13 +74,14 @@ public static class BalanceAnswers
             balancer.Members,
             new BalanceStateBody(balancer.IsEnabled && members.Any(member => member.IsAlive), members),
             balancer.CreatedUtc,
-            balancer.UpdatedUtc);
+            balancer.UpdatedUtc,
+            balancer.Dns);
     }
 
     /// <summary>
     /// Returns what a request asks a balancer to become.
     /// </summary>
-    public static Balancer Draft(BalanceRequest request)
+    public static Balancer Draft(BalanceRequest request, Balancer? held = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -88,6 +91,7 @@ public static class BalanceAnswers
             IsEnabled = request.IsEnabled,
             Strategy = (request.Strategy ?? BalanceStrategy.Priority).Trim(),
             Members = Clean(request.Members),
+            Dns = request.Dns is null ? held?.Dns ?? [] : Clean(request.Dns),
         };
     }
 

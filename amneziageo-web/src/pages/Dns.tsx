@@ -102,7 +102,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
   const draft = kept ?? saved
   const ways = [...(outbounds.data ?? []), ...(balancers.data ?? [])].map((one) => one.name)
   const via = way ?? (draft.outbound === "" ? "direct" : "out")
-  const unpicked = via === "out" && draft.outbound === ""
+  const unpicked = (via === "out" || draft.selection === "outbound") && draft.outbound === ""
   const trouble = troubleOf(settings)
   const report = useDnsConflicts()
   const check = useDnsCheck(kept === null ? null : { dns: draft })
@@ -176,16 +176,27 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
           onChange={(listen) => set({ listen })}
           wide
         />
-        <ListLine
+        <Pick id="dns-selection" caption={t("dns.selection")} value={draft.selection} onChange={(value) => {
+          const selection = value === "outbound" || value === "routing" ? value : "global"
+          set({ selection })
+          if (selection === "outbound") {
+            setWay("out")
+          }
+        }}>
+          <option value="global">{t("dns.selectionGlobal")}</option>
+          <option value="outbound">{t("dns.selectionOutbound")}</option>
+          <option value="routing">{t("dns.selectionRouting")}</option>
+        </Pick>
+        {draft.selection !== "outbound" && <ListLine
           id="dns-upstreams"
-          caption={t("dns.upstreams")}
+          caption={t(draft.selection === "routing" ? "dns.defaultServers" : "dns.upstreams")}
           value={draft.upstreams}
           onChange={(upstreams) => set({ upstreams })}
           wide
-        />
-        <Pick
+        />}
+        {draft.selection !== "outbound" && <Pick
           id="dns-way"
-          caption={t("dns.outbound")}
+          caption={t(draft.selection === "routing" ? "dns.defaultWay" : "dns.outbound")}
           value={via}
           onChange={(v) => {
             setWay(v === "out" ? "out" : null)
@@ -198,8 +209,8 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
           <option value="out" disabled={ways.length === 0}>
             {t("rules.actionOut")}
           </option>
-        </Pick>
-        {via === "out" && (
+        </Pick>}
+        {(via === "out" || draft.selection === "outbound") && (
           <div>
             <Pick
               id="dns-outbound"

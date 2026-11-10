@@ -524,6 +524,8 @@ public sealed class RouteBasicEntity
 /// </summary>
 public sealed class AddressGroupEntity
 {
+    public string Dns { get; set; } = string.Empty;
+
     public long Id { get; set; }
 
     public string Name { get; set; } = string.Empty;
@@ -570,6 +572,8 @@ public sealed class PanelEntity
 /// </summary>
 public sealed class DnsSettingsEntity
 {
+    public string Selection { get; set; } = "global";
+
     public long Id { get; set; }
 
     public bool IsEnabled { get; set; }
@@ -616,6 +620,8 @@ public sealed class DnsStandingEntity
 /// </summary>
 public sealed class StandInEntity
 {
+    public string Scope { get; set; } = string.Empty;
+
     public long Id { get; set; }
 
     public string Name { get; set; } = string.Empty;
@@ -648,6 +654,8 @@ public sealed class TermsEntity
 /// </summary>
 public sealed class BalancerEntity
 {
+    public string Dns { get; set; } = string.Empty;
+
     public long Id { get; set; }
 
     public string Name { get; set; } = string.Empty;

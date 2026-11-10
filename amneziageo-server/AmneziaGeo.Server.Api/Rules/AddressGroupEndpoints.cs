@@ -30,7 +30,7 @@ public static class AddressGroupEndpoints
         var table = await rules.TableAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(found.Select(group => new AddressGroupResponse(group.Id, group.Name, group.Targets,
-            [.. table.Where(rule => rule.Groups.Contains(group.Id)).Select(rule => rule.Id)])));
+            [.. table.Where(rule => rule.Groups.Contains(group.Id)).Select(rule => rule.Id)], group.Dns)));
     }
 
     private static async Task<IResult> AddAsync(AddressGroupRequest request, AddressGroupStore store, RouteApplier applier, CancellationToken ct)
@@ -82,6 +82,7 @@ public static class AddressGroupEndpoints
     {
         Name = request.Name ?? held?.Name ?? string.Empty,
         Targets = request.Targets is null ? held?.Targets ?? [] : Clean(request.Targets),
+        Dns = request.Dns is null ? held?.Dns ?? [] : Clean(request.Dns),
     };
 
     private static IReadOnlyList<string> Clean(IReadOnlyList<string> targets) =>
@@ -97,6 +98,6 @@ public static class AddressGroupEndpoints
         });
 }
 
-public sealed record AddressGroupRequest(string? Name, IReadOnlyList<string>? Targets);
+public sealed record AddressGroupRequest(string? Name, IReadOnlyList<string>? Targets, IReadOnlyList<string>? Dns = null);
 
-public sealed record AddressGroupResponse(long Id, string Name, IReadOnlyList<string> Targets, IReadOnlyList<long> Rules);
+public sealed record AddressGroupResponse(long Id, string Name, IReadOnlyList<string> Targets, IReadOnlyList<long> Rules, IReadOnlyList<string>? Dns = null);

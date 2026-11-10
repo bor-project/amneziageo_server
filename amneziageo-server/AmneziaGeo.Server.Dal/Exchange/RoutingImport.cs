@@ -78,11 +78,12 @@ public static class RoutingImport
         var added = new List<string>();
         var replaced = new List<string>();
         var refused = new List<string>();
-        var existingGroups = (await rules.GroupsAsync(ct).ConfigureAwait(false)).Select(group => group.Name).ToHashSet(StringComparer.Ordinal);
+        var heldGroups = (await rules.GroupsAsync(ct).ConfigureAwait(false)).ToDictionary(group => group.Name, StringComparer.Ordinal);
+        var existingGroups = heldGroups.Keys.ToHashSet(StringComparer.Ordinal);
         var failedGroups = new HashSet<string>(StringComparer.Ordinal);
         foreach (var group in plan.Doc.AddressGroups ?? [])
         {
-            var result = await rules.ImportGroupAsync(new AddressGroup { Name = group.Name, Targets = group.Targets ?? [] }, ct).ConfigureAwait(false);
+            var result = await rules.ImportGroupAsync(new AddressGroup { Name = group.Name, Targets = group.Targets ?? [], Dns = group.Dns ?? (heldGroups.TryGetValue(group.Name, out var heldGroup) ? heldGroup.Dns : []) }, ct).ConfigureAwait(false);
             Keep(result.Fault is null, existingGroups.Contains(group.Name) ? replaced : added, refused, $"address group '{group.Name}'", result.Fault?.Message ?? string.Empty);
             if (result.Fault is not null)
             {

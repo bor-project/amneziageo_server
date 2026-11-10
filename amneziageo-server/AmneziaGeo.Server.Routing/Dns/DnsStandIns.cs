@@ -15,7 +15,7 @@ namespace AmneziaGeo.Server.Routing.Dns;
 /// <param name="Address">The stand-in address the name is answered with.</param>
 /// <param name="Real">The address the stand-in leads to, or null when none is known.</param>
 /// <param name="Seen">When the name was asked about last.</param>
-public sealed record DnsStandIn(string Name, IPAddress Address, IPAddress? Real, DateTimeOffset Seen);
+public sealed record DnsStandIn(string Name, IPAddress Address, IPAddress? Real, DateTimeOffset Seen, string Scope = "");
 
 /// <summary>
 /// Hands out the stand-in addresses the resolver answers names with and writes for the host where they lead.
@@ -100,7 +100,7 @@ public sealed class DnsStandIns
     /// Returns the stand-in address of a name, taking one when the name has none, and leads it to one of the real
     /// addresses; tells whether the host has yet to learn where it leads.
     /// </summary>
-    public IPAddress Take(string name, IReadOnlyList<IPAddress> real, out bool waiting)
+    public IPAddress Take(string name, IReadOnlyList<IPAddress> real, out bool waiting, string scope = "")
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(real);
@@ -111,13 +111,13 @@ public sealed class DnsStandIns
             throw new ArgumentException("no IPv4 address to lead to", nameof(real));
         }
 
-        var key = Key(name);
+        var key = Key(name, scope);
         var now = _time.GetUtcNow();
         lock (_sync)
         {
             if (!_names.TryGetValue(key, out var held))
             {
-                held = new Stand(Free(key), null, now);
+                held = new Stand(Free(key), null, now, Key(name), scope);
                 _names[key] = held;
                 _owners[held.Slot] = key;
                 Interlocked.Increment(ref _stirs);
@@ -156,7 +156,7 @@ public sealed class DnsStandIns
     {
         lock (_sync)
         {
-            return [.. _names.Select(pair => new DnsStandIn(pair.Key, Address(pair.Value.Slot), pair.Value.Real, pair.Value.Seen))];
+            return [.. _names.Select(pair => new DnsStandIn(pair.Value.Name, Address(pair.Value.Slot), pair.Value.Real, pair.Value.Seen, pair.Value.Scope))];
         }
     }
 
@@ -171,7 +171,7 @@ public sealed class DnsStandIns
         {
             foreach (var one in held.OrderByDescending(one => one.Seen))
             {
-                var key = Key(one.Name);
+                var key = Key(one.Name, one.Scope);
                 var slot = Number(one.Address);
                 if (key.Length == 0 || !Inside(one.Address) || _names.ContainsKey(key) || _owners.ContainsKey(slot))
                 {
@@ -179,7 +179,7 @@ public sealed class DnsStandIns
                 }
 
                 var real = one.Real is { AddressFamily: AddressFamily.InterNetwork } ? one.Real : null;
-                _names[key] = new Stand(slot, real, one.Seen);
+                _names[key] = new Stand(slot, real, one.Seen, Key(one.Name), one.Scope);
                 _owners[slot] = key;
             }
         }
@@ -330,7 +330,9 @@ public sealed class DnsStandIns
     private bool Inside(IPAddress address) =>
         address.AddressFamily == AddressFamily.InterNetwork && Number(address) - _first < _count;
 
-    private static string Key(string name) => name.Trim().TrimEnd('.').ToLowerInvariant();
+    private static string Key(string name, string scope = "") =>
+        (scope.Length == 0 ? string.Empty : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(scope))) + "|")
+        + name.Trim().TrimEnd('.').ToLowerInvariant();
 
     private static uint Number(IPAddress address) => BinaryPrimitives.ReadUInt32BigEndian(address.MapToIPv4().GetAddressBytes());
 
@@ -342,8 +344,12 @@ public sealed class DnsStandIns
         return new IPAddress(bytes);
     }
 
-    private sealed class Stand(uint slot, IPAddress? real, DateTimeOffset seen)
+    private sealed class Stand(uint slot, IPAddress? real, DateTimeOffset seen, string name, string scope)
     {
+        public string Name { get; } = name;
+
+        public string Scope { get; } = scope;
+
         public uint Slot { get; } = slot;
 
         public IPAddress? Real { get; set; } = real;

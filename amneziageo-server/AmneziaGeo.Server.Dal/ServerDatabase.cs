@@ -104,7 +104,7 @@ public static class ServerDatabase
         var loggers = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
         var existed = File.Exists(database.GetDbConnection().DataSource);
         var pending = await database.GetPendingMigrationsAsync(ct).ConfigureAwait(false);
-        if (pending.Any(name => name.EndsWith("_RoutingTable", StringComparison.Ordinal))
+        if (pending.Any(name => (name.EndsWith("_RoutingTable", StringComparison.Ordinal) || name.EndsWith("_DnsRouting", StringComparison.Ordinal)))
             && existed)
         {
             var backup = await scope.ServiceProvider.GetRequiredService<DatabaseBackup>().CopyAsync(ct).ConfigureAwait(false);

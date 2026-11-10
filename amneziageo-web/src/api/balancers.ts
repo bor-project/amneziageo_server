@@ -23,6 +23,7 @@ export interface Balancer {
   isEnabled: boolean
   strategy: BalanceStrategy
   members: string[]
+  dns: string[]
   state: BalancerState
   createdUtc: string
   updatedUtc: string
@@ -33,6 +34,7 @@ export interface BalancerDraft {
   isEnabled: boolean
   strategy: BalanceStrategy
   members: string[]
+  dns: string[]
   rules?: number[]
 }
 
@@ -70,6 +72,7 @@ export function draftOf(balancer: Balancer): BalancerDraft {
     isEnabled: balancer.isEnabled,
     strategy: balancer.strategy,
     members: balancer.members,
+    dns: balancer.dns ?? [],
   }
 }
 
@@ -78,6 +81,7 @@ export const freshBalancer: BalancerDraft = {
   isEnabled: true,
   strategy: "priority",
   members: [],
+  dns: [],
 }
 
 function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
@@ -88,6 +92,7 @@ function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["balancers"] })
       await queryClient.invalidateQueries({ queryKey: ["rules"] })
+      await queryClient.invalidateQueries({ queryKey: ["dns-conflicts"] })
     },
   })
 }

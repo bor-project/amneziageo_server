@@ -97,6 +97,7 @@ public sealed class AddressGroupStore
             var entity = held ?? new AddressGroupEntity { CreatedUtc = now };
             entity.Name = draft.Name.Trim();
             entity.Targets = string.Join(", ", draft.Targets);
+            entity.Dns = string.Join(", ", draft.Dns);
             entity.UpdatedUtc = now;
             if (held is null)
             {
@@ -116,6 +117,7 @@ public sealed class AddressGroupStore
         Id = entity.Id,
         Name = entity.Name,
         Targets = [.. entity.Targets.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)],
+        Dns = [.. entity.Dns.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)],
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
     };

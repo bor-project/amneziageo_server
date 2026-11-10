@@ -54,7 +54,7 @@ export function AddressGroups() {
 
 function GroupEditor({ held, onClose }: { held?: AddressGroup; onClose: () => void }) {
   const t = useText()
-  const start = { name: held?.name ?? "", targets: held?.targets ?? [] }
+  const start = { name: held?.name ?? "", targets: held?.targets ?? [], dns: held?.dns ?? [] }
   const [draft, setDraft] = useState<AddressGroupDraft>(start)
   const [removing, setRemoving] = useState(false)
   const add = useAddAddressGroup()
@@ -76,6 +76,9 @@ function GroupEditor({ held, onClose }: { held?: AddressGroup; onClose: () => vo
           <Line id="address-group-name" caption={t("rules.name")} value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
           <div className="sm:col-span-2">
             <ListArea id="address-group-targets" caption={t("routing.addresses")} value={draft.targets} onChange={(targets) => setDraft({ ...draft, targets })} />
+          </div>
+          <div className="sm:col-span-2">
+            <ListArea id="address-group-dns" caption={t("dns.override")} value={draft.dns} onChange={(dns) => setDraft({ ...draft, dns })} />
           </div>
         </div>
         <div className={footerUnder + " routing-form-footer"}>

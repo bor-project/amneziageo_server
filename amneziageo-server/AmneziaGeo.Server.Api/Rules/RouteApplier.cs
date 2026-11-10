@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Api.Dns;
+using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Balance;
@@ -152,12 +153,27 @@ public sealed class RouteApplier
             _live.Alive,
             clients,
             basic,
-            groups) with { Journal = _gate.Group, Reading = _names.Offer, StandIns = standIns, Unanswered = _resolver.KeptOut };
+            groups) with
+        {
+            DnsOrigins = clients.Where(client => client.IsEnabled)
+                .Join(configs, client => client.ConfigId, config => config.Id, (client, config) => (Client: client, config.Name))
+                .SelectMany(one => one.Client.Address.Select(address => Origin(address, one.Name)))
+                .OfType<DnsOrigin>().ToArray(),
+            Journal = _gate.Group,
+            Reading = _names.Offer,
+            StandIns = standIns,
+            Unanswered = _resolver.KeptOut,
+        };
 
         _plans.Keep(plan);
 
         return plan;
     }
+
+    private static DnsOrigin? Origin(string text, string inbound) =>
+        AwgAllowedIp.TryParse(text, out var range)
+            ? new DnsOrigin(new System.Net.IPNetwork(range.Network().Address, range.Cidr), inbound)
+            : null;
 
     /// <summary>
     /// Returns the plan built last, building one when there is none.
