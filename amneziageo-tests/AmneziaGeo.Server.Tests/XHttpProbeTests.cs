@@ -9,10 +9,10 @@ public sealed class XHttpProbeTests
 {
     [Theory]
     [InlineData("GET", 0, false, true, true, 200)]
-    [InlineData("POST", 0, false, true, true, 405)]
-    [InlineData("GET", 1, false, true, true, 400)]
-    [InlineData("GET", 0, true, true, true, 400)]
-    [InlineData("GET", 0, false, false, true, 401)]
+    [InlineData("POST", 0, false, true, true, 404)]
+    [InlineData("GET", 1, false, true, true, 404)]
+    [InlineData("GET", 0, true, true, true, 404)]
+    [InlineData("GET", 0, false, false, true, 404)]
     [InlineData("GET", 0, false, true, false, 503)]
     public async Task ACheckRequiresGetWithoutABodyCurrentAuthorizationAndARunningListener(
         string method, long length, bool upgrade, bool authorized, bool running, int status)
@@ -35,8 +35,8 @@ public sealed class XHttpProbeTests
             return Task.FromResult(authorized);
         }, running).ConfigureAwait(false);
         Assert.Equal(status, context.Response.StatusCode);
-        Assert.Equal("no-store", context.Response.Headers.CacheControl.ToString());
-        Assert.Equal(status is 200 or 401 or 503, checkedAuth);
+        Assert.Equal(status == 404 ? "" : "no-store", context.Response.Headers.CacheControl.ToString());
+        Assert.Equal(method == "GET" && length == 0 && !upgrade, checkedAuth);
         Assert.Equal(status == 200, body.Length > 0);
         if (status == 200)
         {

@@ -105,9 +105,7 @@ public static class ServiceRegistration
         var under = settings.Prefix.Length > 1 ? new PathString(settings.Prefix.TrimEnd('/')) : PathString.Empty;
         app.Use(async (context, next) =>
         {
-            if (context.Features.Get<ITlsConnectionFeature>() is null && app.Services.GetService<PanelPlace>() is { Secure: true }
-                && share.Point?.Endpoints.Any(endpoint => (endpoint.XHttp || endpoint.WebSocket) && endpoint.OriginHttp
-                    && context.Request.Path.StartsWithSegments("/" + endpoint.Path, StringComparison.Ordinal)) != true)
+            if (context.Features.Get<ITlsConnectionFeature>() is null && app.Services.GetService<PanelPlace>() is { Secure: true })
             {
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;

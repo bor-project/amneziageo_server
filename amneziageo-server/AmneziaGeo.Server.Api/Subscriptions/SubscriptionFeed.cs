@@ -1,4 +1,8 @@
+using AmneziaGeo.Server.Api.Proxies;
+using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Api.Dns;
+using AmneziaGeo.Server.Api.Services;
+using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Dal;
@@ -27,6 +31,12 @@ public sealed class SubscriptionFeed
     private readonly DnsHolders _holders;
 
     private readonly PanelStore _panels;
+    private readonly WebOptions _options;
+    private readonly ProxyCertificates? _certificates;
+    private readonly SubscriptionState? _subscriptions;
+    private readonly TransportProxyStore? _proxies;
+    private readonly PanelSettings? _runningPanel;
+    private readonly ServiceServer? _runtime;
 
     /// <summary>
     /// ctor
@@ -39,7 +49,13 @@ public sealed class SubscriptionFeed
         DnsStore dns,
         DnsState resolver,
         DnsHolders holders,
-        PanelStore panels)
+        PanelStore panels,
+        WebOptions? options = null,
+        ProxyCertificates? certificates = null,
+        SubscriptionState? subscriptions = null,
+        TransportProxyStore? proxies = null,
+        PanelSettings? runningPanel = null,
+        ServiceServer? runtime = null)
     {
         _clients = clients;
         _configs = configs;
@@ -49,6 +65,12 @@ public sealed class SubscriptionFeed
         _resolver = resolver;
         _holders = holders;
         _panels = panels;
+        _options = options ?? new WebOptions();
+        _certificates = certificates;
+        _subscriptions = subscriptions;
+        _proxies = proxies;
+        _runningPanel = runningPanel;
+        _runtime = runtime;
     }
 
     /// <summary>
@@ -69,8 +91,21 @@ public sealed class SubscriptionFeed
         var handing = _resolver.Handing ?? held with { IsEnabled = false };
         var offering = _resolver.Chosen ?? held;
         var keptOut = _resolver.KeptOut;
-        var naming = (await _panels.ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
+        var settings = await _panels.ReadAsync(ct).ConfigureAwait(false);
+        var naming = settings.NameTemplate;
+        var configuredProxies = _proxies is null ? Array.Empty<TransportProxyEntity>() : await _proxies.ListAsync(ct).ConfigureAwait(false);
 
+        var listenerFiles = new Dictionary<int, ServiceCertificateFiles?>();
+        if (_runtime is not null)
+        {
+            var used = members.Where(member => member.IsEnabled && member.PrivateKey.Length > 0).Select(member => member.ConfigId).ToHashSet();
+            foreach (var port in endpoints.Where(endpoint => endpoint.IsEnabled && used.Contains(endpoint.Id)).Select(ConfigServices.Port).Distinct())
+            {
+                listenerFiles.Add(port, await _runtime.CertificateFilesAsync(port, ct).ConfigureAwait(false));
+            }
+        }
+
+        var identities = new Dictionary<long, ServiceTlsIdentity?>();
         var feed = ClientFeed.Of(
             endpoints,
             members,
@@ -79,7 +114,8 @@ public sealed class SubscriptionFeed
             endpoint => DnsHandout.For(endpoint, handing, keptOut),
             (endpoint, member) => ClientText.Title(endpoint, member, naming, host),
             endpoint => DnsHandout.For(endpoint, offering, keptOut),
-            held.Files);
+            held.Files,
+            Trust);
         await KeepAsync(
             endpoints,
             members,
@@ -90,6 +126,21 @@ public sealed class SubscriptionFeed
             ct).ConfigureAwait(false);
 
         return feed;
+
+        ServiceTlsIdentity? Trust(ServerConfig endpoint)
+        {
+            if (identities.TryGetValue(endpoint.Id, out var identity))
+            {
+                return identity;
+            }
+
+            var files = listenerFiles.GetValueOrDefault(ConfigServices.Port(endpoint));
+            var selected = _runtime is not null && files is null ? null
+                : ServiceTrust.Of(endpoint, _options, _runtime is null ? _runningPanel ?? settings : settings, publicName: host,
+                    subscription: _subscriptions?.Current, proxies: _certificates, configured: configuredProxies, selectedFiles: files);
+            identities.Add(endpoint.Id, selected);
+            return selected;
+        }
     }
 
     // Keeps which of the clients the subscription hands out were handed a file that names the resolver.

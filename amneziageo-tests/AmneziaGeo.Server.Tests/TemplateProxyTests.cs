@@ -75,6 +75,7 @@ public sealed class TemplateProxyTests
 
     private static TransportProxyEntity Proxy(string name) => new()
     {
+        Hosted = false,
         Name = name, Host = "proxy.example.net", Port = 8443, Path = name,
     };
 }

@@ -1,0 +1,236 @@
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -69,7 +69,7 @@
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
+ dependencies = [
+- "windows-sys 0.61.2",
++ "windows-sys 0.60.2",
+ ]
+ 
+ [[package]]
+@@ -80,7 +80,7 @@
+ dependencies = [
+  "anstyle",
+  "once_cell_polyfill",
+- "windows-sys 0.61.2",
++ "windows-sys 0.60.2",
+ ]
+ 
+ [[package]]
+@@ -1059,7 +1059,7 @@
+ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+ dependencies = [
+  "libc",
+- "windows-sys 0.61.2",
++ "windows-sys 0.60.2",
+ ]
+ 
+ [[package]]
+@@ -1467,9 +1467,9 @@
+ 
+ [[package]]
+ name = "hickory-net"
+-version = "0.26.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e2295ed2f9c31e471e1428a8f88a3f0e1f4b27c15049592138d1eebe9c35b183"
++version = "0.26.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "084e7bd6a377435d568f652153e571b50970d7ccc1d1eeec0519f834632287e1"
+ dependencies = [
+  "async-trait",
+  "bytes",
+@@ -1496,9 +1496,9 @@
+ 
+ [[package]]
+ name = "hickory-proto"
+-version = "0.26.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0bab31817bfb44672a252e97fe81cd0c18d1b2cf892108922f6818820df8c643"
++version = "0.26.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7e2da0694c15b44c6f68a6b05e0233617008c54080e31d6eb848d858a9c5b38d"
+ dependencies = [
+  "data-encoding",
+  "idna",
+@@ -1516,9 +1516,9 @@
+ 
+ [[package]]
+ name = "hickory-resolver"
+-version = "0.26.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f0d58d28879ceecde6607729660c2667a081ccdc082e082675042793960f178c"
++version = "0.26.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0e4f9f4603319422d482738f3f6fe5aac03157fdbfed1cd85a3ff45adb09072f"
+ dependencies = [
+  "cfg-if",
+  "futures-util",
+@@ -1692,7 +1692,7 @@
+  "hyper",
+  "libc",
+  "pin-project-lite",
+- "socket2 0.6.5",
++ "socket2 0.5.10",
+  "tokio",
+  "tower-service",
+  "tracing",
+@@ -2335,7 +2335,7 @@
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
+ dependencies = [
+- "windows-sys 0.61.2",
++ "windows-sys 0.60.2",
+ ]
+ 
+ [[package]]
+@@ -2766,7 +2766,7 @@
+  "quinn-udp",
+  "rustc-hash",
+  "rustls",
+- "socket2 0.6.5",
++ "socket2 0.5.10",
+  "thiserror 2.0.20",
+  "tokio",
+  "tracing",
+@@ -2775,9 +2775,9 @@
+ 
+ [[package]]
+ name = "quinn-proto"
+-version = "0.11.17"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "04759210543be93709136e28212294a659ef5001836ff4eab4d663e4529bba83"
++version = "0.11.18"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a9746dbde176634f4f2f1faf2404e30a31b2bc1e9cafb5329c95d8177a18c9fc"
+ dependencies = [
+  "aws-lc-rs",
+  "bytes",
+@@ -2807,9 +2807,9 @@
+  "cfg_aliases",
+  "libc",
+  "once_cell",
+- "socket2 0.6.5",
++ "socket2 0.5.10",
+  "tracing",
+- "windows-sys 0.61.2",
++ "windows-sys 0.60.2",
+ ]
+ 
+ [[package]]
+@@ -3080,14 +3080,14 @@
+  "errno",
+  "libc",
+  "linux-raw-sys",
+- "windows-sys 0.61.2",
++ "windows-sys 0.60.2",
+ ]
+ 
+ [[package]]
+ name = "rustls"
+-version = "0.23.43"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
++version = "0.23.46"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
+ dependencies = [
+  "aws-lc-rs",
+  "log",
+@@ -3148,7 +3148,7 @@
+  "security-framework",
+  "security-framework-sys",
+  "webpki-root-certs",
+- "windows-sys 0.61.2",
++ "windows-sys 0.60.2",
+ ]
+ 
+ [[package]]
+@@ -3159,9 +3159,9 @@
+ 
+ [[package]]
+ name = "rustls-webpki"
+-version = "0.103.15"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f3c3cf1d8b1e7d4927e2d154c3fcb02979afb9939629c62cd9048d4f07b60ac2"
++version = "0.103.16"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
+ dependencies = [
+  "aws-lc-rs",
+  "ring",
+@@ -3571,7 +3571,7 @@
+ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
+ dependencies = [
+  "libc",
+- "windows-sys 0.61.2",
++ "windows-sys 0.60.2",
+ ]
+ 
+ [[package]]
+@@ -3889,9 +3889,9 @@
+ 
+ [[package]]
+ name = "tokio"
+-version = "1.53.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed"
++version = "1.53.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ce3335fa71841cda333a58d7615b03901380ecf09d59b3296d21f8bbac0dde4e"
+ dependencies = [
+  "bytes",
+  "libc",
+@@ -4368,9 +4368,9 @@
+ 
+ [[package]]
+ name = "webpki-root-certs"
+-version = "1.0.9"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b96554aa2acc8ccdb7e1c9a58a7a68dd5d13bccc69cd124cb09406db612a1c9b"
++version = "1.0.10"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "58ec80e73fd8baf57bf0d9615554c75348bda990d6d5bbeab964dd068319fecb"
+ dependencies = [
+  "rustls-pki-types",
+ ]
+@@ -4409,7 +4409,7 @@
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
+ dependencies = [
+- "windows-sys 0.61.2",
++ "windows-sys 0.60.2",
+ ]
+ 
+ [[package]]
+--- a/wstunnel/Cargo.toml
++++ b/wstunnel/Cargo.toml
+@@ -47,7 +47,7 @@
+ x509-parser = "0.18.1"
+ serde = { version = "1.0.229", features = ["derive"] }
+ socket2 = { version = "0.6.5", features = ["all"] }
+-tokio = { version = "1.53.1", features = ["io-std", "net", "signal", "sync", "time"] }
++tokio = { version = "1.53.3", features = ["io-std", "net", "signal", "sync", "time"] }
+ tokio-stream = { version = "0.1.19", features = ["net"] }
+ 
+ tracing = { version = "0.1.44", features = ["log"] }
+@@ -64,7 +64,7 @@
+ # Already compiled in the tree (rcgen, x509-parser -> asn1-rs, which also turns on `std`);
+ # declared directly so embedded_certificate can read the current year.
+ time = { version = "0.3.55", default-features = false, features = ["std"] }
+-hickory-resolver = { version = "0.26.1", default-features = false, features = ["system-config", "tokio"] }
++hickory-resolver = { version = "0.26.2", default-features = false, features = ["system-config", "tokio"] }
+ aws-lc-rs = { version = "*", optional = true }
+ 
+ [target.'cfg(not(target_family = "unix"))'.dependencies]
+--- a/wstunnel-cli/Cargo.toml
++++ b/wstunnel-cli/Cargo.toml
+@@ -7,7 +7,7 @@
+ anyhow = "1.0.104"
+ clap = { version = "4.6.6", features = ["derive", "env"] }
+ fdlimit = "0.3.0"
+-tokio = { version = "1.53.1", features = ["full"] }
++tokio = { version = "1.53.3", features = ["full"] }
+ tracing = { version = "0.1.44", features = ["log"] }
+ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt", "local-time"] }
+ wstunnel = { path = "../wstunnel", default-features = false, features = ["clap"] }

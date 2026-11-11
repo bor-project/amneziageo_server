@@ -277,6 +277,29 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         .GroupBy(one => one.Key).ToDictionary(group => group.Key, group => group.Last().Value);
 
     /// <summary>
+    /// Returns the certificate files of a bound service listener.
+    /// </summary>
+    public async Task<ServiceCertificateFiles?> CertificateFilesAsync(int port, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (port == _running.Port)
+            {
+                return _share.Point is not null
+                    ? new ServiceCertificateFiles(Listening.Chain(_options, _running), Listening.Key(_options, _running)) : null;
+            }
+
+            return _served.TryGetValue(port, out var served) && served.App is not null
+                ? new ServiceCertificateFiles(served.Point.Chain, served.Point.Key) : null;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
     /// Serves the services of the endpoints the database holds.
     /// </summary>
     public Task StartAsync(CancellationToken cancellationToken) => SettleAsync(cancellationToken);
@@ -368,35 +391,47 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             .ToList();
 
         var proxies = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
+        await proxies.MigrateLegacyAsync(ct).ConfigureAwait(false);
         if (_xhttp is not null)
         {
             await proxies.AdoptHttpGetAsync(_xhttp.ConfigurationDirectory, ct).ConfigureAwait(false);
         }
 
         var registered = await proxies.ListAsync(ct).ConfigureAwait(false);
+        var faults = new Dictionary<long, string>();
+        foreach (var proxy in registered.Where(proxy => proxy.IsEnabled))
+        {
+            if (ProxySecurity.Check(proxy, Listening.Chain(_options, panel), Listening.Key(_options, panel), _logger) is { } fault)
+            {
+                faults[-proxy.Id] = fault.Code;
+            }
+        }
+
+        var ready = registered.Where(proxy => !faults.ContainsKey(-proxy.Id)).ToArray();
         var linked = registered.Where(proxy => proxy.LegacyConfigId is not null)
             .GroupBy(proxy => proxy.LegacyConfigId!.Value).ToDictionary(group => group.Key, group => group.First());
         var unambiguous = registered.Where(proxy => proxy.LegacyConfigId is not null)
             .GroupBy(proxy => proxy.LegacyConfigId!.Value).Where(group => group.Count() == 1)
             .Select(group => group.Single());
-        _fronts.ApplyLegacyPolicies(unambiguous.Where(proxy => proxy.IsEnabled)
+        _fronts.ApplyLegacyPolicies(unambiguous.Where(proxy => proxy.IsEnabled && !faults.ContainsKey(-proxy.Id))
             .Join(configs.Where(config => config.IsEnabled), proxy => proxy.LegacyConfigId, config => (long?)config.Id,
                 (proxy, config) => (proxy.Id, Policy: (ProxyTargetRules.Read(proxy.TargetsJson), config.ListenPort)))
             .ToDictionary(pair => pair.Id, pair => pair.Policy));
         wanted = [.. wanted.Select(point => point with
         {
             Endpoints = [.. point.Endpoints.Select(endpoint => endpoint.ProxyId == 0 && linked.TryGetValue(endpoint.ConfigId, out var proxy)
-                ? endpoint with { PolicyProxyId = proxy.Id } : endpoint)],
+                ? endpoint with { PolicyProxyId = proxy.Id, WebSocket = endpoint.WebSocket && proxy.IsEnabled && !faults.ContainsKey(-proxy.Id) }
+                : endpoint with { WebSocket = false })],
         })];
-        _proxyCertificates?.Update(registered);
-        foreach (var proxy in registered.Where(proxy => _frontOptions.Enabled && proxy.Hosted && proxy.IsEnabled && (proxy.Transport == "websocket" || proxy.IsHttpV2)))
+        _proxyCertificates?.Update(ready, Listening.Chain(_options, panel), Listening.Key(_options, panel));
+        foreach (var proxy in ready.Where(proxy => _frontOptions.Enabled && proxy.Hosted && proxy.IsEnabled && (proxy.Transport == "websocket" || proxy.IsHttpV2)))
         {
             var front = ProxyPort(proxy.Id);
 
             var endpoint = new ServiceEndpoint(-proxy.Id, "transport-proxy-" + proxy.Id, proxy.Transport == "websocket", front, 0, proxy.Path)
             {
-                ProxyId = proxy.Id, XHttp = proxy.IsHttpV2, OriginHttp = proxy.OriginHttp || !proxy.UsesCertificate,
-                UseCertificate = proxy.UseCertificate, HttpMethod = proxy.HttpMethod,
+                ProxyId = proxy.Id, XHttp = proxy.IsHttpV2,
+                UseCertificate = true, HttpMethod = proxy.HttpMethod,
                 PublicHost = proxy.Host, Certificate = proxy.Certificate, CertificateKey = proxy.CertificateKey,
                 Targets = ProxyTargetRules.Read(proxy.TargetsJson),
             };
@@ -422,8 +457,6 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             }
         }
 
-        var faults = registered.Where(proxy => proxy.IsEnabled && proxy.IsHttp && !proxy.IsHttpV2)
-            .ToDictionary(proxy => -proxy.Id, _ => "legacy-xhttp-requires-explicit-http-conversion");
         if (!_frontOptions.Enabled)
         {
             foreach (var proxy in registered.Where(proxy => proxy.IsEnabled && proxy.Hosted))
@@ -629,7 +662,9 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 
                     return gate.SortAsync(connection, next);
                 });
-                listen.UseHttps(https => https.ServerCertificateSelector = (_, name) => PickProxy(served.Point, name) ?? Pick(certificate));
+                listen.UseHttps(https => https.ServerCertificateSelector = (_, name) => PickProxy(served.Point, name)
+                    ?? (certificate is null && string.IsNullOrEmpty(name) ? _proxyCertificates?.Default(point.Port) : null)
+                    ?? (certificate is null && served.Point.Endpoints.Any(endpoint => endpoint.ProxyId > 0) ? null : Pick(certificate)));
                 listen.Use(gate.Keep);
             });
         });
@@ -637,8 +672,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         var app = builder.Build();
         app.Run(async context =>
         {
-            if (!context.Request.IsHttps && !PlainInside.Reaches(context, served.Point)
-                && !served.Point.Endpoints.Any(endpoint => (endpoint.XHttp || endpoint.WebSocket) && endpoint.OriginHttp && context.Request.Path.StartsWithSegments("/" + endpoint.Path, StringComparison.Ordinal)))
+            if (!context.Request.IsHttps && !PlainInside.Reaches(context, served.Point))
             {
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
 
@@ -675,24 +709,32 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             using var scope = _scopes.CreateScope();
             var store = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
             var registered = await store.ListAsync(ct).ConfigureAwait(false);
+            var panel = await scope.ServiceProvider.GetRequiredService<PanelStore>().ReadAsync(ct).ConfigureAwait(false);
+            var rejected = registered.Where(proxy => proxy.IsEnabled)
+                .Select(proxy => (proxy.Id, Fault: ProxySecurity.Check(proxy, Listening.Chain(_options, panel), Listening.Key(_options, panel))))
+                .Where(one => one.Fault is not null).ToDictionary(one => one.Id, one => one.Fault!.Code);
             var wanted = new List<XHttpProxy>();
-            foreach (var proxy in registered.Where(proxy => _frontOptions.Enabled && proxy.Hosted && proxy.IsEnabled && proxy.IsHttpV2))
+            foreach (var proxy in registered.Where(proxy => _frontOptions.Enabled && proxy.Hosted && proxy.IsEnabled && proxy.IsHttpV2 && !rejected.ContainsKey(proxy.Id)))
             {
                 var credentials = await store.CredentialsAsync(proxy, ct).ConfigureAwait(false);
                 wanted.Add(new XHttpProxy(proxy.Id, ProxyPort(proxy.Id), proxy.Path, credentials, ProxyTargetRules.Read(proxy.TargetsJson), proxy.HttpMethod));
             }
 
             var faults = (await _xhttp.ApplyAsync(wanted, ct).ConfigureAwait(false)).ToDictionary();
+            foreach (var (id, fault) in rejected)
+            {
+                faults[id] = fault;
+            }
             if (_quic is not null)
             {
-                var panel = await scope.ServiceProvider.GetRequiredService<PanelStore>().ReadAsync(ct).ConfigureAwait(false);
                 var quic = new List<ProxyServiceEntry>();
-                foreach (var proxy in registered.Where(proxy => _frontOptions.Enabled && proxy.Hosted && proxy.IsEnabled && proxy.Transport == "quic"))
+                foreach (var proxy in registered.Where(proxy => _frontOptions.Enabled && proxy.Hosted && proxy.IsEnabled && proxy.Transport == "quic" && !rejected.ContainsKey(proxy.Id)))
                 {
                     quic.Add(new ProxyServiceEntry(proxy.Id, proxy.Name, "quic", proxy.Host, proxy.Port, proxy.Path,
                         await store.CredentialsAsync(proxy, ct).ConfigureAwait(false), true,
                         ListenPort: proxy.ListenPort, Certificate: proxy.Certificate.Length > 0 ? proxy.Certificate : Listening.Chain(_options, panel),
-                        CertificateKey: proxy.CertificateKey.Length > 0 ? proxy.CertificateKey : Listening.Key(_options, panel), Targets: ProxyTargetRules.Read(proxy.TargetsJson)));
+                        CertificateKey: proxy.CertificateKey.Length > 0 ? proxy.CertificateKey : proxy.Certificate.Length > 0 ? proxy.Certificate : Listening.Key(_options, panel),
+                        Targets: ProxyTargetRules.Read(proxy.TargetsJson), ServerName: proxy.ServerName, Pin: proxy.Pin));
                 }
 
                 foreach (var (id, fault) in await _quic.ApplyAsync(quic, ct).ConfigureAwait(false))
@@ -734,18 +776,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 
     private X509Certificate2? PickProxy(ServicePoint point, string? name)
     {
-        foreach (var endpoint in point.Endpoints.Where(endpoint => endpoint.ProxyId > 0 && endpoint.UseCertificate != false && endpoint.Certificate.Length > 0))
-        {
-            var certificate = Pick(new WebCertificate(endpoint.Certificate,
-                endpoint.CertificateKey.Length > 0 ? endpoint.CertificateKey : endpoint.Certificate));
-            if (string.Equals(endpoint.PublicHost, name, StringComparison.OrdinalIgnoreCase)
-                || !string.IsNullOrEmpty(name) && certificate.MatchesHostname(name))
-            {
-                return certificate;
-            }
-        }
-
-        return null;
+        return _proxyCertificates?.Pick(point.Port, name);
     }
 
     private async Task HaltAsync(int port)

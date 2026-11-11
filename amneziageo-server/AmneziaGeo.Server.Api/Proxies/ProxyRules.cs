@@ -89,9 +89,9 @@ public sealed class ProxyRules
             return new Failure("bad-proxy-transport", "HTTP origin requires an HTTP proxy");
         }
 
-        if (proxy.Transport == "quic" && !proxy.UsesCertificate)
+        if (!proxy.UsesTls)
         {
-            return new("proxy-quic-tls", "QUIC requires a TLS certificate");
+            return new("proxy-tls-required", "the proxy requires TLS");
         }
 
         var path = proxy.Path.Trim().Trim('/');

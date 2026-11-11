@@ -19,13 +19,14 @@ public partial class ServiceTests
     public async Task RestrictedWebSocketRejectsTheActualTokenBeforeCallingItsBackend(string host, int port)
     {
         using var bench = new Bench();
+        using var identity = new ServiceTlsFixture();
         var endpoint = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), default).ConfigureAwait(false)).Record!;
         var store = new TransportProxyStore(bench.Db);
-        var proxy = await store.SaveAsync(0, new TransportProxyEntity
+        var proxy = await store.SaveAsync(0, identity.Secure(new TransportProxyEntity
         {
-            Name = "scoped", Host = "proxy.example", Port = 443, Path = "scoped",
+            Name = "scoped", Host = "proxy.example.net", Port = 443, Path = "scoped",
             TargetsJson = ProxyTargetRules.Write(new ProxyTargets(true, [new("allowed.example", 51820)])),
-        }, default).ConfigureAwait(false);
+        }), default).ConfigureAwait(false);
         var template = (await bench.Templates.AddAsync(new ClientTemplate { Name = "selected", ProxyIds = [proxy.Id] }, default).ConfigureAwait(false)).Record!;
         var client = (await bench.Clients.AddAsync(ClientDefaults.Fresh(endpoint.Id, "phone") with { TemplateId = template.Id }, default).ConfigureAwait(false)).Record!;
         var credential = TransportProxyStore.Credential(proxy, client.Id);

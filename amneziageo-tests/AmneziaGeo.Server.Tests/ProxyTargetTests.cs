@@ -190,6 +190,7 @@ public sealed class ProxyTargetTests
         var store = new TransportProxyStore(bench.Db);
         var entity = await store.SaveAsync(0, new TransportProxyEntity
         {
+            Hosted = false,
             Name = "relay", Host = "proxy.example", Port = 443, Path = "relay",
             TargetsJson = ProxyTargetRules.Write(new ProxyTargets(true, [new("vpn.example", 51820)])),
         }, default).ConfigureAwait(false);
@@ -212,6 +213,7 @@ public sealed class ProxyTargetTests
         var store = new TransportProxyStore(bench.Db);
         var proxy = await store.SaveAsync(0, new TransportProxyEntity
         {
+            Hosted = false,
             Name = "relay", Host = "proxy.example", Port = 443, Path = "relay",
             TargetsJson = ProxyTargetRules.Write(new ProxyTargets(true, [new("vpn.example", 51820)])),
         }, default).ConfigureAwait(false);

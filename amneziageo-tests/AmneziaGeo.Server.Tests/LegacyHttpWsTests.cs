@@ -41,6 +41,7 @@ public sealed class LegacyHttpWsTests
         var context = new DefaultHttpContext();
         context.Request.Method = "GET";
         context.Request.Scheme = "https";
+        ServiceTlsFixture.SecureConnection(context);
         context.Request.Protocol = "HTTP/1.1";
         context.Request.Path = "/relay/session/events";
         context.Request.Headers.Connection = "Upgrade";

@@ -46,7 +46,7 @@ public sealed class QuicHost(string directory, string executable, ILogger logger
             {
                 var first = entries[0];
                 var configuration = Rules(entries) + "\n" + first.Certificate + "\n" + first.CertificateKey;
-                if (entries.Any(one => !one.UseCertificate || one.Certificate.Length == 0
+                if (entries.Any(one => ProxySecurity.Check(ProxySecurity.Of(one), logger: logger) is not null || one.Certificate.Length == 0
                     || one.Certificate != first.Certificate || one.CertificateKey != first.CertificateKey))
                 {
                     await StopAsync(port).ConfigureAwait(false);

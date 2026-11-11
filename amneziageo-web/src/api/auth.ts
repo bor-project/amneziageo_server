@@ -22,6 +22,13 @@ export interface Session {
 }
 
 const complaints: Record<string, TextKey> = {
+  "proxy-tls-required": "error.proxyTlsRequired",
+  "proxy-certificate-missing": "error.proxyCertificateMissing",
+  "proxy-certificate-unreadable": "error.proxyCertificateUnreadable",
+  "proxy-certificate-expired": "error.proxyCertificateExpired",
+  "proxy-certificate-name": "error.proxyCertificateName",
+  "proxy-certificate-pin": "error.proxyCertificatePin",
+  "proxy-certificate-untrusted": "error.proxyCertificateUntrusted",
   "unknown-address-group": "routing.unknownGroup",
   "empty-address-group": "routing.emptyGroup",
   "address-group-in-use": "routing.groupInUse",

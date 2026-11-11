@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http.Features;
 using AmneziaGeo.Server.Api.Services;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Core.Panel;
@@ -31,6 +32,7 @@ public sealed class StandaloneProxyService : IAsyncDisposable
     private string _failure = "";
     private CancellationTokenSource _requests = new();
     private ProxyCatalog _catalog = new(1, []);
+    private IReadOnlyDictionary<long, string> _blocked = new Dictionary<long, string>();
 
     /// <summary>
     /// ctor
@@ -53,26 +55,29 @@ public sealed class StandaloneProxyService : IAsyncDisposable
             {
                 var text = File.Exists(file) ? await File.ReadAllTextAsync(file, ct).ConfigureAwait(false) : "";
                 candidate = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
-                if (text != _configuration)
+                if (text.Length > 4_194_304)
                 {
-                    if (text.Length > 4_194_304)
-                    {
-                        throw new InvalidDataException("The proxy catalog is too large.");
-                    }
-
-                    var catalog = text.Length == 0 ? new ProxyCatalog(1, []) : JsonSerializer.Deserialize<ProxyCatalog>(text, ProxyCatalog.Json)
-                        ?? throw new InvalidDataException("The proxy catalog is empty.");
-                    ProxyCatalog.Check(catalog);
-                    await ChangeAsync(catalog, ct).ConfigureAwait(false);
-                    _configuration = text;
-                    _failure = "";
+                    throw new InvalidDataException("The proxy catalog is too large.");
                 }
+
+                var catalog = text.Length == 0 ? new ProxyCatalog(1, []) : JsonSerializer.Deserialize<ProxyCatalog>(text, ProxyCatalog.Json)
+                    ?? throw new InvalidDataException("The proxy catalog is empty.");
+                var (ready, blocked) = ProxySecurity.Active(catalog, text != _configuration ? _logger : null);
+                if (JsonSerializer.Serialize(ready, ProxyCatalog.Json) != JsonSerializer.Serialize(_catalog, ProxyCatalog.Json))
+                {
+                    await ChangeAsync(ready, ct).ConfigureAwait(false);
+                }
+
+                _blocked = blocked;
+                _configuration = text;
+                _failure = "";
 
                 var faults = await RefreshAsync(ct).ConfigureAwait(false);
                 await ProxyCatalog.WriteAsync(Path.Combine(_state, "status.json"), new
                 {
                     version = 1, updated = DateTimeOffset.UtcNow,
-                    proxies = _catalog.Proxies.Select(one => new { one.Id, running = !faults.ContainsKey(one.Id), fault = faults.GetValueOrDefault(one.Id) ?? "" }),
+                    proxies = _catalog.Proxies.Select(one => new { one.Id, running = !faults.ContainsKey(one.Id), fault = faults.GetValueOrDefault(one.Id) ?? "" })
+                        .Concat(_blocked.Select(one => new { Id = one.Key, running = false, fault = one.Value })),
                 }, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -154,7 +159,7 @@ public sealed class StandaloneProxyService : IAsyncDisposable
                     listen.Protocols = HttpProtocols.Http1AndHttp2;
                     if (certificates.Count > 0)
                     {
-                        var gate = new PlainGate(() => entries.Any(one => !one.UseCertificate || one.OriginHttp));
+                        var gate = new PlainGate(() => false);
                         listen.Use(next => context => gate.SortAsync(context, next));
                         listen.UseHttps(https => https.ServerCertificateSelector = (_, name) =>
                             entries.Where(one => certificates.ContainsKey(one.Id)).Select(one => (Entry: one, Certificate: certificates[one.Id]))
@@ -181,9 +186,15 @@ public sealed class StandaloneProxyService : IAsyncDisposable
         }
     }
 
-    private static WebCertificate Certificate(ProxyServiceEntry proxy) => proxy.Certificate.Length == 0
-        ? WebCertificate.MadeUp()
-        : new WebCertificate(proxy.Certificate, proxy.CertificateKey.Length == 0 ? proxy.Certificate : proxy.CertificateKey);
+    private static WebCertificate Certificate(ProxyServiceEntry proxy)
+    {
+        if (ProxySecurity.Check(ProxySecurity.Of(proxy)) is { } fault)
+        {
+            throw new InvalidDataException(fault.Code);
+        }
+
+        return new WebCertificate(proxy.Certificate, proxy.CertificateKey.Length == 0 ? proxy.Certificate : proxy.CertificateKey);
+    }
 
     private async Task<Dictionary<long, string>> RefreshAsync(CancellationToken ct)
     {
@@ -220,7 +231,7 @@ public sealed class StandaloneProxyService : IAsyncDisposable
             return;
         }
         var proxy = entries.FirstOrDefault(one => context.Request.Path.StartsWithSegments("/" + one.Path, StringComparison.Ordinal));
-        if (proxy is null || proxy.UseCertificate != context.Request.IsHttps && (!proxy.UseCertificate || !proxy.OriginHttp))
+        if (proxy is null || context.Features.Get<ITlsConnectionFeature>() is null || !proxy.UseCertificate || proxy.OriginHttp)
         {
             context.Response.StatusCode = 404;
             return;

@@ -215,9 +215,9 @@ public static class ProxyDaemon
 
         var address = arguments.Select(value => Uri.TryCreate(value, UriKind.Absolute, out var uri) ? uri : null)
             .FirstOrDefault(uri => uri?.Scheme is "ws" or "wts");
-        if (address is null || address.Scheme == "ws" && !address.IsLoopback)
+        if (address is null || !address.IsLoopback)
         {
-            throw new ArgumentException("Invalid proxy listener.");
+            throw new ArgumentException("Public proxy listeners require a validated catalog entry.");
         }
 
         return new(Path.Combine(AppContext.BaseDirectory, address.Scheme == "wts" ? "wstunnel-quic" : "wstunnel"), arguments);

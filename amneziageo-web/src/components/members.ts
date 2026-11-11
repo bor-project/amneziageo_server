@@ -44,6 +44,7 @@ export function proxyItems(proxies: TransportProxy[]): LinkItem[] {
   return [...proxies]
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((one) => ({ key: String(one.id), name: one.name, to: `/routing/proxies/${one.id}/edit`,
+      disabled: !one.isEnabled || one.useCertificate === false || one.originHttp || Boolean(one.fault),
       note: `${one.transport === "xhttp" ? "XHTTP" : "WebSocket"} · ${one.host}:${one.port}/${one.path}` }))
 }
 

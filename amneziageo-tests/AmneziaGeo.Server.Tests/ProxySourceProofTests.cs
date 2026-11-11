@@ -23,6 +23,7 @@ public sealed class ProxySourceProofTests
         using var bench = new Bench();
         var proxy = await new TransportProxyStore(bench.Db).SaveAsync(0, new TransportProxyEntity
         {
+            Hosted = false,
             Name = "shared", Host = "proxy.example.net", Port = 443, Path = "relay",
         }, default).ConfigureAwait(false);
         var template = new ClientTemplate { Name = "selected", ProxyIds = [proxy.Id] };

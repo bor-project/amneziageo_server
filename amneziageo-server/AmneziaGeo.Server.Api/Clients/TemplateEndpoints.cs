@@ -1,5 +1,8 @@
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Rules;
+using AmneziaGeo.Server.Api.Proxies;
+using AmneziaGeo.Server.Api.Web;
+using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Dal;
@@ -73,12 +76,17 @@ public static class TemplateEndpoints
 
     private static async Task<IResult> AddAsync(
         TemplateRequest request,
+        HttpContext context,
         TemplateStore store,
         TemplateRefresher refresher,
         RouteApplier routes,
         CancellationToken ct)
     {
         var draft = TemplateAnswers.Draft(request);
+        if (await ProxyRefusalAsync(draft.ProxyIds, [], context.RequestServices, ct).ConfigureAwait(false) is { } security)
+        {
+            return security;
+        }
         if (await store.RefuseAsync(draft, 0, ct).ConfigureAwait(false) is { } refusal)
         {
             return Explain(refusal);
@@ -102,6 +110,7 @@ public static class TemplateEndpoints
     private static async Task<IResult> ChangeAsync(
         long id,
         TemplateRequest request,
+        HttpContext context,
         TemplateStore store,
         TemplateRefresher refresher,
         RouteApplier routes,
@@ -114,6 +123,10 @@ public static class TemplateEndpoints
         }
 
         var draft = TemplateAnswers.Change(request, held);
+        if (await ProxyRefusalAsync(draft.ProxyIds, held.ProxyIds, context.RequestServices, ct).ConfigureAwait(false) is { } security)
+        {
+            return security;
+        }
         if (await store.RefuseAsync(draft, id, ct).ConfigureAwait(false) is { } refusal)
         {
             return Explain(refusal);
@@ -122,6 +135,24 @@ public static class TemplateEndpoints
         var full = await refresher.ResolveAsync(draft, ct).ConfigureAwait(false);
 
         return await KeepAsync(id, full, TemplateAnswers.Members(request), store, routes, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult?> ProxyRefusalAsync(IReadOnlyList<long> selected, IReadOnlyList<long> previous,
+        IServiceProvider services, CancellationToken ct)
+    {
+        var store = services.GetRequiredService<TransportProxyStore>();
+        var panel = services.GetRequiredService<PanelSettings>();
+        var options = services.GetRequiredService<WebOptions>();
+        foreach (var id in selected.Except(previous))
+        {
+            if (await store.FindAsync(id, ct).ConfigureAwait(false) is { } proxy
+                && ProxySecurity.Check(proxy, Listening.Chain(options, panel), Listening.Key(options, panel)) is { } fault)
+            {
+                return Refuse(StatusCodes.Status400BadRequest, fault.Code, fault.Message);
+            }
+        }
+
+        return null;
     }
 
     private static async Task<IResult> FreeAsync(
