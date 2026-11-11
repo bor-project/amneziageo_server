@@ -512,6 +512,7 @@ export interface LinkItem {
   note?: string
   mark?: string
   to?: string
+  disabled?: boolean
 }
 
 // Names of entities as links: the field adds one, the cross takes off one not in fixed; without onChange it only reads.
@@ -534,12 +535,12 @@ export function Links({
   const [open, setOpen] = useState(false)
   const known = new Map(items.map((item): [string, LinkItem] => [item.key, item]))
   const query = text.trim().toLowerCase()
-  const left = items.filter((item) => !value.includes(item.key) && item.name.toLowerCase().includes(query))
+  const left = items.filter((item) => !item.disabled && !value.includes(item.key) && item.name.toLowerCase().includes(query))
   const last = value.at(-1)
 
   function add(key: string) {
     setText("")
-    if (onChange !== undefined && !value.includes(key)) {
+    if (onChange !== undefined && !value.includes(key) && !known.get(key)?.disabled) {
       onChange([...value, key])
     }
   }

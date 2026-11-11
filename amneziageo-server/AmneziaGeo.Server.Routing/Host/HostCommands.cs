@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 
@@ -73,6 +74,7 @@ public sealed class HostCommands : IHostCommands
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+        start.Environment["LC_ALL"] = "C";
 
         if (_sudo)
         {
@@ -85,8 +87,7 @@ public sealed class HostCommands : IHostCommands
             start.ArgumentList.Add(argument);
         }
 
-        using var process = Process.Start(ServiceSocket.Withhold(start))
-            ?? throw new HostNetworkException($"the host did not start '{file}'");
+        using var process = Start(start, file);
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
         limit.CancelAfter(Limit);
 
@@ -112,6 +113,20 @@ public sealed class HostCommands : IHostCommands
         }
 
         return new CommandResult(process.ExitCode, output.ToString(), error.ToString());
+    }
+
+    private static Process Start(ProcessStartInfo start, string file)
+    {
+        try
+        {
+            return Process.Start(ServiceSocket.Withhold(start))
+                ?? throw new HostNetworkException($"the host did not start '{file}'");
+        }
+        catch (Win32Exception ex)
+        {
+            Trace.TraceError("{0}", ex);
+            throw new HostNetworkException($"the host could not start '{file}': {ex.Message}", ex);
+        }
     }
 
     private static async Task Read(StreamReader stream, StringBuilder into, CancellationToken ct)

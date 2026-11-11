@@ -230,6 +230,8 @@ public interface IObfuscated
 /// </summary>
 public sealed class ConfigEntity : IObfuscated
 {
+    public bool UdpPrivate { get; set; }
+
     public long Id { get; set; }
 
     public string Name { get; set; } = string.Empty;
@@ -486,6 +488,8 @@ public sealed class RouteRuleEntity
 
     public string Targets { get; set; } = string.Empty;
 
+    public string Groups { get; set; } = string.Empty;
+
     public string Clients { get; set; } = string.Empty;
 
     public string Inbounds { get; set; } = string.Empty;
@@ -511,6 +515,24 @@ public sealed class RouteBasicEntity
     public string Direct { get; set; } = string.Empty;
 
     public string Block { get; set; } = string.Empty;
+
+    public DateTimeOffset UpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// Stores an address group.
+/// </summary>
+public sealed class AddressGroupEntity
+{
+    public string Dns { get; set; } = string.Empty;
+
+    public long Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Targets { get; set; } = string.Empty;
+
+    public DateTimeOffset CreatedUtc { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }
 }
@@ -550,6 +572,8 @@ public sealed class PanelEntity
 /// </summary>
 public sealed class DnsSettingsEntity
 {
+    public string Selection { get; set; } = "global";
+
     public long Id { get; set; }
 
     public bool IsEnabled { get; set; }
@@ -596,6 +620,8 @@ public sealed class DnsStandingEntity
 /// </summary>
 public sealed class StandInEntity
 {
+    public string Scope { get; set; } = string.Empty;
+
     public long Id { get; set; }
 
     public string Name { get; set; } = string.Empty;
@@ -628,6 +654,8 @@ public sealed class TermsEntity
 /// </summary>
 public sealed class BalancerEntity
 {
+    public string Dns { get; set; } = string.Empty;
+
     public long Id { get; set; }
 
     public string Name { get; set; } = string.Empty;
@@ -769,6 +797,8 @@ public sealed class TemplateEntity
     public int DnsMode { get; set; }
 
     public string Presets { get; set; } = string.Empty;
+
+    public string ProxyIds { get; set; } = string.Empty;
 
     public bool PresetsOnly { get; set; }
 

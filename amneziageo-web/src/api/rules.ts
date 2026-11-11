@@ -23,6 +23,7 @@ export interface Rule {
   action: RuleAction
   outbound: string
   targets: string[]
+  groups?: number[]
   clients: string[]
   inbounds: string[]
   ports: string[]
@@ -39,6 +40,7 @@ export interface RuleDraft {
   action: RuleAction
   outbound: string
   targets: string[]
+  groups?: number[]
   clients: string[]
   inbounds: string[]
   ports: string[]
@@ -100,7 +102,7 @@ export const directList = -2
 export function useRules() {
   return useQuery({
     queryKey: ["rules"],
-    queryFn: async () => (await client.get<Rule[]>("/rules")).data,
+    queryFn: async () => (await client.get<Rule[]>("/rules/table")).data,
   })
 }
 
@@ -117,11 +119,11 @@ export function useRemoveRule() {
 }
 
 export function useMoveRule() {
-  return useRefreshing(({ id, up }: { id: number; up: boolean }) => client.post(`/rules/${id}/move`, { up }))
+  return useRefreshing(({ id, up }: { id: number; up: boolean }) => client.post(`/rules/table/${id}/move`, { up }))
 }
 
 export function usePlaceRule() {
-  return useRefreshing(({ id, to }: { id: number; to: number }) => client.post(`/rules/${id}/move`, { up: false, to }))
+  return useRefreshing(({ id, to }: { id: number; to: number }) => client.post(`/rules/table/${id}/move`, { up: false, to }))
 }
 
 export function useBasic() {
@@ -152,6 +154,7 @@ export function draftOf(rule: Rule): RuleDraft {
     action: rule.action,
     outbound: rule.outbound,
     targets: rule.targets,
+    groups: rule.groups ?? [],
     clients: rule.clients,
     inbounds: rule.inbounds,
     ports: rule.ports,
@@ -166,6 +169,7 @@ export const freshRule: RuleDraft = {
   action: "out",
   outbound: "",
   targets: [],
+  groups: [],
   clients: [],
   inbounds: [],
   ports: [],
@@ -180,6 +184,7 @@ function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
     mutationFn: call,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["rules"] })
+      await queryClient.invalidateQueries({ queryKey: ["address-groups"] })
       await queryClient.invalidateQueries({ queryKey: ["dns-conflicts"] })
     },
   })

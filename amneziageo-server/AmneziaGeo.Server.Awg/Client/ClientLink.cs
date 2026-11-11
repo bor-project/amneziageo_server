@@ -54,12 +54,13 @@ public static class ClientLink
         IReadOnlyList<string>? resolver = null,
         string? title = null,
         IReadOnlyList<string>? panel = null,
-        DnsFiles? files = null)
+        DnsFiles? files = null,
+        ServiceTlsIdentity? services = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
 
-        var text = ClientText.Text(config, client, template, resolver, panel, files);
+        var text = ClientText.Text(config, client, template, resolver, panel, files, services);
         var head = ConfigLines.Head(text);
         var peer = Peer(text);
         var obfuscated = AwgKeys.Any(head.ContainsKey);

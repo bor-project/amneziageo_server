@@ -64,7 +64,17 @@ public static class PlainInside
     }
 
     /// <summary>
-    /// Tells whether a plain request asks for the hello or a leg of the measurement, the only ones it reaches.
+    /// Reports whether a request reaches an inside service.
+    /// </summary>
+    public static bool Reaches(HttpContext context, ServicePoint point)
+    {
+        var address = context.Connection.LocalIpAddress;
+        var local = address?.IsIPv4MappedToIPv6 == true ? address.MapToIPv4() : address;
+        return Serves(context.Request) && point.Endpoints.Any(endpoint => local is not null && endpoint.Inside.Contains(local));
+    }
+
+    /// <summary>
+    /// Reports whether a path names an inside service.
     /// </summary>
     public static bool Serves(HttpRequest request)
     {
@@ -86,7 +96,9 @@ internal sealed class PlainGate
 
     private static readonly TimeSpan FirstByteWait = TimeSpan.FromSeconds(10);
 
-    private readonly Func<ServicePoint> _point;
+    private readonly Func<ServicePoint>? _point;
+
+    private readonly Func<bool>? _allows;
 
     private ConnectionDelegate? _plain;
 
@@ -99,7 +111,15 @@ internal sealed class PlainGate
     }
 
     /// <summary>
-    /// Holds the step after TLS, where a plain connection goes on.
+    /// ctor
+    /// </summary>
+    public PlainGate(Func<bool> allows)
+    {
+        _allows = allows;
+    }
+
+    /// <summary>
+    /// Holds the connection step after TLS.
     /// </summary>
     public ConnectionDelegate Keep(ConnectionDelegate next)
     {
@@ -116,7 +136,7 @@ internal sealed class PlainGate
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(tls);
 
-        if (_plain is { } plain && Inside(connection.LocalEndPoint) && await OpensPlainAsync(connection).ConfigureAwait(false))
+        if (_plain is { } plain && (_allows?.Invoke() == true || Inside(connection.LocalEndPoint)) && await OpensPlainAsync(connection).ConfigureAwait(false))
         {
             await plain(connection).ConfigureAwait(false);
 
@@ -136,7 +156,7 @@ internal sealed class PlainGate
 
         var reached = address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
 
-        return _point().Endpoints.Any(endpoint => endpoint.Inside.Contains(reached));
+        return _point?.Invoke().Endpoints.Any(endpoint => endpoint.Inside.Contains(reached)) == true;
     }
 
     // Reads the first byte without taking it: TLS opens with a handshake record, plain HTTP with a word.

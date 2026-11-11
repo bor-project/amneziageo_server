@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Outbound;
 using AmneziaGeo.Server.Routing.Probe;
@@ -17,6 +18,8 @@ public sealed class ProbeRunner
 
     private readonly ILogger<ProbeRunner> _logger;
 
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _pending = new(StringComparer.Ordinal);
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -35,25 +38,41 @@ public sealed class ProbeRunner
     {
         ArgumentNullException.ThrowIfNull(outbound);
 
-        if (outbound.Probe.Length == 0 || !DnsRules.Upstream(outbound.Probe, out var server))
+        if (_live.Begin(outbound) is not { } attempt || !DnsRules.Upstream(outbound.Probe, out var server))
         {
             return false;
         }
 
-        var outcome = await _link
-            .ReachAsync(server, outbound.Mark, ProbeDefaults.Name, ProbeDefaults.Wait, ct)
-            .ConfigureAwait(false);
-        var changed = _live.Keep(outbound.Name, outcome, _time.GetUtcNow());
-        if (changed)
+        var gate = _pending.GetOrAdd(outbound.Name, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            _logger.LogInformation(
-                "the probe of '{Outbound}' to {Server} now says {Verdict}",
-                outbound.Name,
-                outbound.Probe,
-                outcome == ProbeOutcome.Reached ? "it carries traffic" : "it carries nothing");
-        }
+            if (!_live.IsCurrent(attempt))
+            {
+                return false;
+            }
 
-        return changed;
+            var outcome = await _link
+                .ReachAsync(server, outbound.Mark, ProbeDefaults.Name, ProbeDefaults.Wait, ct)
+                .ConfigureAwait(false);
+            var result = _live.Complete(attempt, outcome, _time.GetUtcNow());
+            if (result.Warning && result.Reading is { } reading)
+            {
+                _logger.LogWarning(
+                    "the checks of '{Outbound}' are {Health}: {Missed} of {Attempts} unanswered",
+                    outbound.Name, reading.Health, reading.Missed, reading.Attempts);
+            }
+            else if (result.Recovered)
+            {
+                _logger.LogInformation("the checks of '{Outbound}' recovered", outbound.Name);
+            }
+
+            return result.CarriesChanged;
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     /// <summary>
@@ -68,7 +87,7 @@ public sealed class ProbeRunner
             return false;
         }
 
-        var reading = _live.Find(outbound.Name);
+        var reading = _live.Find(outbound, _time.GetUtcNow());
         var every = outbound.ProbeEvery > 0 ? outbound.ProbeEvery : ProbeDefaults.Every;
 
         return reading is null || _time.GetUtcNow() - reading.At >= TimeSpan.FromSeconds(every);

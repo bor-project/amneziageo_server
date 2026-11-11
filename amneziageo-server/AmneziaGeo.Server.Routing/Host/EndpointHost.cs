@@ -83,6 +83,7 @@ public sealed class EndpointHost
     {
         ArgumentNullException.ThrowIfNull(config);
 
+        var protectedUdp = !config.UdpPrivate;
         try
         {
             if (!config.IsEnabled)
@@ -92,6 +93,8 @@ public sealed class EndpointHost
                 return EndpointSync.Done(config.Name);
             }
 
+            await UdpAsync(config, ct).ConfigureAwait(false);
+            protectedUdp = true;
             await _network.ForwardingAsync(ct).ConfigureAwait(false);
             var update = ConfigDevice.Update(config);
             if (Differs(config.Name, update.Obfuscation))
@@ -107,6 +110,10 @@ public sealed class EndpointHost
             _devices.Apply(update);
             await _network.AddressAsync(config.Name, config.Address, ct).ConfigureAwait(false);
             await _network.UpAsync(config.Name, config.Mtu, ct).ConfigureAwait(false);
+            if (!config.UdpPrivate)
+            {
+                await ClearUdpAsync(config.Name, ct).ConfigureAwait(false);
+            }
 
             return EndpointSync.Done(config.Name);
         }
@@ -114,7 +121,14 @@ public sealed class EndpointHost
             when (ex is HostNetworkException or NetlinkException or SocketException or IOException
                 or UnauthorizedAccessException or InvalidOperationException)
         {
-            return new EndpointSync(config.Name, false, ex.Message, Fault(ex));
+            return new EndpointSync(config.Name, false, ex.Message, protectedUdp ? Fault(ex) : EndpointFault.Failed);
+        }
+        finally
+        {
+            if (!protectedUdp && _network.HasLink(config.Name))
+            {
+                await _network.RemoveLinkAsync(config.Name, CancellationToken.None).ConfigureAwait(false);
+            }
         }
     }
 
@@ -144,6 +158,8 @@ public sealed class EndpointHost
         {
             await _network.RemoveLinkAsync(name, ct).ConfigureAwait(false);
         }
+
+        await ClearUdpAsync(name, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -190,6 +206,28 @@ public sealed class EndpointHost
                 or InvalidOperationException)
         {
             return new EndpointSync(EndpointRuleset.TableName, false, ex.Message);
+        }
+    }
+
+    private async Task UdpAsync(ServerConfig config, CancellationToken ct)
+    {
+        if (config.UdpPrivate)
+        {
+            if (_network.HasLink(config.Name) && _devices.Find(config.Name)?.ListenPort != config.ListenPort)
+            {
+                await _network.RemoveLinkAsync(config.Name, ct).ConfigureAwait(false);
+            }
+
+            await _network.FirewallAsync(UdpPrivacyRuleset.Text(config.Name, config.ListenPort), ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task ClearUdpAsync(string name, CancellationToken ct)
+    {
+        var table = UdpPrivacyRuleset.Table(name);
+        if ((await _network.ReadFirewallAsync(table, ct).ConfigureAwait(false)).Length > 0)
+        {
+            await _network.FirewallAsync(UdpPrivacyRuleset.Clear(name), ct).ConfigureAwait(false);
         }
     }
 

@@ -102,12 +102,87 @@ public sealed class RouteStore
     {
         var found = await _db.Rules
             .AsNoTracking()
+            .Where(rule => rule.Id > 0)
             .OrderBy(rule => rule.Position)
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
         return [.. found.Select(Read)];
     }
+
+    /// <summary>
+    /// Returns the complete rule order.
+    /// </summary>
+    public async Task<IReadOnlyList<RouteRule>> TableAsync(CancellationToken ct)
+    {
+        var found = await _db.Rules.AsNoTracking().OrderBy(rule => rule.Position).ToListAsync(ct).ConfigureAwait(false);
+
+        return [.. found.Select(Read)];
+    }
+
+    /// <summary>
+    /// Returns the address groups.
+    /// </summary>
+    public async Task<IReadOnlyList<AddressGroup>> GroupsAsync(CancellationToken ct)
+    {
+        var found = await _db.AddressGroups.AsNoTracking().OrderBy(group => group.Id).ToListAsync(ct).ConfigureAwait(false);
+
+        return [.. found.Select(AddressGroupStore.Read)];
+    }
+
+    /// <summary>
+    /// Imports an address group.
+    /// </summary>
+    public async Task<AddressGroupResult> ImportGroupAsync(AddressGroup draft, CancellationToken ct)
+    {
+        var store = new AddressGroupStore(_db, _time);
+        var held = await _db.AddressGroups.AsNoTracking().FirstOrDefaultAsync(group => group.Name == draft.Name, ct).ConfigureAwait(false);
+
+        return held is null
+            ? await store.AddAsync(draft, ct).ConfigureAwait(false)
+            : await store.ChangeAsync(held.Id, draft, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Imports a legacy exception.
+    /// </summary>
+    public Task<RouteResult> ImportExceptionAsync(RouteRule draft, CancellationToken ct) =>
+        _db.AloneAsync(async () =>
+        {
+            if (!RouteBasic.Holds(draft.Id))
+            {
+                return Missing(draft.Id);
+            }
+
+            var held = await _db.Rules.FirstOrDefaultAsync(rule => rule.Id == draft.Id, ct).ConfigureAwait(false);
+            if (held is not null)
+            {
+                return await ChangeCoreAsync(draft.Id, draft, ct).ConfigureAwait(false);
+            }
+
+            if (Check(draft) is { } fault)
+            {
+                return RouteResult.No(RouteOutcome.Invalid, fault.Code, fault.Message);
+            }
+
+            if (await UnknownGroupAsync(draft.Groups, ct).ConfigureAwait(false) is { } missing)
+            {
+                return missing;
+            }
+
+            if (await _db.Rules.AnyAsync(rule => rule.Name == draft.Name, ct).ConfigureAwait(false))
+            {
+                return Taken(draft.Name);
+            }
+
+            var now = _time.GetUtcNow();
+            var entity = new RouteRuleEntity { Id = draft.Id, CreatedUtc = now, UpdatedUtc = now };
+            Write(entity, draft);
+            _db.Rules.Add(entity);
+            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+            return RouteResult.Done(Read(entity));
+        }, ct);
 
     /// <summary>
     /// Returns one rule, or null when the panel holds none under the number.
@@ -125,7 +200,10 @@ public sealed class RouteStore
     /// <summary>
     /// Adds a rule, giving it the place at the end.
     /// </summary>
-    public async Task<RouteResult> AddAsync(RouteRule draft, CancellationToken ct)
+    public Task<RouteResult> AddAsync(RouteRule draft, CancellationToken ct) =>
+        _db.AloneAsync(() => AddCoreAsync(draft, ct), ct);
+
+    private async Task<RouteResult> AddCoreAsync(RouteRule draft, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
@@ -134,10 +212,15 @@ public sealed class RouteStore
             return Taken(draft.Name);
         }
 
-        var full = draft with { Position = await NextPositionAsync(ct).ConfigureAwait(false) };
-        if (RouteRules.Check(full) is { } fault)
+        var full = draft with { Id = 0, Position = await NextPositionAsync(ct).ConfigureAwait(false) };
+        if (Check(full) is { } fault)
         {
             return RouteResult.No(RouteOutcome.Invalid, fault.Code, fault.Message);
+        }
+
+        if (await UnknownGroupAsync(full.Groups, ct).ConfigureAwait(false) is { } missing)
+        {
+            return missing;
         }
 
         var now = _time.GetUtcNow();
@@ -153,7 +236,10 @@ public sealed class RouteStore
     /// <summary>
     /// Replaces the settings of a rule, keeping its place.
     /// </summary>
-    public async Task<RouteResult> ChangeAsync(long id, RouteRule draft, CancellationToken ct)
+    public Task<RouteResult> ChangeAsync(long id, RouteRule draft, CancellationToken ct) =>
+        _db.AloneAsync(() => ChangeCoreAsync(id, draft, ct), ct);
+
+    private async Task<RouteResult> ChangeCoreAsync(long id, RouteRule draft, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
@@ -168,10 +254,15 @@ public sealed class RouteStore
             return Taken(draft.Name);
         }
 
-        var full = draft with { Position = entity.Position };
-        if (RouteRules.Check(full) is { } fault)
+        var full = draft with { Id = id, Position = entity.Position };
+        if (Check(full) is { } fault)
         {
             return RouteResult.No(RouteOutcome.Invalid, fault.Code, fault.Message);
+        }
+
+        if (await UnknownGroupAsync(full.Groups, ct).ConfigureAwait(false) is { } missing)
+        {
+            return missing;
         }
 
         Write(entity, full);
@@ -220,7 +311,7 @@ public sealed class RouteStore
     /// <summary>
     /// Swaps a rule with the one above or below it.
     /// </summary>
-    public async Task<RouteResult> MoveAsync(long id, bool up, CancellationToken ct)
+    public async Task<RouteResult> MoveAsync(long id, bool up, CancellationToken ct, bool table = false)
     {
         var entity = await _db.Rules.FirstOrDefaultAsync(rule => rule.Id == id, ct).ConfigureAwait(false);
         if (entity is null)
@@ -229,11 +320,11 @@ public sealed class RouteStore
         }
 
         var neighbour = up
-            ? await _db.Rules.Where(one => one.Position < entity.Position)
+            ? await _db.Rules.Where(one => (table || one.Id > 0) && one.Position < entity.Position)
                 .OrderByDescending(one => one.Position)
                 .FirstOrDefaultAsync(ct)
                 .ConfigureAwait(false)
-            : await _db.Rules.Where(one => one.Position > entity.Position)
+            : await _db.Rules.Where(one => (table || one.Id > 0) && one.Position > entity.Position)
                 .OrderBy(one => one.Position)
                 .FirstOrDefaultAsync(ct)
                 .ConfigureAwait(false);
@@ -252,20 +343,22 @@ public sealed class RouteStore
     /// <summary>
     /// Puts a rule at a place in the order, counting from one.
     /// </summary>
-    public async Task<RouteResult> PlaceAsync(long id, int place, CancellationToken ct)
+    public async Task<RouteResult> PlaceAsync(long id, int place, CancellationToken ct, bool table = false)
     {
         var all = await _db.Rules.OrderBy(rule => rule.Position).ToListAsync(ct).ConfigureAwait(false);
-        var entity = all.FirstOrDefault(rule => rule.Id == id);
+        var movable = all.Where(rule => table || rule.Id > 0).ToList();
+        var entity = movable.FirstOrDefault(rule => rule.Id == id);
         if (entity is null)
         {
             return Missing(id);
         }
 
-        all.Remove(entity);
-        all.Insert(Math.Clamp(place, 1, all.Count + 1) - 1, entity);
-        for (var at = 0; at < all.Count; at++)
+        var positions = movable.Select(rule => rule.Position).ToArray();
+        movable.Remove(entity);
+        movable.Insert(Math.Clamp(place, 1, movable.Count + 1) - 1, entity);
+        for (var at = 0; at < movable.Count; at++)
         {
-            all[at].Position = at + 1;
+            movable[at].Position = table ? at + 1 : positions[at];
         }
 
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -280,8 +373,16 @@ public sealed class RouteStore
     {
         var held = await _db.RouteBasics.AsNoTracking().FirstOrDefaultAsync(row => row.Id == BasicRow, ct)
             .ConfigureAwait(false);
+        var rules = await _db.Rules.AsNoTracking().Where(rule => rule.Id == RouteBasic.BlockId || rule.Id == RouteBasic.DirectId)
+            .ToListAsync(ct).ConfigureAwait(false);
+        var prior = held is null ? RouteBasic.Empty : Read(held);
 
-        return held is null ? RouteBasic.Empty : Read(held);
+        return prior with
+        {
+            Direct = rules.FirstOrDefault(rule => rule.Id == RouteBasic.DirectId) is { } direct ? Parts(direct.Targets) : prior.Direct,
+            Block = rules.FirstOrDefault(rule => rule.Id == RouteBasic.BlockId) is { } block ? Parts(block.Targets) : prior.Block,
+            UpdatedUtc = rules.Select(rule => rule.UpdatedUtc).Append(prior.UpdatedUtc).Max(),
+        };
     }
 
     /// <summary>
@@ -296,26 +397,125 @@ public sealed class RouteStore
             return fault;
         }
 
-        var held = await _db.RouteBasics.FirstOrDefaultAsync(row => row.Id == BasicRow, ct).ConfigureAwait(false);
-        if (held is null)
-        {
-            held = new RouteBasicEntity { Id = BasicRow };
-            _db.RouteBasics.Add(held);
-        }
-
-        held.Direct = string.Join(", ", basic.Direct);
-        held.Block = string.Join(", ", basic.Block);
-        held.UpdatedUtc = _time.GetUtcNow();
+        await MigrateBasicAsync(ct).ConfigureAwait(false);
+        var now = _time.GetUtcNow();
+        await WriteBasicAsync(RouteBasic.BlockId, RouteBasic.BlockName, RouteAction.Block, basic.Block, int.MinValue, now, ct).ConfigureAwait(false);
+        await WriteBasicAsync(RouteBasic.DirectId, RouteBasic.DirectName, RouteAction.Direct, basic.Direct, int.MinValue + 1, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return null;
     }
 
+    /// <summary>
+    /// Moves legacy exceptions into the rule order.
+    /// </summary>
+    public async Task MigrateBasicAsync(CancellationToken ct)
+    {
+        await _db.AloneAsync(async () =>
+        {
+            var held = await _db.RouteBasics.FirstOrDefaultAsync(row => row.Id == BasicRow, ct).ConfigureAwait(false);
+            if (held is null || (held.Direct.Length == 0 && held.Block.Length == 0))
+            {
+                return;
+            }
+
+            var before = Read(held).Rules().Concat(await TableAsync(ct).ConfigureAwait(false)).ToArray();
+            foreach (var rule in Read(held).Rules())
+            {
+                if (await _db.Rules.AnyAsync(one => one.Id == rule.Id, ct).ConfigureAwait(false))
+                {
+                    throw new InvalidOperationException("the legacy routing identifier is already assigned");
+                }
+
+                var entity = new RouteRuleEntity { Id = rule.Id, CreatedUtc = held.UpdatedUtc, UpdatedUtc = held.UpdatedUtc };
+                Write(entity, rule with { Name = await BasicNameAsync(rule.Name, ct).ConfigureAwait(false) });
+                _db.Rules.Add(entity);
+            }
+
+            held.Direct = string.Empty;
+            held.Block = string.Empty;
+            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+            if (!RouteCompatibility.Same(before, await TableAsync(ct).ConfigureAwait(false)))
+            {
+                throw new InvalidOperationException("the routing upgrade changed rule conditions or priority");
+            }
+        }, ct).ConfigureAwait(false);
+    }
+
+    private async Task<string> BasicNameAsync(string name, CancellationToken ct)
+    {
+        var candidate = name;
+        var suffix = 1;
+        while (await _db.Rules.AnyAsync(rule => rule.Name == candidate, ct).ConfigureAwait(false))
+        {
+            candidate = name + "-" + suffix++;
+        }
+
+        return candidate;
+    }
+
+    private async Task WriteBasicAsync(long id, string name, string action, IReadOnlyList<string> targets, int position, DateTimeOffset now, CancellationToken ct)
+    {
+        var held = await _db.Rules.FirstOrDefaultAsync(rule => rule.Id == id, ct).ConfigureAwait(false);
+        if (held is not null && Parts(held.Targets).SequenceEqual(targets))
+        {
+            return;
+        }
+
+        if (targets.Count == 0)
+        {
+            if (held is not null && held.Groups.Length == 0)
+            {
+                _db.Rules.Remove(held);
+            }
+            else if (held is not null)
+            {
+                held.Targets = string.Empty;
+                held.UpdatedUtc = now;
+            }
+
+            return;
+        }
+
+        if (held is null)
+        {
+            held = new RouteRuleEntity
+            {
+                Id = id,
+                Name = await BasicNameAsync(name, ct).ConfigureAwait(false),
+                Position = position,
+                Action = action,
+                IsEnabled = true,
+                Protocol = RouteProtocol.Any,
+                CreatedUtc = now,
+            };
+            _db.Rules.Add(held);
+        }
+
+        held.Targets = string.Join(", ", targets);
+        held.UpdatedUtc = now;
+    }
+
+    private async Task<RouteResult?> UnknownGroupAsync(IReadOnlyList<long> groups, CancellationToken ct)
+    {
+        var known = await _db.AddressGroups.Where(group => groups.Contains(group.Id)).Select(group => group.Id).ToListAsync(ct).ConfigureAwait(false);
+
+        return groups.Any(id => !known.Contains(id))
+            ? RouteResult.No(RouteOutcome.Invalid, "unknown-address-group", "the rule names an unknown address group")
+            : null;
+    }
+
+    private static RouteFault? Check(RouteRule rule) =>
+        RouteBasic.Holds(rule.Id)
+            ? RouteRules.CheckBasic(new RouteBasic { Direct = rule.Targets })
+                ?? RouteRules.Check(rule with { Targets = [] })
+            : RouteRules.Check(rule);
+
     private async Task<int> NextPositionAsync(CancellationToken ct)
     {
         var last = await _db.Rules.MaxAsync(rule => (int?)rule.Position, ct).ConfigureAwait(false);
 
-        return (last ?? 0) + 1;
+        return Math.Max(last ?? 0, 0) + 1;
     }
 
     /// <summary>
@@ -326,12 +526,12 @@ public sealed class RouteStore
     {
         ArgumentNullException.ThrowIfNull(rules);
 
-        var held = await ListAsync(ct).ConfigureAwait(false);
+        var held = await TableAsync(ct).ConfigureAwait(false);
         var known = held.Select(rule => rule.Id).ToHashSet();
-        var stranger = rules.FirstOrDefault(id => !known.Contains(id));
-        if (stranger > 0)
+        var strangers = rules.Where(id => !known.Contains(id)).ToArray();
+        if (strangers.Length > 0)
         {
-            return Missing(stranger);
+            return Missing(strangers[0]);
         }
 
         foreach (var rule in held)
@@ -401,12 +601,12 @@ public sealed class RouteStore
     {
         ArgumentNullException.ThrowIfNull(rules);
 
-        var held = await ListAsync(ct).ConfigureAwait(false);
+        var held = await TableAsync(ct).ConfigureAwait(false);
         var known = held.Select(rule => rule.Id).ToHashSet();
-        var stranger = rules.FirstOrDefault(id => !known.Contains(id));
-        if (stranger > 0)
+        var strangers = rules.Where(id => !known.Contains(id)).ToArray();
+        if (strangers.Length > 0)
         {
-            return Missing(stranger);
+            return Missing(strangers[0]);
         }
 
         foreach (var rule in held)
@@ -467,6 +667,7 @@ public sealed class RouteStore
         Action = entity.Action,
         Outbound = entity.Outbound,
         Targets = Parts(entity.Targets),
+        Groups = GroupIds(entity.Groups),
         Clients = Parts(entity.Clients),
         Inbounds = Parts(entity.Inbounds),
         Ports = Parts(entity.Ports),
@@ -491,6 +692,7 @@ public sealed class RouteStore
         entity.Action = rule.Action;
         entity.Outbound = rule.Outbound.Trim();
         entity.Targets = string.Join(", ", rule.Targets);
+        entity.Groups = string.Join(", ", rule.Groups);
         entity.Clients = string.Join(", ", rule.Clients);
         entity.Inbounds = string.Join(", ", rule.Inbounds);
         entity.Ports = string.Join(", ", rule.Ports);
@@ -500,4 +702,10 @@ public sealed class RouteStore
 
     private static IReadOnlyList<string> Parts(string text) =>
         [.. text.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+    /// <summary>
+    /// Reads group identifiers.
+    /// </summary>
+    public static IReadOnlyList<long> GroupIds(string text) =>
+        [.. Parts(text).Select(part => long.TryParse(part, out var id) ? id : 0)];
 }

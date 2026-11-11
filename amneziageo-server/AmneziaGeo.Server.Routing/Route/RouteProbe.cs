@@ -230,7 +230,7 @@ public static class RouteProbe
             return Step(leg, Miss, reason, string.Empty);
         }
 
-        if (leg.Rule.Targets.Count == 0)
+        if (!leg.Rule.HasTargets)
         {
             return Step(leg, Match, "any", string.Empty);
         }

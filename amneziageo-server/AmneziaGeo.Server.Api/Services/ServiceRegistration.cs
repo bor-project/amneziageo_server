@@ -1,4 +1,7 @@
 using AmneziaGeo.Server.Core.Panel;
+using AmneziaGeo.Server.Api.Web;
+using AmneziaGeo.Server.Routing.XHttp;
+using Microsoft.AspNetCore.Http.Features;
 using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Routing.Host;
 using AmneziaGeo.Server.Routing.Proxy;
@@ -14,6 +17,10 @@ public sealed class FrontOptions
     /// The section the settings are read from.
     /// </summary>
     public const string Section = "Proxy";
+
+    public bool Enabled { get; set; } = true;
+
+    public bool Isolated { get; set; }
 
     /// <summary>
     /// The directory the fronts take their files from.
@@ -39,16 +46,22 @@ public static class ServiceRegistration
         configuration.GetSection(FrontOptions.Section).Bind(options);
 
         services.AddSingleton(options);
-        services.AddSingleton<IProxyRunner>(provider => SystemdProxies.Runs
+        services.AddScoped<AmneziaGeo.Server.Api.Proxies.ProxyRules>();
+        services.AddSingleton<IProxyRunner>(provider => options.Isolated
+            ? new ChildProxies(options.Directory, Path.Combine(AppContext.BaseDirectory, "AmneziaGeo.Server.Proxy.Host"))
+            : SystemdProxies.Runs
             ? new SystemdProxies(provider.GetRequiredService<IHostCommands>())
             : new ChildProxies(options.Directory));
         services.AddSingleton(provider =>
             new ProxyHost(
                 provider.GetRequiredService<IHostNetwork>(),
                 provider.GetRequiredService<IProxyRunner>(),
-                options.Directory));
+                options.Directory,
+                provider.GetRequiredService<ILogger<ProxyHost>>()));
         services.AddSingleton<SpeedTickets>();
         services.AddSingleton<IHelloFeature, WebSocketOffer>();
+        services.AddSingleton<IHelloFeature, ProxyOffer>();
+        services.AddSingleton<IHelloFeature>(provider => new ProxyOffer(provider.GetRequiredService<IServiceScopeFactory>(), true, options));
         services.AddSingleton<IHelloFeature, InboundOffer>();
         services.AddSingleton<IHelloFeature, DisconnectOffer>();
         services.AddSingleton<IHelloFeature, SpeedOffer>();
@@ -65,7 +78,15 @@ public static class ServiceRegistration
         services.AddSingleton(new DisconnectSignal());
         services.AddSingleton<ServiceDesk>();
         services.AddSingleton<ServiceShare>();
+        services.AddSingleton(provider => new XHttpHost(
+            configuration["XHttp:Directory"] ?? Path.Combine(options.Directory, "xhttp"),
+            configuration["XHttp:Executable"] ?? Path.Combine(AppContext.BaseDirectory, options.Isolated ? "AmneziaGeo.Server.Proxy.Host" : "wstunnel-get"),
+            provider.GetRequiredService<ILogger<XHttpHost>>()));
+        services.AddSingleton(provider => new AmneziaGeo.Server.Api.Proxies.QuicHost(Path.Combine(options.Directory, "quic"),
+            Path.Combine(AppContext.BaseDirectory, options.Isolated ? "AmneziaGeo.Server.Proxy.Host" : "wstunnel-quic"),
+            provider.GetRequiredService<ILoggerFactory>().CreateLogger("QuicHost")));
         services.AddSingleton<ServiceServer>();
+        services.AddHostedService<XHttpRefresh>();
         services.AddHostedService(provider => provider.GetRequiredService<ServiceServer>());
 
         return services;
@@ -84,6 +105,12 @@ public static class ServiceRegistration
         var under = settings.Prefix.Length > 1 ? new PathString(settings.Prefix.TrimEnd('/')) : PathString.Empty;
         app.Use(async (context, next) =>
         {
+            if (context.Features.Get<ITlsConnectionFeature>() is null && app.Services.GetService<PanelPlace>() is { Secure: true })
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+
             var panel = under.HasValue && context.Request.Path.StartsWithSegments(under);
             if (!panel && share.Point is { } point && (desk.Takes(context, point) || desk.Strays(context, point)))
             {

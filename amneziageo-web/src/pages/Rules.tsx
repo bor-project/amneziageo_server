@@ -1,224 +1,153 @@
+import { useRoutingEditor } from "@/components/useRoutingEditor"
 import { useRef, useState } from "react"
-import { Link, useNavigate, useSearchParams } from "react-router-dom"
+import { Link } from "react-router-dom"
 import axios from "axios"
 import { complaint, reason } from "@/api/auth"
+import { useAddressGroups } from "@/api/addressGroups"
+import type { AddressGroup } from "@/api/addressGroups"
 import { useBalancers } from "@/api/balancers"
 import { useClients } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import { findingsOf, useDnsConflicts } from "@/api/dns"
 import { useFailure } from "@/api/failure"
-import { useMoveRule, usePlaceRule, useRules, useSwitchRule } from "@/api/rules"
+import { useOutbounds } from "@/api/outbounds"
+import { useMoveRule, usePlaceRule, useRules } from "@/api/rules"
 import { useRoutingApply, useRoutingExport, useRoutingImport } from "@/api/exchange"
 import type { ExchangeAnswer, ExchangePlan } from "@/api/exchange"
 import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
 import { DnsMark } from "@/components/DnsMark"
 import { Glyph } from "@/components/Glyph"
-import { Help } from "@/components/fields"
-import { Find, Knob } from "@/components/fields"
-import { clientTo, configTo } from "@/components/members"
+import { Find, Help } from "@/components/fields"
+import { clientTo, configTo, wayTo } from "@/components/members"
 import { Move } from "@/components/Move"
-import { RowActions } from "@/components/RowActions"
+import { RoutingSettings, RoutingToolbar } from "@/components/RoutingEditor"
 import { Rows } from "@/components/Rows"
-import { alarmBar, alarmLine, card, primary, secondary } from "@/components/styles"
+import { alarmBar, alarmLine, card, field, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text } from "@/i18n"
+import { RouteTest } from "@/pages/RouteTest"
+import { RoutingRuleEditor } from "@/pages/RoutingRuleEditor"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
 
 export function Rules() {
   const t = useText()
-  const navigate = useNavigate()
   const user = useAppSelector((s) => s.auth.user)
-  const [params, setParams] = useSearchParams()
+  const editor = useRoutingEditor()
   const rules = useRules()
   const failed = useFailure(rules)
   const balancers = useBalancers()
+  const outbounds = useOutbounds()
+  const addressGroups = useAddressGroups()
   const clients = useClients().data ?? []
   const configs = useConfigs().data ?? []
   const move = useMoveRule()
   const place = usePlaceRule()
-  const turn = useSwitchRule()
   const report = useDnsConflicts().data
   const may = holds(user, scopes.manageRouting)
-  const find = params.get("find") ?? ""
+  const find = editor.params.get("find") ?? ""
+  const client = editor.params.get("client") ?? ""
+  const inbound = editor.params.get("inbound") ?? ""
   const all = rules.data ?? []
-  const shown = all.filter((one) => matches(one, find))
-  const last = all.length - 1
-  const groups = new Set((balancers.data ?? []).map((one) => one.name))
+  const shown = all.filter((one) => matches(one, find, addressGroups.data ?? [])
+    && (client === "" || one.clients.length === 0 || one.clients.some((name) => name.toLowerCase() === client.toLowerCase()))
+    && (inbound === "" || one.inbounds.length === 0 || one.inbounds.includes(inbound)))
   const number = new Map(all.map((one, at) => [one.id, at + 1]))
-
-  function put(key: string, value: string) {
-    const kept = new URLSearchParams(params)
-
-    if (value === "") {
-      kept.delete(key)
-    } else {
-      kept.set(key, value)
-    }
-
-    setParams(kept, { replace: true })
-  }
+  const selected = may && shown.some((one) => one.id === editor.id) ? editor.id : null
+  const open = (id: number | null) => <RoutingRuleEditor key={id ?? "new"} id={id} onClose={editor.close} />
 
   return (
     <>
-    <div className={`mt-4 ${card}`}>
-      {rules.isPending && failed === null && <div className="px-4 py-6 text-sm text-muted">{t("rules.loading")}</div>}
-      {failed !== null && (
-        <div className={all.length === 0 ? alarmLine : alarmBar}>{t(complaint(failed))}</div>
-      )}
-      {rules.isSuccess && all.length === 0 && <div className="px-4 py-6 text-sm text-muted">{t("rules.empty")}</div>}
-
-      {all.length > 0 && (
-        <Rows
-          name="rule"
+      <RoutingToolbar onAdd={may && rules.isSuccess ? () => editor.open("new") : undefined}>
+        <label className="flex min-w-36 flex-col gap-1 text-xs text-muted">
+          {t("routing.client")}
+          <select className={field} value={client} onChange={(event) => editor.filter("client", event.target.value)}>
+            <option value="">{t("routing.all")}</option>
+            {clients.map((one) => <option key={one.id} value={one.name}>{one.name}</option>)}
+          </select>
+        </label>
+        <label className="flex min-w-36 flex-col gap-1 text-xs text-muted">
+          {t("routing.inbound")}
+          <select className={field} value={inbound} onChange={(event) => editor.filter("inbound", event.target.value)}>
+            <option value="">{t("routing.all")}</option>
+            {configs.map((one) => <option key={one.id} value={one.name}>{one.name}</option>)}
+          </select>
+        </label>
+        <Find value={find} onChange={(value) => editor.filter("find", value)} className="w-full wide:max-w-64" />
+      </RoutingToolbar>
+      <div className={card}>
+        {rules.isPending && failed === null && <div className="px-4 py-6 text-sm text-muted">{t("rules.loading")}</div>}
+        {failed !== null && <div className={all.length === 0 ? alarmLine : alarmBar}>{t(complaint(failed))}</div>}
+        {rules.data !== undefined && <Rows
+          name="routing-rule-order"
           items={shown}
           keyOf={(one) => one.id}
-          drag={
-            may && find === ""
-              ? {
-                  title: t("rules.drag"),
-                  onMove: (one, to) => void place.mutateAsync({ id: one.id, to: number.get(to.id) ?? 1 }),
-                }
-              : undefined
-          }
-          tools={
-            <Find value={find} onChange={(value) => put("find", value)} className="w-full wide:w-72" />
-          }
+          creating={may && editor.fresh ? open(null) : undefined}
+          expanded={selected === null ? undefined : { key: selected, body: open(selected) }}
+          drag={may && find === "" && client === "" && inbound === "" ? {
+            title: t("rules.drag"),
+            onMove: (one, to) => void place.mutateAsync({ id: one.id, to: number.get(to.id) ?? 1 }).catch(() => undefined),
+          } : undefined}
           columns={[
+            { key: "place", width: 44, caption: "№", cell: (one) => number.get(one.id) },
             {
-              key: "place",
-              width: 40,
-              caption: "#",
-              sort: (one) => number.get(one.id) ?? 0,
-              body: "text-faint tabular-nums",
-              cell: (one) => number.get(one.id),
+              key: "name", caption: t("routing.rule"), width: 190, lead: true,
+              cell: (one) => <div className="min-w-0">
+                <div className="flex items-center gap-2 font-semibold text-ink">
+                  {may ? <button type="button" className="truncate text-left hover:text-brand-ink" onClick={() => editor.open(one.id)}>{one.name}</button> : one.name}
+                  <DnsMark findings={findingsOf(report, one.id < 0 ? "basic" : "rule", one.id)} view="rule" />
+                </div>
+                {one.id < 0 && <div className="text-xs text-muted">{t("routing.legacyExceptions")}</div>}
+                {!one.isEnabled && <div className="text-xs text-muted">{t("rules.off")}</div>}
+              </div>,
             },
             {
-              key: "on",
-              width: 60,
-              caption: t("rules.on"),
-              cell: (one) => (
-                <Knob
-                  value={one.isEnabled}
-                  title={one.isEnabled ? t("rules.turnOff") : t("rules.turnOn")}
-                  disabled={!may || turn.isPending}
-                  onChange={(on) => void turn.mutateAsync({ id: one.id, on })}
-                />
-              ),
-            },
-            {
-              key: "name",
-              caption: t("rules.name"),
-              sort: (one) => one.name,
-              lead: true,
-              body: "font-semibold text-ink",
-              cell: (one) => (
-                <span className="flex min-w-0 items-center gap-2">
-                  {may ? (
-                    <Link to={`/routing/rules/${one.id}/edit`} className="truncate hover:text-brand-ink">
-                      {one.name}
-                    </Link>
-                  ) : (
-                    <span className="truncate">{one.name}</span>
-                  )}
-                  <DnsMark findings={findingsOf(report, "rule", one.id)} view="rule" />
-                </span>
-              ),
-            },
-            {
-              key: "action",
-              width: 104,
-              caption: t("rules.action"),
-              sort: (one) => way(one, t),
-              cell: (one) => (
-                <span className="whitespace-nowrap">
-                  {way(one, t)}
-                  {one.action === "out" && groups.has(one.outbound) && (
-                    <span className="ml-1.5 rounded bg-chip px-1.5 py-0.5 text-xs text-chip-ink">
-                      {t("rules.group")}
-                    </span>
-                  )}
-                </span>
-              ),
-            },
-            {
-              key: "targets",
-              wrap: true,
-              caption: t("rules.targets"),
-              sort: (one) => (one.targets.length > 0 ? one.targets.join(", ") : t("rules.anything")),
-              cell: (one) => <Some values={one.targets} none={t("rules.anything")} />,
-            },
-            {
-              key: "clients",
-              width: 104,
-              wrap: true,
-              caption: t("rules.clients"),
-              sort: (one) => one.clients.join(", "),
-              cell: (one) => (
+              key: "source", caption: t("routing.source"), width: 160,
+              cell: (one) => <div className="flex min-w-0 flex-col gap-1">
                 <Some values={one.clients} none={t("rules.anyone")} to={(name) => clientTo(name, clients)} />
-              ),
+                <span className="text-xs text-muted"><Some values={one.inbounds} none={t("rules.anyInbound")} to={(name) => configTo(name, configs)} /></span>
+              </div>,
             },
             {
-              key: "inbounds",
-              width: 96,
-              wrap: true,
-              caption: t("rules.inbounds"),
-              sort: (one) => one.inbounds.join(", "),
-              cell: (one) => (
-                <Some values={one.inbounds} none={t("rules.anyInbound")} to={(name) => configTo(name, configs)} />
-              ),
+              key: "targets", caption: t("routing.destination"), wrap: true,
+              cell: (one) => <div className="min-w-0">
+                <Some values={[...(one.groups ?? []).map((id) => addressGroups.data?.find((group) => group.id === id)?.name ?? String(id)), ...one.targets]} none={t("rules.anything")} />
+                <div className="mt-1 text-xs text-muted">{traffic(one, t)}</div>
+              </div>,
             },
             {
-              key: "traffic",
-              width: 96,
-              caption: t("rules.traffic"),
-              sort: (one) => traffic(one, t),
-              cell: (one) => traffic(one, t),
+              key: "direction", width: 170, caption: t("routing.direction"),
+              cell: (one) => {
+                const to = one.action === "out" ? wayTo(one.outbound, outbounds.data ?? [], balancers.data ?? []) : undefined
+                return <div>
+                  {to ? <Link to={to} className="text-brand-ink hover:text-brand-lit">{way(one, t)}</Link> : way(one, t)}
+                  {one.isEnabled && (!one.state.isLive || one.state.fault.length > 0) && <div className="mt-1 text-xs"><State rule={one} t={t} /></div>}
+                </div>
+              },
             },
             {
-              key: "ranges",
-              width: 120,
-              caption: t("rules.ranges"),
-              sort: (one) => `${one.state.ranges} / ${one.state.names}`,
-              cell: (one) => `${one.state.ranges} / ${one.state.names}`,
-            },
-            {
-              key: "state",
-              width: 128,
-              caption: t("rules.state"),
-              sort: (one) => ranked(one),
-              cell: (one) => <State rule={one} t={t} />,
-            },
-            {
-              key: "actions",
-              width: 128,
-              caption: t("rules.actions"),
-              tail: true,
-              cell: (one) =>
-                may && (
-                  <div className="flex items-center justify-end gap-1">
-                    <Move
-                      first={(number.get(one.id) ?? 1) === 1}
-                      last={(number.get(one.id) ?? 1) - 1 === last}
-                      upTitle={t("rules.up")}
-                      downTitle={t("rules.down")}
-                      onMove={(up) => void move.mutateAsync({ id: one.id, up })}
-                    />
-                    <RowActions
-                      title={t("rules.actions")}
-                      actions={[
-                        { label: t("action.settings"), onPick: () => navigate(`/routing/rules/${one.id}/edit`) },
-                      ]}
-                    />
-                  </div>
-                ),
+              key: "actions", width: 120, caption: t("rules.actions"), tail: true,
+              cell: (one) => may && <div className="flex items-center justify-end gap-1">
+                <Move first={number.get(one.id) === 1 || move.isPending || place.isPending}
+                  last={number.get(one.id) === all.length || move.isPending || place.isPending}
+                  upTitle={t("rules.up")} downTitle={t("rules.down")}
+                  onMove={(up) => void move.mutateAsync({ id: one.id, up }).catch(() => undefined)} />
+                <RoutingSettings onClick={() => editor.open(one.id)} open={editor.id === one.id} />
+              </div>,
             },
           ]}
-        />
-      )}
-    </div>
-    <Exchange may={may} />
+        />}
+      </div>
+      {(move.error ?? place.error) && <div className="mt-2 text-sm text-alarm">{t(complaint(move.error ?? place.error))}</div>}
+      <details className="mt-5 border-t border-line pt-3">
+        <summary className="w-fit cursor-pointer text-sm text-brand-ink">{t("tab.test")}</summary>
+        <RouteTest />
+      </details>
+      <div className="mt-4 flex flex-wrap gap-3 text-sm text-muted">
+        {t("routing.default")}<span className="text-ink">{t("rules.actionDirect")}</span>
+      </div>
+      <Exchange may={may} />
     </>
   )
 }
@@ -338,11 +267,13 @@ function Exchange({ may }: { may: boolean }) {
 
 function Plan({ plan, t }: { plan: ExchangePlan; t: Text }) {
   const added = [
+    ...(plan.newGroups ?? []).map((name) => t("routing.groupItem", { name })),
     ...plan.newRules.map((name) => t("exchange.itemRule", { name })),
     ...plan.newPresets.map((name) => t("exchange.itemPreset", { name })),
     ...plan.newSources.map((name) => t("exchange.itemSource", { name })),
   ]
   const replaced = [
+    ...(plan.replacedGroups ?? []).map((name) => t("routing.groupItem", { name })),
     ...plan.replacedRules.map((name) => t("exchange.itemRule", { name })),
     ...plan.replacedPresets.map((name) => t("exchange.itemPreset", { name })),
     ...plan.replacedSources.map((name) => t("exchange.itemSource", { name })),
@@ -462,14 +393,6 @@ function way(rule: Rule, t: Text): string {
   return rule.action === "direct" ? t("rules.actionDirect") : rule.outbound
 }
 
-function ranked(rule: Rule): number {
-  if (rule.state.fault.length > 0) {
-    return 1
-  }
-
-  return rule.state.isLive ? 0 : 2
-}
-
 function State({ rule, t }: { rule: Rule; t: Text }) {
   if (rule.state.isHeld) {
     return (
@@ -501,7 +424,7 @@ function traffic(rule: Rule, t: Text): string {
   return rule.sourcePorts.length > 0 ? `${to} ${t("rules.fromPorts", { ports: rule.sourcePorts.join(", ") })}` : to
 }
 
-function matches(one: Rule, find: string): boolean {
+function matches(one: Rule, find: string, groups: AddressGroup[]): boolean {
   const query = find.trim().toLowerCase()
 
   return (
@@ -509,6 +432,8 @@ function matches(one: Rule, find: string): boolean {
     one.name.toLowerCase().includes(query) ||
     one.outbound.toLowerCase().includes(query) ||
     one.targets.some((target) => target.toLowerCase().includes(query)) ||
+    groups.some((group) => (one.groups ?? []).includes(group.id)
+      && [group.name, ...group.targets].some((value) => value.toLowerCase().includes(query))) ||
     one.clients.some((name) => name.toLowerCase().includes(query)) ||
     one.inbounds.some((name) => name.toLowerCase().includes(query))
   )

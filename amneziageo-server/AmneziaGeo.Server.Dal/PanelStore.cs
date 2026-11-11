@@ -143,7 +143,33 @@ public sealed class PanelStore
                 "select count(*) from Configs where IsEnabled = 1 and (ServicesPort = $port or (ServicesPort = 0 and ListenPort = $port))";
             command.Parameters.AddWithValue("$port", port);
 
-            return command.ExecuteScalar() is long count && count > 0;
+            if (command.ExecuteScalar() is long count && count > 0)
+            {
+                return true;
+            }
+
+            try
+            {
+                command.CommandText = "pragma table_info(TransportProxies)";
+                var columns = new HashSet<string>(StringComparer.Ordinal);
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        columns.Add(reader.GetString(1));
+                    }
+                }
+
+                var hosted = columns.Contains("Hosted") ? " and Hosted = 1" : "";
+                command.CommandText = "select count(*) from TransportProxies where IsEnabled = 1" + hosted
+                    + " and (Transport = 'websocket' or Transport = 'http' or Transport = 'xhttp') and (case when ListenPort = 0 then Port else ListenPort end) = $port";
+                return command.ExecuteScalar() is long proxies && proxies > 0;
+            }
+            catch (SqliteException)
+            {
+                command.CommandText = "select count(*) from TransportProxies where IsEnabled = 1 and Transport = 'websocket' and Port = $port";
+                return command.ExecuteScalar() is long proxies && proxies > 0;
+            }
         }
         catch (SqliteException)
         {

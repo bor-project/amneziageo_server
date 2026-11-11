@@ -57,6 +57,8 @@ export function Rows<T>({
   choice,
   empty,
   pinned = [],
+  expanded,
+  creating,
 }: {
   items: T[]
   columns: Column<T>[]
@@ -67,6 +69,8 @@ export function Rows<T>({
   choice?: Choice
   empty?: string
   pinned?: T[]
+  expanded?: { key: string | number; body: ReactNode }
+  creating?: ReactNode
 }) {
   const t = useText()
   const wide = useAbove(wideQuery)
@@ -96,6 +100,10 @@ export function Rows<T>({
     columns.reduce((sum, column) => sum + (widthOf(column) ?? least), 0) + (moving ? grip : 0) + (choice ? box : 0)
 
   function lit(item: T): string {
+    if (expanded?.key === keyOf(item)) {
+      return "bg-active"
+    }
+
     if (held === item) {
       return "opacity-60"
     }
@@ -253,7 +261,7 @@ export function Rows<T>({
       <div>
         {bar}
         {batch}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto [container-type:inline-size]" data-routing-scroll>
           <table
             className={`w-full table-fixed text-left text-sm tabular-nums ${pulled === null ? "" : "cursor-col-resize select-none"}`}
             style={{ minWidth: span }}
@@ -303,7 +311,11 @@ export function Rows<T>({
               </tr>
             </thead>
             <tbody>
+              {creating !== undefined && (
+                <tr><td colSpan={columns.length + (choice ? 1 : 0) + (moving ? 1 : 0)}>{creating}</td></tr>
+              )}
               {sorted.map((place) => (
+                <Fragment key={keyOf(place.item)}>
                 <tr
                   key={keyOf(place.item)}
                   draggable={moving && held === place.item}
@@ -352,6 +364,12 @@ export function Rows<T>({
                     </td>
                   ))}
                 </tr>
+                {expanded?.key === keyOf(place.item) && (
+                  <tr data-expanded-row={keyOf(place.item)}>
+                    <td colSpan={columns.length + (choice ? 1 : 0) + (moving ? 1 : 0)}>{expanded.body}</td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -377,7 +395,9 @@ export function Rows<T>({
         </label>
       )}
 
+      {creating}
       {sorted.map((place) => (
+        <Fragment key={keyOf(place.item)}>
         <div key={keyOf(place.item)} className={`border-t border-line-soft px-4 py-3.5 hover:bg-hover ${lit(place.item)}`}>
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-3">
@@ -391,6 +411,8 @@ export function Rows<T>({
             {rest.map((column) => told(column.cell(place.item, place.at), column))}
           </dl>
         </div>
+        {expanded?.key === keyOf(place.item) && <div data-expanded-row={keyOf(place.item)}>{expanded.body}</div>}
+        </Fragment>
       ))}
 
       {nothing}

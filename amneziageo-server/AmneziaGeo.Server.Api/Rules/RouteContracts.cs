@@ -32,7 +32,10 @@ public sealed record RouteResponse(
     string Protocol,
     RouteStateBody State,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc)
+{
+    public IReadOnlyList<long> Groups { get; init; } = [];
+}
 
 /// <summary>
 /// The settings a rule is added or changed with, and the client addresses an older client still sends.
@@ -48,7 +51,8 @@ public sealed record RouteRequest(
     IReadOnlyList<string>? Clients = null,
     IReadOnlyList<string>? Inbounds = null,
     IReadOnlyList<string>? SourcePorts = null,
-    IReadOnlyList<string>? Sources = null);
+    IReadOnlyList<string>? Sources = null,
+    IReadOnlyList<long>? Groups = null);
 
 /// <summary>
 /// Which way a rule moves in the list, or the place it goes to, counting from one.
@@ -143,7 +147,7 @@ public static class RouteAnswers
             rule.Protocol,
             State(leg),
             rule.CreatedUtc,
-            rule.UpdatedUtc);
+            rule.UpdatedUtc) { Groups = rule.Groups };
     }
 
     /// <summary>
@@ -160,6 +164,7 @@ public static class RouteAnswers
             Action = (request.Action ?? RouteAction.Out).Trim(),
             Outbound = (request.Outbound ?? string.Empty).Trim(),
             Targets = Clean(request.Targets),
+            Groups = request.Groups ?? held?.Groups ?? [],
             Clients = request.Clients is null ? held?.Clients ?? [] : Clean(request.Clients),
             Inbounds = request.Inbounds is null ? held?.Inbounds ?? [] : Clean(request.Inbounds),
             Ports = Clean(request.Ports),

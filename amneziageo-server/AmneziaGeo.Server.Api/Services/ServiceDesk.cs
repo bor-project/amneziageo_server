@@ -1,12 +1,18 @@
 using System.Buffers;
+using AmneziaGeo.Server.Core.Panel;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
+using AmneziaGeo.Server.Core.Proxy;
+using AmneziaGeo.Server.Routing.Proxy;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Routing.XHttp;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Options;
 using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
@@ -50,6 +56,8 @@ public sealed class ServiceDesk
     private readonly AnswerSlots _slots;
 
     private readonly SubscriptionCertificates? _certificates;
+    private readonly XHttpHost? _xhttp;
+    private readonly ProxyHost? _fronts;
 
     /// <summary>
     /// ctor
@@ -64,7 +72,9 @@ public sealed class ServiceDesk
         ILogger<ServiceDesk> logger,
         RefusalHold? hold = null,
         AnswerSlots? slots = null,
-        SubscriptionCertificates? certificates = null)
+        SubscriptionCertificates? certificates = null,
+        XHttpHost? xhttp = null,
+        ProxyHost? fronts = null)
     {
         ArgumentNullException.ThrowIfNull(life);
         ArgumentNullException.ThrowIfNull(json);
@@ -79,6 +89,8 @@ public sealed class ServiceDesk
         _hold = hold ?? new RefusalHold();
         _slots = slots ?? new AnswerSlots(0);
         _certificates = certificates;
+        _xhttp = xhttp;
+        _fronts = fronts;
     }
 
     /// <summary>
@@ -89,8 +101,25 @@ public sealed class ServiceDesk
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(point);
 
-        switch (Route(context, point))
+        var route = Route(context, point);
+        var proxyRoute = point.Endpoints.FirstOrDefault(endpoint => endpoint.ProxyId > 0
+            && (route == Wanted.XHttp && endpoint.XHttp || route == Wanted.Front && endpoint.WebSocket || route == Wanted.Probe && endpoint.WebSocket)
+            && context.Request.Path.StartsWithSegments("/" + endpoint.Path, StringComparison.Ordinal));
+        if (route is Wanted.XHttp or Wanted.Front or Wanted.Probe
+            && (context.Features.Get<ITlsConnectionFeature>() is null || proxyRoute is { UseCertificate: false } or { OriginHttp: true }))
         {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        switch (route)
+        {
+            case Wanted.XHttp:
+                await XHttpAsync(context, point).ConfigureAwait(false);
+                break;
+            case Wanted.Probe:
+                await ProbeAsync(context, point).ConfigureAwait(false);
+                break;
             case Wanted.Front:
                 await PassAsync(context, point).ConfigureAwait(false);
                 break;
@@ -226,6 +255,8 @@ public sealed class ServiceDesk
     private async Task PassAsync(HttpContext context, ServicePoint point)
     {
         var named = point.Endpoints.Where(one => one.WebSocket && Under(context.Request.Path, one.Path)).ToList();
+        var modern = context.Request.Headers.ContainsKey("X-AmneziaGeo-Target");
+        named = named.Where(endpoint => modern ? endpoint.ProxyId > 0 : endpoint.ProxyId == 0).ToList();
         if (named.Count != 1)
         {
             await HoldAsync(context, Refuse(context, string.Join(", ", named.Select(one => one.Name)), "shared-path")).ConfigureAwait(false);
@@ -234,7 +265,78 @@ public sealed class ServiceDesk
             return;
         }
 
-        var refused = await FrontRelay.PassAsync(context, named[0].Front, _stopping).ConfigureAwait(false);
+        var lease = default(ProxyLease?);
+        if (named[0].ProxyId > 0 && _fronts is not null)
+        {
+            _fronts.TryLease(named[0].Name, out lease);
+        }
+
+        if (named[0].ProxyId == 0 && named[0].PolicyProxyId > 0 && _fronts is not null)
+        {
+            _fronts.TryLegacyLease(named[0].PolicyProxyId, out lease);
+        }
+
+        using var held = lease;
+        using var lifetime = held is not null ? CancellationTokenSource.CreateLinkedTokenSource(_stopping, held.Stopped) : null;
+        var stopped = lifetime?.Token ?? _stopping;
+        if (named[0].ProxyId > 0)
+        {
+            var proxy = await AuthorizedProxyAsync(context, named[0]).ConfigureAwait(false);
+            if (proxy is null)
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
+            }
+
+            var targets = ProxyTargetRules.Read(proxy.TargetsJson);
+            if (targets is { Restricted: true })
+            {
+                if (!ProxyWsTarget.TryRead(context.Request.Headers.SecWebSocketProtocol.ToString(), out var target))
+                {
+                    await XHttpProbe.RefuseAsync(context, 400, "bad-proxy-target").ConfigureAwait(false);
+                    return;
+                }
+
+                if (!ProxyTargetRules.Allows(targets, target!.Host, target.Port))
+                {
+                    await XHttpProbe.RefuseAsync(context, 403, "proxy-target-denied").ConfigureAwait(false);
+                    return;
+                }
+            }
+        }
+
+        if (named[0].ProxyId == 0 && named[0].PolicyProxyId > 0)
+        {
+            using var scope = _scopes.CreateScope();
+            var proxy = await scope.ServiceProvider.GetRequiredService<TransportProxyStore>()
+                .FindAsync(named[0].PolicyProxyId, context.RequestAborted).ConfigureAwait(false);
+            if (proxy is not { IsEnabled: true, UsesTls: true } || !Usable(scope.ServiceProvider, proxy) || proxy.LegacyConfigId != named[0].ConfigId
+                || !ProxyTargetRules.Allows(ProxyTargetRules.Read(proxy.TargetsJson), ProxyDefaults.Loopback, named[0].Target))
+            {
+                await XHttpProbe.RefuseAsync(context, 403, "proxy-target-denied").ConfigureAwait(false);
+                return;
+            }
+        }
+
+        if ((named[0].ProxyId > 0 || named[0].PolicyProxyId > 0) && held is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            return;
+        }
+
+        if (stopped.IsCancellationRequested)
+        {
+            context.Abort();
+            return;
+        }
+
+        var refused = await FrontRelay.PassAsync(context, named[0].Front, stopped).ConfigureAwait(false);
+        if (stopped.IsCancellationRequested)
+        {
+            context.Abort();
+            return;
+        }
+
         if (refused is null)
         {
             return;
@@ -243,7 +345,7 @@ public sealed class ServiceDesk
         var noted = Refuse(context, named[0].Name, refused.Reason, refused.Down);
         if (refused.Down)
         {
-            refused = await AgainAsync(context, named[0].Front, refused, noted).ConfigureAwait(false);
+            refused = await AgainAsync(context, named[0].Front, refused, noted, stopped).ConfigureAwait(false);
         }
         else
         {
@@ -254,6 +356,94 @@ public sealed class ServiceDesk
         {
             context.Response.StatusCode = refused.Status;
         }
+    }
+
+    private async Task XHttpAsync(HttpContext context, ServicePoint point)
+    {
+        var endpoints = point.Endpoints.Where(endpoint => endpoint.XHttp && Under(context.Request.Path, endpoint.Path)).ToList();
+        if (endpoints.Count != 1 || context.Features.Get<ITlsConnectionFeature>() is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        var endpoint = endpoints[0];
+        if (!XHttpRelay.Accepts(context, endpoint.HttpMethod))
+        {
+            return;
+        }
+
+        if (_xhttp is null || !_xhttp.TryLease(endpoint.ProxyId, out var lease))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        using var held = lease;
+        await XHttpRelay.PassAsync(context, endpoint.Front, _logger, held.Stopped, endpoint.HttpMethod).ConfigureAwait(false);
+    }
+
+    private async Task ProbeAsync(HttpContext context, ServicePoint point)
+    {
+        var endpoints = point.Endpoints.Where(endpoint => endpoint.ProxyId > 0 && endpoint.WebSocket
+            && XHttpProbe.Nonce(context.Request.Path, endpoint.Path, out _)).ToArray();
+        if (endpoints.Length != 1 || !XHttpProbe.Nonce(context.Request.Path, endpoints[0].Path, out var nonce))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        await ProbeAsync(context, endpoints[0], nonce).ConfigureAwait(false);
+    }
+
+    private async Task ProbeAsync(HttpContext context, ServiceEndpoint endpoint, string nonce)
+    {
+        var proxy = default(TransportProxyEntity?);
+        async Task<bool> Authorized()
+        {
+            proxy = await AuthorizedProxyAsync(context, endpoint).ConfigureAwait(false);
+            return proxy is not null;
+        }
+
+        var lease = default(ProxyLease?);
+        var running = endpoint.XHttp
+            ? _xhttp is not null && _xhttp.TryLease(endpoint.ProxyId, out lease)
+            : _fronts is not null && _fronts.TryLease(endpoint.Name, out lease)
+                && (await _fronts.StateAsync(endpoint.Name, context.RequestAborted).ConfigureAwait(false)).IsRunning;
+        using var held = lease;
+        bool Current() => held is not null && !held.Stopped.IsCancellationRequested
+            && (endpoint.XHttp ? _xhttp?.CanRelay(endpoint.ProxyId) == true : _fronts?.CanRelay(endpoint.Name) == true);
+        await XHttpProbe.AnswerAsync(context, nonce, Authorized, running,
+            () => ProxyTargetRules.Read(proxy?.TargetsJson), endpoint.XHttp ? "xhttp" : "websocket", Current).ConfigureAwait(false);
+    }
+
+    private async Task<TransportProxyEntity?> AuthorizedProxyAsync(HttpContext context, ServiceEndpoint endpoint)
+    {
+        var authorization = context.Request.Headers.Authorization.ToString();
+        if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        using var scope = _scopes.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
+        var proxy = await store.FindAsync(endpoint.ProxyId, context.RequestAborted).ConfigureAwait(false);
+        if (proxy is not { IsEnabled: true, UsesTls: true } || !Usable(scope.ServiceProvider, proxy))
+        {
+            return null;
+        }
+
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(authorization[7..]));
+        var credentials = await store.CredentialsAsync(proxy, context.RequestAborted).ConfigureAwait(false);
+        return credentials.Any(credential => CryptographicOperations.FixedTimeEquals(digest,
+            SHA256.HashData(Encoding.UTF8.GetBytes(credential)))) ? proxy : null;
+    }
+
+    private static bool Usable(IServiceProvider services, TransportProxyEntity proxy)
+    {
+        var panel = services.GetService<PanelSettings>() ?? new PanelSettings();
+        var options = services.GetService<WebOptions>() ?? new WebOptions();
+        return AmneziaGeo.Server.Api.Proxies.ProxySecurity.Check(proxy, Listening.Chain(options, panel), Listening.Key(options, panel)) is null;
     }
 
     // Counts a websocket refused to an address and writes down the start of a row and the start of the holding.
@@ -304,7 +494,7 @@ public sealed class ServiceDesk
     }
 
     // Holds the answer to a websocket whose front is down and hands it to the front again at every step of the wait.
-    private async Task<FrontRefusal?> AgainAsync(HttpContext context, int front, FrontRefusal refused, RefusalNote noted)
+    private async Task<FrontRefusal?> AgainAsync(HttpContext context, int front, FrontRefusal refused, RefusalNote noted, CancellationToken stopping)
     {
         if (noted.Wait <= TimeSpan.Zero)
         {
@@ -324,12 +514,12 @@ public sealed class ServiceDesk
 
         try
         {
-            using var ended = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, _stopping);
+            using var ended = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stopping);
             var last = refused;
             for (var waited = TimeSpan.Zero; waited < noted.Wait && last is { Down: true }; waited += RefusalHold.Step)
             {
                 await _hold.WaitAsync(RefusalHold.Step, ended.Token).ConfigureAwait(false);
-                last = await FrontRelay.PassAsync(context, front, _stopping, Leave).ConfigureAwait(false);
+                last = await FrontRelay.PassAsync(context, front, stopping, Leave).ConfigureAwait(false);
             }
 
             return last;
@@ -354,6 +544,16 @@ public sealed class ServiceDesk
             return Wanted.Front;
         }
 
+        if (point.Endpoints.Any(one => one.XHttp && Under(path, one.Path)))
+        {
+            return Wanted.XHttp;
+        }
+
+        if (point.Endpoints.Any(one => one.ProxyId > 0 && one.WebSocket && XHttpProbe.Nonce(path, one.Path, out _)))
+        {
+            return Wanted.Probe;
+        }
+
         if (path.Equals(HelloPath, StringComparison.Ordinal) && HttpMethods.IsPost(method))
         {
             return Wanted.Hello;
@@ -375,7 +575,7 @@ public sealed class ServiceDesk
             ?? SubscriptionAnswer.AskedConfig(path, subscriptions)?.Subscription;
 
         return subscriptions.IsEnabled
-            && !subscriptions.Separate
+            && (!subscriptions.Separate || subscriptions.Port == point.Port)
             && asked is not null
             && _certificates?.OnRequest(context.Request.Host.Host).IsGood != false
             ? Wanted.Subscription
@@ -573,7 +773,9 @@ public sealed class ServiceDesk
     // What the services of a port make of a request.
     private enum Wanted
     {
+        Probe = 7,
         None = 0,
+        XHttp = 6,
         Front = 1,
         Hello = 2,
         Down = 3,

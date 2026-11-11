@@ -11,6 +11,8 @@ public sealed class FirewallApplier
 {
     private readonly ConfigStore _configs;
 
+    private readonly TransportProxyStore? _proxies;
+
     private readonly PanelStore _panel;
 
     private readonly SubscriptionStore _subscriptions;
@@ -33,9 +35,11 @@ public sealed class FirewallApplier
         DnsStore dns,
         DnsState resolver,
         FirewallHost host,
-        ILogger<FirewallApplier> logger)
+        ILogger<FirewallApplier> logger,
+        TransportProxyStore? proxies = null)
     {
         _configs = configs;
+        _proxies = proxies;
         _panel = panel;
         _subscriptions = subscriptions;
         _dns = dns;
@@ -53,7 +57,10 @@ public sealed class FirewallApplier
             await _configs.ListAsync(ct).ConfigureAwait(false),
             await _panel.ReadAsync(ct).ConfigureAwait(false),
             await _subscriptions.ReadAsync(ct).ConfigureAwait(false),
-            _resolver.Settings ?? (await _dns.ReadAsync(ct).ConfigureAwait(false)) with { IsEnabled = false });
+            _resolver.Settings ?? (await _dns.ReadAsync(ct).ConfigureAwait(false)) with { IsEnabled = false },
+            _proxies is null ? [] : [.. (await _proxies.ListAsync(ct).ConfigureAwait(false))
+                .Where(proxy => proxy.IsEnabled && proxy.Hosted && proxy.Opened && (proxy.Transport == "websocket" || proxy.IsHttpV2 || proxy.Transport == "quic"))
+                .Select(proxy => new FirewallPort(proxy.Transport == "quic" ? FirewallPlan.Udp : FirewallPlan.Tcp, proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort, proxy.Name))]);
 
     /// <summary>
     /// Opens the ports the panel keeps open and closes the rest of what it opened before.

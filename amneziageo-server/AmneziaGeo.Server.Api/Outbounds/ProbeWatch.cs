@@ -121,11 +121,11 @@ public sealed class ProbeWatch : BackgroundService
         }
 
         var outbounds = _outbounds;
-        _live.Hold(outbounds.Select(one => one.Name));
+        var reset = _live.Sync(outbounds);
         var now = _time.GetUtcNow();
         if (!changed && !fresh && !_resting.Values.Any(again => again <= now) && !(_rulesAgain <= now))
         {
-            return (outbounds, false);
+            return (outbounds, reset);
         }
 
         if (fresh)
@@ -133,7 +133,7 @@ public sealed class ProbeWatch : BackgroundService
             Forget(outbounds);
         }
 
-        var moved = await MendAsync(outbounds, fresh, now, ct).ConfigureAwait(false);
+        var moved = reset | await MendAsync(outbounds, fresh, now, ct).ConfigureAwait(false);
         if (fresh || !(_rulesAgain > now))
         {
             await KeepRulesAsync(outbounds, now, ct).ConfigureAwait(false);

@@ -40,6 +40,7 @@ public sealed class StandInStore
         _db.StandIns.AddRange(held.Select(one => new StandInEntity
         {
             Name = one.Name,
+            Scope = one.Scope,
             Address = one.Address.ToString(),
             Real = one.Real?.ToString() ?? string.Empty,
             SeenUtc = one.Seen,
@@ -56,6 +57,6 @@ public sealed class StandInStore
 
         var real = IPAddress.TryParse(row.Real, out var found) ? found : null;
 
-        return new DnsStandIn(row.Name, address, real, row.SeenUtc);
+        return new DnsStandIn(row.Name, address, real, row.SeenUtc, row.Scope);
     }
 }

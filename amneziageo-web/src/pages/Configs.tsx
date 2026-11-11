@@ -179,10 +179,10 @@ function Closed({ one }: { one: Config }) {
   const { able } = useOpening(scopes.manageInterfaces)
   const open = useOpenPort()
   const services = one.servicesPort > 0 ? one.servicesPort : one.listenPort
-  const udp = usePortState(one.listenPort, one.isEnabled, "udp")
+  const udp = usePortState(one.listenPort, one.isEnabled && !one.udpPrivate, "udp")
   const tcp = usePortState(services, one.isEnabled)
   const closed = [
-    one.isEnabled && udp.data?.state === "closed" ? `${one.listenPort}/udp` : "",
+    one.isEnabled && !one.udpPrivate && udp.data?.state === "closed" ? `${one.listenPort}/udp` : "",
     one.isEnabled && tcp.data?.state === "closed" ? `${services}/tcp` : "",
   ].filter((port) => port.length > 0)
 

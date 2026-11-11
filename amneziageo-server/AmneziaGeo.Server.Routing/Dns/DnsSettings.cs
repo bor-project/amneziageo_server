@@ -27,6 +27,8 @@ public sealed record DnsSettings
     /// </summary>
     public string Outbound { get; init; } = string.Empty;
 
+    public string Selection { get; init; } = DnsSelection.Global;
+
     /// <summary>
     /// The addresses the resolver listens on, empty for the addresses of the configurations.
     /// </summary>
@@ -81,6 +83,7 @@ public sealed record DnsSettings
 
         return IsEnabled != other.IsEnabled
             || Port != other.Port
+            || Selection != other.Selection
             || !Upstreams.SequenceEqual(other.Upstreams, StringComparer.Ordinal)
             || !string.Equals(Outbound, other.Outbound, StringComparison.Ordinal)
             || !Listen.SequenceEqual(other.Listen, StringComparer.Ordinal)

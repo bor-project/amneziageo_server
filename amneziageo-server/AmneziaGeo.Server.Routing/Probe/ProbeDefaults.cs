@@ -40,10 +40,24 @@ public static class ProbeDefaults
     /// </summary>
     public const int Falls = 2;
 
+    public const int Window = 12;
+
+    public const int MinAttempts = 6;
+
+    public const int DegradedPercent = 30;
+
+    public const int RecoverySuccesses = 4;
+
     /// <summary>
     /// How long a probe waits for an answer.
     /// </summary>
     public static readonly TimeSpan Wait = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Returns the lifetime of a check.
+    /// </summary>
+    public static TimeSpan FreshFor(int every) =>
+        TimeSpan.FromSeconds(2L * (every > 0 ? every : Every)) + Wait;
 
     /// <summary>
     /// How often the server looks for outbounds due a probe.

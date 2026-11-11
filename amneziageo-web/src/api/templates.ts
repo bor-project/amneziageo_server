@@ -12,6 +12,7 @@ export interface Template {
   dns: string[]
   mtu: number | null
   keepalive: number | null
+  proxyIds: number[]
   presets: number[]
   presetsOnly: boolean
   standIns: boolean
@@ -29,6 +30,7 @@ export interface TemplateDraft {
   dns: string[]
   mtu: number | null
   keepalive: number | null
+  proxyIds: number[]
   presets: number[]
   presetsOnly: boolean
   standIns: boolean
@@ -111,6 +113,7 @@ export function draftOf(template: Template): TemplateDraft {
     dns: template.dns,
     mtu: template.mtu,
     keepalive: template.keepalive,
+    proxyIds: template.proxyIds ?? [],
     presets: template.presets,
     presetsOnly: template.presetsOnly,
     standIns: template.standIns,
@@ -125,6 +128,7 @@ export const freshTemplate: TemplateDraft = {
   dns: [],
   mtu: null,
   keepalive: null,
+  proxyIds: [],
   presets: [],
   presetsOnly: false,
   standIns: false,

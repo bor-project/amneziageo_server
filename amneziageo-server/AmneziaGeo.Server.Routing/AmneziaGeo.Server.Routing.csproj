@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
     <ProjectReference Include="..\AmneziaGeo.Server.Core\AmneziaGeo.Server.Core.csproj" />
     <ProjectReference Include="..\AmneziaGeo.Server.Awg\AmneziaGeo.Server.Awg.csproj" />
     <ProjectReference Include="..\AmneziaGeo.Server.Geo\AmneziaGeo.Server.Geo.csproj" />
@@ -11,5 +12,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AmneziaGeo.Server.Tests" />
+  </ItemGroup>
 
 </Project>

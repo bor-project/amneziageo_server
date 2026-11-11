@@ -111,7 +111,7 @@ public static class BalanceEndpoints
             return Refuse(StatusCodes.Status400BadRequest, refused.Code, refused.Message);
         }
 
-        var result = await store.ChangeAsync(id, BalanceAnswers.Draft(request), ct).ConfigureAwait(false);
+        var result = await store.ChangeAsync(id, BalanceAnswers.Draft(request, held), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);

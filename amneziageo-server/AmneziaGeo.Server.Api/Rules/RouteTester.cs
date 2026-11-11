@@ -92,7 +92,7 @@ public sealed class RouteTester
             return (fault, null);
         }
 
-        var addresses = bare is null ? await AskAsync(name, ct).ConfigureAwait(false) : new[] { bare };
+        var addresses = bare is null ? await AskAsync(name, sources.FirstOrDefault(), inbound, ct).ConfigureAwait(false) : new[] { bare };
         var plan = await _applier.ReadAsync(ct).ConfigureAwait(false);
         var query = new RouteQuery
         {
@@ -167,9 +167,9 @@ public sealed class RouteTester
         return (null, sources, configs.FirstOrDefault(config => config.Id == found.ConfigId)?.Name ?? string.Empty);
     }
 
-    private async Task<IReadOnlyList<IPAddress>> AskAsync(string name, CancellationToken ct)
+    private async Task<IReadOnlyList<IPAddress>> AskAsync(string name, IPAddress? client, string inbound, CancellationToken ct)
     {
-        var answered = await _dns.AskAsync(name, ct).ConfigureAwait(false);
+        var answered = await _dns.AskAsync(name, ct, client, inbound).ConfigureAwait(false);
         if (answered is not null)
         {
             return [.. answered.Distinct()];
@@ -192,7 +192,7 @@ public sealed class RouteTester
             return null;
         }
 
-        var rules = await _rules.ListAsync(ct).ConfigureAwait(false);
+        var rules = await _rules.TableAsync(ct).ConfigureAwait(false);
         var place = rules.Select((rule, at) => (rule.Id, Place: at + 1)).FirstOrDefault(one => one.Id == leg.Rule.Id).Place;
 
         return new RouteTestRule(leg.Rule.Id, leg.Rule.Name, place, leg.Rule.Action, leg.Rule.Outbound);

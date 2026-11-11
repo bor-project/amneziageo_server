@@ -12,10 +12,10 @@ const tab = "shrink-0 border-b-2 px-3.5 py-2.5 text-sm whitespace-nowrap"
 const on = "border-brand font-medium text-ink"
 const off = "border-transparent text-muted hover:border-line-button hover:text-ink"
 
-export function Tabs({ items }: { items: Tab[] }) {
+export function Tabs({ items, wrap = false }: { items: Tab[]; wrap?: boolean }) {
   return (
     <div className="mt-2 border-b border-line">
-      <nav className="-mb-px flex gap-1 overflow-x-auto">
+      <nav className={"-mb-px flex gap-1 " + (wrap ? "flex-wrap" : "overflow-x-auto")}>
         {items.map((one) => (
           <span key={one.to} className="flex shrink-0 items-center">
             <NavLink to={one.to} end={one.end} className={({ isActive }) => `${tab} ${isActive ? on : off}`}>

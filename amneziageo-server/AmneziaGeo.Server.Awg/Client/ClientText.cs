@@ -22,7 +22,8 @@ public static class ClientText
         ClientTemplate? template = null,
         IReadOnlyList<string>? resolver = null,
         IReadOnlyList<string>? panel = null,
-        DnsFiles? files = null)
+        DnsFiles? files = null,
+        ServiceTlsIdentity? services = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(client);
@@ -49,6 +50,15 @@ public static class ClientText
         if (ConfigServices.Moved(config))
         {
             Line(text, "# AmneziaGeo Services", Number(config.ServicesPort));
+        }
+
+        if (services is not null)
+        {
+            Line(text, "# AmneziaGeo Services TLS Name", services.Name);
+            if (services.Pin.Length > 0)
+            {
+                Line(text, "# AmneziaGeo Services TLS Pin", services.Pin);
+            }
         }
 
         text.Append("\n[Peer]\n");

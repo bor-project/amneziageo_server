@@ -1,12 +1,14 @@
 using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Routing.Host;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AmneziaGeo.Server.Routing.Proxy;
 
 /// <summary>
 /// Holds the websocket fronts of the endpoints: writes what each may reach and runs its service.
 /// </summary>
-public sealed class ProxyHost
+public sealed partial class ProxyHost
 {
     /// <summary>
     /// The firewall table the rules of the proxies of the releases before lived in.
@@ -14,6 +16,7 @@ public sealed class ProxyHost
     public const string SourcesTable = "amneziageo_proxy";
 
     private readonly IProxyRunner _runner;
+    private readonly ILogger<ProxyHost> _logger;
 
     private readonly IHostNetwork _network;
 
@@ -22,10 +25,11 @@ public sealed class ProxyHost
     /// <summary>
     /// ctor
     /// </summary>
-    public ProxyHost(IHostNetwork network, IProxyRunner runner, string? directory = null)
+    public ProxyHost(IHostNetwork network, IProxyRunner runner, string? directory = null, ILogger<ProxyHost>? logger = null)
     {
         _network = network;
         _runner = runner;
+        _logger = logger ?? NullLogger<ProxyHost>.Instance;
         _directory = string.IsNullOrWhiteSpace(directory) ? ProxyDefaults.Directory : directory;
     }
 
@@ -64,23 +68,29 @@ public sealed class ProxyHost
     /// <summary>
     /// Puts the front of an interface on the host, starting its service over only when its files change or it is down.
     /// </summary>
-    public async Task<ProxyState> ApplyAsync(string name, int front, int target, string path, CancellationToken ct)
+    public async Task<ProxyState> ApplyAsync(string name, int front, int target, string path, CancellationToken ct, ProxyTargets? targets = null)
     {
+        var plan = default(LeasePlan);
         try
         {
-            var written = await WriteAsync(name, front, target, path, ct).ConfigureAwait(false);
+            var whitelist = ProxyFile.Whitelist(target, path, targets);
+            var arguments = ProxyFile.Line(front, RulesPath(name));
+            plan = target == 0 ? Desire(name, whitelist + "\0" + arguments) : null;
+            var written = await WriteAsync(name, whitelist, arguments, ct).ConfigureAwait(false);
             if (written.Fault.Length > 0)
             {
+                Revoke(plan);
                 return new ProxyState(false, written.Fault);
             }
 
             var enabled = await _runner.EnableAsync(name, ct).ConfigureAwait(false);
             if (enabled.Message.Length > 0)
             {
+                Revoke(plan);
                 return enabled;
             }
 
-            if (!written.IsChanged)
+            if (!written.IsChanged && (plan is null || plan.Ready))
             {
                 var running = await StateAsync(name, ct).ConfigureAwait(false);
                 if (running.IsRunning)
@@ -89,14 +99,41 @@ public sealed class ProxyHost
                 }
             }
 
-            var started = await _runner.StartAsync(name, ct).ConfigureAwait(false);
+            if (plan is { Ready: true })
+            {
+                plan = Desire(name, plan.Text, true);
+            }
 
-            return started.Message.Length > 0
-                ? started
-                : await StateAsync(name, ct).ConfigureAwait(false);
+            var started = await _runner.StartAsync(name, ct).ConfigureAwait(false);
+            if (started.Message.Length > 0)
+            {
+                Revoke(plan);
+                return started;
+            }
+
+            var state = await StateAsync(name, ct).ConfigureAwait(false);
+            if (plan is not null)
+            {
+                if (state.IsRunning && state.Message.Length == 0)
+                {
+                    Confirm(name, plan);
+                }
+                else
+                {
+                    Revoke(plan);
+                }
+            }
+
+            return state;
+        }
+        catch (ArgumentException ex) when (target == 0)
+        {
+            Retire(name);
+            return new ProxyState(false, ex.Message);
         }
         catch (HostNetworkException ex)
         {
+            Revoke(plan);
             return new ProxyState(false, ex.Message);
         }
     }
@@ -106,6 +143,7 @@ public sealed class ProxyHost
     /// </summary>
     public async Task<ProxyState> WithdrawAsync(string name, CancellationToken ct)
     {
+        Retire(name);
         try
         {
             var stopped = await _runner.StopAsync(name, ct).ConfigureAwait(false);
@@ -148,14 +186,14 @@ public sealed class ProxyHost
         }
     }
 
-    private async Task<Written> WriteAsync(string name, int front, int target, string path, CancellationToken ct)
+    private async Task<Written> WriteAsync(string name, string whitelistText, string argumentText, CancellationToken ct)
     {
         try
         {
             Directory.CreateDirectory(_directory);
             var rules = RulesPath(name);
-            var whitelist = await PutAsync(rules, ProxyFile.Whitelist(target, path), ct).ConfigureAwait(false);
-            var arguments = await PutAsync(ArgumentsPath(name), ProxyFile.Line(front, rules), ct).ConfigureAwait(false);
+            var whitelist = await PutAsync(rules, whitelistText, ct).ConfigureAwait(false);
+            var arguments = await PutAsync(ArgumentsPath(name), argumentText, ct).ConfigureAwait(false);
 
             return new Written(whitelist || arguments, string.Empty);
         }

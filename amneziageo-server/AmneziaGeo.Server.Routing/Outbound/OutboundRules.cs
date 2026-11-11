@@ -206,15 +206,9 @@ public static class OutboundRules
 
     private static OutboundFault? CheckServers(IReadOnlyList<string> servers)
     {
-        foreach (var server in servers)
-        {
-            if (!IPAddress.TryParse(server, out _))
-            {
-                return Fault("bad-dns", $"'{server}' is not a name server address");
-            }
-        }
-
-        return null;
+        return servers.FirstOrDefault(server => !DnsRules.Server(server, out _)) is { } wrong
+            ? Fault("bad-dns", $"'{wrong}' is not a name server")
+            : null;
     }
 
     private static OutboundFault? CheckMtu(int mtu) =>

@@ -1,0 +1,28 @@
+[Unit]
+Description=AmneziaGeo proxy service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+WorkingDirectory=/opt/amneziageo-proxy/current
+ExecStart=/opt/amneziageo-proxy/current/AmneziaGeo.Server.Proxy.Host serve
+EnvironmentFile=-/etc/amneziageo-proxy/service.env
+Restart=on-failure
+RestartSec=3
+RuntimeDirectory=amneziageo-proxy
+RuntimeDirectoryMode=0700
+UMask=0077
+KillMode=control-group
+TimeoutStopSec=15
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/etc/amneziageo-proxy /var/lib/amneziageo-proxy /run/amneziageo-proxy
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

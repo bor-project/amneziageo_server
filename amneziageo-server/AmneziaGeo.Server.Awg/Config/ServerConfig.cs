@@ -159,6 +159,11 @@ public sealed record ServerConfig
     public int ListenPort { get; init; }
 
     /// <summary>
+    /// Restricts UDP ingress to the local host.
+    /// </summary>
+    public bool UdpPrivate { get; init; }
+
+    /// <summary>
     /// The address ranges the interface itself carries.
     /// </summary>
     public IReadOnlyList<string> Address { get; init; } = [];

@@ -92,7 +92,8 @@ public sealed class ConfigStore
                 config => config.IsEnabled
                     && (config.ServicesPort == port || (config.ServicesPort == 0 && config.ListenPort == port)),
                 ct)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false)
+        || await new TransportProxyStore(_db).ServesAsync(port, ct).ConfigureAwait(false);
 
     /// <summary>
     /// Returns the endpoint whose websocket comes under a path on a TCP port, on any port when none is named; null when
@@ -191,6 +192,12 @@ public sealed class ConfigStore
                 $"the panel already carries an endpoint called '{draft.Name}'");
         }
 
+        if (await _db.TransportProxies.AnyAsync(proxy => proxy.IsEnabled && proxy.Hosted && proxy.Transport == "quic"
+            && (proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort) == draft.ListenPort, ct).ConfigureAwait(false))
+        {
+            return ConfigResult.No(ConfigOutcome.PortTaken, "port-taken", "the UDP port belongs to a QUIC proxy");
+        }
+
         if (await _db.Configs.AnyAsync(config => config.ListenPort == draft.ListenPort, ct).ConfigureAwait(false))
         {
             return ConfigResult.No(
@@ -223,7 +230,12 @@ public sealed class ConfigStore
     /// <summary>
     /// Replaces the settings of an endpoint, carrying its new name into the rules.
     /// </summary>
-    public async Task<ConfigResult> ChangeAsync(long id, ServerConfig draft, CancellationToken ct)
+    public Task<ConfigResult> ChangeAsync(long id, ServerConfig draft, CancellationToken ct) => ChangeAsync(id, draft, null, ct);
+
+    /// <summary>
+    /// Withdraws the former endpoint before committing its renamed configuration.
+    /// </summary>
+    public async Task<ConfigResult> ChangeAsync(long id, ServerConfig draft, Func<ServerConfig, CancellationToken, Task>? withdraw, CancellationToken ct)
     {
         var entity = await _db.Configs.FirstOrDefaultAsync(config => config.Id == id, ct).ConfigureAwait(false);
         if (entity is null)
@@ -245,6 +257,12 @@ public sealed class ConfigStore
                 $"the panel already carries an endpoint called '{draft.Name}'");
         }
 
+        if (await _db.TransportProxies.AnyAsync(proxy => proxy.IsEnabled && proxy.Hosted && proxy.Transport == "quic"
+            && (proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort) == draft.ListenPort, ct).ConfigureAwait(false))
+        {
+            return ConfigResult.No(ConfigOutcome.PortTaken, "port-taken", "the UDP port belongs to a QUIC proxy");
+        }
+
         if (await _db.Configs.AnyAsync(config => config.ListenPort == draft.ListenPort && config.Id != id, ct)
             .ConfigureAwait(false))
         {
@@ -260,6 +278,11 @@ public sealed class ConfigStore
         }
 
         var old = entity.Name;
+        if (withdraw is not null && !string.Equals(old, draft.Name, StringComparison.Ordinal))
+        {
+            await withdraw(Read(entity), ct).ConfigureAwait(false);
+        }
+
         var now = _time.GetUtcNow();
         Write(entity, draft);
         if (draft.IsDefault && !entity.IsDefault)
@@ -354,7 +377,12 @@ public sealed class ConfigStore
     /// <summary>
     /// Removes an endpoint, handing the default mark to the next endpoint in order.
     /// </summary>
-    public async Task<ConfigResult> RemoveAsync(long id, CancellationToken ct)
+    public Task<ConfigResult> RemoveAsync(long id, CancellationToken ct) => RemoveAsync(id, null, ct);
+
+    /// <summary>
+    /// Withdraws the endpoint before removing its stored configuration.
+    /// </summary>
+    public async Task<ConfigResult> RemoveAsync(long id, Func<ServerConfig, CancellationToken, Task>? withdraw, CancellationToken ct)
     {
         var entity = await _db.Configs.FirstOrDefaultAsync(config => config.Id == id, ct).ConfigureAwait(false);
         if (entity is null)
@@ -363,6 +391,11 @@ public sealed class ConfigStore
         }
 
         var gone = Read(entity);
+        if (withdraw is not null)
+        {
+            await withdraw(gone, ct).ConfigureAwait(false);
+        }
+
         var now = _time.GetUtcNow();
         var clients = await _db.Clients
             .Where(client => client.ConfigId == id)
@@ -407,6 +440,11 @@ public sealed class ConfigStore
 
         var port = ConfigServices.Port(draft);
         var path = ConfigServices.WebSocketPath(draft);
+        if (await new TransportProxyStore(_db).UnderAsync(port, path, id, ct).ConfigureAwait(false) is { } proxy)
+        {
+            return Taken($"the proxy {proxy.Name} comes under '/{path}' on TCP port {port}");
+        }
+
         var sockets = await _db.Configs
             .AsNoTracking()
             .Where(config => config.WebSocket && config.Id != id)
@@ -448,6 +486,7 @@ public sealed class ConfigStore
         Name = entity.Name,
         Host = entity.Host,
         ListenPort = entity.ListenPort,
+        UdpPrivate = entity.UdpPrivate,
         Address = Parts(entity.Address),
         Dns = Parts(entity.Dns),
         AllowedIps = Parts(entity.AllowedIps),
@@ -477,6 +516,7 @@ public sealed class ConfigStore
         entity.Name = config.Name;
         entity.Host = config.Host.Trim();
         entity.ListenPort = config.ListenPort;
+        entity.UdpPrivate = config.UdpPrivate;
         entity.Address = string.Join(", ", config.Address);
         entity.Dns = string.Join(", ", config.Dns);
         entity.AllowedIps = string.Join(", ", config.AllowedIps);

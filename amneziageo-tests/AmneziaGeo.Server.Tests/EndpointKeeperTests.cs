@@ -28,7 +28,7 @@ public class EndpointKeeperTests
         var sync = await keeper.RaiseAsync(Endpoint(1, "awg0") with { IsEnabled = false }, [Client(1, 1)], CancellationToken.None);
 
         Assert.True(sync.IsDone);
-        Assert.Equal(["remove awg0"], ledger.Steps);
+        Assert.Equal(["remove awg0", "read amneziageo_udp_awg0"], ledger.Steps);
         Assert.Empty(Laid(kernel, "awg0"));
     }
 

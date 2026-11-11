@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../AmneziaGeo.Server.Api/AmneziaGeo.Server.Api.csproj" /></ItemGroup>
+</Project>

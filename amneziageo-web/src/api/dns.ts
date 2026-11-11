@@ -96,7 +96,10 @@ export interface DnsState {
   picked: number
 }
 
+export type DnsSelection = "global" | "outbound" | "routing"
+
 export interface DnsDraft {
+  selection: DnsSelection
   isEnabled: boolean
   port: number
   upstreams: string[]
@@ -187,6 +190,7 @@ function useSettled<T>(value: T): T {
 export function draftOf(resolver: Resolver): DnsDraft {
   return {
     isEnabled: resolver.isEnabled,
+    selection: resolver.selection ?? "global",
     port: resolver.port,
     upstreams: resolver.upstreams,
     outbound: resolver.outbound,

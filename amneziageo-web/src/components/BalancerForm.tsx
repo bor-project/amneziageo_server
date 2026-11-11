@@ -3,10 +3,10 @@ import { Link } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import type { BalanceStrategy, BalancerDraft } from "@/api/balancers"
 import { useOutbounds } from "@/api/outbounds"
-import { Line, Part, Switch } from "@/components/fields"
+import { Line, ListArea, Part, Switch } from "@/components/fields"
 import { WayUse } from "@/components/Holders"
 import { wayTo } from "@/components/members"
-import { danger, field, footer, label, primary, quiet, secondary } from "@/components/styles"
+import { danger, field, footer, footerUnder, label, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { same } from "@/store/draftSlice"
@@ -19,6 +19,7 @@ export function BalancerForm({
   onSave,
   onClose,
   onRemove,
+  embedded = false,
 }: {
   start: BalancerDraft
   self?: string
@@ -27,6 +28,7 @@ export function BalancerForm({
   onSave: (draft: BalancerDraft) => void
   onClose: () => void
   onRemove?: () => void
+  embedded?: boolean
 }) {
   const t = useText()
   const outbounds = useOutbounds()
@@ -144,19 +146,25 @@ export function BalancerForm({
         </div>
       </Part>
 
+      <Part title={t("tab.dns")}>
+        <div className="sm:col-span-2">
+          <ListArea id="balancer-dns" caption={t("dns.override")} value={draft.dns} onChange={(dns) => put({ dns })} />
+        </div>
+      </Part>
+
       {self !== undefined && <WayUse name={self} rules={draft.rules} onRules={(rules) => put({ rules })} />}
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
 
-      <div className={footer}>
+      <div className={embedded ? footerUnder + " routing-form-footer" : footer}>
         {onRemove !== undefined && (
           <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
             {t("balancers.remove")}
           </button>
         )}
-        <button type="button" onClick={onClose} disabled={!edited || pending} className={secondary}>
+        <button type="button" onClick={onClose} disabled={pending} className={secondary}>
           {t("balancers.cancel")}
         </button>
         <button

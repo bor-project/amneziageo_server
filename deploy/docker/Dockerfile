@@ -23,7 +23,7 @@ WORKDIR /src
 COPY wstunnel/wstunnel/ ./
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release --package wstunnel-cli \
+    cargo build --locked --release --package wstunnel-cli --no-default-features --features ring \
  && cp target/release/wstunnel /wstunnel
 
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:$DOTNET AS server
@@ -55,6 +55,7 @@ RUN apt-get update \
  && ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose \
  && ln -s /usr/local/share/amneziageo-server/amneziageo-server /usr/local/bin/amneziageo-server
 COPY --from=tunnel /wstunnel /usr/local/bin/wstunnel
+COPY --from=tunnel /wstunnel /opt/amneziageo-server/wstunnel-get
 COPY --chmod=755 deploy/docker/entrypoint.sh /usr/local/bin/amneziageo-server-entrypoint
 COPY --chmod=755 deploy/docker/update.sh /usr/local/bin/amneziageo-server-update
 COPY --from=server /out/deps/ /opt/amneziageo-server/

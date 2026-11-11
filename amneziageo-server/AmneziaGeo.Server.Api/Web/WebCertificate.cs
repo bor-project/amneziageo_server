@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 namespace AmneziaGeo.Server.Api.Web;
 
@@ -18,7 +19,7 @@ public sealed class WebCertificate
 
     private X509Certificate2? _held;
 
-    private DateTime _stamp;
+    private string _stamp = "";
 
     /// <summary>
     /// ctor
@@ -50,10 +51,12 @@ public sealed class WebCertificate
 
         lock (_sync)
         {
-            var stamp = File.GetLastWriteTimeUtc(_chain);
+            var chain = Read(_chain);
+            var key = Read(_key);
+            var stamp = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(chain + "\0" + key)));
             if (_held is null || stamp != _stamp)
             {
-                _held = X509Certificate2.CreateFromPemFile(_chain, _key);
+                _held = X509Certificate2.CreateFromPem(chain, key);
                 _stamp = stamp;
             }
 
@@ -92,6 +95,22 @@ public sealed class WebCertificate
     /// Returns a certificate made up for a port that answers under none of its own.
     /// </summary>
     public static WebCertificate MadeUp() => new();
+
+    /// <summary>
+    /// Reads a certificate file.
+    /// </summary>
+    internal static string Read(string path)
+    {
+        using var reader = new StreamReader(path);
+        var buffer = new char[64 * 1024 + 1];
+        var count = reader.ReadBlock(buffer, 0, buffer.Length);
+        if (count == buffer.Length)
+        {
+            throw new InvalidDataException("the certificate file exceeds its size limit");
+        }
+
+        return new string(buffer, 0, count);
+    }
 
     // Makes up the certificate a port answers under when the panel holds none.
     private static X509Certificate2 Make()

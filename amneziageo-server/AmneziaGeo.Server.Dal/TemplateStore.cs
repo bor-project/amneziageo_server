@@ -357,6 +357,26 @@ public sealed class TemplateStore
                 $"there is no routing preset under the number {missing}");
         }
 
+        if (draft.ProxyIds.Count > 256)
+        {
+            return TemplateResult.No(TemplateOutcome.Invalid, "too-many-proxies", "a template carries at most 256 proxies");
+        }
+
+        var named = draft.ProxyIds.ToList();
+        var previous = id == 0 ? "" : await _db.Templates.Where(one => one.Id == id).Select(one => one.ProxyIds).FirstOrDefaultAsync(ct).ConfigureAwait(false) ?? "";
+        var added = named.Except(Numbers(previous)).ToArray();
+        if (await _db.TransportProxies.AnyAsync(proxy => added.Contains(proxy.Id)
+            && (!proxy.IsEnabled || proxy.UseCertificate == false || proxy.OriginHttp), ct).ConfigureAwait(false))
+        {
+            return TemplateResult.No(TemplateOutcome.Invalid, "proxy-tls-required", "the selected proxy requires TLS");
+        }
+        var held = await _db.TransportProxies.Where(proxy => named.Contains(proxy.Id))
+            .Select(proxy => proxy.Id).ToListAsync(ct).ConfigureAwait(false);
+        if (named.Where(id => !held.Contains(id)).Select(id => (long?)id).FirstOrDefault() is { } missingProxy)
+        {
+            return TemplateResult.No(TemplateOutcome.Invalid, "unknown-proxy", $"there is no proxy under the number {missingProxy}");
+        }
+
         return null;
     }
 
@@ -438,6 +458,7 @@ public sealed class TemplateStore
         Keepalive = entity.Keepalive,
         StandIns = entity.StandIns,
         Presets = Numbers(entity.Presets),
+        ProxyIds = Numbers(entity.ProxyIds),
         PresetsOnly = entity.PresetsOnly,
         RefreshedUtc = entity.RefreshedUtc,
         CreatedUtc = entity.CreatedUtc,
@@ -456,6 +477,7 @@ public sealed class TemplateStore
         entity.Keepalive = template.Keepalive;
         entity.StandIns = template.StandIns;
         entity.Presets = string.Join(", ", template.Presets);
+        entity.ProxyIds = string.Join(", ", template.ProxyIds);
         entity.PresetsOnly = template.PresetsOnly;
         entity.RefreshedUtc = template.RefreshedUtc;
     }
@@ -465,6 +487,7 @@ public sealed class TemplateStore
         Name = draft.Name.Trim(),
         Entries = [.. draft.Entries.Select(one => TemplateList.Entry(one) ?? one.Trim()).Distinct(StringComparer.Ordinal)],
         Presets = [.. draft.Presets.Distinct()],
+        ProxyIds = [.. draft.ProxyIds.Distinct()],
     };
 
     private static IReadOnlyList<string> Parts(string text) =>

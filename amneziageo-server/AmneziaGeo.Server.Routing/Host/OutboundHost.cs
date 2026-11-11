@@ -63,6 +63,7 @@ public sealed class OutboundHost : IDisposable
     public async Task<OutboundState> ApplyAsync(OutboundConfig outbound, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(outbound);
+        _probes?.Observe(outbound);
 
         try
         {
@@ -100,6 +101,7 @@ public sealed class OutboundHost : IDisposable
     public async Task WithdrawAsync(OutboundConfig outbound, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(outbound);
+        _probes?.Forget(outbound.Name);
 
         await _network.SealAsync(ct).ConfigureAwait(false);
         _sealed = true;
@@ -220,7 +222,8 @@ public sealed class OutboundHost : IDisposable
     {
         ArgumentNullException.ThrowIfNull(outbound);
 
-        var reading = _probes?.Find(outbound.Name);
+        var now = _time.GetUtcNow();
+        var reading = _probes?.Find(outbound, now);
         if (!OutboundKind.HasLink(outbound.Kind))
         {
             return new OutboundState(outbound.Name, true, string.Empty, null, 0, 0, true, string.Empty, reading)
@@ -231,7 +234,7 @@ public sealed class OutboundHost : IDisposable
 
         try
         {
-            var state = OutboundDevice.State(outbound, _devices.Find(outbound.Name), _time.GetUtcNow()) with
+            var state = OutboundDevice.State(outbound, _devices.Find(outbound.Name), now) with
             {
                 Probe = reading,
             };

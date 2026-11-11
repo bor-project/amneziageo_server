@@ -13,14 +13,15 @@ import { Boot } from "@/components/Boot"
 import { Layout } from "@/components/Layout"
 import { RequireAuth, RequireScope } from "@/components/RequireAuth"
 import { Cards, Sectioned } from "@/components/Section"
-import { clients, interfaces, routing, settings } from "@/components/menu"
+import { clients, interfaces, settings } from "@/components/menu"
+import { RoutingLegacy, RoutingSection } from "@/components/RoutingEditor"
+import { AddressGroups } from "@/pages/AddressGroups"
+import { Balancers } from "@/pages/Balancers"
+import { Directions } from "@/pages/Directions"
 import { About } from "@/pages/About"
 import { AboutText } from "@/pages/AboutText"
 import { Accounts } from "@/pages/Accounts"
-import { BalancerPage } from "@/pages/BalancerPage"
-import { BasicRouting } from "@/pages/BasicRouting"
 import { BalancerRemove } from "@/pages/BalancerRemove"
-import { Channels } from "@/pages/Channels"
 import { ClientExport, ClientSettings, ClientView, NewClient } from "@/pages/ClientPage"
 import { ClientReleasePage } from "@/pages/ClientReleasePage"
 import { ClientReleaseRemove } from "@/pages/ClientReleaseRemove"
@@ -40,18 +41,18 @@ import { GeoPage } from "@/pages/GeoPage"
 import { GeoRemove } from "@/pages/GeoRemove"
 import { Login } from "@/pages/Login"
 import { OwnPassword } from "@/pages/OwnPassword"
-import { OutboundPage } from "@/pages/OutboundPage"
 import { OutboundRemove } from "@/pages/OutboundRemove"
 import { Password } from "@/pages/Password"
 import { RolePage } from "@/pages/RolePage"
 import { RoleRemove } from "@/pages/RoleRemove"
 import { RouteTest } from "@/pages/RouteTest"
-import { RulePage } from "@/pages/RulePage"
 import { RuleRemove } from "@/pages/RuleRemove"
 import { Rules } from "@/pages/Rules"
 import { PresetPage } from "@/pages/PresetPage"
 import { PresetRemove } from "@/pages/PresetRemove"
 import { Presets } from "@/pages/Presets"
+import { Proxies } from "@/pages/Proxies"
+import { ProxyPage, ProxyRemove } from "@/pages/ProxyPage"
 import { PanelCertificates, PanelServer } from "@/pages/Settings"
 import { Subscriptions } from "@/pages/Subscriptions"
 import { TemplatePage } from "@/pages/TemplatePage"
@@ -66,10 +67,10 @@ import { useAppearance } from "@/theme/theme"
 
 const moved: { from: string; to: string }[] = [
   { from: "configs", to: "/interfaces" },
-  { from: "proxies", to: "/interfaces" },
+  { from: "proxies", to: "/routing/proxies" },
   { from: "rules", to: "/routing" },
   { from: "outbounds", to: "/routing/channels" },
-  { from: "balancers", to: "/routing/channels" },
+  { from: "balancers", to: "/routing/balancers" },
   { from: "geo", to: "/routing/geo" },
   { from: "dns", to: "/routing/dns" },
   { from: "access/*", to: "/settings/users" },
@@ -125,23 +126,25 @@ const router = createBrowserRouter(
               </Route>
             </Route>
             <Route path="connections/*" element={<Moved />} />
-            <Route path="routing" element={<Sectioned title="nav.routing" to="/routing" items={routing} />}>
-              <Route index element={<Cards items={routing} />} />
+            <Route path="routing" element={<RoutingSection />}>
+              <Route index element={<Navigate to="rules" replace />} />
               <Route path="rules" element={<Rules />} />
               <Route element={<RequireScope scope={scopes.manageRouting} />}>
-                <Route path="rules/new" element={<RulePage />} />
-                <Route path="rules/:ruleId/edit" element={<RulePage />} />
+                <Route path="rules/new" element={<RoutingLegacy to="/routing/rules" />} />
+                <Route path="rules/:ruleId/edit" element={<RoutingLegacy to="/routing/rules" />} />
                 <Route path="rules/:ruleId/delete" element={<RuleRemove />} />
               </Route>
-              <Route path="basic" element={<BasicRouting />} />
+              <Route path="basic" element={<Navigate to="/routing/rules" replace />} />
               <Route path="test" element={<RouteTest />} />
-              <Route path="channels" element={<Channels />} />
+              <Route path="channels" element={<Directions />} />
+              <Route path="balancers" element={<Balancers />} />
+              <Route path="address-groups" element={<AddressGroups />} />
               <Route element={<RequireScope scope={scopes.manageRouting} />}>
-                <Route path="channels/new" element={<OutboundPage />} />
-                <Route path="channels/groups/new" element={<BalancerPage />} />
-                <Route path="channels/groups/:balancerId/edit" element={<BalancerPage />} />
+                <Route path="channels/new" element={<RoutingLegacy to="/routing/channels" />} />
+                <Route path="channels/groups/new" element={<RoutingLegacy to="/routing/balancers" />} />
+                <Route path="channels/groups/:balancerId/edit" element={<RoutingLegacy to="/routing/balancers" />} />
                 <Route path="channels/groups/:balancerId/delete" element={<BalancerRemove />} />
-                <Route path="channels/:outboundId/edit" element={<OutboundPage />} />
+                <Route path="channels/:outboundId/edit" element={<RoutingLegacy to="/routing/channels" />} />
                 <Route path="channels/:outboundId/delete" element={<OutboundRemove />} />
               </Route>
               <Route path="geo" element={<Geo />} />
@@ -149,6 +152,12 @@ const router = createBrowserRouter(
                 <Route path="geo/new" element={<GeoPage />} />
                 <Route path="geo/:sourceId/edit" element={<GeoPage />} />
                 <Route path="geo/:sourceId/delete" element={<GeoRemove />} />
+              </Route>
+              <Route path="proxies" element={<Proxies />} />
+              <Route element={<RequireScope scope={scopes.manageProxies} />}>
+                <Route path="proxies/new" element={<ProxyPage />} />
+                <Route path="proxies/:proxyId/edit" element={<ProxyPage />} />
+                <Route path="proxies/:proxyId/delete" element={<ProxyRemove />} />
               </Route>
               <Route path="dns" element={<Dns />} />
             </Route>

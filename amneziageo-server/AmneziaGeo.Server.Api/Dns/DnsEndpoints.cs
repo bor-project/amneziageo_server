@@ -63,17 +63,28 @@ public static class DnsEndpoints
         CancellationToken ct)
     {
         var draft = DnsAnswers.Draft(request, await store.ReadAsync(ct).ConfigureAwait(false));
+        var heldOutbounds = await outbounds.ListAsync(ct).ConfigureAwait(false);
+        var heldBalancers = await balancers.ListAsync(ct).ConfigureAwait(false);
         if (draft.Outbound.Length > 0
             && !DnsExit.Knows(
                 draft.Outbound,
-                await outbounds.ListAsync(ct).ConfigureAwait(false),
-                await balancers.ListAsync(ct).ConfigureAwait(false)))
+                heldOutbounds,
+                heldBalancers))
         {
             var missing = new Failure(
                 "unknown-outbound",
                 $"there is no outbound or balancer called '{draft.Outbound}'");
 
             return Results.Json(missing, statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (draft.Selection == DnsSelection.Outbound
+            && !heldOutbounds.Any(one => one.Name == draft.Outbound && one.Dns.Count > 0)
+            && !heldBalancers.Any(one => one.Name == draft.Outbound
+                && (one.Dns.Count > 0 || heldOutbounds.Any(member => one.Members.Contains(member.Name) && member.Dns.Count > 0))))
+        {
+            return Results.Json(new Failure("no-outbound-dns", "the selected direction has no name server"),
+                statusCode: StatusCodes.Status400BadRequest);
         }
 
         var result = await store.SaveAsync(draft, ct).ConfigureAwait(false);

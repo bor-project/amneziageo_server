@@ -212,7 +212,8 @@ public static class ClientEndpoints
         await (ClientText.Dns(endpoint, client, template, names, picked, held.Files).IsPanel
             ? holders.HandedAsync(store, handed, [], ct)
             : holders.HandedAsync(store, [], handed, ct)).ConfigureAwait(false);
-        var naming = (await panels.ReadAsync(ct).ConfigureAwait(false)).NameTemplate;
+        var settings = await panels.ReadAsync(ct).ConfigureAwait(false);
+        var naming = settings.NameTemplate;
         var host = context.Request.Host.Host;
         var address = SubscriptionAnswer.Address(
             subscriptions.Current,
@@ -223,11 +224,20 @@ public static class ClientEndpoints
             client.PrivateKey.Length > 0 ? client.SubscriptionId : string.Empty);
         var carried = certificates.Of(address);
         var asked = Asked(context, certificates, Listening.Chain(options, panel));
+        var proxyStore = context.RequestServices.GetRequiredService<TransportProxyStore>();
+        var configuredProxies = await proxyStore.ListAsync(ct).ConfigureAwait(false);
+        var runtime = context.RequestServices.GetService<AmneziaGeo.Server.Api.Services.ServiceServer>();
+        var selectedFiles = runtime is null ? null
+            : await runtime.CertificateFilesAsync(ConfigServices.Port(endpoint), ct).ConfigureAwait(false);
+        var servicesTls = runtime is not null && selectedFiles is null ? null
+            : AmneziaGeo.Server.Api.Services.ServiceTrust.Of(endpoint, options, runtime is null ? panel : settings, publicName: host,
+                subscription: subscriptions.Current, proxies: context.RequestServices.GetService<AmneziaGeo.Server.Api.Proxies.ProxyCertificates>(),
+                configured: configuredProxies, selectedFiles: selectedFiles);
 
         return Results.Ok(new ClientConfigResponse(
             ClientText.FileName(endpoint, client, naming, host),
-            ClientText.Text(endpoint, client, template, names, picked, held.Files),
-            ClientLink.Link(endpoint, client, template, names, ClientText.Title(endpoint, client, naming, host), picked, held.Files),
+            ClientText.Text(endpoint, client, template, names, picked, held.Files, servicesTls),
+            ClientLink.Link(endpoint, client, template, names, ClientText.Title(endpoint, client, naming, host), picked, held.Files, servicesTls),
             address,
             Miss(subscriptions.Current, client),
             carried.Fault,
@@ -409,7 +419,7 @@ public static class ClientEndpoints
         ClientSignals signals,
         CancellationToken ct)
     {
-        var before = await rules.ListAsync(ct).ConfigureAwait(false);
+        var before = await rules.TableAsync(ct).ConfigureAwait(false);
         var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -479,7 +489,7 @@ public static class ClientEndpoints
             return Refuse(StatusCodes.Status400BadRequest, "incomplete", "a removal of many clients needs the ids");
         }
 
-        var before = await rules.ListAsync(ct).ConfigureAwait(false);
+        var before = await rules.TableAsync(ct).ConfigureAwait(false);
         var batch = await store.RemoveAllAsync(ids, ct).ConfigureAwait(false);
         foreach (var client in batch.Done)
         {

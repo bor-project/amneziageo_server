@@ -19,11 +19,12 @@ using Microsoft.Extensions.Hosting.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 
 namespace AmneziaGeo.Server.Tests;
 
-public class ServiceTests
+public partial class ServiceTests
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
@@ -188,11 +189,13 @@ public class ServiceTests
         var client = (await bench.Clients.AddAsync(
             ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
             CancellationToken.None)).Record!;
-        var (server, folder) = Served(bench);
+        using var identity = new ServiceTlsFixture();
+        await identity.PrepareLegacyAsync(bench).ConfigureAwait(false);
+        var (server, folder) = Served(bench, identity);
         try
         {
             await server.SettleAsync(CancellationToken.None);
-            using var tls = Trusting();
+            using var tls = identity.Client();
             var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
 
             using var asked = await tls.PostAsync(
@@ -227,7 +230,9 @@ public class ServiceTests
         await bench.Configs.AddAsync(
             ConfigDefaults.Fresh("awg1") with { ListenPort = busy, Address = ["10.8.0.1/24"], WebSocket = true, ServicesPort = port },
             CancellationToken.None);
-        var (server, folder) = Served(bench);
+        using var identity = new ServiceTlsFixture();
+        await identity.PrepareLegacyAsync(bench).ConfigureAwait(false);
+        var (server, folder) = Served(bench, identity);
         try
         {
             var faults = await server.SettleAsync(CancellationToken.None);
@@ -413,6 +418,14 @@ public class ServiceTests
         var context = Upgrading($"/{first.WebSocketPath}/events");
         context.Request.Headers.Authorization = PeerToken.Header(mine.PrivateKey, other.PublicKey, bench.Clock.GetUtcNow());
 
+        var forwarded = Upgrading($"/{first.WebSocketPath}/events");
+        forwarded.Features.Set<Microsoft.AspNetCore.Http.Features.ITlsConnectionFeature>(null);
+        forwarded.Request.Headers["X-Forwarded-Proto"] = "https";
+        Assert.Equal("https", forwarded.Request.Scheme);
+        await desk.AnswerAsync(forwarded, point).ConfigureAwait(false);
+        Assert.Equal(StatusCodes.Status404NotFound, forwarded.Response.StatusCode);
+        Assert.False(front.Head.IsCompleted);
+
         await desk.AnswerAsync(context, point);
         var head = await front.Head.WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -523,7 +536,13 @@ public class ServiceTests
         var client = (await bench.Clients.AddAsync(
             ClientDefaults.Fresh(endpoint.Id, "milena") with { Address = ["10.8.0.2/32"] },
             CancellationToken.None)).Record!;
-        var desk = Desk(bench, new SpeedTickets(bench.Clock));
+        using var identity = new ServiceTlsFixture();
+        await identity.PrepareLegacyAsync(bench).ConfigureAwait(false);
+        using var services = new ServiceCollection()
+            .AddSingleton(new AmneziaGeo.Server.Dal.TransportProxyStore(bench.Db))
+            .AddSingleton(PanelDefaults.Settings).AddSingleton(identity.Options).BuildServiceProvider();
+        var desk = Desk(bench, new SpeedTickets(bench.Clock),
+            webSocket: new WebSocketOffer(scopes: services.GetRequiredService<IServiceScopeFactory>()));
         var token = Token(client.PrivateKey, endpoint.PublicKey, bench.Clock.GetUtcNow());
 
         var answer = await AskAsync(desk, Point(endpoint), token);
@@ -541,6 +560,8 @@ public class ServiceTests
         Assert.Equal("milena", root.GetProperty("client").GetString());
         Assert.Equal(endpoint.ListenPort, features.GetProperty("websocket").GetProperty("port").GetInt32());
         Assert.Equal(endpoint.WebSocketPath, features.GetProperty("websocket").GetProperty("path").GetString());
+        Assert.Empty(features.GetProperty("proxies").GetProperty("items").EnumerateArray());
+        Assert.Equal(1, features.GetProperty("proxies").GetProperty("version").GetInt32());
         Assert.False(features.TryGetProperty("routing", out _));
         Assert.StartsWith($"http://10.8.0.1:{endpoint.ListenPort}/api/speed/down?", features.GetProperty("speed").GetProperty("inside").GetProperty("down").GetString(), StringComparison.Ordinal);
         Assert.StartsWith($"https://vpn.example:{endpoint.ListenPort}/api/speed/up?", features.GetProperty("speed").GetProperty("outside").GetProperty("up").GetString(), StringComparison.Ordinal);
@@ -1215,11 +1236,13 @@ public class ServiceTests
             ConfigDefaults.Fresh("awg4") with { ListenPort = 51823, Address = ["10.11.0.1/24"], ServicesPort = Free() },
             CancellationToken.None);
         var folder = Path.Combine(Path.GetTempPath(), $"amneziageo-fronts-{Guid.NewGuid():N}");
+        using var identity = new ServiceTlsFixture();
+        await identity.PrepareLegacyAsync(bench).ConfigureAwait(false);
         var server = new ServiceServer(
             bench.Scopes,
             Desk(bench, new SpeedTickets(bench.Clock)),
             new ProxyHost(new Ledger(), new Fronts("awg2"), folder),
-            new WebOptions(),
+            identity.Options,
             PanelDefaults.Settings,
             new ServiceShare(),
             NullLogger<ServiceServer>.Instance);
@@ -1227,7 +1250,10 @@ public class ServiceTests
         {
             var faults = await server.SettleAsync(CancellationToken.None);
 
-            Assert.Equal([blocked.Id, fallen.Id], faults.Keys.Order().ToArray());
+            var catalog = Assert.Single(await new AmneziaGeo.Server.Dal.TransportProxyStore(bench.Db).ListAsync(default).ConfigureAwait(false),
+                proxy => proxy.LegacyConfigId == blocked.Id);
+            Assert.Equal([-catalog.Id, blocked.Id, fallen.Id], faults.Keys.Order().ToArray());
+            Assert.Contains(busy.ToString(CultureInfo.InvariantCulture), faults[-catalog.Id], StringComparison.Ordinal);
             Assert.Contains(busy.ToString(CultureInfo.InvariantCulture), faults[blocked.Id], StringComparison.Ordinal);
             Assert.Equal("the front fell over", faults[fallen.Id]);
             Assert.Equal([busy], server.Refused.Keys.ToArray());
@@ -1349,12 +1375,14 @@ public class ServiceTests
         await bench.Configs.AddAsync(
             ConfigDefaults.Fresh("awg1") with { Address = ["127.0.0.1/8"], ServicesPort = port },
             CancellationToken.None);
-        var (server, folder) = Served(bench);
+        using var identity = new ServiceTlsFixture();
+        await identity.PrepareLegacyAsync(bench).ConfigureAwait(false);
+        var (server, folder) = Served(bench, identity);
         try
         {
             await server.SettleAsync(CancellationToken.None);
             using var plain = new HttpClient();
-            using var tls = Trusting();
+            using var tls = identity.Client();
 
             using var measured = await plain.GetAsync(new Uri($"http://127.0.0.1:{port}/api/speed/down?ticket=none"));
             using var hello = await plain.PostAsync(new Uri($"http://127.0.0.1:{port}/api/hello"), new StringContent("not a hello", Encoding.UTF8, "application/json"));
@@ -1384,12 +1412,14 @@ public class ServiceTests
         await bench.Configs.AddAsync(
             ConfigDefaults.Fresh("awg1") with { Address = ["10.8.0.1/24"], ServicesPort = port },
             CancellationToken.None);
-        var (server, folder) = Served(bench);
+        using var identity = new ServiceTlsFixture();
+        await identity.PrepareLegacyAsync(bench).ConfigureAwait(false);
+        var (server, folder) = Served(bench, identity);
         try
         {
             await server.SettleAsync(CancellationToken.None);
             using var plain = new HttpClient();
-            using var tls = Trusting();
+            using var tls = identity.Client();
 
             await Assert.ThrowsAnyAsync<HttpRequestException>(() => plain.GetAsync(new Uri($"http://127.0.0.1:{port}/api/speed/down?ticket=none")));
             using var secure = await tls.GetAsync(new Uri($"https://127.0.0.1:{port}/api/speed/down?ticket=none"));
@@ -1426,6 +1456,151 @@ public class ServiceTests
         Assert.Equal("network||10.8.0.1", network);
     }
 
+#pragma warning disable xUnit1030
+    [Fact]
+    public async Task ASeparateSubscriptionSharesAProxyAndEndpointPort()
+    {
+        using var bench = new Bench();
+        using var identity = new ServiceTlsFixture();
+        var port = Free();
+        var endpoint = (await bench.Configs.AddAsync(
+            ConfigDefaults.Fresh("awg1") with { Host = "vpn.example.net", ServicesPort = port },
+            CancellationToken.None).ConfigureAwait(false)).Record!;
+        var client = (await bench.Clients.AddAsync(ClientDefaults.Fresh(endpoint.Id, "phone"), CancellationToken.None).ConfigureAwait(false)).Record!;
+        var store = new AmneziaGeo.Server.Dal.TransportProxyStore(bench.Db);
+        await store.SaveAsync(0, identity.Secure(new AmneziaGeo.Server.Dal.TransportProxyEntity
+        {
+            Name = "relay", Host = "proxy.example.net", Port = port, Path = "relay",
+        }), CancellationToken.None).ConfigureAwait(false);
+        var state = new SubscriptionState();
+        var folder = Path.Combine(Path.GetTempPath(), $"amneziageo-shared-proxy-{Guid.NewGuid():N}");
+        var services = new ServiceServer(
+            bench.Scopes, Desk(bench, new SpeedTickets(bench.Clock), subscriptions: state),
+            new ProxyHost(new Ledger(), new Fronts(string.Empty), folder), identity.Options,
+            PanelDefaults.Settings, new ServiceShare(), NullLogger<ServiceServer>.Instance, state);
+        var subscriptions = new SubscriptionServer(bench.Scopes, state, PanelDefaults.Settings,
+            identity.Options, NullLogger<SubscriptionServer>.Instance);
+        try
+        {
+            await services.SettleAsync(CancellationToken.None).ConfigureAwait(false);
+            var fault = await subscriptions.ApplyAsync(SubscriptionDefaults.Settings with
+            {
+                IsEnabled = true, Separate = true, Port = port, Path = "sub",
+            }, CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(string.Empty, fault);
+            using var tls = identity.Client();
+            using var response = await tls.GetAsync($"https://127.0.0.1:{port}/sub/{client.SubscriptionId}").ConfigureAwait(false);
+            Assert.Equal(StatusCodes.Status200OK, (int)response.StatusCode);
+        }
+        finally
+        {
+            await subscriptions.DisposeAsync().ConfigureAwait(false);
+            await services.DisposeAsync().ConfigureAwait(false);
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
+#pragma warning restore xUnit1030
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("wrong-name")]
+    public async Task ALegacyWebSocketAddedAfterStartupWaitsForAValidPinnedIdentity(string defect)
+    {
+        using var bench = new Bench();
+        using var identity = new ServiceTlsFixture();
+        var folder = Path.Combine(Path.GetTempPath(), "service-legacy-tls-" + Guid.NewGuid().ToString("N"));
+        var runner = new Fronts(string.Empty);
+        var fronts = new ProxyHost(new Ledger(), runner, folder);
+        var desk = Desk(bench, new SpeedTickets(bench.Clock), fronts: fronts);
+        var services = new ServiceServer(bench.Scopes, desk, fronts,
+            defect == "missing" ? new WebOptions() : identity.Options, PanelDefaults.Settings,
+            new ServiceShare(), NullLogger<ServiceServer>.Instance);
+        try
+        {
+            Assert.Empty(await services.SettleAsync(default).ConfigureAwait(false));
+            var endpoint = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("late") with
+            {
+                Host = defect == "wrong-name" ? "unlisted.example" : "localhost",
+                ListenPort = Free(), ServicesPort = Free(), WebSocket = true,
+            }, default).ConfigureAwait(false)).Record!;
+
+            var faults = await services.SettleAsync(default).ConfigureAwait(false);
+            var store = new AmneziaGeo.Server.Dal.TransportProxyStore(bench.Db);
+            var proxy = Assert.Single(await store.ListAsync(default).ConfigureAwait(false));
+            var expected = defect == "missing" ? "proxy-certificate-missing" : "proxy-certificate-name";
+            Assert.Equal(expected, faults[-proxy.Id]);
+            Assert.Equal(endpoint.Id, proxy.LegacyConfigId);
+            Assert.Equal(0, runner.Starts);
+            Assert.False(fronts.TryLegacyLease(proxy.Id, out _));
+            Assert.False(fronts.CanRelay("transport-proxy-" + proxy.Id));
+
+            var secret = proxy.Secret;
+            var repaired = identity.Secure(proxy);
+            repaired.ServerName = "localhost";
+            await store.SaveAsync(proxy.Id, repaired, default).ConfigureAwait(false);
+            Assert.Empty(await services.SettleAsync(default).ConfigureAwait(false));
+            var current = Assert.Single(await store.ListAsync(default).ConfigureAwait(false));
+            Assert.Equal(proxy.Id, current.Id);
+            Assert.Equal(secret, current.Secret);
+            Assert.Equal(endpoint.Id, current.LegacyConfigId);
+            Assert.True(runner.Starts > 0);
+            Assert.True(fronts.TryLegacyLease(proxy.Id, out var lease));
+            using var held = lease;
+            Assert.False(held.Stopped.IsCancellationRequested);
+            using var front = new Front();
+            var point = Fronted(Point(endpoint), endpoint.Id, front.Port);
+            point = point with { Endpoints = [.. point.Endpoints.Select(one => one with { PolicyProxyId = proxy.Id })] };
+            await desk.AnswerAsync(Upgrading("/" + endpoint.WebSocketPath + "/events"), point).ConfigureAwait(false);
+            Assert.Contains("GET /" + endpoint.WebSocketPath + "/events", await front.Head.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false));
+        }
+        finally
+        {
+            await services.DisposeAsync().ConfigureAwait(false);
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AStalledTlsRecordDoesNotOccupyAHelloAnswerSlot()
+    {
+        using var bench = new Bench();
+        using var identity = new ServiceTlsFixture();
+        using var slots = new AnswerSlots(1);
+        var port = Free();
+        await bench.Configs.AddAsync(ConfigDefaults.Fresh("tls-phase") with
+        {
+            Host = "localhost", ListenPort = Free(), ServicesPort = port,
+        }, default).ConfigureAwait(false);
+        var (server, folder) = Served(bench, identity, slots);
+        try
+        {
+            Assert.Empty(await server.SettleAsync(default).ConfigureAwait(false));
+            using var stalled = new TcpClient();
+            await stalled.ConnectAsync(System.Net.IPAddress.Loopback, port).ConfigureAwait(false);
+            await stalled.GetStream().WriteAsync(new byte[] { 0x16, 0x03, 0x01, 0x00, 0x40 }).ConfigureAwait(false);
+            using var client = identity.Client();
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var response = await client.PostAsync($"https://127.0.0.1:{port}/api/hello",
+                new StringContent("not a hello", Encoding.UTF8, "application/json"), deadline.Token).ConfigureAwait(false);
+            Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        }
+        finally
+        {
+            await server.DisposeAsync().ConfigureAwait(false);
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+    }
+
     private static ServiceDesk Desk(
         Bench bench,
         SpeedTickets tickets,
@@ -1436,7 +1611,9 @@ public class ServiceTests
         AnswerSlots? slots = null,
         DnsState? resolver = null,
         SubscriptionCertificates? certificates = null,
-        ServiceShare? share = null)
+        ServiceShare? share = null,
+        ProxyHost? fronts = null,
+        IHelloFeature? webSocket = null)
     {
         var state = subscriptions ?? new SubscriptionState();
 
@@ -1444,7 +1621,8 @@ public class ServiceTests
             bench.Scopes,
             tickets,
             [
-                new WebSocketOffer(),
+                webSocket ?? new WebSocketOffer(),
+                new ProxyOffer(bench.Scopes),
                 new InboundOffer(),
                 new DisconnectOffer(),
                 new SpeedOffer(tickets, share),
@@ -1461,7 +1639,8 @@ public class ServiceTests
             logger ?? NullLogger<ServiceDesk>.Instance,
             hold,
             slots,
-            certificates);
+            certificates,
+            fronts: fronts);
     }
 
     // Tells under which certificate the subscriptions answer, the roots standing in for the ones of the host.
@@ -1593,6 +1772,8 @@ public class ServiceTests
     {
         var context = new DefaultHttpContext();
         context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpUpgradeFeature>(new Upgradable(connection));
+        ServiceTlsFixture.SecureConnection(context);
+        context.Request.Scheme = "https";
         context.Request.Method = "GET";
         context.Request.Path = path;
 
@@ -1609,24 +1790,20 @@ public class ServiceTests
     }
 
     // The server of the services of the bench, with the folder its fronts would take.
-    private static (ServiceServer Server, string Folder) Served(Bench bench)
+    private static (ServiceServer Server, string Folder) Served(Bench bench, ServiceTlsFixture identity, AnswerSlots? slots = null)
     {
         var folder = Path.Combine(Path.GetTempPath(), $"amneziageo-fronts-{Guid.NewGuid():N}");
         var server = new ServiceServer(
             bench.Scopes,
-            Desk(bench, new SpeedTickets(bench.Clock)),
+            Desk(bench, new SpeedTickets(bench.Clock), slots: slots),
             new ProxyHost(new Ledger(), new Fronts(string.Empty), folder),
-            new WebOptions(),
+            identity.Options,
             PanelDefaults.Settings,
             new ServiceShare(),
             NullLogger<ServiceServer>.Instance);
 
         return (server, folder);
     }
-
-    // A client that takes the certificate the services make up.
-    private static HttpClient Trusting() =>
-        new(new HttpClientHandler { ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator });
 
     // Tells whether a TCP port of the loopback takes a connection.
     private static bool Listens(int port)
@@ -1893,6 +2070,8 @@ public class ServiceTests
     {
         private readonly string _falling;
 
+        public int Starts { get; private set; }
+
         /// <summary>
         /// ctor
         /// </summary>
@@ -1903,8 +2082,11 @@ public class ServiceTests
 
         public Task<ProxyState> EnableAsync(string name, CancellationToken ct) => Task.FromResult(ProxyState.Down);
 
-        public Task<ProxyState> StartAsync(string name, CancellationToken ct) =>
-            Task.FromResult(name == _falling ? new ProxyState(false, "the front fell over") : ProxyState.Up);
+        public Task<ProxyState> StartAsync(string name, CancellationToken ct)
+        {
+            Starts++;
+            return Task.FromResult(name == _falling ? new ProxyState(false, "the front fell over") : ProxyState.Up);
+        }
 
         public Task<ProxyState> StopAsync(string name, CancellationToken ct) => Task.FromResult(ProxyState.Down);
 

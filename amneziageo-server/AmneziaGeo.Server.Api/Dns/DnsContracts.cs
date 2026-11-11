@@ -63,7 +63,8 @@ public sealed record DnsResponse(
     DnsStateBody State,
     DnsReadingBody Reading,
     string FilesMode = DnsChoiceName.Routing,
-    IReadOnlyList<string>? FilesDns = null);
+    IReadOnlyList<string>? FilesDns = null,
+    string Selection = DnsSelection.Global);
 
 /// <summary>
 /// The settings the resolver is changed with.
@@ -79,7 +80,8 @@ public sealed record DnsRequest(
     int MinTtl,
     int MaxTtl,
     string? FilesMode = null,
-    IReadOnlyList<string>? FilesDns = null);
+    IReadOnlyList<string>? FilesDns = null,
+    string? Selection = null);
 
 /// <summary>
 /// Turns the resolver settings into what the panel reads and back.
@@ -133,7 +135,8 @@ public static class DnsAnswers
                 state.Picked),
             reading ?? new DnsReadingBody(false, false, 0, 0, 0, 0, 0, 0, 0),
             DnsChoiceName.Of(settings.FilesMode),
-            settings.FilesDns);
+            settings.FilesDns,
+            settings.Selection);
     }
 
     /// <summary>
@@ -150,6 +153,7 @@ public static class DnsAnswers
             Port = request.Port,
             Upstreams = Clean(request.Upstreams),
             Outbound = (request.Outbound ?? string.Empty).Trim(),
+            Selection = request.Selection?.Trim() ?? held?.Selection ?? DnsSelection.Global,
             Listen = Clean(request.Listen),
             NameMinutes = request.NameMinutes,
             CacheSize = request.CacheSize,

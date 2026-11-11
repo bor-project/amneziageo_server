@@ -41,6 +41,7 @@ public static class RouteRules
             ?? CheckAction(rule)
             ?? CheckProtocol(rule.Protocol)
             ?? CheckTargets(rule.Targets, MaxConditions)
+            ?? CheckGroups(rule.Groups)
             ?? CheckClients(rule.Clients)
             ?? CheckInbounds(rule.Inbounds)
             ?? CheckPorts(rule.Ports, "bad-port", "ports")
@@ -56,6 +57,26 @@ public static class RouteRules
 
         return CheckTargets(basic.Direct, MaxBasic) ?? CheckTargets(basic.Block, MaxBasic);
     }
+
+    /// <summary>
+    /// Validates an address group.
+    /// </summary>
+    public static RouteFault? CheckGroup(AddressGroup group)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+
+        return CheckName(group.Name)
+            ?? (group.Targets.Count == 0 ? new RouteFault("empty-address-group", "the address group contains no destinations") : null)
+            ?? CheckTargets(group.Targets, MaxBasic)
+            ?? (Dns.DnsRules.Servers(group.Dns) is { } dns ? new RouteFault(dns.Code, dns.Message) : null);
+    }
+
+    private static RouteFault? CheckGroups(IReadOnlyList<long> groups) =>
+        groups.Count > MaxConditions
+            ? Many("address groups")
+            : groups.Any(id => id <= 0)
+                ? new RouteFault("unknown-address-group", "the rule names an unknown address group")
+                : null;
 
     /// <summary>
     /// Returns why the name of a rule is unusable, or null when it holds.
