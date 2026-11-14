@@ -288,7 +288,7 @@ public sealed class ServiceDesk
                 return;
             }
 
-            var targets = ProxyTargetRules.Read(proxy.TargetsJson);
+            var targets = await TargetsAsync(proxy, context.RequestAborted).ConfigureAwait(false);
             if (targets is { Restricted: true })
             {
                 if (!ProxyWsTarget.TryRead(context.Request.Headers.SecWebSocketProtocol.ToString(), out var target))
@@ -311,7 +311,7 @@ public sealed class ServiceDesk
             var proxy = await scope.ServiceProvider.GetRequiredService<TransportProxyStore>()
                 .FindAsync(named[0].PolicyProxyId, context.RequestAborted).ConfigureAwait(false);
             if (proxy is not { IsEnabled: true, UsesTls: true } || !Usable(scope.ServiceProvider, proxy) || proxy.LegacyConfigId != named[0].ConfigId
-                || !ProxyTargetRules.Allows(ProxyTargetRules.Read(proxy.TargetsJson), ProxyDefaults.Loopback, named[0].Target))
+                || !ProxyTargetRules.Allows(await TargetsAsync(proxy, context.RequestAborted).ConfigureAwait(false), ProxyDefaults.Loopback, named[0].Target))
             {
                 await XHttpProbe.RefuseAsync(context, 403, "proxy-target-denied").ConfigureAwait(false);
                 return;
@@ -380,6 +380,14 @@ public sealed class ServiceDesk
         }
 
         using var held = lease;
+        var authorization = context.Request.Headers.Authorization;
+        var identity = context.Request.Headers["X-WG-Key"];
+        if (authorization.Count > 1 || identity.Count > 1 || !_xhttp.AllowsHeaders(endpoint.ProxyId, authorization.ToString(), identity.ToString()))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
         await XHttpRelay.PassAsync(context, endpoint.Front, _logger, held.Stopped, endpoint.HttpMethod).ConfigureAwait(false);
     }
 
@@ -399,9 +407,14 @@ public sealed class ServiceDesk
     private async Task ProbeAsync(HttpContext context, ServiceEndpoint endpoint, string nonce)
     {
         var proxy = default(TransportProxyEntity?);
+        var targets = (ProxyTargets?)ProxyTargetRules.Denied;
         async Task<bool> Authorized()
         {
             proxy = await AuthorizedProxyAsync(context, endpoint).ConfigureAwait(false);
+            if (proxy is not null)
+            {
+                targets = await TargetsAsync(proxy, context.RequestAborted).ConfigureAwait(false);
+            }
             return proxy is not null;
         }
 
@@ -414,21 +427,32 @@ public sealed class ServiceDesk
         bool Current() => held is not null && !held.Stopped.IsCancellationRequested
             && (endpoint.XHttp ? _xhttp?.CanRelay(endpoint.ProxyId) == true : _fronts?.CanRelay(endpoint.Name) == true);
         await XHttpProbe.AnswerAsync(context, nonce, Authorized, running,
-            () => ProxyTargetRules.Read(proxy?.TargetsJson), endpoint.XHttp ? "xhttp" : "websocket", Current).ConfigureAwait(false);
+            () => targets, endpoint.XHttp ? "xhttp" : "websocket", Current).ConfigureAwait(false);
+    }
+
+    private async Task<ProxyTargets?> TargetsAsync(TransportProxyEntity proxy, CancellationToken ct)
+    {
+        using var scope = _scopes.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<TransportProxyStore>().TargetsAsync(proxy, ct).ConfigureAwait(false);
     }
 
     private async Task<TransportProxyEntity?> AuthorizedProxyAsync(HttpContext context, ServiceEndpoint endpoint)
     {
         var authorization = context.Request.Headers.Authorization.ToString();
-        if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
         using var scope = _scopes.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
         var proxy = await store.FindAsync(endpoint.ProxyId, context.RequestAborted).ConfigureAwait(false);
         if (proxy is not { IsEnabled: true, UsesTls: true } || !Usable(scope.ServiceProvider, proxy))
+        {
+            return null;
+        }
+
+        if (proxy.AllowAnonymous)
+        {
+            return proxy;
+        }
+
+        if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }

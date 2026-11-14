@@ -19,9 +19,15 @@ public sealed record ProxyCatalog(int Version, IReadOnlyList<ProxyServiceEntry> 
         {
             if (entry.Name is null || entry.Host is null || entry.Transport is null || entry.Path is null || entry.HttpMethod is null
                 || entry.Certificate is null || entry.CertificateKey is null || entry.ServerName is null || entry.Pin is null || entry.Credentials is null || entry.Credentials.Any(value => value is null)
-                || entry.Id <= 0 || entry.Credentials.Count is 0 or > 4096 || entry.Credentials.Any(value => value.Length is 0 or > 256 || !value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_')))
+                || entry.Id <= 0 || entry.Credentials.Count == 0 && !entry.AllowAnonymous || entry.Credentials.Count > 4096 || entry.Credentials.Any(value => value.Length is 0 or > 256 || !value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_')))
             {
                 throw new InvalidDataException("The proxy requires an identifier and credentials.");
+            }
+
+            var identities = ProxyAccess.Credentials(entry.Credentials, entry.AllowAnonymous).Select(ProxyAccess.HttpIdentity).ToHashSet(StringComparer.Ordinal);
+            if (entry.BearerIds is { } bearerIds && (bearerIds.Count > 64 || bearerIds.Any(id => id is null || id.Length != 64 || !identities.Contains(id))))
+            {
+                throw new InvalidDataException("The bearer identity does not belong to a proxy credential.");
             }
 
             var fault = ProxyRules.Check(new TransportProxyEntity
@@ -86,4 +92,4 @@ public sealed record ProxyCatalog(int Version, IReadOnlyList<ProxyServiceEntry> 
 public sealed record ProxyServiceEntry(long Id, string Name, string Transport, string Host, int Port, string Path,
     IReadOnlyList<string> Credentials, bool UseCertificate = true, string HttpMethod = "GET", int ProtocolVersion = 0,
     int ListenPort = 0, string Certificate = "", string CertificateKey = "", bool OriginHttp = false, ProxyTargets? Targets = null,
-    string ServerName = "", string Pin = "");
+    string ServerName = "", string Pin = "", bool AllowAnonymous = false, IReadOnlyList<string>? BearerIds = null);

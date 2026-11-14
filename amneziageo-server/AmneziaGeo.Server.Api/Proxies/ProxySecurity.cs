@@ -115,6 +115,7 @@ public static class ProxySecurity
         HttpMethod = entry.HttpMethod, ProtocolVersion = entry.ProtocolVersion, Certificate = entry.Certificate,
         CertificateKey = entry.CertificateKey, ServerName = entry.ServerName, Pin = entry.Pin,
         TargetsJson = AmneziaGeo.Server.Core.Proxy.ProxyTargetRules.Write(entry.Targets),
+        AllowAnonymous = entry.AllowAnonymous,
     };
 
     /// <summary>
@@ -151,5 +152,6 @@ public static class ProxySecurity
         OriginHttp = proxy.OriginHttp, UseCertificate = proxy.UseCertificate, HttpMethod = proxy.HttpMethod,
         ProtocolVersion = proxy.ProtocolVersion, Path = proxy.Path, ServerName = proxy.ServerName, Pin = proxy.Pin,
         TargetsJson = proxy.TargetsJson,
+        AllowAnonymous = proxy.AllowAnonymous,
     };
 }

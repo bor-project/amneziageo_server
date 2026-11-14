@@ -291,6 +291,9 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(proxy => proxy.Host).HasMaxLength(253);
             entity.Property(proxy => proxy.Path).HasMaxLength(64);
             entity.Property(proxy => proxy.TargetsJson).HasDefaultValue(string.Empty);
+            entity.Property(proxy => proxy.TokensJson).HasDefaultValue(string.Empty);
+            entity.Property(proxy => proxy.AllowAnonymous).HasDefaultValue(false);
+            entity.Property(proxy => proxy.AccessVersion).HasDefaultValue(0L);
             entity.HasIndex(proxy => proxy.Name).IsUnique();
             entity.HasIndex(proxy => proxy.LegacyConfigId).IsUnique();
         });
