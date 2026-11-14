@@ -200,7 +200,8 @@ public sealed class StandaloneProxyService : IAsyncDisposable
     {
         var faults = new Dictionary<long, string>();
         var http = _catalog.Proxies.Where(one => one.Transport is "http" or "xhttp").Select(one =>
-            new XHttpProxy(one.Id, Port(one.Id), one.Path, one.Credentials, one.Targets, one.HttpMethod)).ToArray();
+            new XHttpProxy(one.Id, Port(one.Id), one.Path, ProxyAccess.Credentials(one.Credentials, one.AllowAnonymous), one.Targets, one.HttpMethod,
+                one.AllowAnonymous, one.BearerIds)).ToArray();
         foreach (var (id, fault) in await _http.ApplyAsync(http, ct).ConfigureAwait(false))
         {
             faults[id] = fault;
@@ -246,13 +247,21 @@ public sealed class StandaloneProxyService : IAsyncDisposable
             }
 
             using var held = lease;
+            var authorization = context.Request.Headers.Authorization;
+            var identity = context.Request.Headers["X-WG-Key"];
+            if (authorization.Count > 1 || identity.Count > 1 || !_http.AllowsHeaders(proxy.Id, authorization.ToString(), identity.ToString()))
+            {
+                context.Response.StatusCode = 404;
+                return;
+            }
+
             using var ended = CancellationTokenSource.CreateLinkedTokenSource(held.Stopped, stopping);
             await XHttpRelay.PassAsync(context, Port(proxy.Id), _logger, ended.Token, proxy.HttpMethod).ConfigureAwait(false);
             return;
         }
 
         var token = context.Request.Headers.Authorization.ToString();
-        var allowed = proxy.Credentials.Any(credential => CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes("Bearer " + credential), Encoding.UTF8.GetBytes(token)));
+        var allowed = proxy.AllowAnonymous || proxy.Credentials.Any(credential => CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes("Bearer " + credential), Encoding.UTF8.GetBytes(token)));
         if (!allowed)
         {
             context.Response.StatusCode = 403;

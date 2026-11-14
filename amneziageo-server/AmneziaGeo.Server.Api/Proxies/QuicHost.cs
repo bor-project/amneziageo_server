@@ -22,8 +22,11 @@ public sealed class QuicHost(string directory, string executable, ILogger logger
         {
             var rule = ProxyFile.Whitelist(0, proxy.Path, proxy.Targets)["restrictions:\n".Length..];
             var credentials = proxy.Credentials.Count == 0 ? @"^\x00$" : "^Bearer (?:" + string.Join('|', proxy.Credentials.Select(Regex.Escape)) + ")$";
-            rule = rule.Replace("name: amneziageo", "name: proxy-" + proxy.Id, StringComparison.Ordinal)
-                .Replace("    allow:", "      - !Authorization '" + credentials + "'\n    allow:", StringComparison.Ordinal);
+            rule = rule.Replace("name: amneziageo", "name: proxy-" + proxy.Id, StringComparison.Ordinal);
+            if (!proxy.AllowAnonymous)
+            {
+                rule = rule.Replace("    allow:", "      - !Authorization '" + credentials + "'\n    allow:", StringComparison.Ordinal);
+            }
             text.Append(rule);
         }
 

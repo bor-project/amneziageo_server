@@ -1,17 +1,16 @@
-import { useRef, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { maxTokenDays, useMintApiToken } from "@/api/apiTokens"
 import type { MintedApiToken } from "@/api/apiTokens"
 import { complaint } from "@/api/auth"
 import { useRoles } from "@/api/roles"
-import { TextBlock } from "@/components/TextBlock"
+import { TokenSecret } from "@/components/TokenSecret"
 import { useTail } from "@/components/crumbs"
 import { Line, Part, Pick } from "@/components/fields"
 import { narrowest, titleOf } from "@/components/roles"
-import { card, footer, note, primary, secondary } from "@/components/styles"
+import { footer, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { useSpot } from "@/store/spots"
-import { selectText } from "@/select"
 
 export function TokenPage() {
   const t = useText()
@@ -36,7 +35,7 @@ export function TokenPage() {
   }
 
   if (minted !== null) {
-    return <Secret minted={minted} />
+    return <TokenSecret name={minted.token.name} secret={minted.secret} back={back} />
   }
 
   return (
@@ -71,49 +70,6 @@ export function TokenPage() {
         <button type="button" onClick={() => void save()} disabled={!ready} className={primary}>
           {mint.isPending ? t("apiTokens.busy") : t("apiTokens.save")}
         </button>
-      </div>
-    </div>
-  )
-}
-
-function Secret({ minted }: { minted: MintedApiToken }) {
-  const t = useText()
-  const back = useSpot("/settings/users")
-  const block = useRef<HTMLPreElement>(null)
-  const [copied, setCopied] = useState(false)
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(minted.secret)
-      setCopied(true)
-    } catch {
-      if (block.current !== null) {
-        selectText(block.current)
-      }
-    }
-  }
-
-  return (
-    <div className="mt-4 flex flex-col gap-4">
-      <h2 className="text-[22px] font-semibold">{t("apiTokens.secretTitle", { name: minted.token.name })}</h2>
-
-      <div className={`p-4 ${card}`}>
-        <TextBlock
-          ref={block}
-          className="rounded-lg border border-line bg-canvas px-3 py-2 font-mono text-sm break-all whitespace-pre-wrap text-ink"
-        >
-          {minted.secret}
-        </TextBlock>
-        <div className={note}>{t("apiTokens.once")}</div>
-      </div>
-
-      <div className="flex justify-end gap-2">
-        <button type="button" onClick={() => void copy()} className={secondary}>
-          {copied ? t("apiTokens.copied") : t("apiTokens.copy")}
-        </button>
-        <Link to={back} className={`flex h-10 items-center ${primary}`}>
-          {t("apiTokens.done")}
-        </Link>
       </div>
     </div>
   )

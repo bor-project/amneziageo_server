@@ -53,6 +53,7 @@ import { PresetRemove } from "@/pages/PresetRemove"
 import { Presets } from "@/pages/Presets"
 import { Proxies } from "@/pages/Proxies"
 import { ProxyPage, ProxyRemove } from "@/pages/ProxyPage"
+import { ProxyTokenPage, ProxyTokenRemove } from "@/pages/ProxyTokenPage"
 import { PanelCertificates, PanelServer } from "@/pages/Settings"
 import { Subscriptions } from "@/pages/Subscriptions"
 import { TemplatePage } from "@/pages/TemplatePage"
@@ -158,6 +159,8 @@ const router = createBrowserRouter(
                 <Route path="proxies/new" element={<ProxyPage />} />
                 <Route path="proxies/:proxyId/edit" element={<ProxyPage />} />
                 <Route path="proxies/:proxyId/delete" element={<ProxyRemove />} />
+                <Route path="proxies/:proxyId/tokens/new" element={<ProxyTokenPage />} />
+                <Route path="proxies/:proxyId/tokens/:tokenId/delete" element={<ProxyTokenRemove />} />
               </Route>
               <Route path="dns" element={<Dns />} />
             </Route>
