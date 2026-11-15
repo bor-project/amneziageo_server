@@ -75,6 +75,7 @@ export interface ClientDraft {
 export type Miss = "off" | "no-id" | "no-key"
 
 export interface ClientConfig {
+  wireguard?: string
   fileName: string
   text: string
   link: string

@@ -118,6 +118,11 @@ public static class ConfigDefaults
         };
     }
 
+    /// <summary>
+    /// Returns the standard WireGuard settings.
+    /// </summary>
+    public static ObfuscationSettings Plain() => new();
+
     private static int Second(int first)
     {
         var second = RandomNumberGenerator.GetInt32(15, 150);

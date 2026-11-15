@@ -524,6 +524,8 @@ public sealed class RouteBasicEntity
 /// </summary>
 public sealed class AddressGroupEntity
 {
+    public string? DefaultKey { get; set; }
+
     public string Dns { get; set; } = string.Empty;
 
     public long Id { get; set; }
@@ -814,6 +816,8 @@ public sealed class TemplateEntity
 /// </summary>
 public sealed class RoutingPresetEntity
 {
+    public string? DefaultKey { get; set; }
+
     public long Id { get; set; }
 
     public string Uid { get; set; } = string.Empty;

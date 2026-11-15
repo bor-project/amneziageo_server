@@ -209,6 +209,12 @@ public static partial class ConfigRules
 
     private static ConfigFault? CheckTypes(ObfuscationSettings obfuscation)
     {
+        var headers = new[] { obfuscation.H1, obfuscation.H2, obfuscation.H3, obfuscation.H4 };
+        if (headers.Any(string.IsNullOrEmpty))
+        {
+            return IsPlain(obfuscation) ? null : Fault("bad-type", "only plain WireGuard omits all packet types");
+        }
+
         var types = new List<AwgRange>(4);
         foreach (var text in (string[])[obfuscation.H1, obfuscation.H2, obfuscation.H3, obfuscation.H4])
         {
@@ -386,6 +392,26 @@ public static partial class ConfigRules
         string.IsNullOrEmpty(key) || Curve25519.IsKey(key)
             ? null
             : Fault("bad-preshared", "the preshared key is not 32 bytes in base64");
+
+    /// <summary>
+    /// Identifies an endpoint without AmneziaWG parameters.
+    /// </summary>
+    public static bool IsPlain(ObfuscationSettings shape)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+
+        return shape.Jc == 0 && shape.Jmin == 0 && shape.Jmax == 0
+            && shape.S1 == 0 && shape.S2 == 0 && shape.S3 == 0 && shape.S4 == 0
+            && !shape.RandomTrailers && !shape.DisableCookies
+            && new[]
+            {
+                shape.H1, shape.H2, shape.H3, shape.H4,
+                shape.I1, shape.I2, shape.I3, shape.I4, shape.I5,
+                shape.HeaderProtectionKey, shape.ContentPaddingAddition,
+                shape.RekeyAfterTime, shape.RekeyTimeout, shape.RejectAfterTime,
+                shape.KeepaliveTimeout, shape.MaxHandshakeAttempts,
+            }.All(string.IsNullOrEmpty);
+    }
 
     private static ConfigFault Fault(string code, string message) => new(code, message);
 

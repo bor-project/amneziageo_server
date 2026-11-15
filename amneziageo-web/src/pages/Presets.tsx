@@ -1,3 +1,4 @@
+import { RestoreRoutingDefaults } from "@/components/RestoreRoutingDefaults"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { useFailure } from "@/api/failure"
@@ -47,6 +48,7 @@ export function Presets() {
     <div className="mt-4 flex flex-col gap-4">
       <div className="text-sm text-muted">{t("presets.about")}</div>
 
+      {may && <RestoreRoutingDefaults part="presets" head />}
       <div className={card}>
         {presets.isPending && failed === null && (
           <div className="px-4 py-6 text-sm text-muted">{t("presets.loading")}</div>

@@ -1,4 +1,5 @@
 import { useRoutingEditor } from "@/components/useRoutingEditor"
+import { RestoreRoutingDefaults } from "@/components/RestoreRoutingDefaults"
 import { useState } from "react"
 import { complaint } from "@/api/auth"
 import { useAddAddressGroup, useAddressGroups, useChangeAddressGroup, useRemoveAddressGroup } from "@/api/addressGroups"
@@ -28,7 +29,8 @@ export function AddressGroups() {
 
   return (
     <>
-      <RoutingToolbar onAdd={may && groups.isSuccess ? () => editor.open("new") : undefined}>
+      <RoutingToolbar onAdd={may && groups.isSuccess ? () => editor.open("new") : undefined}
+        actions={may ? <RestoreRoutingDefaults part="groups" /> : undefined}>
         <Find value={editor.params.get("find") ?? ""} onChange={(value) => editor.filter("find", value)} className="w-full wide:w-72" />
       </RoutingToolbar>
       <div className={card}>

@@ -118,7 +118,8 @@ public sealed record ClientConfigResponse(
     string SubscriptionFault = "",
     string SubscriptionDetail = "",
     string PanelFault = "",
-    string PanelDetail = "");
+    string PanelDetail = "",
+    string Wireguard = "");
 
 /// <summary>
 /// What putting the clients of one endpoint on the host produced.

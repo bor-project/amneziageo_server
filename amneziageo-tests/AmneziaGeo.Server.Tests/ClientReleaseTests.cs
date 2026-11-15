@@ -64,7 +64,7 @@ public sealed class ClientReleaseTests : IDisposable
     }
 
     [Fact]
-    public void AReleaseCarriesTwentyFiles()
+    public void AReleaseOffersOnlyArmPackagesForAndroidDevices()
     {
         var slots = ReleaseSlots.Of(Nine);
 
@@ -72,11 +72,67 @@ public sealed class ClientReleaseTests : IDisposable
         Assert.Equal(ReleaseSlots.Count, slots.Select(slot => slot.Name).Distinct(StringComparer.Ordinal).Count());
         Assert.Contains(slots, slot => slot is { Name: "AmneziaGeo-1.10.9.0-win-x64-fdd.exe", Platform: "windows", Arch: "x64", Variant: "fdd", Installer: null });
         Assert.Contains(slots, slot => slot is { Name: "amneziageo-gui_1.10.9.0_arm64.deb", Platform: "linux", Arch: "arm64", Variant: "amneziageo-gui" });
-        Assert.Contains(slots, slot => slot is { Name: "AmneziaGeo-1.10.9.0-android.apk", Platform: "android", Arch: "universal", Variant: "apk" });
+        Assert.Equal(["arm64", "arm"], slots.Where(slot => slot.Platform == "android").Select(slot => slot.Arch));
         Assert.Equal("amneziageo_1.10.9.0_amd64.deb", ReleaseSlots.Find(Nine, "amneziageo_1.10.9.0_amd64.patch")?.Installer);
         Assert.Null(ReleaseSlots.Find(Nine, "AmneziaGeo-1.10.9.0-android.patch"));
         Assert.Null(ReleaseSlots.Find(Nine, "AmneziaGeo-1.10.8.0-win-x64.exe"));
-        Assert.Equal(12, slots.Count(slot => !slot.IsPatch));
+        Assert.Equal(10, slots.Count(slot => !slot.IsPatch));
+    }
+
+    [Fact]
+    public void LegacyAndroidPackagesRemainAddressableAndKeepManifestMetadata()
+    {
+        var tag = new ReleaseTag(Nine, ReleaseChannel.Stable, 0);
+        var legacy = new[] { "AmneziaGeo-1.10.9.0-android.apk", "AmneziaGeo-1.10.9.0-android-x64.apk" };
+        var files = legacy.Select(name => new ReleaseFileInfo(name, 123, new string('a', 64), string.Empty)).ToArray();
+
+        var manifest = ReleaseManifest.Build(tag, "existing release", files);
+
+        Assert.Equal(legacy, manifest.Installers.Select(slot => slot.Name));
+        Assert.All(legacy, name => Assert.NotNull(ReleaseSlots.Find(Nine, name)));
+        Assert.All(manifest.Installers, slot => Assert.Equal(new string('a', 64), slot.Sha256));
+    }
+
+    [Fact]
+    public async Task AnArmOnlyReleasePreservesThePreviousUniversalRelease()
+    {
+        var store = new ReleaseStore(_folder.FullName);
+        await store.CreateAsync("1.10.9.0", "stable", null, CancellationToken.None).ConfigureAwait(false);
+        var legacy = "AmneziaGeo-1.10.9.0-android.apk";
+        var universal = Apk("arm64-v8a", "armeabi-v7a", "x86_64");
+        await store.PutFileAsync("v1.10.9.0", legacy, Body(universal), null, CancellationToken.None).ConfigureAwait(false);
+        var before = File.ReadAllBytes(store.Resolve("stable", "update.json")!);
+
+        await store.CreateAsync("1.10.10.0", "stable", null, CancellationToken.None).ConfigureAwait(false);
+        await store.PutFileAsync("v1.10.10.0", "AmneziaGeo-1.10.10.0-android-arm64.apk", Body(Apk("arm64-v8a")), null, CancellationToken.None).ConfigureAwait(false);
+        await store.PutFileAsync("v1.10.10.0", "AmneziaGeo-1.10.10.0-android-arm.apk", Body(Apk("armeabi-v7a")), null, CancellationToken.None).ConfigureAwait(false);
+        var manifest = ReleaseManifest.Parse(File.ReadAllText(store.Resolve("stable", "update.json")!))!;
+        var again = new ReleaseStore(_folder.FullName);
+
+        Assert.Equal(["arm64", "arm"], manifest.Installers.Select(slot => slot.Arch));
+        Assert.Equal(2, again.Read("v1.10.10.0").Files.Count);
+        Assert.DoesNotContain(again.Read("v1.10.10.0").Missing, name => name.EndsWith("-android.apk", StringComparison.Ordinal) || name.EndsWith("-android-x64.apk", StringComparison.Ordinal));
+        Assert.Equal(before, File.ReadAllBytes(again.ResolveIn("v1.10.9.0", "update.json")!));
+        Assert.Equal(universal, File.ReadAllBytes(again.ResolveIn("v1.10.9.0", legacy)!));
+    }
+
+    [Fact]
+    public void AScannedLegacyFolderRetainsItsAndroidFiles()
+    {
+        var home = Directory.CreateDirectory(Path.Combine(_folder.FullName, "releases", "v1.10.9.0"));
+        var legacy = "AmneziaGeo-1.10.9.0-android.apk";
+        var emulator = "AmneziaGeo-1.10.9.0-android-x64.apk";
+        File.WriteAllBytes(Path.Combine(home.FullName, legacy), Apk("arm64-v8a", "armeabi-v7a", "x86_64"));
+        File.WriteAllBytes(Path.Combine(home.FullName, emulator), Apk("x86_64"));
+        var store = new ReleaseStore(_folder.FullName);
+
+        var read = store.Read("v1.10.9.0");
+        var manifest = ReleaseManifest.Parse(File.ReadAllText(store.ResolveIn("v1.10.9.0", "update.json")!))!;
+
+        Assert.Equal(2, read.Files.Count);
+        Assert.Equal([legacy, emulator], manifest.Installers.Select(slot => slot.Name));
+        Assert.NotNull(store.ResolveIn("v1.10.9.0", legacy));
+        Assert.NotNull(store.ResolveIn("v1.10.9.0", emulator));
     }
 
     [Fact]

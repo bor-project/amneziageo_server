@@ -27,6 +27,8 @@ public static class PresetEndpoints
 
         var writing = routes.MapGroup(Prefix).RequireScope(Scopes.ManageClients);
         writing.MapPost("/", AddAsync);
+        writing.MapPost("/defaults", async (RoutingDefaultsStore store, CancellationToken ct) =>
+            Results.Ok(await store.RestorePresetsAsync(ct).ConfigureAwait(false)));
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
