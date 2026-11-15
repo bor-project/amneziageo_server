@@ -67,6 +67,7 @@ static int Usage()
           amneziageo-server update status | check | apply [--beta]
           amneziageo-server geo update                 download the geo sources of the panel now
           amneziageo-server preset list | set <name> --readonly on | off
+          amneziageo-server routing defaults           restore bundled address groups and presets
           amneziageo-server routing export <file>      write the routing of the panel to a file
           amneziageo-server routing import <file> [--apply]
                                                        take a routing file in, showing the plan first

@@ -2,7 +2,8 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { span } from "@/address"
 import { complaint } from "@/api/auth"
-import { downedOf, failure, useConfigs, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
+import { isPlainObfuscation, plainObfuscation } from "@/api/plainWireGuard"
+import { downedOf, failure, useConfigs, useFreshConfig, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import { useClients } from "@/api/clients"
 import type { Inbound } from "@/api/clients"
@@ -76,6 +77,9 @@ export function ConfigForm({
   const taken = useServicesHolders()
   const claimed = [...usePathHolders({ config: self }), ...useSocketHolders({ config: self })]
   const [draft, setDraft] = useState(start)
+  const [amnezia, setAmnezia] = useState(!isPlainObfuscation(start.obfuscation))
+  const fresh = useFreshConfig(!amnezia && isPlainObfuscation(draft.obfuscation), start.name)
+  const applied = amnezia ? draft : { ...draft, obfuscation: plainObfuscation() }
   const [shown, setShown] = useState(publicKey)
   const read = useImportConfig()
   const [text, setText] = useState("")
@@ -106,15 +110,16 @@ export function ConfigForm({
   const name = nameFault(t, draft.name, others.map((one) => one.name))
   const address = addressFault(t, draft.address)
   const host = hostFault(t, draft)
-  const edited = !same(draft, start) || opening
-  const check = useDnsCheck({ id: self, config: draft })
+  const edited = !same(applied, start) || opening
+  const check = useDnsCheck({ id: self, config: applied })
   const files = useResolver(false).data?.filesMode
   const ready =
     edited &&
     !pending &&
+    (!amnezia || !isPlainObfuscation(draft.obfuscation)) &&
     draft.name.length > 0 &&
     [port, services, socket, name, address, host].every((one) => one.length === 0)
-  const twisted = JSON.stringify(draft.obfuscation) !== JSON.stringify(start.obfuscation)
+  const twisted = JSON.stringify(applied.obfuscation) !== JSON.stringify(start.obfuscation)
 
   function put(change: Partial<ConfigDraft>) {
     setDraft({ ...draft, ...change })
@@ -127,7 +132,20 @@ export function ConfigForm({
       return
     }
 
-    onSave(draft, opening ? { opened: true } : {})
+    onSave(applied, opening ? { opened: true } : {})
+  }
+
+  function protocol(enabled: boolean) {
+    if (enabled && isPlainObfuscation(draft.obfuscation)) {
+      const cover = fresh.data?.obfuscation
+      if (cover === undefined || isPlainObfuscation(cover)) {
+        return
+      }
+
+      setDraft({ ...draft, obfuscation: cover })
+    }
+
+    setAmnezia(enabled)
   }
 
   function twist(change: Partial<Obfuscation>) {
@@ -158,6 +176,7 @@ export function ConfigForm({
       privateKey: found.privateKey ?? "",
       obfuscation: found.obfuscation,
     })
+    setAmnezia(!isPlainObfuscation(found.obfuscation))
     setShown(found.publicKey)
   }
 
@@ -385,7 +404,20 @@ export function ConfigForm({
       </Part>
 
       <Part title={t("configs.obfuscation")}>
-        <ObfuscationFields id="config" cover={draft.obfuscation} onChange={twist} />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:col-span-2">
+          <Switch
+            id="config-amnezia"
+            caption={t("configs.amnezia")}
+            value={amnezia}
+            onChange={protocol}
+            disabled={pending || (!amnezia && isPlainObfuscation(draft.obfuscation) && fresh.data === undefined)}
+          />
+          {!amnezia && <span className="text-xs text-alarm">{t("configs.plainWarning")}</span>}
+        </div>
+        {amnezia && <ObfuscationFields id="config" cover={draft.obfuscation} onChange={twist} />}
+        {!amnezia && isPlainObfuscation(draft.obfuscation) && fresh.error !== null && fresh.error !== undefined && (
+          <div className="text-sm text-alarm sm:col-span-2">{failure(t, fresh.error)}</div>
+        )}
         {self !== undefined && twisted && (
           <div className="text-xs text-alarm sm:col-span-2">{t("configs.obfuscationWarning")}</div>
         )}
@@ -443,7 +475,7 @@ export function ConfigForm({
           onCancel={() => setAsking(false)}
           onAnswer={(keep) => {
             setAsking(false)
-            onSave(draft, { keep })
+            onSave(applied, { keep })
           }}
         />
       )}

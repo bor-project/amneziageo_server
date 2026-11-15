@@ -12,7 +12,7 @@ import { draw } from "@/qr"
 import { holds } from "@/store/authSlice"
 import { useAppSelector } from "@/store/hooks"
 
-type Kind = "subscription" | "file" | "link"
+type Kind = "subscription" | "file" | "link" | "wireguard"
 
 interface Missing {
   says: string
@@ -23,6 +23,7 @@ const kinds: { kind: Kind; label: TextKey; tail: string }[] = [
   { kind: "subscription", label: "clients.qrSubscription", tail: "-subscription.png" },
   { kind: "file", label: "clients.qrFile", tail: ".conf" },
   { kind: "link", label: "clients.qrLink", tail: "-link.png" },
+  { kind: "wireguard", label: "clients.qrWireguard", tail: "-wireguard.png" },
 ]
 
 const misses: Record<Miss, TextKey> = {
@@ -40,13 +41,15 @@ export function ClientConfig({ id, editable }: { id: number; editable: boolean }
     subscription: config.data?.subscription ?? "",
     file: config.data?.text ?? "",
     link: config.data?.link ?? "",
+    wireguard: config.data?.wireguard ?? "",
   }
   const pictures = useQuery({
-    queryKey: ["client-qr", id, words.file, words.link, words.subscription],
+    queryKey: ["client-qr", id, words.file, words.link, words.wireguard, words.subscription],
     queryFn: async () => ({
       subscription: words.subscription.length > 0 ? await draw(words.subscription) : null,
       file: await draw(words.file),
       link: await draw(words.link),
+      wireguard: words.wireguard.length > 0 ? await draw(words.wireguard) : null,
     }),
     enabled: words.file.length > 0,
   })
@@ -71,6 +74,10 @@ export function ClientConfig({ id, editable }: { id: number; editable: boolean }
   }
 
   function warning(kind: Kind): string | undefined {
+    if (kind === "wireguard") {
+      return undefined
+    }
+
     if (kind === "subscription") {
       return carried === "" || words.subscription.length === 0
         ? undefined

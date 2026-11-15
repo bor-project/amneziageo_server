@@ -64,13 +64,13 @@ public static class ReleaseSlots
     /// <summary>
     /// How many files a whole release carries.
     /// </summary>
-    public const int Count = 20;
+    public const int Count = 18;
 
     /// <summary>
     /// Returns the files a release of a version is made of: the installers of Windows, the packages of Linux, the
     /// packages of Android, each installer followed by its patch where the platform takes one.
     /// </summary>
-    public static IReadOnlyList<ReleaseSlot> Of(Version version)
+    public static IReadOnlyList<ReleaseSlot> Of(Version version, bool includeLegacy = false)
     {
         ArgumentNullException.ThrowIfNull(version);
 
@@ -90,10 +90,13 @@ public static class ReleaseSlots
             }
         }
 
-        slots.Add(new ReleaseSlot($"AmneziaGeo-{v}-android.apk", Android, "universal", Apk));
         slots.Add(new ReleaseSlot($"AmneziaGeo-{v}-android-arm64.apk", Android, "arm64", Apk));
         slots.Add(new ReleaseSlot($"AmneziaGeo-{v}-android-arm.apk", Android, "arm", Apk));
-        slots.Add(new ReleaseSlot($"AmneziaGeo-{v}-android-x64.apk", Android, "x64", Apk));
+        if (includeLegacy)
+        {
+            slots.Add(new ReleaseSlot($"AmneziaGeo-{v}-android.apk", Android, "universal", Apk));
+            slots.Add(new ReleaseSlot($"AmneziaGeo-{v}-android-x64.apk", Android, "x64", Apk));
+        }
 
         return slots;
     }
@@ -102,7 +105,7 @@ public static class ReleaseSlots
     /// Returns the file of a release a name stands for, null for a name the release does not carry.
     /// </summary>
     public static ReleaseSlot? Find(Version version, string? name) =>
-        name is null ? null : Of(version).FirstOrDefault(slot => string.Equals(slot.Name, name, StringComparison.Ordinal));
+        name is null ? null : Of(version, includeLegacy: true).FirstOrDefault(slot => string.Equals(slot.Name, name, StringComparison.Ordinal));
 
     /// <summary>
     /// Returns the installer the patch of a name goes with, in the order of the files.

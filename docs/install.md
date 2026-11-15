@@ -34,8 +34,7 @@ before it changes anything, and the same command goes on once it is on. Then it 
 container the directory of `compose.yaml` and whether the command goes on the host among it, then on a terminal
 whether a short command of the menu goes on the host and its name, `ag-s` by default, the answers of the
 look as defaults, prints the plan and, once
-told to go on, upgrades the system, rebooting when a new kernel comes and going on with the same answers when run
-again, puts on the module from the PPA of Amnezia when the kernel lacks it, turns forwarding on now and at boot,
+told to go on, upgrades the system, rebooting when a new kernel comes and continuing automatically at boot with the same answers, puts on the module from the PPA of Amnezia when the kernel lacks it, turns forwarding on now and at boot,
 with `accept_ra = 2` for the interface the router advertises the IPv6 route on, turns BBR on, lets the packets of
 the clients past the drop Docker puts on forwarding, checks the release against the key the releases are signed
 with and puts it on as a package or a container, makes the first administrator with a temporary
@@ -66,6 +65,7 @@ every key the installation runs without a question:
 | `kind` | `package` or `docker` |
 | `channel` | `stable` or `test` |
 | `restore` | a backup to put the panel on, empty for a fresh panel |
+| `routing_defaults` | `yes` adds the bundled address groups and client routing presets when installing the proxy component; `no` leaves both collections empty |
 | `bbr` | `yes` turns BBR on |
 | `docker_dir` | the directory of `compose.yaml` of a container, new or empty, `/opt/amneziageo-docker` by default |
 | `host_menu` | `yes` puts the menu on the host of a container as `/usr/local/bin/amneziageo-server`, `no` leaves it in the container alone |
@@ -88,6 +88,103 @@ every key the installation runs without a question:
 | `reboot` | `yes` reboots after an upgrade that brings a kernel |
 | `go` | `yes` goes on past the plan |
 
+### Continuing after an installation reboot
+
+A reboot during installation does not mean that the server is ready. Before rebooting, the installer
+saves its answers in `/root/.amneziageo-install` (mode 600), its executable copy in
+`/root/.amneziageo-install.sh` (mode 700), and enables the one-shot systemd unit
+`amneziageo-install.service`. If you chose your own administrator password, enter and confirm it before
+reboot; it is kept only in the private checkpoint until the administrator is created.
+
+1. Answer the reboot question. SSH disconnects when the server reboots. If you answer no, run `reboot`
+   when ready; continuation does not bypass a required reboot.
+2. At boot, systemd continues the installation after `network-online.target`, with the saved answers.
+   You do not need to start the installer over SSH.
+3. Reconnect as root (`sudo -i`) and check progress:
+
+   ```sh
+   systemctl status amneziageo-install.service --no-pager
+   tail -f /root/.amneziageo-install.log
+   ```
+
+4. When `/root/.amneziageo-install.status` says `done`, read the final address and login details:
+
+   ```sh
+   cat /root/.amneziageo-install.log
+   ```
+
+The log may contain the temporary administrator password, update token and first client details. It and
+the status file have mode 600 and remain available to root. The system journal does not receive the
+installer's output. A root login prints the result location; the completion reminder is removed after
+that first login. Do not publish the log or checkpoint.
+
+On success, the installer disables and removes its temporary unit, saved executable and answers.
+The installation is not repeated on later boots. On failure, the checkpoint is retained and the status
+is `failed:<code>`. There is no rapid restart loop. Read the private log, fix the error, and retry as root:
+
+```sh
+/root/.amneziageo-install.sh install --resume
+```
+
+`amneziageo-server install --resume` also works when that command is available. A concurrent manual or
+boot attempt is refused by the installation lock. Once a resumed run has created its administrator,
+the checkpoint preserves that fact and its generated temporary password for later continuation.
+Supported `AMNEZIAGEO_*` layout overrides are retained in the private checkpoint as well. A successful
+manual retry updates the status to `done` and records its generated login details in the private log.
+Older checkpoints still support manual `--resume` and `--answers`; if another reboot is required,
+the current installer arms the automatic boot continuation. Automatic continuation requires working
+systemd: failure to enable the unit stops the installer before reboot.
+
+### After rebooting an installed server
+
+There is no need to run `install` again after a normal reboot of an already completed installation.
+Package services enabled during installation start through systemd. Check only the components installed:
+
+| Component | Package service | Check |
+|---|---|---|
+| VPN server and its panel | `amneziageo-server` | `systemctl is-active amneziageo-server` |
+| Independent proxy service | `amneziageo-proxy` | `systemctl is-active amneziageo-proxy` |
+| Independent client updates server | `amneziageo-updates` | `systemctl is-active amneziageo-updates` |
+
+The VPN service raises its configured enabled interfaces and routing itself; do not also start `awg-quick`
+for those same interfaces. A proxy hosted inside the panel follows the panel service. The independent proxy
+service applies to a standalone installation.
+
+For a package, check `systemctl is-enabled <service>`, then `systemctl status <service> --no-pager` and
+`journalctl -u <service> -b --no-pager -n 100`. Start a stopped service with `systemctl start <service>` after
+reading the failure. If autostart was deliberately disabled, it remains disabled; re-enable it only when wanted.
+
+For Docker, the generated compose file uses `restart: unless-stopped`. Check the Docker daemon first with
+`systemctl is-active docker`, then `docker compose -f <saved-directory>/compose.yaml ps` and
+`docker compose -f <saved-directory>/compose.yaml logs --tail 100`. A container explicitly stopped before
+reboot remains stopped; `docker compose -f <saved-directory>/compose.yaml up -d` starts the existing project.
+Use the directory printed at installation, rather than creating a second compose project.
+
+Finally, run `amneziageo-server status` and `amneziageo-server settings` where the host menu is installed,
+open the existing panel URL and check the enabled interfaces/proxies. For a kernel upgrade, also check
+`uname -r` and `lsmod | grep amneziawg` on a VPN host. Read the service log if a module or interface did
+not return; repeating installation or creating duplicate interfaces is not the recovery step.
+
+### Bundled routing lists
+
+A fresh proxy installation asks whether to add routing lists and presets for YouTube, Discord, Instagram,
+Facebook, WhatsApp, Telegram and X (Twitter). The domain lists and client application entries ship with the
+server. Installation and restoration do not download external routing lists or geo databases.
+
+The menu beside **Add** in **Routing → Address groups** restores missing server groups. The menu in
+**Clients → Presets** restores missing client presets. The utility restores both collections:
+
+```sh
+AmneziaGeo.Server.Cli routing defaults
+```
+
+Restoration keeps existing records, including renamed defaults, their contents, DNS settings and template
+assignments. A user list with the same name remains intact; the bundled list receives a separate name.
+Client presets send their entries through the VPN tunnel. Select them in the desired client templates to
+distribute them. Server groups can be selected in routing rules. Restoration does not create or enable rules,
+change template selections, or configure a remote outbound. Updating the server does not restore deleted
+defaults automatically; restoring a backup keeps the backed-up routing state.
+
 Without arguments the script opens a menu, over ssh as well: updates and the way back, copies of the database,
 the address, the port and the path of the panel, users and tokens, the service and its log, certificates, the
 firewall, endpoints, websocket fronts, BBR and the resolver of the clients. Its items go as commands too:
@@ -97,6 +194,7 @@ firewall, endpoints, websocket fronts, BBR and the resolver of the clients. Its 
 | `install` | asks what goes on the host, looks it over, asks what the panel or the client updates server needs and puts it on |
 | `install --restore <file>` | puts the panel on the host on a backup a panel downloaded |
 | `install --answers <file>` | puts the panel on the host with the answers of a file |
+| `install --resume` | continues the unfinished installation with its saved answers |
 | `restore <file>` | puts a backup a panel downloaded in place of the database |
 | `update`, `update beta` | moves the panel to the newest release of its channel, of the test channel for `beta` |
 | `rollback` | goes back to the release before |

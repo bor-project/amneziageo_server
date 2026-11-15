@@ -18,6 +18,8 @@ public static class AddressGroupEndpoints
         routes.MapGroup("/api/address-groups").RequireScope(Scopes.ReadState).MapGet("/", ListAsync);
         var writing = routes.MapGroup("/api/address-groups").RequireScope(Scopes.ManageRouting);
         writing.MapPost("/", AddAsync);
+        writing.MapPost("/defaults", async (RoutingDefaultsStore store, CancellationToken ct) =>
+            Results.Ok(await store.RestoreGroupsAsync(ct).ConfigureAwait(false)));
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 

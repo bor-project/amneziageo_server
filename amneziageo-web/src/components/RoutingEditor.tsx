@@ -23,13 +23,16 @@ export function RoutingLegacy({ to }: { to: string }) {
   return <Navigate to={to + "?" + search.toString() + location.hash} replace />
 }
 
-export function RoutingToolbar({ onAdd, children }: { onAdd?: () => void; children?: ReactNode }) {
+export function RoutingToolbar({ onAdd, actions, children }: { onAdd?: () => void; actions?: ReactNode; children?: ReactNode }) {
   const t = useText()
 
   return (
     <div className="mt-4 mb-4 flex flex-wrap items-end gap-3">
       {children}
-      {onAdd && <button type="button" onClick={onAdd} className={"ml-auto " + primary}>{t("action.add")}</button>}
+      {(onAdd || actions) && <div className="ml-auto flex items-center gap-2">
+        {onAdd && <button type="button" onClick={onAdd} className={primary}>{t("action.add")}</button>}
+        {actions}
+      </div>}
     </div>
   )
 }

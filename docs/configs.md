@@ -20,6 +20,32 @@ none; a rule is added and taken off there the way the settings of a client do it
 `POST /api/configs` and `PUT /api/configs/{id}` take the rules in `rules` the same way. Removing an interface takes
 its name and the names of its clients off the rules, see [rules.md](rules.md).
 
+## Plain WireGuard
+
+Create a separate endpoint with its own UDP port for clients that do not support AmneziaWG. In
+`Obfuscation`, turn off `AmneziaWG`. Its settings are hidden and the saved configuration has no
+obfuscation parameters, including packet types, special packets, padding and timing overrides.
+Turning it back on before saving restores the draft settings. Enabling AmneziaWG on an existing
+plain endpoint loads fresh AmneziaWG defaults. The endpoint port, addresses and keys are preserved.
+Save the endpoint and enable it as usual.
+
+New endpoints have AmneziaWG enabled. Existing endpoints and imported files retain their protocol:
+fully plain configurations open with the switch off, while configurations with AmneziaWG parameters
+open with it on. Both protocols encrypt VPN traffic; this switch controls AmneziaWG obfuscation.
+
+An endpoint with all obfuscation settings empty or zero uses the standard WireGuard packet types
+1–4. Partly cleared packet types are rejected. Existing AmneziaWG endpoints retain their settings;
+changing an endpoint to plain WireGuard also requires updating its clients.
+
+Plain WireGuard has no AmneziaWG traffic obfuscation and can be recognized or blocked by DPI. The
+usual routing, NAT and firewall settings apply to this endpoint as well.
+
+The client export includes a `wireguard://` link and QR code for Happ when the endpoint is plain
+and the client has no effective preshared key. Create a separate client and clear its `Preshared
+key` field for this format; the endpoint preshared key must also be empty. This does not change
+the keys of existing clients. A client that needs a preshared key can still use the standard `.conf`
+export or its AmneziaGeo `vpn://` link. See [clients.md](clients.md).
+
 ## Rights
 
 | Route | Right |

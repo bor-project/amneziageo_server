@@ -8,6 +8,7 @@ import {
   channelWords,
   channels,
   createRelease,
+  deviceWord,
   dropReleaseFile,
   fileFault,
   isVersion,
@@ -75,7 +76,7 @@ function ReleaseForm({ held }: { held: ReleaseDetails | null }) {
   const [fault, setFault] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const typed = isVersion(version)
-  const slots = slotsOf(typed ? version : "x.x.x.x")
+  const slots = slotsOf(typed ? version : "x.x.x.x", made?.files ?? [])
   const first = params.get("archive") === "1"
 
   useTail([{ label: made === null ? t("releases.newTitle") : shownTag(made.release.tag) }])
@@ -253,18 +254,17 @@ function ReleaseForm({ held }: { held: ReleaseDetails | null }) {
             const kept = made?.files.find((one) => one.name === slot.name)
             const file = picked[at]
             const gone = kept !== undefined && dropped.includes(slot.name)
+            const devices = deviceWord(slot.name)
 
             return (
               <div
                 key={slot.name}
                 className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2 md:grid md:grid-cols-[minmax(0,1fr)_auto_11rem_13rem]"
               >
-                <span
-                  className={`min-w-0 basis-full truncate font-mono text-xs ${gone ? "text-faint line-through" : "text-ink"}`}
-                  title={slot.name}
-                >
-                  {slot.name}
-                </span>
+                <div className={`min-w-0 basis-full ${gone ? "text-faint line-through" : "text-ink"}`}>
+                  {devices !== null && <div className="text-xs">{t(devices)}</div>}
+                  <div className="truncate font-mono text-xs text-muted" title={slot.name}>{slot.name}</div>
+                </div>
                 <div className="flex items-center gap-2">
                   <Chooser
                     caption={t("releases.pick")}

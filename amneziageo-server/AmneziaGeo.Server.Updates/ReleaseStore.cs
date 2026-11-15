@@ -547,7 +547,7 @@ public sealed class ReleaseStore
         var manifest = Path.Combine(home, ReleaseManifest.FileName);
         var read = File.Exists(manifest) ? ReleaseManifest.Parse(File.ReadAllText(manifest)) : null;
         var files = new List<ReleaseFileInfo>();
-        foreach (var slot in ReleaseSlots.Of(tag.Version))
+        foreach (var slot in ReleaseSlots.Of(tag.Version, includeLegacy: true))
         {
             var path = Path.Combine(home, slot.Name);
             if (!File.Exists(path))

@@ -188,6 +188,10 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("DefaultKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Dns")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -207,6 +211,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DefaultKey")
+                        .IsUnique();
 
                     b.HasIndex("Name")
                         .IsUnique();
@@ -1237,6 +1244,10 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("DefaultKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Direct")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -1268,6 +1279,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DefaultKey")
+                        .IsUnique();
 
                     b.HasIndex("Name")
                         .IsUnique();
@@ -1555,14 +1569,14 @@ namespace AmneziaGeo.Server.Dal.Migrations
 
             modelBuilder.Entity("AmneziaGeo.Server.Dal.TransportProxyEntity", b =>
                 {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("AccessVersion")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0L);
-
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("AllowAnonymous")
                         .ValueGeneratedOnAdd()

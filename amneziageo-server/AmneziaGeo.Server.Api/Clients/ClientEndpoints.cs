@@ -243,7 +243,8 @@ public static class ClientEndpoints
             carried.Fault,
             carried.Detail,
             asked.Fault,
-            asked.Detail));
+            asked.Detail,
+            ClientWireLink.Link(endpoint, client, template, ClientText.Title(endpoint, client, naming, host))));
     }
 
     // What keeps the certificate of the panel from being taken at the host it was asked at; nothing over the loopback.

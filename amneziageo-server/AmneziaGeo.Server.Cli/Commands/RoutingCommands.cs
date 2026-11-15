@@ -20,6 +20,7 @@ public static class RoutingCommands
 
         return args.At(1) switch
         {
+            "defaults" => await DefaultsAsync(context, ct).ConfigureAwait(false),
             "export" => await ExportAsync(context, args, ct).ConfigureAwait(false),
             "import" => await ImportAsync(context, args, ct).ConfigureAwait(false),
             _ => Usage(),
@@ -147,5 +148,16 @@ public static class RoutingCommands
         return 2;
     }
 
-    private static int Usage() => Refuse("usage: amneziageo-server routing export <file> | import <file> [--apply]");
+    /// <summary>
+    /// Restores the bundled routing groups and presets.
+    /// </summary>
+    public static async Task<int> DefaultsAsync(Context context, CancellationToken ct)
+    {
+        var restored = await context.RoutingDefaults.RestoreAllAsync(ct).ConfigureAwait(false);
+        Terminal.Say($"added {restored.Groups} address groups and {restored.Presets} routing presets");
+
+        return 0;
+    }
+
+    private static int Usage() => Refuse("usage: amneziageo-server routing defaults | export <file> | import <file> [--apply]");
 }

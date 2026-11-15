@@ -172,6 +172,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
         builder.Entity<RoutingPresetEntity>(entity =>
         {
+            entity.Property(record => record.DefaultKey).HasMaxLength(32);
+            entity.HasIndex(record => record.DefaultKey).IsUnique();
             entity.Property(preset => preset.Name).HasMaxLength(PresetRules.MaxNameLength);
             entity.Property(preset => preset.Uid).HasMaxLength(PresetRules.UidLength);
             entity.HasIndex(preset => preset.Name).IsUnique();
@@ -277,6 +279,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
         builder.Entity<AddressGroupEntity>(entity =>
         {
+            entity.Property(record => record.DefaultKey).HasMaxLength(32);
+            entity.HasIndex(record => record.DefaultKey).IsUnique();
             entity.Property(group => group.Name).HasMaxLength(RouteRules.MaxNameLength);
             entity.Property(group => group.Dns).HasDefaultValue(string.Empty);
             entity.HasIndex(group => group.Name).IsUnique();

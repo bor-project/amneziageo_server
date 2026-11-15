@@ -40,6 +40,18 @@ container on a bare host as well, see [The menu](#the-menu).
 
 The container names in its log what of this the host lacks, as it starts.
 
+## Reboot during or after installation
+
+If the host installer pauses for a reboot, its one-shot systemd unit continues automatically at boot.
+Reconnect as root to check `systemctl status amneziageo-install.service` and read the private result in
+`/root/.amneziageo-install.log`. The host is ready when `/root/.amneziageo-install.status` says `done`.
+An error retains the saved answers for manual `install --resume`.
+See [the continuation steps](install.md#continuing-after-an-installation-reboot).
+
+After a completed installation, check the Docker daemon and the existing compose project in the directory
+printed by the installer. Generated projects use `restart: unless-stopped`; a container deliberately stopped
+before reboot stays stopped. See [the service checks](install.md#after-rebooting-an-installed-server).
+
 ## Build and start
 
 On the host, in a copy of the repository with its submodules:
