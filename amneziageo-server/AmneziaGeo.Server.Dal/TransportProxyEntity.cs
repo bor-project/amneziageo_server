@@ -35,6 +35,9 @@ public sealed class TransportProxyEntity
     public string ServerName { get; set; } = string.Empty;
     public string Pin { get; set; } = string.Empty;
     public string TargetsJson { get; set; } = string.Empty;
+    public string TokensJson { get; set; } = string.Empty;
+    public bool AllowAnonymous { get; set; }
+    public long AccessVersion { get; set; }
     public string Secret { get; set; } = string.Empty;
     public bool IsEnabled { get; set; } = true;
     public bool Opened { get; set; }

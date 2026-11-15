@@ -51,6 +51,8 @@ public sealed record ServiceEndpoint(long ConfigId, string Name, bool WebSocket,
 
     public ProxyTargets? Targets { get; init; }
 
+    public string AccessRevision { get; init; } = string.Empty;
+
     /// <summary>
     /// Whether the port is the one of the endpoint, where a file without the line of the services asks after they
     /// moved.
@@ -398,6 +400,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         }
 
         var registered = await proxies.ListAsync(ct).ConfigureAwait(false);
+        var policies = await proxies.TargetsAsync(registered, ct).ConfigureAwait(false);
         var faults = new Dictionary<long, string>();
         foreach (var proxy in registered.Where(proxy => proxy.IsEnabled))
         {
@@ -415,7 +418,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             .Select(group => group.Single());
         _fronts.ApplyLegacyPolicies(unambiguous.Where(proxy => proxy.IsEnabled && !faults.ContainsKey(-proxy.Id))
             .Join(configs.Where(config => config.IsEnabled), proxy => proxy.LegacyConfigId, config => (long?)config.Id,
-                (proxy, config) => (proxy.Id, Policy: (ProxyTargetRules.Read(proxy.TargetsJson), config.ListenPort)))
+                (proxy, config) => (proxy.Id, Policy: (policies[proxy.Id], config.ListenPort)))
             .ToDictionary(pair => pair.Id, pair => pair.Policy));
         wanted = [.. wanted.Select(point => point with
         {
@@ -433,7 +436,8 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
                 ProxyId = proxy.Id, XHttp = proxy.IsHttpV2,
                 UseCertificate = true, HttpMethod = proxy.HttpMethod,
                 PublicHost = proxy.Host, Certificate = proxy.Certificate, CertificateKey = proxy.CertificateKey,
-                Targets = ProxyTargetRules.Read(proxy.TargetsJson),
+                Targets = policies[proxy.Id],
+                AccessRevision = proxies.AccessRevision(proxy),
             };
             var listenPort = proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort;
             var at = wanted.FindIndex(point => point.Port == listenPort);
@@ -575,7 +579,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 
         foreach (var endpoint in kept)
         {
-            var state = await _fronts.ApplyAsync(endpoint.Name, endpoint.Front, endpoint.Target, endpoint.Path, ct, endpoint.Targets).ConfigureAwait(false);
+            var state = await _fronts.ApplyAsync(endpoint.Name, endpoint.Front, endpoint.Target, endpoint.Path, ct, endpoint.Targets, endpoint.AccessRevision).ConfigureAwait(false);
             if (!state.IsRunning || state.Message.Length > 0)
             {
                 _logger.LogWarning("the websocket front of {Name} is down: {Reason}", endpoint.Name, state.Message);
@@ -709,6 +713,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             using var scope = _scopes.CreateScope();
             var store = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
             var registered = await store.ListAsync(ct).ConfigureAwait(false);
+            var policies = await store.TargetsAsync(registered, ct).ConfigureAwait(false);
             var panel = await scope.ServiceProvider.GetRequiredService<PanelStore>().ReadAsync(ct).ConfigureAwait(false);
             var rejected = registered.Where(proxy => proxy.IsEnabled)
                 .Select(proxy => (proxy.Id, Fault: ProxySecurity.Check(proxy, Listening.Chain(_options, panel), Listening.Key(_options, panel))))
@@ -717,7 +722,8 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             foreach (var proxy in registered.Where(proxy => _frontOptions.Enabled && proxy.Hosted && proxy.IsEnabled && proxy.IsHttpV2 && !rejected.ContainsKey(proxy.Id)))
             {
                 var credentials = await store.CredentialsAsync(proxy, ct).ConfigureAwait(false);
-                wanted.Add(new XHttpProxy(proxy.Id, ProxyPort(proxy.Id), proxy.Path, credentials, ProxyTargetRules.Read(proxy.TargetsJson), proxy.HttpMethod));
+                wanted.Add(new XHttpProxy(proxy.Id, ProxyPort(proxy.Id), proxy.Path, credentials, policies[proxy.Id], proxy.HttpMethod,
+                    proxy.AllowAnonymous, store.BearerIds(proxy)));
             }
 
             var faults = (await _xhttp.ApplyAsync(wanted, ct).ConfigureAwait(false)).ToDictionary();
@@ -734,7 +740,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
                         await store.CredentialsAsync(proxy, ct).ConfigureAwait(false), true,
                         ListenPort: proxy.ListenPort, Certificate: proxy.Certificate.Length > 0 ? proxy.Certificate : Listening.Chain(_options, panel),
                         CertificateKey: proxy.CertificateKey.Length > 0 ? proxy.CertificateKey : proxy.Certificate.Length > 0 ? proxy.Certificate : Listening.Key(_options, panel),
-                        Targets: ProxyTargetRules.Read(proxy.TargetsJson), ServerName: proxy.ServerName, Pin: proxy.Pin));
+                        Targets: policies[proxy.Id], ServerName: proxy.ServerName, Pin: proxy.Pin, AllowAnonymous: proxy.AllowAnonymous));
                 }
 
                 foreach (var (id, fault) in await _quic.ApplyAsync(quic, ct).ConfigureAwait(false))

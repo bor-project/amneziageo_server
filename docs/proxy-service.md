@@ -24,6 +24,22 @@ Clear “Run on this server” to publish a proxy hosted elsewhere. Certificate 
 
 The catalog contains `version: 1` and a `proxies` array. Each entry carries `id`, `name`, `transport` (`websocket`, `http`, `quic`), `host`, `port`, `path`, `credentials`, `useCertificate`, and optional `listenPort`, certificate paths, `originHttp` and `targets`. HTTP requires `protocolVersion: 2` and `httpMethod: GET|POST`. `targets` uses the existing `restricted`/`destinations` policy; restricted entries preserve destination boundaries for all transports. Other protocol versions are rejected.
 
+## Destination scope
+
+Access tokens, anonymous mode and client integration are described in [Proxy access contract](proxy-frontend-contract.md).
+
+The panel offers three destination modes independently of the public proxy host, TLS certificate and CDN:
+
+* **Local interfaces only** is the default for a new proxy. The management API stores `targets: { "restricted": true, "destinations": [], "local": true }`. The panel expands it from enabled VPN interfaces: their configured endpoint hosts, interface addresses, and IPv4/IPv6 loopback, paired with each interface's own UDP port. It does not authorize unrelated UDP ports or disabled interfaces. Set each interface's public endpoint host explicitly when clients use a domain or an address different from the interface addresses.
+* **Specified addresses and domains** stores `restricted: true`, `local: false`, and one to 64 exact host/UDP-port pairs in `destinations`. It authorizes precisely those pairs, including local destinations only when listed. Domain identity follows its configured DNS resolution; specifying a domain does not authorize arbitrary aliases or addresses returned by a client's resolver.
+* **Any destination** stores `restricted: false` and `local: false`. It preserves the existing authenticated unrestricted forwarding mode.
+
+Local policies are expanded before generating WS, HTTP GET/POST and QUIC backend rules, checking WS handshakes/probes, exporting a standalone catalog, and publishing hello. An unexpanded local policy, missing local interfaces, malformed policy or expansion exceeding the existing 64-destination limit never becomes unrestricted. Existing catalog entries without `local` retain their previous selected/any policy. API updates omitting `targets` or sending `targets: null` preserve the stored policy. No credential, proxy id, catalog source or template membership is regenerated.
+
+Both hello contracts (`proxies` version 1 and `proxiesV2` version 2) add `scope: "local"|"selected"|"any"` to each item. `targets` retains its existing concrete `restricted`/`destinations` representation: local policies publish the expanded allowlist, selected policies publish their exact allowlist, and unrestricted items omit the effective restriction. Existing clients can use `targets` without recognizing `scope`; clients using `scope` should still filter configurations against the effective `targets`. The publishing catalog remains the template's selection rather than being filtered to only the currently connected VPN interface.
+
+Changing an interface updates local policies when services settle; HTTP and QUIC also refresh through the existing runtime watcher. Exported standalone catalogs contain a concrete snapshot of the management server's permitted destinations. Repeat the export after changing relevant interface hosts, ports, addresses or enabled state. Destination restrictions are enforced by the proxy backend in addition to the client-side choice filter.
+
 ## HTTP transport
 
 GET is bodyless. Uplink datagrams use `X-WG-Data`; downlink uses responses to polling requests. POST carries the same framed datagrams in its body. All operations of a POST endpoint use POST, including challenge and pull. Methods are selected explicitly; there is no fallback between GET, POST, WS, QUIC or direct UDP. Datagrams are limited to2048 bytes and upload batches to4096 bytes.

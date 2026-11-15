@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
 
 export interface ProxyDestination { host: string; port: number }
-export interface ProxyTargets { restricted: boolean; destinations: ProxyDestination[] }
+export interface ProxyTargets { restricted: boolean; destinations: ProxyDestination[]; local?: boolean }
 
 export interface ProxyDraft {
   name: string
@@ -17,6 +17,7 @@ export interface ProxyDraft {
   httpMethod: "GET" | "POST"
   protocolVersion: number
   isEnabled: boolean
+  allowAnonymous: boolean
   opened: boolean
   certificate: string
   certificateKey: string

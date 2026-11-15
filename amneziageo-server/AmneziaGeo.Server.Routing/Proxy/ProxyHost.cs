@@ -68,12 +68,21 @@ public sealed partial class ProxyHost
     /// <summary>
     /// Puts the front of an interface on the host, starting its service over only when its files change or it is down.
     /// </summary>
-    public async Task<ProxyState> ApplyAsync(string name, int front, int target, string path, CancellationToken ct, ProxyTargets? targets = null)
+    public async Task<ProxyState> ApplyAsync(string name, int front, int target, string path, CancellationToken ct, ProxyTargets? targets = null, string accessRevision = "")
     {
         var plan = default(LeasePlan);
         try
         {
             var whitelist = ProxyFile.Whitelist(target, path, targets);
+            if (accessRevision.Length > 0)
+            {
+                if (accessRevision.Length != 64 || !accessRevision.All(char.IsAsciiHexDigit))
+                {
+                    throw new ArgumentException("Invalid proxy access revision.");
+                }
+
+                whitelist += "# access: " + accessRevision + "\n";
+            }
             var arguments = ProxyFile.Line(front, RulesPath(name));
             plan = target == 0 ? Desire(name, whitelist + "\0" + arguments) : null;
             var written = await WriteAsync(name, whitelist, arguments, ct).ConfigureAwait(false);

@@ -21,6 +21,38 @@ namespace AmneziaGeo.Server.Tests;
 public partial class ServiceTests
 {
     [Fact]
+    public async Task RevokingAManualTokenRetiresExistingWebSocketLeases()
+    {
+        using var bench = new Bench();
+        var store = new TransportProxyStore(bench.Db);
+        var proxy = await store.SaveAsync(0, new TransportProxyEntity { Hosted = false, Name = "relay", Host = "proxy.example", Port = 443, Path = "relay" }, default).ConfigureAwait(false);
+        var minted = (await store.MintAsync(proxy.Id, "phone", default).ConfigureAwait(false)).Minted!;
+        proxy = (await store.FindAsync(proxy.Id, default).ConfigureAwait(false))!;
+        var folder = Path.Combine(Path.GetTempPath(), "token-ws-generation-" + Guid.NewGuid().ToString("N"));
+        var host = new ProxyHost(new Ledger(), new GenerationRunner(), folder);
+        try
+        {
+            Assert.True((await host.ApplyAsync("relay", 31234, 0, "relay", default, accessRevision: store.AccessRevision(proxy)).ConfigureAwait(false)).IsRunning);
+            Assert.True(host.TryLease("relay", out var old));
+            using var held = old;
+            Assert.DoesNotContain(minted.Secret, await File.ReadAllTextAsync(host.RulesPath("relay")).ConfigureAwait(false));
+            Assert.True(await store.RevokeAsync(proxy.Id, minted.Token.Id, default).ConfigureAwait(false));
+            proxy = (await store.FindAsync(proxy.Id, default).ConfigureAwait(false))!;
+            await host.ApplyAsync("relay", 31234, 0, "relay", default, accessRevision: store.AccessRevision(proxy)).ConfigureAwait(false);
+            Assert.True(old.Stopped.IsCancellationRequested);
+            Assert.True(host.CanRelay("relay"));
+        }
+        finally
+        {
+            await host.WithdrawAsync("relay", default).ConfigureAwait(false);
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task ModernWsRevokesAnAlreadyUpgradedConnectionWhenPolicyRestartFails()
     {
         using var bench = new Bench();

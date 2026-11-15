@@ -22,6 +22,9 @@ export interface Session {
 }
 
 const complaints: Record<string, TextKey> = {
+  "bad-proxy-token-name": "error.badName",
+  "proxy-token-name-taken": "error.nameTaken",
+  "proxy-token-limit": "error.proxyTokenLimit",
   "proxy-tls-required": "error.proxyTlsRequired",
   "proxy-certificate-missing": "error.proxyCertificateMissing",
   "proxy-certificate-unreadable": "error.proxyCertificateUnreadable",

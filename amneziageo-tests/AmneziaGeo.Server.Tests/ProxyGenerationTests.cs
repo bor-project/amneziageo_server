@@ -25,6 +25,29 @@ public sealed class ProxyGenerationTests
     private static readonly ProxyTargets Restricted = new(true, [new("127.0.0.1", 51820)]);
 
     [Fact]
+    public async Task HttpBearerPolicyFollowsTheActiveChildGeneration()
+    {
+        Skip.IfNot(OperatingSystem.IsLinux());
+        using var place = new Place();
+        await using var host = place.Host(process => process.Kill(true));
+        var original = place.Proxy;
+        var credential = Assert.Single(original.Credentials);
+        var identity = ProxyAccess.HttpIdentity(credential);
+        var authenticated = original with { BearerIds = [identity] };
+        Assert.Empty(await host.ApplyAsync([authenticated], default).ConfigureAwait(false));
+        Assert.False(host.AllowsHeaders(original.Id, "", identity));
+        Assert.True(host.AllowsHeaders(original.Id, "Bearer " + credential, identity));
+        Assert.False(host.AllowsHeaders(original.Id, "Bearer " + Guid.NewGuid().ToString("D"), identity));
+        Assert.True(host.TryLease(original.Id, out var old));
+        using var held = old;
+        Assert.Empty(await host.ApplyAsync([authenticated with { AllowAnonymous = true }], default).ConfigureAwait(false));
+        Assert.True(old.Stopped.IsCancellationRequested);
+        Assert.True(host.AllowsHeaders(original.Id, "", identity));
+        await host.ApplyAsync([], default).ConfigureAwait(false);
+        Assert.False(host.AllowsHeaders(original.Id, "Bearer " + credential, identity));
+    }
+
+    [Fact]
     public void RetirementCancelsExistingUsersAndAllowsLateLinkedRegistration()
     {
         using var lifetime = new ProxyLifetime();

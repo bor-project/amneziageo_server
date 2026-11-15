@@ -51,7 +51,7 @@ public static class ProxyFile
     public static string Whitelist(int target, string path, ProxyTargets? targets = null)
     {
         ArgumentNullException.ThrowIfNull(path);
-        var effective = ProxyTargetRules.TryNormalize(targets, out var normalized) ? normalized : ProxyTargetRules.Denied;
+        var effective = ProxyTargetRules.TryNormalize(targets, out var normalized) && normalized is not { Local: true } ? normalized : ProxyTargetRules.Denied;
         if (target <= 0 && effective is { Restricted: true })
         {
             return Restricted(path, effective);

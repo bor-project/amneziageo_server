@@ -14,7 +14,7 @@ public sealed record ProxyDestination(string Host, int Port);
 /// <summary>
 /// Describes the destinations a proxy accepts.
 /// </summary>
-public sealed record ProxyTargets(bool Restricted, IReadOnlyList<ProxyDestination> Destinations);
+public sealed record ProxyTargets(bool Restricted, IReadOnlyList<ProxyDestination> Destinations, bool Local = false);
 
 /// <summary>
 /// Validates and compares proxy destinations.
@@ -26,6 +26,32 @@ public static class ProxyTargetRules
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public static ProxyTargets Denied { get; } = new(true, []);
+
+    public static ProxyTargets LocalOnly { get; } = new(true, [], true);
+
+    /// <summary>
+    /// Returns the destination mode.
+    /// </summary>
+    public static string Mode(ProxyTargets? targets) => targets is { Local: true } ? "local"
+        : targets is { Restricted: true } ? "selected" : "any";
+
+    /// <summary>
+    /// Expands the local interface destinations.
+    /// </summary>
+    public static ProxyTargets? Expand(ProxyTargets? targets, IReadOnlyList<ProxyDestination> local)
+    {
+        if (!TryNormalize(targets, out var policy))
+        {
+            return Denied;
+        }
+
+        if (policy is not { Local: true })
+        {
+            return policy;
+        }
+
+        return TryNormalize(new ProxyTargets(true, local), out var expanded) ? expanded : Denied;
+    }
 
     /// <summary>
     /// Normalizes a destination host.
@@ -115,13 +141,14 @@ public static class ProxyTargetRules
             }
         }
 
-        if (targets.Restricted && unique.Count == 0)
+        if (targets.Local && (!targets.Restricted || unique.Count != 0)
+            || targets.Restricted && unique.Count == 0 && !targets.Local)
         {
             return false;
         }
 
         normalized = new ProxyTargets(targets.Restricted, [.. unique.Values
-            .OrderBy(destination => destination.Host, StringComparer.Ordinal).ThenBy(destination => destination.Port)]);
+            .OrderBy(destination => destination.Host, StringComparer.Ordinal).ThenBy(destination => destination.Port)], targets.Local);
         return true;
     }
 
@@ -141,7 +168,8 @@ public static class ProxyTargetRules
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("restricted", out var restricted) || restricted.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
-                || !root.TryGetProperty("destinations", out var destinations) || destinations.ValueKind != JsonValueKind.Array)
+                || !root.TryGetProperty("destinations", out var destinations) || destinations.ValueKind != JsonValueKind.Array
+                || root.TryGetProperty("local", out var local) && local.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
             {
                 return Denied;
             }
@@ -180,7 +208,7 @@ public static class ProxyTargetRules
             return false;
         }
 
-        if (!TryNormalize(targets, out var policy))
+        if (!TryNormalize(targets, out var policy) || policy is { Local: true })
         {
             return false;
         }

@@ -1,4 +1,5 @@
 using System.Globalization;
+using AmneziaGeo.Server.Core.Proxy;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using AmneziaGeo.Server.Awg.Config;
@@ -11,7 +12,7 @@ namespace AmneziaGeo.Server.Dal;
 /// <summary>
 /// Reads the transport proxy catalog.
 /// </summary>
-public sealed class TransportProxyStore
+public sealed partial class TransportProxyStore
 {
     private readonly AppDbContext _db;
     private readonly ILogger<TransportProxyStore>? _logger;
@@ -125,6 +126,31 @@ public sealed class TransportProxyStore
         _db.TransportProxies.AsNoTracking().SingleOrDefaultAsync(proxy => proxy.Id == id, ct);
 
     /// <summary>
+    /// Resolves the destination policies of the catalog.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<long, ProxyTargets?>> TargetsAsync(IReadOnlyList<TransportProxyEntity> proxies, CancellationToken ct)
+    {
+        var policies = proxies.ToDictionary(proxy => proxy.Id, proxy => ProxyTargetRules.Read(proxy.TargetsJson));
+        if (!policies.Values.Any(policy => policy is { Local: true }))
+        {
+            return policies;
+        }
+
+        var configs = await new ConfigStore(_db).ListAsync(ct).ConfigureAwait(false);
+        var local = configs.Where(config => config.IsEnabled).SelectMany(config =>
+            new[] { "127.0.0.1", "::1", config.Host }.Concat(config.Address.Select(address => address.Split('/')[0]))
+                .Where(host => ProxyTargetRules.TryHost(host, out _))
+                .Select(host => new ProxyDestination(host, config.ListenPort))).ToArray();
+        return policies.ToDictionary(pair => pair.Key, pair => ProxyTargetRules.Expand(pair.Value, local));
+    }
+
+    /// <summary>
+    /// Resolves the destination policy of a proxy.
+    /// </summary>
+    public async Task<ProxyTargets?> TargetsAsync(TransportProxyEntity proxy, CancellationToken ct) =>
+        (await TargetsAsync([proxy], ct).ConfigureAwait(false))[proxy.Id];
+
+    /// <summary>
     /// Reports whether a proxy uses a port.
     /// </summary>
     public Task<bool> ServesAsync(int port, CancellationToken ct) =>
@@ -162,6 +188,12 @@ public sealed class TransportProxyStore
         held.ServerName = draft.ServerName.Trim();
         held.Pin = draft.Pin.Trim();
         held.TargetsJson = draft.TargetsJson;
+        if (held.AllowAnonymous && !draft.AllowAnonymous)
+        {
+            held.AccessVersion++;
+        }
+
+        held.AllowAnonymous = draft.AllowAnonymous;
         held.IsEnabled = draft.IsEnabled;
         held.Opened = draft.Opened;
         held.UpdatedUtc = DateTimeOffset.UtcNow;
@@ -217,7 +249,8 @@ public sealed class TransportProxyStore
         var clients = await _db.Clients.AsNoTracking()
             .Where(client => client.IsEnabled && client.TemplateId != null && selected.Contains(client.TemplateId.Value))
             .Select(client => client.Id).ToListAsync(ct).ConfigureAwait(false);
-        return [.. clients.Select(id => Credential(proxy, id))];
+        var credentials = clients.Select(id => Credential(proxy, id)).Concat(TokenCredentials(proxy));
+        return [.. (proxy.AllowAnonymous ? credentials.Append(ProxyAccess.AnonymousCredential) : credentials).Distinct(StringComparer.Ordinal)];
     }
 
     /// <summary>

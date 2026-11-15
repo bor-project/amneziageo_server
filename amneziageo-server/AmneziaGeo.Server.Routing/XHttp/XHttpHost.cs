@@ -26,6 +26,7 @@ public sealed class XHttpHost : IAsyncDisposable
     private readonly ConcurrentDictionary<long, Child> _children = new();
     private readonly ConcurrentDictionary<long, XHttpState> _states = new();
     private volatile IReadOnlyDictionary<long, string> _desired = new Dictionary<long, string>();
+    private volatile IReadOnlyDictionary<long, (string Text, XHttpProxy Proxy)> _headers = new Dictionary<long, (string, XHttpProxy)>();
     private readonly Action<Process> _kill;
     private bool _disposed;
 
@@ -75,6 +76,17 @@ public sealed class XHttpHost : IAsyncDisposable
     {
         var desired = _desired;
         return desired.TryGetValue(id, out var text) && _children.TryGetValue(id, out var child) && child.CanRelay(text);
+    }
+
+    /// <summary>
+    /// Checks the active HTTP authorization policy.
+    /// </summary>
+    public bool AllowsHeaders(long id, string authorization, string identity)
+    {
+        var desired = _desired;
+        return desired.TryGetValue(id, out var text) && _headers.TryGetValue(id, out var policy) && policy.Text == text
+            && _children.TryGetValue(id, out var child) && child.CanRelay(text)
+            && ProxyAccess.AllowsHttp(policy.Proxy.AllowAnonymous, policy.Proxy.BearerIds ?? [], authorization, identity);
     }
 
     /// <summary>
@@ -141,6 +153,7 @@ public sealed class XHttpHost : IAsyncDisposable
                 }
             }
 
+            _headers = desired.ToDictionary(pair => pair.Key, pair => (pair.Value.Text, pair.Value.Proxy));
             _desired = desired.ToDictionary(pair => pair.Key, pair => pair.Value.Text);
             foreach (var (id, child) in _children)
             {

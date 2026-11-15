@@ -14,6 +14,7 @@ import { danger, footer, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { same } from "@/store/draftSlice"
 import { useSpot } from "@/store/spots"
+import { ProxyTokens } from "@/pages/ProxyTokenPage"
 
 export function ProxyPage() {
   const { proxyId } = useParams()
@@ -35,12 +36,13 @@ function ProxyForm({ start }: { start: TransportProxy }) {
   const save = useSaveProxy()
   const settings = usePanel().data
   const initial = { ...start, transport: start.transport === "xhttp" && start.protocolVersion === 2 ? "http" as const : start.transport,
-    useCertificate: start.useCertificate ?? true, targets: start.targets ?? { restricted: false, destinations: [] } }
+    useCertificate: start.useCertificate ?? true, allowAnonymous: start.allowAnonymous ?? false, targets: start.targets ?? { restricted: false, destinations: [] } }
   const [draft, setDraft] = useState<ProxyDraft>(initial)
   const [asking, setAsking] = useState(false)
   const edited = !same(draft, initial)
   const targets = draft.targets!
-  const targetsValid = targets.destinations.length <= 64 && (!targets.restricted || targets.destinations.length > 0) && targets.destinations.every((one) => one.host.trim().length > 0 && one.port >= 1 && one.port <= 65535)
+  const mode = targets.local ? "local" : targets.restricted ? "selected" : "any"
+  const targetsValid = targets.destinations.length <= 64 && (mode !== "selected" || targets.destinations.length > 0) && targets.destinations.every((one) => one.host.trim().length > 0 && one.port >= 1 && one.port <= 65535)
   const paths = [...usePathHolders({ proxy: start.id, config: start.legacyConfigId ?? undefined }), ...useSocketHolders({ config: start.legacyConfigId ?? undefined })]
   const listenPort = draft.listenPort || draft.port
   const path = pathFault(t, draft.path, listenPort, paths)
@@ -85,15 +87,21 @@ function ProxyForm({ start }: { start: TransportProxy }) {
     </Part>
     <Part title={t("proxies.access")}>
       <Switch id="proxy-opened" caption={t("proxies.openPort")} value={draft.opened} onChange={(opened) => put({ opened })} />
+      <Switch id="proxy-anonymous" caption={t("proxies.allowAnonymous")} value={draft.allowAnonymous} onChange={(allowAnonymous) => put({ allowAnonymous })} />
     </Part>
+    {start.id > 0 && <ProxyTokens id={start.id} disabled={edited || save.isPending} />}
     <Part title={t("proxies.targets")}>
-      <div className="sm:col-span-2"><Switch id="proxy-restricted" caption={t("proxies.restricted")} value={targets.restricted} onChange={(restricted) => put({ targets: { ...targets, restricted } })} /></div>
-      {targets.destinations.map((one, index) => <div key={index} className="grid grid-cols-[1fr_8rem_auto] items-end gap-2 sm:col-span-2">
+      <Pick id="proxy-target-mode" caption={t("proxies.targetMode")} value={mode} onChange={(value) => put({ targets: { restricted: value !== "any", local: value === "local", destinations: value === "local" ? [] : targets.destinations } })}>
+        <option value="local">{t("proxies.localTargets")}</option>
+        <option value="selected">{t("proxies.selectedTargets")}</option>
+        <option value="any">{t("proxies.anyTargets")}</option>
+      </Pick>
+      {mode === "selected" && targets.destinations.map((one, index) => <div key={index} className="grid grid-cols-[1fr_8rem_auto] items-end gap-2 sm:col-span-2">
         <Line id={`proxy-target-host-${index}`} caption={t("proxies.targetHost")} value={one.host} onChange={(host) => destination(index, { host })} />
         <Count id={`proxy-target-port-${index}`} caption={t("proxies.port")} value={one.port} onChange={(port) => destination(index, { port })} />
         <button type="button" className={secondary} aria-label={t("geo.remove")} onClick={() => put({ targets: { ...targets, destinations: targets.destinations.filter((_, at) => at !== index) } })}>×</button>
       </div>)}
-      <div className="sm:col-span-2"><button type="button" className={secondary} disabled={targets.destinations.length >= 64} onClick={() => put({ targets: { ...targets, destinations: [...targets.destinations, { host: "", port: 51820 }] } })}>{t("action.add")}</button></div>
+      {mode === "selected" && <div className="sm:col-span-2"><button type="button" className={secondary} disabled={targets.destinations.length >= 64} onClick={() => put({ targets: { ...targets, destinations: [...targets.destinations, { host: "", port: 51820 }] } })}>{t("action.add")}</button></div>}
     </Part>
     <Part title={t("settings.partCertificate")}>
       {(!draft.useCertificate || draft.originHttp) && <div className="sm:col-span-2"><button type="button" className={secondary} onClick={() => put({ useCertificate: true, originHttp: false })}>{t("proxies.enableTls")}</button></div>}

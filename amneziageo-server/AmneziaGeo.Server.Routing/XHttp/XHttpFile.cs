@@ -6,7 +6,8 @@ namespace AmneziaGeo.Server.Routing.XHttp;
 /// <summary>
 /// Defines an HTTP GET listener and its users.
 /// </summary>
-public sealed record XHttpProxy(long Id, int Port, string Path, IReadOnlyList<string> Credentials, ProxyTargets? Targets = null, string Method = "GET");
+public sealed record XHttpProxy(long Id, int Port, string Path, IReadOnlyList<string> Credentials, ProxyTargets? Targets = null, string Method = "GET",
+    bool AllowAnonymous = false, IReadOnlyList<string>? BearerIds = null);
 
 /// <summary>
 /// Renders the configuration of an HTTP GET listener.
@@ -44,16 +45,22 @@ public static class XHttpFile
         }
 
         ArgumentNullException.ThrowIfNull(proxy.Credentials);
-        if (proxy.Credentials.Count == 0)
+        if (proxy.Credentials.Count == 0 && !proxy.AllowAnonymous)
         {
             throw new ArgumentException("The listener requires at least one user.", nameof(proxy));
         }
 
-        var users = proxy.Credentials.Select(ParseCredential)
+        var users = ProxyAccess.Credentials(proxy.Credentials, proxy.AllowAnonymous).Select(ParseCredential)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        var targets = ProxyTargetRules.TryNormalize(proxy.Targets, out var normalized) ? normalized : ProxyTargetRules.Denied;
+        var identities = users.Select(ProxyAccess.HttpIdentity).ToHashSet(StringComparer.Ordinal);
+        var bearerIds = (proxy.BearerIds ?? []).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (bearerIds.Any(id => id is null || id.Length != 64 || !identities.Contains(id)))
+        {
+            throw new ArgumentException("The bearer identity does not belong to a listener credential.", nameof(proxy));
+        }
+        var targets = ProxyTargetRules.TryNormalize(proxy.Targets, out var normalized) && normalized is not { Local: true } ? normalized : ProxyTargetRules.Denied;
         var configuration = new
         {
             httpGet = new
@@ -63,6 +70,8 @@ public static class XHttpFile
                 port = proxy.Port,
                 path = $"/{path}/",
                 credentials = users,
+                allowAnonymous = proxy.AllowAnonymous,
+                bearerIds,
                 restricted = targets?.Restricted ?? false,
                 destinations = targets is { Restricted: true }
                     ? targets.Destinations.Select(destination => new { host = destination.Host, port = destination.Port }).ToArray() : [],

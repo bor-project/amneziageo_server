@@ -13,7 +13,7 @@ public sealed partial class ProxyHost
     {
         var desired = policies.ToDictionary(pair => pair.Key, pair =>
         {
-            var policy = ProxyTargetRules.TryNormalize(pair.Value.Targets, out var normalized) ? normalized : ProxyTargetRules.Denied;
+            var policy = ProxyTargetRules.TryNormalize(pair.Value.Targets, out var normalized) && normalized is not { Local: true } ? normalized : ProxyTargetRules.Denied;
             var effective = policy is { Restricted: false } ? null : policy;
             return ProxyTargetRules.Write(effective) + "\0" + pair.Value.Port;
         });

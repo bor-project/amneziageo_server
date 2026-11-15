@@ -31,10 +31,36 @@ public static class ProxyEndpoints
         writing.MapGet("/draft", (PanelSettings panel) => Results.Ok(ProxyResponse.Of(new TransportProxyEntity
         {
             Port = panel.Port, Path = ConfigDefaults.WebSocketPath(), UseCertificate = true,
+            TargetsJson = ProxyTargetRules.Write(ProxyTargetRules.LocalOnly),
         })));
         writing.MapPost("/", (ProxyRequest draft, HttpContext context, CancellationToken ct) => SaveAsync(0, draft, context, ct));
         writing.MapPut("/{id:long}", SaveAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
+        writing.MapGet("/{id:long}/tokens", async (long id, TransportProxyStore store, CancellationToken ct) =>
+            await store.FindAsync(id, ct).ConfigureAwait(false) is { } proxy ? Results.Ok(store.Tokens(proxy)) : Results.NotFound());
+        writing.MapPost("/{id:long}/tokens", async (long id, ProxyTokenRequest request, TransportProxyStore store, HttpContext context, CancellationToken ct) =>
+        {
+            var result = await store.MintAsync(id, request.Name ?? string.Empty, ct).ConfigureAwait(false);
+            if (result.Minted is null)
+            {
+                return Refuse(result.Error, result.Error, result.Error == "unknown-proxy" ? 404 : result.Error == "bad-proxy-token-name" ? 400 : 409);
+            }
+
+            await SettleAsync(context.RequestServices, ct).ConfigureAwait(false);
+            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Headers.Pragma = "no-cache";
+            return Results.Ok(result.Minted);
+        });
+        writing.MapDelete("/{id:long}/tokens/{tokenId:guid}", async (long id, Guid tokenId, TransportProxyStore store, HttpContext context, CancellationToken ct) =>
+        {
+            if (!await store.RevokeAsync(id, tokenId.ToString("D"), ct).ConfigureAwait(false))
+            {
+                return Results.NotFound();
+            }
+
+            await SettleAsync(context.RequestServices, ct).ConfigureAwait(false);
+            return Results.NoContent();
+        });
         writing.MapGet("/{id:long}/export", async (long id, TransportProxyStore store, HttpContext context, CancellationToken ct) =>
         {
             var proxy = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -60,7 +86,7 @@ public static class ProxyEndpoints
                 proxy.HttpMethod, proxy.ProtocolVersion, proxy.ListenPort,
                 proxy.Certificate.Length > 0 ? proxy.Certificate : Listening.Chain(options, panel),
                 proxy.CertificateKey.Length > 0 ? proxy.CertificateKey : proxy.Certificate.Length > 0 ? proxy.Certificate : Listening.Key(options, panel),
-                false, ProxyTargetRules.Read(proxy.TargetsJson), proxy.ServerName, proxy.Pin)]);
+                false, await store.TargetsAsync(proxy, ct).ConfigureAwait(false), proxy.ServerName, proxy.Pin, proxy.AllowAnonymous, store.BearerIds(proxy))]);
             context.Response.Headers.CacheControl = "no-store";
             return Results.Json(catalog, ProxyCatalog.Json);
         });
@@ -149,7 +175,7 @@ public static class ProxyEndpoints
 /// Carries proxy settings from the panel.
 /// </summary>
 public sealed record ProxyRequest(string Name, string Transport, string Host, int Port, string Path,
-    bool IsEnabled, string? Certificate = null, string? CertificateKey = null, string? ServerName = null, string? Pin = null, bool? Opened = null, bool? Keep = null, int? ListenPort = null, bool? OriginHttp = null, ProxyTargets? Targets = null, bool? UseCertificate = null, string? HttpMethod = null, int? ProtocolVersion = null, bool? Hosted = null)
+    bool IsEnabled, string? Certificate = null, string? CertificateKey = null, string? ServerName = null, string? Pin = null, bool? Opened = null, bool? Keep = null, int? ListenPort = null, bool? OriginHttp = null, ProxyTargets? Targets = null, bool? UseCertificate = null, string? HttpMethod = null, int? ProtocolVersion = null, bool? Hosted = null, bool? AllowAnonymous = null)
 {
     /// <summary>
     /// Returns the proxy settings.
@@ -159,12 +185,13 @@ public sealed record ProxyRequest(string Name, string Transport, string Host, in
         Name = Name ?? "", Transport = Transport ?? "", Host = Host ?? "", Port = Port,
         ListenPort = ListenPort ?? held?.ListenPort ?? 0, OriginHttp = OriginHttp ?? held?.OriginHttp ?? false, Path = Path ?? "",
         Hosted = Hosted ?? held?.Hosted ?? true,
+        AllowAnonymous = AllowAnonymous ?? held?.AllowAnonymous ?? false,
         UseCertificate = UseCertificate ?? held?.UseCertificate,
         HttpMethod = HttpMethod ?? held?.HttpMethod ?? "GET",
         ProtocolVersion = ProtocolVersion ?? (Transport == "http" ? 2 : held?.ProtocolVersion ?? 0),
         IsEnabled = IsEnabled, Opened = Opened ?? held?.Opened ?? false, Certificate = Certificate ?? held?.Certificate ?? "", CertificateKey = CertificateKey ?? held?.CertificateKey ?? "",
         ServerName = ServerName ?? held?.ServerName ?? "", Pin = Pin ?? held?.Pin ?? "",
-        TargetsJson = Targets is null ? held?.TargetsJson ?? string.Empty : ProxyTargetRules.Write(
+        TargetsJson = Targets is null ? held?.TargetsJson ?? ProxyTargetRules.Write(ProxyTargetRules.LocalOnly) : ProxyTargetRules.Write(
             ProxyTargetRules.TryNormalize(Targets, out var normalized) ? normalized : Targets),
     };
 }
@@ -173,12 +200,14 @@ public sealed record ProxyRequest(string Name, string Transport, string Host, in
 /// Describes a proxy without its transport secret.
 /// </summary>
 public sealed record ProxyResponse(long Id, string Name, string Transport, string Host, int Port, string Path,
-    bool IsEnabled, string Certificate, string CertificateKey, string ServerName, string Pin, long? LegacyConfigId, bool Opened, string Fault = "", int ListenPort = 0, bool OriginHttp = false, ProxyTargets? Targets = null, bool? UseCertificate = null, string? HttpMethod = null, int? ProtocolVersion = null, bool? Hosted = null)
+    bool IsEnabled, string Certificate, string CertificateKey, string ServerName, string Pin, long? LegacyConfigId, bool Opened, string Fault = "", int ListenPort = 0, bool OriginHttp = false, ProxyTargets? Targets = null, bool? UseCertificate = null, string? HttpMethod = null, int? ProtocolVersion = null, bool? Hosted = null, bool AllowAnonymous = false)
 {
     /// <summary>
     /// Returns the public proxy settings.
     /// </summary>
     public static ProxyResponse Of(TransportProxyEntity proxy) => new(
         proxy.Id, proxy.Name, proxy.Transport, proxy.Host, proxy.Port, proxy.Path, proxy.IsEnabled,
-        proxy.Certificate, proxy.CertificateKey, proxy.ServerName, proxy.Pin, proxy.LegacyConfigId, proxy.Opened, "", proxy.ListenPort, proxy.OriginHttp, ProxyTargetRules.Read(proxy.TargetsJson), proxy.UseCertificate, proxy.HttpMethod, proxy.ProtocolVersion, proxy.Hosted);
+        proxy.Certificate, proxy.CertificateKey, proxy.ServerName, proxy.Pin, proxy.LegacyConfigId, proxy.Opened, "", proxy.ListenPort, proxy.OriginHttp, ProxyTargetRules.Read(proxy.TargetsJson), proxy.UseCertificate, proxy.HttpMethod, proxy.ProtocolVersion, proxy.Hosted, proxy.AllowAnonymous);
 }
+
+public sealed record ProxyTokenRequest(string Name);

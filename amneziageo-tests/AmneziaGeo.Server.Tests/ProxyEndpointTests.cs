@@ -12,6 +12,7 @@ using AmneziaGeo.Server.Api.Subscriptions;
 using AmneziaGeo.Server.Api.Web;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Core.Panel;
+using AmneziaGeo.Server.Core.Proxy;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Host;
@@ -27,6 +28,116 @@ namespace AmneziaGeo.Server.Tests;
 
 public sealed class ProxyEndpointTests
 {
+    [Fact]
+    public async Task DestinationModesRoundTripThroughTheManagementApi()
+    {
+        using var bench = new Bench();
+        var folder = Path.Combine(Path.GetTempPath(), "proxy-scope-api-" + Guid.NewGuid().ToString("N"));
+        var panel = PanelDefaults.Settings with { Port = Free() };
+        await bench.Panel.SeedAsync(panel, default).ConfigureAwait(false);
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Configuration["Proxy:Directory"] = folder;
+        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, panel.Port));
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddServerDatabase(bench.DatabasePath, new AuthOptions());
+        builder.Services.AddSingleton(panel);
+        builder.Services.AddSingleton(new WebOptions());
+        builder.Services.AddSingleton(new DnsState());
+        builder.Services.AddSingleton<IHostNetwork>(new Ledger());
+        builder.Services.AddSingleton<IHostCommands>(new Tools());
+        builder.Services.AddFirewall();
+        builder.Services.AddEndpointServices(builder.Configuration);
+        builder.Services.AddSingleton<IProxyRunner>(new Fronts());
+        builder.Services.AddSubscriptions();
+        builder.Services.AddClientUpdates();
+        await using var app = builder.Build();
+        app.Use(async (context, next) =>
+        {
+            context.Items["amneziageo.caller"] = new Principal(1, "tester", AuthScheme.Password, 1, Scopes.All.ToHashSet(), "admin");
+            await next(context).ConfigureAwait(false);
+        });
+        app.MapTransportProxies();
+        try
+        {
+            await app.StartAsync().ConfigureAwait(false);
+            using var api = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{panel.Port}/api/proxies/") };
+            var fresh = await api.GetFromJsonAsync<ProxyResponse>("draft").ConfigureAwait(false);
+            Assert.True(fresh!.Targets!.Local);
+            var request = new ProxyRequest("relay", "websocket", "proxy.example", 443, "relay", true, Hosted: false);
+            using var created = await api.PostAsJsonAsync("", request).ConfigureAwait(false);
+            created.EnsureSuccessStatusCode();
+            var proxy = (await created.Content.ReadFromJsonAsync<ProxyResponse>().ConfigureAwait(false))!;
+            Assert.True(proxy.Targets!.Local);
+            var id = proxy.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            using var selected = await api.PutAsJsonAsync(id, request with
+            {
+                Targets = new ProxyTargets(true, [new("REMOTE.EXAMPLE.", 45120)]),
+            }).ConfigureAwait(false);
+            selected.EnsureSuccessStatusCode();
+            var restricted = (await selected.Content.ReadFromJsonAsync<ProxyResponse>().ConfigureAwait(false))!.Targets!;
+            Assert.False(restricted.Local);
+            Assert.Equal(new ProxyDestination("remote.example", 45120), Assert.Single(restricted.Destinations));
+
+            using var invalid = await api.PutAsJsonAsync(id, request with
+            {
+                Targets = new ProxyTargets(true, [new("remote.example", 45120)], true),
+            }).ConfigureAwait(false);
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+            Assert.Contains("bad-proxy-targets", await invalid.Content.ReadAsStringAsync().ConfigureAwait(false));
+            using var renamed = await api.PutAsJsonAsync(id, request with { Name = "renamed" }).ConfigureAwait(false);
+            renamed.EnsureSuccessStatusCode();
+            var preserved = (await renamed.Content.ReadFromJsonAsync<ProxyResponse>().ConfigureAwait(false))!.Targets!;
+            Assert.Equal(restricted.Restricted, preserved.Restricted);
+            Assert.Equal(restricted.Local, preserved.Local);
+            Assert.Equal(restricted.Destinations, preserved.Destinations);
+
+            using var any = await api.PutAsJsonAsync(id, request with { Targets = new ProxyTargets(false, []) }).ConfigureAwait(false);
+            any.EnsureSuccessStatusCode();
+            Assert.False((await any.Content.ReadFromJsonAsync<ProxyResponse>().ConfigureAwait(false))!.Targets!.Restricted);
+            using var local = await api.PutAsJsonAsync(id, request with { Targets = ProxyTargetRules.LocalOnly }).ConfigureAwait(false);
+            local.EnsureSuccessStatusCode();
+            var listed = Assert.Single((await api.GetFromJsonAsync<ProxyResponse[]>("").ConfigureAwait(false))!);
+            Assert.True(listed.Targets!.Local);
+            Assert.Empty(listed.Targets.Destinations);
+
+            using var mintedResponse = await api.PostAsJsonAsync(id + "/tokens", new ProxyTokenRequest("phone")).ConfigureAwait(false);
+            mintedResponse.EnsureSuccessStatusCode();
+            Assert.True(mintedResponse.Headers.CacheControl!.NoStore);
+            var minted = (await mintedResponse.Content.ReadFromJsonAsync<MintedProxyToken>().ConfigureAwait(false))!;
+            var tokenText = await api.GetStringAsync(id + "/tokens").ConfigureAwait(false);
+            Assert.DoesNotContain(minted.Secret, tokenText);
+            var tokens = System.Text.Json.JsonSerializer.Deserialize<ProxyTokenInfo[]>(tokenText, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+            Assert.Equal(minted.Token, Assert.Single(tokens));
+            Assert.DoesNotContain(minted.Secret, await api.GetStringAsync("").ConfigureAwait(false));
+
+            using var anonymous = await api.PutAsJsonAsync(id, request with { AllowAnonymous = true }).ConfigureAwait(false);
+            anonymous.EnsureSuccessStatusCode();
+            Assert.True((await anonymous.Content.ReadFromJsonAsync<ProxyResponse>().ConfigureAwait(false))!.AllowAnonymous);
+            using var oldRequest = await api.PutAsJsonAsync(id, request).ConfigureAwait(false);
+            oldRequest.EnsureSuccessStatusCode();
+            Assert.True((await oldRequest.Content.ReadFromJsonAsync<ProxyResponse>().ConfigureAwait(false))!.AllowAnonymous);
+            Assert.Single((await api.GetFromJsonAsync<ProxyTokenInfo[]>(id + "/tokens").ConfigureAwait(false))!);
+            using var exported = await api.GetAsync(id + "/export").ConfigureAwait(false);
+            exported.EnsureSuccessStatusCode();
+            var catalog = (await exported.Content.ReadFromJsonAsync<ProxyCatalog>().ConfigureAwait(false))!;
+            var entry = Assert.Single(catalog.Proxies);
+            Assert.True(entry.AllowAnonymous);
+            Assert.Contains(ProxyAccess.HttpIdentity(minted.Secret), entry.BearerIds!);
+            using var revoked = await api.DeleteAsync(id + "/tokens/" + minted.Token.Id).ConfigureAwait(false);
+            Assert.Equal(HttpStatusCode.NoContent, revoked.StatusCode);
+            Assert.Empty((await api.GetFromJsonAsync<ProxyTokenInfo[]>(id + "/tokens").ConfigureAwait(false))!);
+        }
+        finally
+        {
+            await app.StopAsync().ConfigureAwait(false);
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+    }
+
     [Theory]
     [InlineData("subscription.example.net", false)]
     [InlineData("proxy.example.net", true)]
