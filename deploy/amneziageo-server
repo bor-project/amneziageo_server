@@ -28,6 +28,15 @@ modules_dir=/lib/modules
 os_release=/etc/os-release
 override_mark='# written by amneziageo-server'
 answers_file=/root/.amneziageo-install
+resume_notice=/etc/profile.d/amneziageo-install.sh
+resume_unit=amneziageo-install.service
+resume_unit_file=/etc/systemd/system/$resume_unit
+installer_source=$(readlink -f "$0")
+resume_requested=
+resume_boot=
+answers_supplied=
+installation_resumed=
+installation_complete=
 declare -gA given=() seen=()
 made_password=
 made_client=
@@ -1375,13 +1384,259 @@ load_answers() {
 
 # Keeps the answers of the installation for the run after the reboot.
 keep_answers() {
-  local key
+  local key temporary
   (
     umask 077
+    temporary=$(mktemp "$answers_file.XXXXXX") || exit 1
     for key in "${!given[@]}"; do
       printf '%s=%s\n' "$key" "${given[$key]}"
-    done > "$answers_file"
+    done > "$temporary" || { rm -f -- "$temporary"; exit 1; }
+    mv -fT -- "$temporary" "$answers_file" || { rm -f -- "$temporary"; exit 1; }
   )
+}
+
+# Prints the command that continues the saved installation.
+resume_command() {
+  printf '%q install --resume' "$answers_file.sh"
+}
+
+# Writes the installation status.
+installation_status() {
+  local temporary
+  (
+    umask 077
+    temporary=$(mktemp "$answers_file.status.XXXXXX") || exit 1
+    printf '%s\n' "$1" > "$temporary" && mv -fT -- "$temporary" "$answers_file.status" || {
+      rm -f -- "$temporary"
+      exit 1
+    }
+  )
+}
+
+# Quotes a systemd command argument.
+installation_argument() {
+  local value=$1
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//%/%%}
+  value=${value//\$/\$\$}
+  printf '"%s"' "$value"
+}
+
+# Enables continuation on the next boot.
+arm_installation() {
+  local temporary
+  if [ -f "$resume_unit_file" ] && ! grep -Fxq "$override_mark" "$resume_unit_file"; then
+    bad "$resume_unit_file is not an installer unit"
+    return 1
+  fi
+
+  temporary=$(mktemp "$resume_unit_file.XXXXXX") || return 1
+  {
+    printf '%s\n' "$override_mark" '[Unit]' 'Description=Continue AmneziaGeo installation' \
+      'Wants=network-online.target' 'After=network-online.target'
+    printf 'ConditionPathExists=%s\n' "${answers_file//%/%%}"
+    printf '%s\n' '[Service]' 'Type=oneshot'
+    printf 'ExecStart=/bin/bash %s install --resume --boot\n' "$(installation_argument "$answers_file.sh")"
+    printf '%s\n' 'TimeoutStartSec=0' 'Environment=DEBIAN_FRONTEND=noninteractive' 'StandardInput=null' 'StandardOutput=null' 'StandardError=journal' \
+      'UMask=0077' 'Restart=no' '[Install]' 'WantedBy=multi-user.target'
+  } > "$temporary"
+  chmod 644 "$temporary" && mv -fT -- "$temporary" "$resume_unit_file" || { rm -f -- "$temporary"; return 1; }
+  systemctl daemon-reload && systemctl enable --quiet "$resume_unit"
+}
+
+# Writes the installation reminder for root.
+installation_notice() {
+  local command temporary
+  command=$(resume_command)
+  temporary=$(mktemp "$resume_notice.XXXXXX") || return 1
+  {
+    printf '%s\n' '# Shows root the installation status.'
+    printf 'if [ "$(id -u)" = 0 ] && [ -t 1 ]; then\n'
+    printf '  if [ -f %q ]; then\n' "$answers_file"
+    printf '    case $(cat %q 2>/dev/null) in\n' "$answers_file.status"
+    printf '      running) printf "%%s\\n" %q ;;\n' 'AmneziaGeo installation is running.'
+    printf '      failed:*) printf "%%s\\n" %q ;;\n' 'AmneziaGeo installation stopped; read the private log and retry.'
+    printf '      *) printf "%%s\\n" %q ;;\n' 'AmneziaGeo installation continues automatically after reboot.'
+    printf '    esac\n'
+    printf '    printf "%%s\\n" %q %q\n' \
+      "Status: systemctl status $resume_unit; log: tail -f $answers_file.log" "Retry as root after a failure: $command"
+    printf '  elif [ -f %q ] && [ "$(cat %q)" = done ]; then\n' "$answers_file.status" "$answers_file.status"
+    printf '    printf "%%s\\n" %q\n' "AmneziaGeo installation finished. Read the address and login details as root: cat $answers_file.log"
+    printf '    rm -f -- %q\n' "$resume_notice"
+    printf '  fi\nfi\n'
+  } > "$temporary"
+  chmod 644 "$temporary" && mv -fT -- "$temporary" "$resume_notice" || { rm -f -- "$temporary"; return 1; }
+}
+
+# Reads a chosen administrator password before reboot.
+installation_password() {
+  local value again
+  if [ "${given[role]:-}" != panel ] || [ -n "${given[restore]:-}" ] \
+    || [ "${given[host_admin]:-no}" = yes ] || [ "${given[generate]:-no}" = yes ] \
+    || [ "${given[admin_created]:-no}" = yes ]; then
+    return 0
+  fi
+
+  value=${given[first_password]:-}
+  if [ "${#value}" -ge 8 ]; then
+    return 0
+  fi
+
+  if ! on_terminal; then
+    bad "automatic continuation needs the chosen password before reboot; use a terminal or generate=yes"
+    return 1
+  fi
+
+  while true; do
+    printf 'Administrator password before reboot: ' >&2
+    IFS= read -rs value || return 1
+    printf '\nRepeat: ' >&2
+    IFS= read -rs again || return 1
+    printf '\n' >&2
+    if [ "$value" = "$again" ] && [ "${#value}" -ge 8 ]; then
+      given[first_password]=$value
+      return 0
+    fi
+
+    bad "the passwords must match and contain at least 8 characters"
+  done
+}
+
+# Keeps the installer, answers and boot continuation.
+keep_installer() {
+  local temporary name
+  if ! head -n 1 -- "$installer_source" | grep -qE '^#!.*bash'; then
+    bad "the installer must run from a downloaded script file before it can be saved"
+    return 1
+  fi
+
+  given[questions_saved]=yes
+  for name in AMNEZIAGEO_KIND AMNEZIAGEO_CONTAINER AMNEZIAGEO_CLI AMNEZIAGEO_DATA AMNEZIAGEO_UNIT AMNEZIAGEO_DOCKER_DIR AMNEZIAGEO_UPDATES_DIR; do
+    given[resume_$name]=$(printf '%s' "${!name-}" | base64 -w 0) || return 1
+  done
+  given[resume_environment]=yes
+  temporary=$(mktemp "$answers_file.sh.XXXXXX") || return 1
+  if ! install -m 700 -- "$installer_source" "$temporary" || ! mv -fT -- "$temporary" "$answers_file.sh"; then
+    rm -f -- "$temporary"
+    return 1
+  fi
+
+  keep_answers || return 1
+  if ! installation_password; then
+    bad "the saved installation needs its administrator password; continue as root: $(resume_command)"
+    return 1
+  fi
+
+  keep_answers || return 1
+  installation_notice && arm_installation
+}
+
+# Restores the saved installation layout.
+installation_environment() {
+  local name value
+  if [ "${given[resume_environment]:-no}" != yes ]; then
+    return 0
+  fi
+
+  for name in AMNEZIAGEO_KIND AMNEZIAGEO_CONTAINER AMNEZIAGEO_CLI AMNEZIAGEO_DATA AMNEZIAGEO_UNIT AMNEZIAGEO_DOCKER_DIR AMNEZIAGEO_UPDATES_DIR; do
+    value=$(printf '%s' "${given[resume_$name]:-}" | base64 -d) || return 1
+    export "$name=$value"
+  done
+
+  data=${AMNEZIAGEO_DATA:-/var/lib/amneziageo-server}
+  unit=${AMNEZIAGEO_UNIT:-amneziageo-server}
+  docker_dir=${given[docker_dir]:-${AMNEZIAGEO_DOCKER_DIR:-/opt/amneziageo-docker}}
+  updates_dir=${AMNEZIAGEO_UPDATES_DIR:-/opt/amneziageo-updates}
+}
+
+# Prints the remaining installation steps.
+resume_steps() {
+  say "Installation is paused for a reboot; the server is not ready yet."
+  say "Answers are saved in $answers_file; no need to download the installer again."
+  say "1. Reboot this server. This SSH connection will close."
+  say "2. Installation continues automatically at boot with the saved answers."
+  say "3. Reconnect over SSH as root: systemctl status $resume_unit"
+  say "   Follow progress: tail -f $answers_file.log"
+  say "4. After 'done', read the address and login details: cat $answers_file.log"
+  say "   Retry after a failure: $(resume_command)"
+}
+
+# Loads the saved installation answers.
+resume_answers() {
+  installation_resumed=
+  if [ -n "$answers_supplied" ]; then
+    if [ -n "$resume_requested" ]; then
+      bad "use either --resume or --answers, not both"
+      return 1
+    fi
+
+    if [ -f "$answers_file" ] && [ "$(readlink -f "$answers_supplied")" != "$(readlink -f "$answers_file")" ]; then
+      bad "an unfinished installation is saved; continue with: $(resume_command)"
+      return 1
+    fi
+
+    if [ "${given[stage]:-}" = upgraded ]; then
+      installation_environment || return 1
+      installation_resumed=1
+      return 0
+    fi
+  fi
+
+  if [ ! -f "$answers_file" ]; then
+    if [ -n "$resume_requested" ]; then
+      bad "there is no unfinished installation in $answers_file"
+      return 1
+    fi
+
+    return 0
+  fi
+
+  if [ -z "$resume_requested" ]; then
+    if ! on_terminal; then
+      bad "an unfinished installation is saved; continue with: $(resume_command)"
+      return 1
+    fi
+
+    if ! agree "Continue the saved installation?"; then
+      say "the saved answers remain in $answers_file"
+      return 2
+    fi
+  fi
+
+  load_answers "$answers_file" || return 1
+  if [ "${given[stage]:-}" != upgraded ]; then
+    bad "the saved installation has no completed system-upgrade stage"
+    return 1
+  fi
+
+  installation_environment || return 1
+  installation_resumed=1
+  say "Continuing the saved installation with its previous answers."
+}
+
+# Removes the completed installation checkpoint.
+finish_installation() {
+  if [ -f "$resume_unit_file" ]; then
+    if ! grep -Fxq "$override_mark" "$resume_unit_file"; then
+      bad "$resume_unit_file is not an installer unit"
+      return 1
+    fi
+
+    systemctl disable --quiet "$resume_unit" || return 1
+    rm -f -- "$resume_unit_file" || return 1
+    systemctl daemon-reload || return 1
+  fi
+
+  rm -f -- "$answers_file" "$answers_file.sh" || return 1
+  if [ -z "$resume_boot" ]; then
+    rm -f -- "$resume_notice"
+  fi
+}
+
+# Prints the identifier of this system boot.
+installation_boot() {
+  cat /proc/sys/kernel/random/boot_id
 }
 
 # Tells whether a word is a port that TCP leaves free on the host.
@@ -1935,6 +2190,8 @@ ask_installation() {
     return 0
   fi
 
+  ask_routing_defaults
+
   answer_until login "Login of the first administrator" admin first_login_ok || return 1
   answer_yes generate "Make up a temporary password for it, replaced at the first sign-in?" yes || true
   ask_certificate || return 1
@@ -1985,12 +2242,38 @@ ask_installation() {
   fi
 }
 
+# Checks whether the installation includes routing defaults.
+routing_defaults_available() {
+  local components=${given[components]:-${given[role]:-panel}}
+  components=${components//,/ }
+  case " $components " in
+    *" proxy "* | ' all ' | ' panel ')
+      return 0 ;;
+  esac
+
+  return 1
+}
+
+# Asks whether to add the bundled routing groups and presets.
+ask_routing_defaults() {
+  if routing_defaults_available; then
+    answer_yes routing_defaults "Add default routing lists and presets for blocked sites and apps?" yes || true
+  fi
+}
+
+# Restores the bundled routing groups and presets chosen at installation.
+install_routing_defaults() {
+  if routing_defaults_available && [ "${given[routing_defaults]:-no}" = yes ]; then
+    cli routing defaults || return 1
+  fi
+}
+
 # Prints what the installation is going to do.
 plan() {
   local uplinks routed
   step "the plan"
   if [ "${given[upgrade]:-no}" = yes ] && [ "${given[stage]:-}" != upgraded ]; then
-    say "- upgrade the system; with a new kernel reboot, and the same command goes on after it"
+    say "- upgrade the system; with a new kernel reboot, then continue automatically at boot"
   fi
 
   if ! module_loaded; then
@@ -2031,6 +2314,10 @@ plan() {
   if [ -n "${given[restore]}" ]; then
     say "- put the backup ${given[restore]} in place of its database"
     return 0
+  fi
+
+  if routing_defaults_available && [ "${given[routing_defaults]:-no}" = yes ]; then
+    say "- add the bundled routing lists and presets for blocked sites and apps"
   fi
 
   if [ "${given[generate]}" = yes ]; then
@@ -2084,9 +2371,32 @@ plan() {
   fi
 }
 
-# Upgrades the system and stops for a reboot when a new kernel comes, to go on after it.
+# Upgrades the system and stops for a reboot when a new kernel comes.
 upgrade_system() {
-  if [ "${given[upgrade]:-no}" != yes ] || [ "${given[stage]:-}" = upgraded ]; then
+  local boot
+  if [ "${given[stage]:-}" = upgraded ]; then
+    if [ -n "${given[reboot_boot]:-}" ]; then
+      boot=$(installation_boot) || return 1
+      if [ "$boot" = "${given[reboot_boot]}" ] || reboot_pending; then
+        bad "the required reboot is not complete; installation has not continued"
+        resume_steps
+        return 1
+      fi
+
+      unset 'given[reboot_boot]'
+      keep_answers || return 1
+      good "the server has rebooted; continuing installation"
+    elif reboot_pending; then
+      given[reboot_boot]=$(installation_boot) || return 1
+      keep_installer || return 1
+      resume_steps
+      return 1
+    fi
+
+    return 0
+  fi
+
+  if [ "${given[upgrade]:-no}" != yes ]; then
     return 0
   fi
 
@@ -2099,16 +2409,13 @@ upgrade_system() {
     return 0
   fi
 
-  keep_answers
-  if [ "${given[role]:-panel}" = updates ]; then
-    say "the host boots into a new kernel"
-  else
-    say "the host boots into a new kernel, and the module is built for that one"
-  fi
-
-  say "after the reboot run amneziageo-server install again: it goes on with these answers"
+  given[reboot_boot]=$(installation_boot) || return 1
+  keep_installer || { bad "the installation checkpoint could not be saved; not rebooting"; return 1; }
+  resume_steps
   if answer_yes reboot "Reboot now?" yes; then
-    reboot
+    reboot || { bad "reboot failed; the saved installation is kept"; return 1; }
+  else
+    say "Reboot when ready with: reboot"
   fi
 
   exit 0
@@ -2136,19 +2443,40 @@ first_login_ok() {
 # Makes the first administrator of a fresh panel, with a temporary password made up unless one is typed.
 first_admin() {
   local said
+  if [ "${given[admin_created]:-no}" = yes ]; then
+    made_password=${given[temporary_password]:-}
+    return 0
+  fi
+
   local -a make=(init --user "${given[login]}")
   if [ "${given[host_admin]:-no}" = yes ]; then
     make=(user add "${given[login]}" --role admin --host)
   fi
 
   if [ "${given[generate]:-no}" != yes ]; then
-    cli_in "${make[@]}" --permanent
-    return
+    if [ -n "${given[first_password]:-}" ] && [ "${given[host_admin]:-no}" != yes ]; then
+      printf '%s\n%s\n' "${given[first_password]}" "${given[first_password]}" | cli_in "${make[@]}" --permanent || return 1
+    else
+      cli_in "${make[@]}" --permanent || return 1
+    fi
+  else
+    said=$(cli "${make[@]}" --generate | tr -d '\r') || { printf '%s\n' "$said"; return 1; }
+    made_password=$(printf '%s\n' "$said" | sed -n 's/^password: //p')
+    printf '%s\n' "$said" | grep -v '^password: '
   fi
 
-  said=$(cli "${make[@]}" --generate | tr -d '\r') || { printf '%s\n' "$said"; return 1; }
-  made_password=$(printf '%s\n' "$said" | sed -n 's/^password: //p')
-  printf '%s\n' "$said" | grep -v '^password: '
+  given[admin_created]=yes
+  unset 'given[first_password]'
+  if [ -n "$made_password" ]; then
+    given[temporary_password]=$made_password
+    if [ -n "$installation_resumed" ]; then
+      say "Administrator ${given[login]}, temporary password: $made_password"
+    fi
+  fi
+
+  if [ -n "$installation_resumed" ] && [ -f "$answers_file" ]; then
+    keep_answers || return 1
+  fi
 }
 
 # Puts the panel on the port, certificate and addresses of the answers and starts it over on them.
@@ -2274,6 +2602,12 @@ first_endpoint() {
     return 0
   fi
 
+  if [ "${given[endpoint_created]:-no}" = yes ]; then
+    made_client=${given[first_client_file]:-}
+    made_link=${given[first_client_link]:-}
+    return 0
+  fi
+
   step "the first interface"
   api_work=$(mktemp -d) || return 1
   said=$(cli token add "installer-$(date +%s)" --role admin --days 1 | tr -d '\r')
@@ -2292,6 +2626,13 @@ first_endpoint() {
   endpoint_calls || rc=$?
   cli token revoke "$id" --yes > /dev/null
   rm -rf "$api_work"
+  if [ "$rc" -eq 0 ] && [ -n "$installation_resumed" ] && [ -f "$answers_file" ]; then
+    given[endpoint_created]=yes
+    given[first_client_file]=$made_client
+    given[first_client_link]=$made_link
+    keep_answers || return 1
+  fi
+
   return "$rc"
 }
 
@@ -2511,7 +2852,114 @@ ask_role() {
 
 # Item 1: asks what goes on the host, the panel or the client updates server alone, and puts it on.
 install_host() {
-  case $(role) in
+  local lock code=0
+  (
+    umask 077
+    touch "$answers_file.lock"
+  ) || return 1
+  exec {lock}>"$answers_file.lock" || return 1
+  if ! flock -n "$lock"; then
+    bad "another installation is running; check systemctl status $resume_unit"
+    exec {lock}>&-
+    return 1
+  fi
+
+  if [ -n "$resume_boot" ]; then
+    automatic_installation || code=$?
+  else
+    install_host_locked || code=$?
+  fi
+
+  exec {lock}>&-
+  return "$code"
+}
+
+# Continues the installation in the private boot log.
+automatic_installation() (
+  local code=0
+  if [ -z "$resume_requested" ] || [ -n "$answers_supplied" ]; then
+    bad "boot continuation requires --resume alone"
+    return 1
+  fi
+
+  umask 077
+  if [ -L "$answers_file.log" ]; then
+    bad "the installation log must be a regular file"
+    return 1
+  fi
+
+  touch "$answers_file.log" && chmod 600 "$answers_file.log" || return 1
+  exec >> "$answers_file.log" 2>&1
+  installation_status running || return 1
+  trap 'installation_status "failed:$?"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  say "Continuing installation at boot: $(date -u +%FT%TZ)"
+  install_host_locked || code=$?
+  if [ "$code" -eq 0 ] && [ -n "$installation_complete" ]; then
+    installation_status done || return 1
+    finish_installation || return 1
+    good "automatic installation completed"
+  else
+    [ "$code" -ne 0 ] || code=1
+    installation_status "failed:$code" || return 1
+    bad "automatic installation stopped; retry as root: $(resume_command)"
+  fi
+
+  trap - EXIT
+  return "$code"
+)
+
+# Loads and runs the saved installation.
+install_host_locked() {
+  local code=0
+  installation_complete=
+  resume_answers || code=$?
+  if [ "$code" -eq 2 ]; then
+    return 0
+  elif [ "$code" -ne 0 ]; then
+    return "$code"
+  fi
+
+  install_host_run || code=$?
+  if [ "$code" -eq 0 ] && [ -n "$installation_complete" ] && [ -z "$resume_boot" ]; then
+    if [ -f "$answers_file.status" ]; then
+      if [ -L "$answers_file.log" ]; then
+        bad "the installation log must be a regular file"
+        return 1
+      fi
+
+      (
+        umask 077
+        touch "$answers_file.log" && chmod 600 "$answers_file.log" || exit 1
+        {
+          printf '\nManual continuation completed: %s\n' "$(date -u +%FT%TZ)"
+          if [ -n "$made_password" ]; then
+            printf 'Administrator %s, temporary password: %s\n' "${given[login]}" "$made_password"
+          fi
+
+          if [ -n "$made_client" ]; then
+            printf 'Client configuration: %s\n' "$made_client"
+          fi
+
+          printf '%s\n' 'The final settings were printed in SSH; read them again with amneziageo-server settings.'
+        } >> "$answers_file.log"
+      ) || return 1
+      installation_status done || return 1
+    fi
+
+    if ! finish_installation; then
+      [ ! -f "$answers_file.status" ] || installation_status failed:1
+      return 1
+    fi
+  fi
+
+  return "$code"
+}
+
+# Runs the selected installation.
+install_host_run() {
+  case $([ -z "$installation_resumed" ] && role) in
     panel)
       say "the panel is already on this host as a $(kind): item 2 updates it"
       return 0
@@ -2521,14 +2969,6 @@ install_host() {
       return 0
       ;;
   esac
-
-  if [ -f "$answers_file" ] && [ -z "${given[stage]:-}" ]; then
-    if agree "An installation stopped for a reboot: go on with its answers?"; then
-      load_answers "$answers_file"
-    fi
-
-    rm -f "$answers_file"
-  fi
 
   ask_role
   if [ "${given[role]}" = updates ]; then
@@ -2542,7 +2982,12 @@ install_host() {
 # database of a backup.
 install_panel() {
   assess_host || return 1
-  ask_installation || return 1
+  if [ -z "$installation_resumed" ] || [ "${given[questions_saved]:-no}" != yes ]; then
+    ask_installation || return 1
+  else
+    docker_dir=${given[docker_dir]:-$docker_dir}
+  fi
+
   plan
   answer_yes go "Go on?" yes || return 0
   upgrade_system || return 1
@@ -2561,8 +3006,9 @@ install_panel() {
     fi
 
     put_shortcut
-    restore_copy "${given[restore]}"
-    return
+    restore_copy "${given[restore]}" || return 1
+    installation_complete=1
+    return 0
   fi
 
   if [ "${given[kind]}" = docker ]; then
@@ -2581,10 +3027,12 @@ install_panel() {
   fi
 
   place_panel || return 1
+  install_routing_defaults || return 1
   first_endpoint || bad "the interface was not made: item 25 of the menu and the panel make one"
   guard_host || bad "ufw did not take the ports: item 23 of the menu opens them"
   install_doors
-  final_check
+  final_check || return 1
+  installation_complete=1
 }
 
 # Items 2 and 3: moves the panel to the newest release of its channel, of the test channel for a beta.
@@ -4553,7 +5001,7 @@ ask_updates() {
 plan_updates() {
   step "the plan"
   if [ "${given[upgrade]:-no}" = yes ] && [ "${given[stage]:-}" != upgraded ]; then
-    say "- upgrade the system; with a new kernel reboot, and the same command goes on after it"
+    say "- upgrade the system; with a new kernel reboot, then continue automatically at boot"
   fi
 
   if [ "${given[kind]}" = docker ]; then
@@ -4614,7 +5062,10 @@ guard_updates() {
 install_updates() {
   local name= fresh=
   assess_updates_host || return 1
-  ask_updates || return 1
+  if [ -z "$installation_resumed" ] || [ "${given[questions_saved]:-no}" != yes ]; then
+    ask_updates || return 1
+  fi
+
   plan_updates
   answer_yes go "Go on?" yes || return 0
   upgrade_system || return 1
@@ -4660,6 +5111,7 @@ install_updates() {
   fi
 
   say "the menu: amneziageo-server${made_shortcut:+, or $made_shortcut}"
+  installation_complete=1
 }
 
 # Items 2 and 3: moves the client updates server to the newest release of its channel, of the test channel for a beta.
@@ -5367,11 +5819,12 @@ usage() {
   cat <<'EOF'
 usage:
   amneziageo-server                    open the menu
-  amneziageo-server install [--restore <file>] [--answers <file>]
+  amneziageo-server install [--restore <file>] [--answers <file>] [--resume]
                                        ask what goes on the host, the panel or the client updates
                                        server alone, look the host over, ask what it needs and put
                                        it on, the panel on a backup downloaded from a panel, with
                                        answers of a file
+  amneziageo-server install --resume   continue the unfinished installation with its saved answers
   amneziageo-server restore <file>     put a backup downloaded from a panel in place of the database
   amneziageo-server update [beta]      move the panel to the newest release, of the test channel for beta
   amneziageo-server rollback           go back to the release before
@@ -5408,7 +5861,7 @@ main() {
 
   need_root
   locate_compose
-  if [ "$(role)" = updates ]; then
+  if [ "${1:-}" != install ] && [ "$(role)" = updates ]; then
     updates_main "$@"
     return
   fi
@@ -5422,6 +5875,16 @@ main() {
       shift
       while [ $# -gt 0 ]; do
         case $1 in
+          --resume)
+            resume_requested=1
+            shift
+            continue
+            ;;
+          --boot)
+            resume_boot=1
+            shift
+            continue
+            ;;
           --restore)
             given[restore]=${2:-}
             ;;
@@ -5432,6 +5895,7 @@ main() {
             fi
 
             load_answers "$2"
+            answers_supplied=$2
             ;;
           *)
             usage

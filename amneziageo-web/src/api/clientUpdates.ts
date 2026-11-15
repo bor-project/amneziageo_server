@@ -251,7 +251,7 @@ export function isVersion(text: string): boolean {
 }
 
 // The files a release of a version is made of, in the order the panel lists them.
-export function slotsOf(version: string): ReleaseSlot[] {
+export function slotsOf(version: string, held: readonly ReleaseFile[] = []): ReleaseSlot[] {
   const slots: ReleaseSlot[] = []
   const patched = (name: string) => {
     slots.push({ name, installer: null })
@@ -269,11 +269,30 @@ export function slotsOf(version: string): ReleaseSlot[] {
     }
   }
 
-  for (const tail of ["", "-arm64", "-arm", "-x64"]) {
+  for (const tail of ["-arm64", "-arm"]) {
     slots.push({ name: `AmneziaGeo-${version}-android${tail}.apk`, installer: null })
   }
 
+  for (const tail of ["", "-x64"]) {
+    const name = `AmneziaGeo-${version}-android${tail}.apk`
+    if (held.some((file) => file.name === name)) {
+      slots.push({ name, installer: null })
+    }
+  }
+
   return slots
+}
+
+export function deviceWord(name: string): TextKey | null {
+  if (name.endsWith("-android-arm64.apk")) return "releases.devicesAndroidArm64"
+  if (name.endsWith("-android-arm.apk")) return "releases.devicesAndroidArm"
+  if (name.endsWith("-android.apk")) return "releases.devicesAndroidLegacy"
+  if (name.endsWith("-android-x64.apk")) return "releases.devicesAndroidEmulator"
+  if (/-win-x64(?:-fdd)?\.(exe|patch)$/.test(name)) return "releases.devicesWindowsX64"
+  if (/-win-arm64(?:-fdd)?\.(exe|patch)$/.test(name)) return "releases.devicesWindowsArm64"
+  if (/_amd64\.(deb|patch)$/.test(name)) return "releases.devicesLinuxX64"
+  if (/_arm64\.(deb|patch)$/.test(name)) return "releases.devicesLinuxArm64"
+  return null
 }
 
 // The version and the channel a tag of a release stands for, as the list shows it.

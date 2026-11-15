@@ -62,6 +62,7 @@ public sealed class Context : IDisposable
         Subscriptions = scope.ServiceProvider.GetRequiredService<SubscriptionStore>();
         Dns = scope.ServiceProvider.GetRequiredService<DnsStore>();
         Presets = scope.ServiceProvider.GetRequiredService<PresetStore>();
+        RoutingDefaults = scope.ServiceProvider.GetRequiredService<RoutingDefaultsStore>();
         Templates = scope.ServiceProvider.GetRequiredService<TemplateStore>();
         Outbounds = scope.ServiceProvider.GetRequiredService<OutboundStore>();
         Rules = scope.ServiceProvider.GetRequiredService<RouteStore>();
@@ -95,6 +96,8 @@ public sealed class Context : IDisposable
     public DnsStore Dns { get; }
 
     public PresetStore Presets { get; }
+
+    public RoutingDefaultsStore RoutingDefaults { get; }
 
     public TemplateStore Templates { get; }
 

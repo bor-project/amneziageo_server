@@ -79,6 +79,7 @@ public static class ServerDatabase
         services.AddScoped<TemplateStore>();
         services.AddScoped<TransportProxyStore>();
         services.AddScoped<PresetStore>();
+        services.AddScoped<RoutingDefaultsStore>();
         services.AddScoped<SubscriptionStore>();
         services.AddScoped<ClientUpdateStore>();
         services.AddScoped<DatabaseBackup>();

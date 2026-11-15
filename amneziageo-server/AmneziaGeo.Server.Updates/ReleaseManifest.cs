@@ -78,7 +78,7 @@ public sealed record ReleaseManifest(
 
         var held = files.ToDictionary(file => file.Name, StringComparer.Ordinal);
         var installers = new List<ManifestInstaller>();
-        foreach (var slot in ReleaseSlots.Of(tag.Version).Where(slot => !slot.IsPatch))
+        foreach (var slot in ReleaseSlots.Of(tag.Version, includeLegacy: true).Where(slot => !slot.IsPatch))
         {
             if (!held.TryGetValue(slot.Name, out var installer))
             {
