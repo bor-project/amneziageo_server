@@ -75,6 +75,7 @@ public static class ServiceRegistration
         services.AddSingleton<IHelloFeature, ConfigsOffer>();
         services.AddSingleton<IHelloFeature, DefaultOffer>();
         services.AddSingleton<IHelloFeature, UpdateOffer>();
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<AmneziaGeo.Server.Routing.Udp.UdpPorts>(services);
         services.AddSingleton(new DisconnectSignal());
         services.AddSingleton<ServiceDesk>();
         services.AddSingleton<ServiceShare>();
@@ -84,7 +85,7 @@ public static class ServiceRegistration
             provider.GetRequiredService<ILogger<XHttpHost>>()));
         services.AddSingleton(provider => new AmneziaGeo.Server.Api.Proxies.QuicHost(Path.Combine(options.Directory, "quic"),
             Path.Combine(AppContext.BaseDirectory, options.Isolated ? "AmneziaGeo.Server.Proxy.Host" : "wstunnel-quic"),
-            provider.GetRequiredService<ILoggerFactory>().CreateLogger("QuicHost")));
+            provider.GetRequiredService<ILoggerFactory>().CreateLogger("QuicHost"), provider.GetRequiredService<AmneziaGeo.Server.Routing.Udp.UdpPorts>()));
         services.AddSingleton<ServiceServer>();
         services.AddHostedService<XHttpRefresh>();
         services.AddHostedService(provider => provider.GetRequiredService<ServiceServer>());

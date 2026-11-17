@@ -91,7 +91,7 @@ public static class QuicInitial
 
         var at = 5;
         if (!Id(datagram, ref at, out var connection) || !Id(datagram, ref at, out _)
-            || !Number(datagram, ref at, out var token) || datagram.Length - at < (int)token)
+            || !Number(datagram, ref at, out var token) || token > (ulong)(datagram.Length - at))
         {
             return null;
         }

@@ -68,12 +68,13 @@ adopt() {
 
 # Puts the server of the package into a release of its own, the web interface left out.
 stage_release() {
-  local target=$base/releases/$release
+  local target=$base/releases/$release tool
   if [ -d "$target" ]; then
-    [ -x "$target/wstunnel" ] || install -m 755 "$here/wstunnel" "$target/wstunnel"
-    if [ -f "$here/wstunnel-get" ]; then
-      install -m 755 "$here/wstunnel-get" "$target/wstunnel-get"
-    fi
+    for tool in wstunnel wstunnel-get wstunnel-quic; do
+      if [ -f "$here/$tool" ]; then
+        install -m 755 "$here/$tool" "$target/$tool"
+      fi
+    done
     return 0
   fi
 
@@ -81,10 +82,11 @@ stage_release() {
   cp -a --no-preserve=ownership "$here/publish" "$target.new"
   rm -rf "$target.new/wwwroot"
   cp "$here/install.sh" "$here/release" "$here/server" "$target.new/"
-  install -m 755 "$here/wstunnel" "$target.new/"
-  if [ -f "$here/wstunnel-get" ]; then
-    install -m 755 "$here/wstunnel-get" "$target.new/"
-  fi
+  for tool in wstunnel wstunnel-get wstunnel-quic; do
+    if [ -f "$here/$tool" ]; then
+      install -m 755 "$here/$tool" "$target.new/"
+    fi
+  done
   if [ -f "$here/amneziageo-server" ]; then
     install -m 755 "$here/amneziageo-server" "$target.new/"
   fi

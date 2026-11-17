@@ -207,6 +207,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
 
     private readonly XHttpHost? _xhttp;
     private readonly QuicHost? _quic;
+    private readonly SharedUdpHost? _udp;
     private readonly FrontOptions _frontOptions;
 
     private volatile IReadOnlyDictionary<long, string> _xhttpFaults = new Dictionary<long, string>();
@@ -245,7 +246,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         SubscriptionState? subscriptions = null,
         ClientUpdateState? updates = null,
         ProxyCertificates? proxyCertificates = null,
-        XHttpHost? xhttp = null, QuicHost? quic = null, FrontOptions? frontOptions = null)
+        XHttpHost? xhttp = null, QuicHost? quic = null, FrontOptions? frontOptions = null, SharedUdpHost? udp = null)
     {
         _scopes = scopes;
         _desk = desk;
@@ -259,6 +260,7 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         _proxyCertificates = proxyCertificates;
         _xhttp = xhttp;
         _quic = quic;
+        _udp = udp;
         _frontOptions = frontOptions ?? new FrontOptions();
     }
 
@@ -698,6 +700,67 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
     }
 
     /// <summary>
+    /// Validates the shared UDP listeners.
+    /// </summary>
+    public async Task<AmneziaGeo.Server.Api.Auth.Failure?> CheckUdpAsync(CancellationToken ct, ServerConfig? config = null,
+        long? configId = null, TransportProxyEntity? proxy = null, long? proxyId = null)
+    {
+        if (_udp is null || config is not null && ConfigRules.Check(config) is not null)
+        {
+            return null;
+        }
+
+        using var scope = _scopes.CreateScope();
+        var configs = (await scope.ServiceProvider.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false)).ToList();
+        var proxies = (await scope.ServiceProvider.GetRequiredService<TransportProxyStore>().ListAsync(ct).ConfigureAwait(false)).ToList();
+        if (config is not null)
+        {
+            configs.RemoveAll(one => one.Id == configId);
+            configs.Add(config);
+        }
+
+        if (proxy is not null)
+        {
+            proxies.RemoveAll(one => one.Id == proxyId);
+            proxies.Add(proxy);
+        }
+
+        try
+        {
+            await _udp.PreflightAsync(configs, proxies.Where(one => _frontOptions.Enabled && one.IsEnabled && one.Hosted && one.Transport == "quic")
+                .Select(one => one.ListenPort == 0 ? one.Port : one.ListenPort).ToHashSet(), ct).ConfigureAwait(false);
+            return null;
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
+        {
+            _logger.LogWarning(ex, "Another program holds a requested UDP listener");
+            return new("port-busy", "another program holds the UDP port");
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "udp-identity-taken")
+        {
+            _logger.LogWarning(ex, "VPN interfaces on one UDP port have ambiguous server keys");
+            return new("udp-identity-taken", "VPN interfaces on one UDP port require distinct server keys");
+        }
+    }
+
+    /// <summary>
+    /// Applies the shared UDP listeners.
+    /// </summary>
+    public async Task PrepareUdpAsync(CancellationToken ct)
+    {
+        if (_udp is null)
+        {
+            return;
+        }
+
+        using var scope = _scopes.CreateScope();
+        var proxies = await scope.ServiceProvider.GetRequiredService<TransportProxyStore>().ListAsync(ct).ConfigureAwait(false);
+        var configs = await scope.ServiceProvider.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false);
+        await _udp.PrepareAsync(configs, proxies.Where(one => _frontOptions.Enabled && one.IsEnabled && one.Hosted && one.Transport == "quic")
+            .Select(one => one.ListenPort == 0 ? one.Port : one.ListenPort).ToHashSet(), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Updates the XHTTP processes and client credentials.
     /// </summary>
     public async Task RefreshXHttpAsync(CancellationToken ct)
@@ -712,6 +775,17 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
         {
             using var scope = _scopes.CreateScope();
             var store = scope.ServiceProvider.GetRequiredService<TransportProxyStore>();
+            var udpReady = true;
+            try
+            {
+                await PrepareUdpAsync(ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or InvalidOperationException)
+            {
+                _logger.LogWarning(ex, "The shared UDP listeners could not be applied");
+                udpReady = false;
+            }
+
             var registered = await store.ListAsync(ct).ConfigureAwait(false);
             var policies = await store.TargetsAsync(registered, ct).ConfigureAwait(false);
             var panel = await scope.ServiceProvider.GetRequiredService<PanelStore>().ReadAsync(ct).ConfigureAwait(false);
@@ -722,6 +796,11 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
             foreach (var proxy in registered.Where(proxy => _frontOptions.Enabled && proxy.Hosted && proxy.IsEnabled && proxy.IsHttpV2 && !rejected.ContainsKey(proxy.Id)))
             {
                 var credentials = await store.CredentialsAsync(proxy, ct).ConfigureAwait(false);
+                if (credentials.Count == 0 && !proxy.AllowAnonymous)
+                {
+                    continue;
+                }
+
                 wanted.Add(new XHttpProxy(proxy.Id, ProxyPort(proxy.Id), proxy.Path, credentials, policies[proxy.Id], proxy.HttpMethod,
                     proxy.AllowAnonymous, store.BearerIds(proxy)));
             }
@@ -736,6 +815,12 @@ public sealed class ServiceServer : IHostedService, IAsyncDisposable
                 var quic = new List<ProxyServiceEntry>();
                 foreach (var proxy in registered.Where(proxy => _frontOptions.Enabled && proxy.Hosted && proxy.IsEnabled && proxy.Transport == "quic" && !rejected.ContainsKey(proxy.Id)))
                 {
+                    if (!udpReady && !scope.ServiceProvider.GetRequiredService<AmneziaGeo.Server.Routing.Udp.UdpPorts>().Quic.ContainsKey(proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort))
+                    {
+                        faults[proxy.Id] = "quic-listener-unavailable";
+                        continue;
+                    }
+
                     quic.Add(new ProxyServiceEntry(proxy.Id, proxy.Name, "quic", proxy.Host, proxy.Port, proxy.Path,
                         await store.CredentialsAsync(proxy, ct).ConfigureAwait(false), true,
                         ListenPort: proxy.ListenPort, Certificate: proxy.Certificate.Length > 0 ? proxy.Certificate : Listening.Chain(_options, panel),

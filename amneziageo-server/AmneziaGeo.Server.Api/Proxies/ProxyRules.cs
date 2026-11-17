@@ -64,7 +64,7 @@ public sealed class ProxyRules
     /// </summary>
     public static Failure? Check(TransportProxyEntity proxy)
     {
-        if (proxy.Name.Trim().Length is 0 or > 64)
+        if (proxy.Name.Trim().Length is 0 or > 64 || proxy.Name.Any(char.IsControl))
         {
             return new Failure("bad-proxy-name", "the proxy name must contain 1 to 64 characters");
         }
@@ -74,14 +74,19 @@ public sealed class ProxyRules
             return new Failure("bad-proxy-transport", "the proxy transport is unknown");
         }
 
-        if (proxy.Host.Length > 253 || Uri.CheckHostName(proxy.Host.Trim().Trim('[', ']')) == UriHostNameType.Unknown)
+        if (proxy.Host.Length > 253 || !ProxyTargetRules.TryHost(proxy.Host, out _))
         {
             return new Failure("bad-proxy-host", "the proxy needs a public host");
         }
 
-        if (proxy.Port is < 1 or > 65535 || proxy.ListenPort is < 0 or > 65535)
+        if (proxy.Port is < 1 or > 65535)
         {
-            return new Failure("bad-proxy-port", "the TCP port must be between 1 and 65535");
+            return new Failure("bad-proxy-port", "the port must be between 1 and 65535");
+        }
+
+        if (proxy.ListenPort is < 0 or > 65535)
+        {
+            return new Failure("bad-proxy-listen-port", "the server port must be zero or between 1 and 65535");
         }
 
         if (proxy.OriginHttp && !proxy.IsHttp)
@@ -117,9 +122,9 @@ public sealed class ProxyRules
         }
 
 
-        if (proxy.ServerName.Length > 0 && Uri.CheckHostName(proxy.ServerName) == UriHostNameType.Unknown)
+        if (proxy.ServerName.Length > 0 && !ProxyTargetRules.TryHost(proxy.ServerName, out _))
         {
-            return new Failure("bad-proxy-host", "the TLS server name is not a host");
+            return new Failure("bad-proxy-server-name", "the TLS server name is not a host");
         }
 
         if (!ProxyTargetRules.TryNormalize(ProxyTargetRules.Read(proxy.TargetsJson), out _))
@@ -134,7 +139,7 @@ public sealed class ProxyRules
     /// <summary>
     /// Returns the owner of a conflicting QUIC socket.
     /// </summary>
-    public async Task<string?> QuicConflictAsync(TransportProxyEntity proxy, long id, CancellationToken ct)
+    public async Task<string?> QuicConflictAsync(TransportProxyEntity proxy, long id, CancellationToken ct, string chain = "", string key = "")
     {
         if (proxy.Transport != "quic" || !proxy.IsEnabled || !proxy.Hosted)
         {
@@ -142,18 +147,32 @@ public sealed class ProxyRules
         }
 
         var port = proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort;
-        var endpoint = await db.Configs.AsNoTracking().FirstOrDefaultAsync(one => one.IsEnabled && one.ListenPort == port, ct).ConfigureAwait(false);
-        if (endpoint is not null)
-        {
-            return "UDP port is used by " + endpoint.Name;
-        }
-
         var peers = await db.TransportProxies.AsNoTracking().Where(one => one.Id != id && one.IsEnabled && one.Hosted && one.Transport == "quic")
             .ToListAsync(ct).ConfigureAwait(false);
         return peers.Any(one => (one.ListenPort == 0 ? one.Port : one.ListenPort) == port
-            && (one.Certificate != proxy.Certificate || one.CertificateKey != proxy.CertificateKey))
+            && !QuicHost.SameCertificate(Certificate(one, chain, key).Chain, Certificate(one, chain, key).Key,
+                Certificate(proxy, chain, key).Chain, Certificate(proxy, chain, key).Key))
             ? "QUIC proxies on one UDP port require the same certificate" : null;
     }
+
+    private static (string Chain, string Key) Certificate(TransportProxyEntity proxy, string chain, string key) =>
+        (proxy.Certificate.Length > 0 ? proxy.Certificate : chain,
+            proxy.CertificateKey.Length > 0 ? proxy.CertificateKey : proxy.Certificate.Length > 0 ? proxy.Certificate : key);
+
+    public static string Field(string code) => code switch
+    {
+        "bad-proxy-name" or "name-taken" => "name",
+        "bad-proxy-host" => "host",
+        "bad-proxy-port" => "port",
+        "bad-proxy-listen-port" or "proxy-listener-unavailable" => "listenPort",
+        "bad-proxy-path" or "proxy-path-taken" => "path",
+        "bad-proxy-server-name" or "proxy-certificate-name" => "serverName",
+        "bad-proxy-pin" or "proxy-certificate-pin" => "pin",
+        "bad-proxy-targets" => "targets",
+        "bad-proxy-transport" or "proxy-protocol" or "proxy-method" => "transport",
+        _ when code.StartsWith("proxy-certificate", StringComparison.Ordinal) || code is "quic-port-requires-one-certificate" or "proxy-tls-required" => "certificate",
+        _ => "",
+    };
 
     private static bool Same(string left, string right) => string.Equals(left.Trim('/'), right, StringComparison.OrdinalIgnoreCase);
 }

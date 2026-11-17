@@ -196,6 +196,14 @@ public sealed class ProxyEndpointTests
                 Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
                 Assert.Contains("proxy-tls-required", await refused.Content.ReadAsStringAsync().ConfigureAwait(false));
             }
+            using var pending = await api.PostAsJsonAsync($"http://127.0.0.1:{panel.Port}/api/proxies", new ProxyRequest(
+                "pending-http", "http", "proxy.example.net", port, "pending-http", true,
+                proxyCertificate.Chain, proxyCertificate.Key, Pin: proxyCertificate.Pin, HttpMethod: "GET", ProtocolVersion: 2)).ConfigureAwait(false);
+            Assert.True(pending.IsSuccessStatusCode, await pending.Content.ReadAsStringAsync().ConfigureAwait(false));
+            var pendingProxy = (await pending.Content.ReadFromJsonAsync<ProxyResponse>().ConfigureAwait(false))!;
+            Assert.Empty(pendingProxy.Fault);
+            using var removedPending = await api.DeleteAsync($"http://127.0.0.1:{panel.Port}/api/proxies/{pendingProxy.Id}").ConfigureAwait(false);
+            Assert.Equal(HttpStatusCode.NoContent, removedPending.StatusCode);
             using var saved = await api.PutAsJsonAsync($"http://127.0.0.1:{panel.Port}/api/subscription", new SubscriptionRequest(
                 true, true, [], ["subscription.example.net"], port, false, "sub",
                 subscriptionCertificate.Chain, subscriptionCertificate.Key, 12, "test")).ConfigureAwait(false);
@@ -235,11 +243,14 @@ public sealed class ProxyEndpointTests
             using var changed = await api.PutAsJsonAsync($"http://127.0.0.1:{panel.Port}/api/proxies/{registered.Id}", new ProxyRequest(
                 registered.Name, "websocket", registered.Host, port, registered.Path, true,
                 proxyCertificate.Chain, proxyCertificate.Key, Pin: proxyCertificate.Pin)).ConfigureAwait(false);
-            changed.EnsureSuccessStatusCode();
-            var failed = await changed.Content.ReadFromJsonAsync<ProxyResponse>().ConfigureAwait(false);
-            Assert.NotEmpty(failed!.Fault);
+            Assert.Equal(HttpStatusCode.Conflict, changed.StatusCode);
+            var failure = await changed.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>().ConfigureAwait(false);
+            Assert.Equal("listenPort", failure.GetProperty("field").GetString());
+            Assert.Equal("proxy-listener-unavailable", failure.GetProperty("error").GetString());
             var listed = Assert.Single((await api.GetFromJsonAsync<ProxyResponse[]>($"http://127.0.0.1:{panel.Port}/api/proxies").ConfigureAwait(false))!);
-            Assert.Equal(failed.Fault, listed.Fault);
+            Assert.Equal(registered.Name, listed.Name);
+            Assert.Equal(registered.Path, listed.Path);
+            Assert.NotEmpty(listed.Fault);
         }
         finally
         {

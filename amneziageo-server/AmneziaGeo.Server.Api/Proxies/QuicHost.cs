@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Security.Cryptography.X509Certificates;
+using AmneziaGeo.Server.Api.Web;
+using AmneziaGeo.Server.Routing.Udp;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -10,7 +13,7 @@ namespace AmneziaGeo.Server.Api.Proxies;
 /// <summary>
 /// Runs QUIC listeners with destination and credential restrictions.
 /// </summary>
-public sealed class QuicHost(string directory, string executable, ILogger logger) : IAsyncDisposable
+public sealed class QuicHost(string directory, string executable, ILogger logger, UdpPorts? udp = null) : IAsyncDisposable
 {
     private readonly Dictionary<int, (string Configuration, Process Process)> _children = [];
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -48,9 +51,11 @@ public sealed class QuicHost(string directory, string executable, ILogger logger
             foreach (var (port, entries) in ports)
             {
                 var first = entries[0];
-                var configuration = Rules(entries) + "\n" + first.Certificate + "\n" + first.CertificateKey;
+                var backend = udp?.Quic.GetValueOrDefault(port) ?? 0;
+                var address = backend > 0 ? "127.0.0.1:" + backend : "[::]:" + port;
+                var configuration = address + "\n" + Rules(entries) + "\n" + first.Certificate + "\n" + first.CertificateKey;
                 if (entries.Any(one => ProxySecurity.Check(ProxySecurity.Of(one), logger: logger) is not null || one.Certificate.Length == 0
-                    || one.Certificate != first.Certificate || one.CertificateKey != first.CertificateKey))
+                    || !SameCertificate(one.Certificate, one.CertificateKey, first.Certificate, first.CertificateKey, logger)))
                 {
                     await StopAsync(port).ConfigureAwait(false);
                     foreach (var entry in entries)
@@ -87,7 +92,7 @@ public sealed class QuicHost(string directory, string executable, ILogger logger
                     {
                         UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true,
                     } };
-                    foreach (var argument in new[] { "server", "wts://[::]:" + port, "--enable-webtransport", "--restrict-config", file,
+                    foreach (var argument in new[] { "server", "wts://" + address, "--enable-webtransport", "--restrict-config", file,
                         "--tls-certificate", first.Certificate, "--tls-private-key", first.CertificateKey.Length > 0 ? first.CertificateKey : first.Certificate })
                     {
                         process.StartInfo.ArgumentList.Add(argument);
@@ -124,6 +129,26 @@ public sealed class QuicHost(string directory, string executable, ILogger logger
         finally
         {
             _gate.Release();
+        }
+    }
+
+    public static bool SameCertificate(string chain, string key, string otherChain, string otherKey, ILogger? logger = null)
+    {
+        if (chain == otherChain && key == otherKey)
+        {
+            return true;
+        }
+
+        try
+        {
+            using var left = X509Certificate2.CreateFromPem(WebCertificate.Read(chain), WebCertificate.Read(key.Length > 0 ? key : chain));
+            using var right = X509Certificate2.CreateFromPem(WebCertificate.Read(otherChain), WebCertificate.Read(otherKey.Length > 0 ? otherKey : otherChain));
+            return CryptographicOperations.FixedTimeEquals(left.GetCertHash(HashAlgorithmName.SHA256), right.GetCertHash(HashAlgorithmName.SHA256));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException or ArgumentException)
+        {
+            (logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance).LogWarning(ex, "The QUIC listener certificates could not be compared");
+            return false;
         }
     }
 

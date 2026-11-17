@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using AmneziaGeo.Server.Routing.Udp;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
@@ -34,6 +35,7 @@ public sealed class ClientHost
     private readonly TimeProvider _time;
 
     private readonly TrafficLedger? _ledger;
+    private readonly UdpPorts? _udp;
 
     /// <summary>
     /// ctor
@@ -43,13 +45,14 @@ public sealed class ClientHost
         IAwgDevices devices,
         InterfaceFile file,
         TimeProvider? time = null,
-        TrafficLedger? ledger = null)
+        TrafficLedger? ledger = null, UdpPorts? udp = null)
     {
         _network = network;
         _devices = devices;
         _file = file;
         _time = time ?? TimeProvider.System;
         _ledger = ledger;
+        _udp = udp;
     }
 
     /// <summary>
@@ -132,7 +135,8 @@ public sealed class ClientHost
         {
             var device = _devices.Find(config.Name);
 
-            return device?.Peers.ToDictionary(peer => peer.PublicKey, StringComparer.Ordinal);
+            return device?.Peers.Select(peer => peer.Endpoint is { } endpoint && _udp is not null
+                ? peer with { Endpoint = _udp.Public(endpoint) } : peer).ToDictionary(peer => peer.PublicKey, StringComparer.Ordinal);
         }
         catch (Exception ex) when (ex is NetlinkException or IOException or InvalidOperationException)
         {

@@ -1,4 +1,6 @@
 using AmneziaGeo.Server.Routing.Host;
+using AmneziaGeo.Server.Routing.Udp;
+using AmneziaGeo.Server.Api.Proxies;
 
 namespace AmneziaGeo.Server.Api.Configs;
 
@@ -14,6 +16,11 @@ public static class ConfigServices
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.AddSingleton<UdpPorts>();
+        services.AddSingleton(provider => new SharedUdpHost(provider.GetRequiredService<UdpPorts>(),
+            provider.GetRequiredService<IHostNetwork>(), provider.GetRequiredService<AmneziaGeo.Server.Awg.Device.IAwgDevices>(),
+            provider.GetRequiredService<ILogger<SharedUdpHost>>(),
+            Path.Combine(Path.GetDirectoryName(AmneziaGeo.Server.Dal.ServerDatabase.DefaultPath()) ?? ".", "udp")));
         services.AddSingleton<EndpointHost>();
         services.AddSingleton<EndpointKeeper>();
         services.AddSingleton<ConfigWatch>();

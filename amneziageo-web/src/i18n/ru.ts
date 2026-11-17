@@ -1468,6 +1468,13 @@ export const ru: Dictionary = {
   "proxies.off": "Выключен",
   "proxies.remove": "Удалить прокси {name}?",
   "scope.proxies:write": "Прокси",
+  "error.proxyName": "Введите от 1 до 64 символов без управляющих символов",
+  "error.proxyPin": "Введите SHA-256: 64 шестнадцатеричных символа",
+  "error.proxyQuicCertificate": "Для QUIC-прокси на общем UDP-порту нужны одинаковые сертификат и ключ",
+  "error.udpIdentityTaken": "Для VPN-интерфейсов на общем UDP-порту нужны разные серверные ключи",
+  "error.proxyListenerUnavailable": "Не удалось запустить слушатель. Прежние настройки восстановлены",
+  "error.proxyRestoreFailed": "Настройки восстановлены, но прежние слушатели не удалось запустить",
+  "error.proxyPortHeld": "UDP-порт {port} занят другой программой",
   "error.proxyHost": "Укажите публичный хост",
   "error.proxyTransport": "Неизвестный транспорт прокси",
 

@@ -19,7 +19,7 @@ import { KeepQuestion, PortNote } from "@/components/PortNote"
 import { Count, Flag, Help, Hinted, Line, LinkLine, Links, ListLine, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { clientItems, few, names, ruleItems } from "@/components/members"
 import { manual, useOpening } from "@/components/opening"
-import { pathFault, portFault, usePathHolders, usePortHolders, useServicesHolders, useSocketHolders } from "@/components/ports"
+import { pathFault, portFault, usePathHolders, useServicesHolders, useSocketHolders } from "@/components/ports"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
@@ -73,7 +73,6 @@ export function ConfigForm({
   const { able, reach, ufw } = useOpening(scopes.manageInterfaces)
   const [opening, setOpening] = useState(false)
   const [asking, setAsking] = useState(false)
-  const held = usePortHolders({ config: self })
   const taken = useServicesHolders()
   const claimed = [...usePathHolders({ config: self }), ...useSocketHolders({ config: self })]
   const [draft, setDraft] = useState(start)
@@ -81,12 +80,14 @@ export function ConfigForm({
   const fresh = useFreshConfig(!amnezia && isPlainObfuscation(draft.obfuscation), start.name)
   const applied = amnezia ? draft : { ...draft, obfuscation: plainObfuscation() }
   const [shown, setShown] = useState(publicKey)
+  const [submitted, setSubmitted] = useState<ConfigDraft | null>(null)
   const read = useImportConfig()
   const [text, setText] = useState("")
   const failed = error !== null && error !== undefined
   const said = failed ? failure(t, error) : fault
   const proxy = (failed ? downedOf(error)?.error : faultOf) === "websocket-down" ? said : ""
-  const port = portFault(t, draft.listenPort, held)
+  const port = portFault(t, draft.listenPort, [])
+  const portReply = submitted !== null && same(applied, submitted) && ["port-busy", "udp-identity-taken"].includes(downedOf(error)?.error ?? faultOf) ? said : ""
   const services = draft.servicesPort === 0 ? "" : portFault(t, draft.servicesPort, taken)
   const servicesAt = draft.servicesPort > 0 ? draft.servicesPort : draft.listenPort
   const servicesWere = start.servicesPort > 0 ? start.servicesPort : start.listenPort
@@ -132,6 +133,7 @@ export function ConfigForm({
       return
     }
 
+    setSubmitted(applied)
     onSave(applied, opening ? { opened: true } : {})
   }
 
@@ -218,7 +220,7 @@ export function ConfigForm({
           caption={t("configs.port")}
           value={draft.listenPort}
           onChange={(value) => put({ listenPort: value })}
-          fault={port}
+          fault={port || portReply}
           note={
             draft.isEnabled && !draft.udpPrivate && (
               <PortNote
@@ -475,6 +477,7 @@ export function ConfigForm({
           onCancel={() => setAsking(false)}
           onAnswer={(keep) => {
             setAsking(false)
+            setSubmitted(applied)
             onSave(applied, { keep })
           }}
         />

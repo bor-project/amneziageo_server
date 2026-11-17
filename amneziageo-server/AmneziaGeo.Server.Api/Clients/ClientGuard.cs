@@ -52,6 +52,7 @@ public sealed class ClientGuard : BackgroundService
     private readonly ILogger<ClientGuard> _logger;
 
     private readonly DatabaseVersion? _version;
+    private readonly AmneziaGeo.Server.Api.Proxies.SharedUdpHost? _udp;
 
     private readonly PeerGuard _guard;
 
@@ -85,7 +86,7 @@ public sealed class ClientGuard : BackgroundService
         GuardOptions options,
         TimeProvider time,
         ILogger<ClientGuard> logger,
-        DatabaseVersion? version = null)
+        DatabaseVersion? version = null, AmneziaGeo.Server.Api.Proxies.SharedUdpHost? udp = null)
     {
         _scopes = scopes;
         _devices = devices;
@@ -94,6 +95,7 @@ public sealed class ClientGuard : BackgroundService
         _time = time;
         _logger = logger;
         _version = version;
+        _udp = udp;
         _guard = new PeerGuard(options.IsEnabled);
     }
 
@@ -214,6 +216,7 @@ public sealed class ClientGuard : BackgroundService
 
     private async Task ClearAsync(CancellationToken ct)
     {
+        _udp?.Block([]);
         if (_cleared)
         {
             return;
@@ -233,6 +236,7 @@ public sealed class ClientGuard : BackgroundService
     private async Task LayAsync(DateTimeOffset now, CancellationToken ct)
     {
         var holds = Holds();
+        _udp?.Block(holds);
         var ruleset = GuardRuleset.Text(holds);
         var same = string.Equals(ruleset, _ruleset, StringComparison.Ordinal);
         if ((same && (holds.Count == 0 || now - _laid < Refresh)) || (_refused && now - _laid < Refresh))

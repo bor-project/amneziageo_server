@@ -1,4 +1,6 @@
 using AmneziaGeo.Server.Api.Auth;
+using System.Net.Sockets;
+using Microsoft.EntityFrameworkCore;
 using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Routing.Firewall;
 using AmneziaGeo.Server.Api.ClientUpdates;
@@ -24,10 +26,12 @@ public static class ProxyEndpoints
     public static IEndpointRouteBuilder MapTransportProxies(this IEndpointRouteBuilder routes)
     {
         var reading = routes.MapGroup("/api/proxies").RequireScope(Scopes.ReadState);
+        reading.MapGet("/udp", (HttpContext context) => Results.Ok(context.RequestServices.GetService<SharedUdpHost>()?.Snapshot() ?? []));
         reading.MapGet("/", async (TransportProxyStore store, ServiceServer runtime, CancellationToken ct) =>
             Results.Ok((await store.ListAsync(ct).ConfigureAwait(false)).Select(proxy =>
                 ProxyResponse.Of(proxy) with { Fault = runtime.Faults.GetValueOrDefault(-proxy.Id) ?? string.Empty })));
         var writing = routes.MapGroup("/api/proxies").RequireScope(Scopes.ManageProxies);
+        writing.AddEndpointFilter<UdpChangesFilter>();
         writing.MapGet("/draft", (PanelSettings panel) => Results.Ok(ProxyResponse.Of(new TransportProxyEntity
         {
             Port = panel.Port, Path = ConfigDefaults.WebSocketPath(), UseCertificate = true,
@@ -118,9 +122,9 @@ public static class ProxyEndpoints
             return Refuse(certificate.Code, certificate.Message);
         }
 
-        if (await services.GetRequiredService<ProxyRules>().QuicConflictAsync(draft, id, ct).ConfigureAwait(false) is { } udp)
+        if (await services.GetRequiredService<ProxyRules>().QuicConflictAsync(draft, id, ct, Listening.Chain(options, panel), Listening.Key(options, panel)).ConfigureAwait(false) is { } udp)
         {
-            return Refuse("proxy-quic-port-taken", udp, 409);
+            return Refuse("quic-port-requires-one-certificate", udp, 409);
         }
 
         var all = await store.ListAsync(ct).ConfigureAwait(false);
@@ -131,16 +135,54 @@ public static class ProxyEndpoints
 
         if (await services.GetRequiredService<ProxyRules>().ConflictAsync(draft.ListenPort == 0 ? draft.Port : draft.ListenPort, draft.Path, id, held?.LegacyConfigId, ct).ConfigureAwait(false) is { } conflict)
         {
-            return Results.Json(new { error = "proxy-path-taken", message = "the path is used by " + conflict, entity = conflict }, statusCode: 409);
+            return Results.Json(new { error = "proxy-path-taken", message = "the path is used by " + conflict, entity = conflict, field = "path" }, statusCode: 409);
+        }
+
+        if (await services.GetRequiredService<ServiceServer>().CheckUdpAsync(ct, proxy: draft, proxyId: id).ConfigureAwait(false) is { } listener)
+        {
+            return Results.Json(new { error = listener.Error, message = listener.Message, field = "listenPort" }, statusCode: 409);
         }
 
         var previous = request.Keep == true ? await services.GetRequiredService<FirewallApplier>().PlanAsync(ct).ConfigureAwait(false) : null;
+        var db = services.GetRequiredService<AppDbContext>();
+        var legacy = held?.LegacyConfigId is { } configId
+            ? await db.Configs.AsNoTracking().SingleOrDefaultAsync(one => one.Id == configId, ct).ConfigureAwait(false) : null;
         var saved = await store.SaveAsync(id, draft, ct).ConfigureAwait(false);
-        await SettleAsync(services, ct, previous).ConfigureAwait(false);
-        return Results.Ok(ProxyResponse.Of(saved) with
+        var failure = string.Empty;
+        try
         {
-            Fault = services.GetRequiredService<ServiceServer>().Faults.GetValueOrDefault(-saved.Id) ?? string.Empty,
-        });
+            await SettleAsync(services, ct, previous).ConfigureAwait(false);
+            if (saved.IsEnabled && saved.Hosted)
+            {
+                failure = services.GetRequiredService<ServiceServer>().Faults.GetValueOrDefault(-saved.Id) ?? string.Empty;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or SocketException or InvalidOperationException or OperationCanceledException)
+        {
+            logger.LogWarning(ex, "The proxy listener could not be applied");
+            failure = ex is SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse }
+                ? "udp-port-held-by-another-process" : "proxy-listener-unavailable";
+        }
+
+        if (failure.Length > 0)
+        {
+            await store.RestoreAsync(saved.Id, held, legacy?.WebSocket, legacy?.UpdatedUtc, CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                await SettleAsync(services, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "The previous proxy listeners could not be restored");
+                return Refuse("proxy-restore-failed", "the previous settings were restored but their listeners require attention", 503);
+            }
+
+            ct.ThrowIfCancellationRequested();
+            return Results.Json(new { error = "proxy-listener-unavailable", field = "listenPort", reason = failure,
+                message = "the proxy listener could not start; the previous settings were restored" }, statusCode: 409);
+        }
+
+        return Results.Ok(ProxyResponse.Of(saved));
     }
 
     private static async Task<IResult> RemoveAsync(long id, HttpContext context, CancellationToken ct)
@@ -168,7 +210,7 @@ public static class ProxyEndpoints
         await services.GetRequiredService<FirewallApplier>().SettleAsync(previous, ct).ConfigureAwait(false);
     }
 
-    private static IResult Refuse(string code, string message, int status = 400) => Results.Json(new Failure(code, message), statusCode: status);
+    private static IResult Refuse(string code, string message, int status = 400) => Results.Json(new { error = code, message, field = ProxyRules.Field(code) }, statusCode: status);
 }
 
 /// <summary>
@@ -182,7 +224,7 @@ public sealed record ProxyRequest(string Name, string Transport, string Host, in
     /// </summary>
     public TransportProxyEntity Draft(TransportProxyEntity? held = null) => new()
     {
-        Name = Name ?? "", Transport = Transport ?? "", Host = Host ?? "", Port = Port,
+        Name = (Name ?? "").Trim(), Transport = Transport ?? "", Host = (Host ?? "").Trim(), Port = Port,
         ListenPort = ListenPort ?? held?.ListenPort ?? 0, OriginHttp = OriginHttp ?? held?.OriginHttp ?? false, Path = Path ?? "",
         Hosted = Hosted ?? held?.Hosted ?? true,
         AllowAnonymous = AllowAnonymous ?? held?.AllowAnonymous ?? false,
@@ -190,7 +232,7 @@ public sealed record ProxyRequest(string Name, string Transport, string Host, in
         HttpMethod = HttpMethod ?? held?.HttpMethod ?? "GET",
         ProtocolVersion = ProtocolVersion ?? (Transport == "http" ? 2 : held?.ProtocolVersion ?? 0),
         IsEnabled = IsEnabled, Opened = Opened ?? held?.Opened ?? false, Certificate = Certificate ?? held?.Certificate ?? "", CertificateKey = CertificateKey ?? held?.CertificateKey ?? "",
-        ServerName = ServerName ?? held?.ServerName ?? "", Pin = Pin ?? held?.Pin ?? "",
+        ServerName = (ServerName ?? held?.ServerName ?? "").Trim(), Pin = (Pin ?? held?.Pin ?? "").Trim(),
         TargetsJson = Targets is null ? held?.TargetsJson ?? ProxyTargetRules.Write(ProxyTargetRules.LocalOnly) : ProxyTargetRules.Write(
             ProxyTargetRules.TryNormalize(Targets, out var normalized) ? normalized : Targets),
     };

@@ -41,7 +41,8 @@ public static class ClientServices
             InterfaceReads.Key,
             (provider, _) => new InterfaceReads(
                 provider.GetRequiredService<IAwgDevices>(),
-                provider.GetRequiredService<TimeProvider>()));
+                provider.GetRequiredService<TimeProvider>(),
+                provider.GetService<AmneziaGeo.Server.Api.Proxies.SharedUdpHost>()));
         services.AddSingleton<ClientGuard>();
         services.AddHostedService(provider => provider.GetRequiredService<ClientGuard>());
         services.AddHostedService<ClientMeter>();

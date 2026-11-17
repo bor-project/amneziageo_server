@@ -1,3 +1,4 @@
+using AmneziaGeo.Server.Api.Proxies;
 using System.Security.Cryptography;
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Firewall;
@@ -28,6 +29,7 @@ public static class ConfigEndpoints
         reading.MapGet("/{id:long}", FindAsync);
 
         var writing = routes.MapGroup("/api/configs").RequireScope(Scopes.ManageInterfaces);
+        writing.AddEndpointFilter<UdpChangesFilter>();
         writing.MapGet("/draft", DraftAsync);
         writing.MapPost("/keys", Keys);
         writing.MapPost("/preshared", Preshared);
@@ -129,6 +131,11 @@ public static class ConfigEndpoints
         }
 
         using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
+        if (await services.CheckUdpAsync(ct, draft).ConfigureAwait(false) is { } udp)
+        {
+            return Refuse(409, udp.Error, udp.Message);
+        }
+
         var result = await store.AddAsync(draft, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -136,6 +143,7 @@ public static class ConfigEndpoints
         }
 
         await RuleNaming.NameAsync(rules, RuleSide.Inbounds, result.Record!.Name, listed, ct).ConfigureAwait(false);
+        await services.PrepareUdpAsync(ct).ConfigureAwait(false);
         var raised = await RaiseAsync(store, clients, host, keeper, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
@@ -179,6 +187,11 @@ public static class ConfigEndpoints
         }
 
         var previous = request.Keep == true ? await firewall.PlanAsync(ct).ConfigureAwait(false) : null;
+        if (await services.CheckUdpAsync(ct, draft, id).ConfigureAwait(false) is { } udp)
+        {
+            return Refuse(409, udp.Error, udp.Message);
+        }
+
         var result = await store.ChangeAsync(id, draft, (previous, stop) => host.WithdrawAsync(previous.Name, stop), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
@@ -186,6 +199,7 @@ public static class ConfigEndpoints
         }
 
         await RuleNaming.NameAsync(rules, RuleSide.Inbounds, result.Record!.Name, request.Rules, ct).ConfigureAwait(false);
+        await services.PrepareUdpAsync(ct).ConfigureAwait(false);
         var raised = await RaiseAsync(store, clients, host, keeper, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
@@ -245,12 +259,19 @@ public static class ConfigEndpoints
             return Refuse(StatusCodes.Status400BadRequest, unreached.Code, unreached.Message);
         }
 
+        if (on && await store.FindAsync(id, ct).ConfigureAwait(false) is { } requested
+            && await services.CheckUdpAsync(ct, requested with { IsEnabled = true }, id).ConfigureAwait(false) is { } udp)
+        {
+            return Refuse(409, udp.Error, udp.Message);
+        }
+
         var result = await store.SwitchAsync(id, on, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
+        await services.PrepareUdpAsync(ct).ConfigureAwait(false);
         var raised = await RaiseAsync(store, clients, host, keeper, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);
         await resolver.RebindAsync(ct).ConfigureAwait(false);
@@ -305,6 +326,7 @@ public static class ConfigEndpoints
             return Refuse(StatusCodes.Status404NotFound, "unknown-config", $"there is no endpoint under the number {id}");
         }
 
+        await services.PrepareUdpAsync(ct).ConfigureAwait(false);
         var sync = await keeper.RaiseAsync(found, await clients.ListAsync(id, ct).ConfigureAwait(false), ct)
             .ConfigureAwait(false);
         await FirewallAsync(store, clients, host, ct).ConfigureAwait(false);
@@ -324,6 +346,7 @@ public static class ConfigEndpoints
     {
         using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
         var found = await store.ListAsync(ct).ConfigureAwait(false);
+        await services.PrepareUdpAsync(ct).ConfigureAwait(false);
         var done = await keeper.SyncAsync(found, await clients.ListAsync(ct).ConfigureAwait(false), ct)
             .ConfigureAwait(false);
         await services.SettleAsync(ct).ConfigureAwait(false);
@@ -411,5 +434,5 @@ public static class ConfigEndpoints
     };
 
     private static IResult Refuse(int status, string error, string message) =>
-        Results.Json(new Failure(error, message), statusCode: status);
+        Results.Json(new { error, message, field = error is "port-busy" or "udp-identity-taken" ? "listenPort" : "" }, statusCode: status);
 }

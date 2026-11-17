@@ -192,18 +192,9 @@ public sealed class ConfigStore
                 $"the panel already carries an endpoint called '{draft.Name}'");
         }
 
-        if (await _db.TransportProxies.AnyAsync(proxy => proxy.IsEnabled && proxy.Hosted && proxy.Transport == "quic"
-            && (proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort) == draft.ListenPort, ct).ConfigureAwait(false))
+        if (await IdentityTakenAsync(draft, 0, ct).ConfigureAwait(false) is { } identity)
         {
-            return ConfigResult.No(ConfigOutcome.PortTaken, "port-taken", "the UDP port belongs to a QUIC proxy");
-        }
-
-        if (await _db.Configs.AnyAsync(config => config.ListenPort == draft.ListenPort, ct).ConfigureAwait(false))
-        {
-            return ConfigResult.No(
-                ConfigOutcome.PortTaken,
-                "port-taken",
-                $"the panel already listens on port {draft.ListenPort}");
+            return identity;
         }
 
         if (await PathTakenAsync(draft, 0, ct).ConfigureAwait(false) is { } busy)
@@ -257,19 +248,9 @@ public sealed class ConfigStore
                 $"the panel already carries an endpoint called '{draft.Name}'");
         }
 
-        if (await _db.TransportProxies.AnyAsync(proxy => proxy.IsEnabled && proxy.Hosted && proxy.Transport == "quic"
-            && (proxy.ListenPort == 0 ? proxy.Port : proxy.ListenPort) == draft.ListenPort, ct).ConfigureAwait(false))
+        if (await IdentityTakenAsync(draft, id, ct).ConfigureAwait(false) is { } identity)
         {
-            return ConfigResult.No(ConfigOutcome.PortTaken, "port-taken", "the UDP port belongs to a QUIC proxy");
-        }
-
-        if (await _db.Configs.AnyAsync(config => config.ListenPort == draft.ListenPort && config.Id != id, ct)
-            .ConfigureAwait(false))
-        {
-            return ConfigResult.No(
-                ConfigOutcome.PortTaken,
-                "port-taken",
-                $"the panel already listens on port {draft.ListenPort}");
+            return identity;
         }
 
         if (await PathTakenAsync(draft, id, ct).ConfigureAwait(false) is { } busy)
@@ -307,6 +288,11 @@ public sealed class ConfigStore
         if (held is null)
         {
             return Missing(id);
+        }
+
+        if (on && await IdentityTakenAsync(Read(held) with { IsEnabled = true }, id, ct).ConfigureAwait(false) is { } identity)
+        {
+            return identity;
         }
 
         held.IsEnabled = on;
@@ -479,6 +465,20 @@ public sealed class ConfigStore
 
     private static ConfigResult Taken(string message) =>
         ConfigResult.No(ConfigOutcome.PortTaken, "websocket-path-taken", message);
+
+    private async Task<ConfigResult?> IdentityTakenAsync(ServerConfig draft, long id, CancellationToken ct)
+    {
+        if (!draft.IsEnabled)
+        {
+            return null;
+        }
+
+        var key = Curve25519.PublicOf(draft.PrivateKey);
+        var others = await _db.Configs.AsNoTracking().Where(one => one.Id != id && one.IsEnabled && one.ListenPort == draft.ListenPort)
+            .ToListAsync(ct).ConfigureAwait(false);
+        return others.Any(one => Curve25519.PublicOf(one.PrivateKey) == key)
+            ? ConfigResult.No(ConfigOutcome.PortTaken, "udp-identity-taken", "VPN interfaces on one UDP port require distinct server keys") : null;
+    }
 
     private static ServerConfig Read(ConfigEntity entity) => new()
     {

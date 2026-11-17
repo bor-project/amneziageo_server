@@ -128,6 +128,9 @@ else
   done
 
   bash "$root/deploy/build-proxy-tools.sh" "$runtime" "$out"
+  cp "$root/THIRD-PARTY.md" "$root/THIRD-PARTY.ru.md" "$out/publish/"
+  mkdir -p "$out/publish/licenses"
+  cp "$root/licenses/BouncyCastle.Cryptography.txt" "$out/publish/licenses/"
   cp "$root/deploy/amneziageo-server.service" "$out/"
   cp "$root/deploy/amneziageo-proxy@.service" "$out/"
   cp "$root/deploy/amneziageo-proxy.service" "$root/deploy/proxy-install.sh" "$out/"

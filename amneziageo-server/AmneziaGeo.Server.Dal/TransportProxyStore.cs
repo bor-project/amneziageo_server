@@ -169,6 +169,26 @@ public sealed partial class TransportProxyStore
     /// <summary>
     /// Stores a proxy and its transport secret.
     /// </summary>
+    public async Task RestoreAsync(long id, TransportProxyEntity? previous, bool? legacyEnabled, DateTimeOffset? legacyUpdated, CancellationToken ct)
+    {
+        if (previous is null)
+        {
+            await RemoveAsync(id, ct).ConfigureAwait(false);
+            return;
+        }
+
+        var current = await _db.TransportProxies.SingleAsync(one => one.Id == id, ct).ConfigureAwait(false);
+        _db.Entry(current).CurrentValues.SetValues(previous);
+        if (previous.LegacyConfigId is { } configId && legacyEnabled is { } enabled
+            && await _db.Configs.FindAsync([configId], ct).ConfigureAwait(false) is { } endpoint)
+        {
+            endpoint.WebSocket = enabled;
+            endpoint.UpdatedUtc = legacyUpdated ?? endpoint.UpdatedUtc;
+        }
+
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
     public async Task<TransportProxyEntity> SaveAsync(long id, TransportProxyEntity draft, CancellationToken ct)
     {
         var held = id == 0 ? new TransportProxyEntity() : await _db.TransportProxies.SingleAsync(proxy => proxy.Id == id, ct).ConfigureAwait(false);

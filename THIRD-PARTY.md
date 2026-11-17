@@ -11,6 +11,7 @@ AmneziaGeo server is distributed under GPL-3.0 or later. It is built from the co
 
 - .NET, ASP.NET Core and Entity Framework Core 10.0 (Microsoft, .NET Foundation): MIT.
 - Microsoft.Data.Sqlite and Microsoft.Extensions 10.0: MIT.
+- BouncyCastle.Cryptography 2.7: MIT (The Legion of the Bouncy Castle).
 - SQLitePCLRaw 3.0: Apache-2.0. SQLite: public domain.
 
 ## Panel

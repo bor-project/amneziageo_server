@@ -1,4 +1,6 @@
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Api.Proxies;
+using AmneziaGeo.Server.Api.Services;
 using AmneziaGeo.Server.Routing.Host;
 
 namespace AmneziaGeo.Server.Api.Configs;
@@ -12,15 +14,18 @@ public sealed class ConfigBoot : IHostedService
 
     private readonly EndpointHost _host;
 
+    private readonly SharedUdpHost? _udp;
+
     private readonly ILogger<ConfigBoot> _logger;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public ConfigBoot(IServiceScopeFactory scopes, EndpointHost host, ILogger<ConfigBoot> logger)
+    public ConfigBoot(IServiceScopeFactory scopes, EndpointHost host, ILogger<ConfigBoot> logger, SharedUdpHost? udp = null)
     {
         _scopes = scopes;
         _host = host;
+        _udp = udp;
         _logger = logger;
     }
 
@@ -32,6 +37,21 @@ public sealed class ConfigBoot : IHostedService
         using var scope = _scopes.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<ConfigStore>();
         var configs = await store.ListAsync(cancellationToken).ConfigureAwait(false);
+        if (_udp is not null)
+        {
+            var proxies = await scope.ServiceProvider.GetRequiredService<TransportProxyStore>().ListAsync(cancellationToken).ConfigureAwait(false);
+            var fronts = scope.ServiceProvider.GetService<FrontOptions>()?.Enabled != false;
+            try
+            {
+                await _udp.PrepareAsync(configs, proxies.Where(one => fronts && one.IsEnabled && one.Hosted && one.Transport == "quic")
+                    .Select(one => one.ListenPort == 0 ? one.Port : one.ListenPort).ToHashSet(), cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or InvalidOperationException)
+            {
+                _logger.LogWarning(ex, "The shared UDP listeners could not start");
+            }
+        }
+
         if (configs.Count == 0)
         {
             return;

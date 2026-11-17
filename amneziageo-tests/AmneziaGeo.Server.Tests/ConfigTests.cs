@@ -317,15 +317,17 @@ public class ConfigTests
 
 
     [Fact]
-    public async Task TwoEndpointsDoNotListenOnOnePort()
+    public async Task DistinctKeysShareOnePublicUdpPort()
     {
         using var bench = new Bench();
-        await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), default);
-
-        var again = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg2"), default);
-
-        Assert.Equal(ConfigOutcome.PortTaken, again.Outcome);
-        Assert.Equal("port-taken", again.Code);
+        var first = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), default)).Record!;
+        var again = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg2") with { ListenPort = first.ListenPort }, default);
+        Assert.True(again.IsOk, again.Message);
+        Assert.Equal(first.ListenPort, again.Record!.ListenPort);
+        Assert.NotEqual(first.PublicKey, again.Record.PublicKey);
+        var duplicate = await bench.Configs.AddAsync(first with { Name = "awg3" }, default);
+        Assert.Equal("udp-identity-taken", duplicate.Code);
+        Assert.Equal(2, (await bench.Configs.ListAsync(default)).Count);
     }
 
     [Fact]

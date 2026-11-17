@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using AmneziaGeo.Server.Routing.Udp;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
@@ -67,13 +68,16 @@ public sealed class EndpointHost
 
     private readonly IAwgDevices _devices;
 
+    private readonly UdpPorts? _udp;
+
     /// <summary>
     /// ctor
     /// </summary>
-    public EndpointHost(IHostNetwork network, IAwgDevices devices)
+    public EndpointHost(IHostNetwork network, IAwgDevices devices, UdpPorts? udp = null)
     {
         _network = network;
         _devices = devices;
+        _udp = udp;
     }
 
     /// <summary>
@@ -83,6 +87,7 @@ public sealed class EndpointHost
     {
         ArgumentNullException.ThrowIfNull(config);
 
+        config = _udp?.Runtime(config) ?? config;
         var protectedUdp = !config.UdpPrivate;
         try
         {

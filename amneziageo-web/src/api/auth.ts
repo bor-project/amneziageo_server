@@ -22,6 +22,14 @@ export interface Session {
 }
 
 const complaints: Record<string, TextKey> = {
+  "bad-proxy-listen-port": "error.badPort",
+  "bad-proxy-server-name": "error.proxyHost",
+  "bad-proxy-pin": "error.proxyPin",
+  "quic-port-requires-one-certificate": "error.proxyQuicCertificate",
+  "proxy-quic-port-taken": "error.proxyQuicCertificate",
+  "udp-identity-taken": "error.udpIdentityTaken",
+  "proxy-listener-unavailable": "error.proxyListenerUnavailable",
+  "proxy-restore-failed": "error.proxyRestoreFailed",
   "bad-proxy-token-name": "error.badName",
   "proxy-token-name-taken": "error.nameTaken",
   "proxy-token-limit": "error.proxyTokenLimit",
@@ -37,7 +45,7 @@ const complaints: Record<string, TextKey> = {
   "address-group-in-use": "routing.groupInUse",
   "bad-proxy-targets": "error.proxyTargets", "bad-proxy-host": "error.proxyHost", "bad-proxy-transport": "error.proxyTransport",
   "bad-proxy-port": "error.badPort", "bad-proxy-path": "error.badWebSocketPath",
-  "proxy-path-taken": "error.pathTaken", "bad-proxy-name": "error.badName",
+  "proxy-path-taken": "error.pathTaken", "bad-proxy-name": "error.proxyName",
   "wrong-credentials": "error.wrongCredentials",
   "update-busy": "error.updateBusy",
   "update-unknown": "error.updateUnknown",

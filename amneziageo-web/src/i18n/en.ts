@@ -1469,6 +1469,13 @@ export const en = {
   "proxies.off": "Disabled",
   "proxies.remove": "Remove proxy {name}?",
   "scope.proxies:write": "Proxies",
+  "error.proxyName": "Enter 1 to 64 characters without control characters",
+  "error.proxyPin": "Enter a SHA-256 fingerprint: 64 hexadecimal characters",
+  "error.proxyQuicCertificate": "QUIC proxies on one UDP port require the same certificate and private key",
+  "error.udpIdentityTaken": "VPN interfaces on one UDP port require distinct server keys",
+  "error.proxyListenerUnavailable": "The listener could not start. The previous settings were restored",
+  "error.proxyRestoreFailed": "The settings were restored, but the previous listeners could not restart",
+  "error.proxyPortHeld": "UDP port {port} is held by another program",
   "error.proxyHost": "Enter a public host",
   "error.proxyTransport": "Unknown proxy transport",
 

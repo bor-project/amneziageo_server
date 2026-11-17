@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Awg.Device;
+using AmneziaGeo.Server.Api.Proxies;
 
 namespace AmneziaGeo.Server.Api.Clients;
 
@@ -18,6 +19,7 @@ public sealed class InterfaceReads : IAwgDevices
     private readonly IAwgDevices _devices;
 
     private readonly TimeProvider _time;
+    private readonly SharedUdpHost? _udp;
 
     private readonly Lock _sync = new();
 
@@ -26,10 +28,11 @@ public sealed class InterfaceReads : IAwgDevices
     /// <summary>
     /// ctor
     /// </summary>
-    public InterfaceReads(IAwgDevices devices, TimeProvider time)
+    public InterfaceReads(IAwgDevices devices, TimeProvider time, SharedUdpHost? udp = null)
     {
         _devices = devices;
         _time = time;
+        _udp = udp;
     }
 
     /// <summary>
@@ -52,6 +55,11 @@ public sealed class InterfaceReads : IAwgDevices
         }
 
         var device = _devices.Find(name);
+        if (device is not null && _udp is not null)
+        {
+            device = device with { Peers = device.Peers.Select(one => one.Endpoint is { } endpoint
+                ? one with { Endpoint = _udp.Resolve(endpoint) ?? endpoint } : one).ToArray() };
+        }
         lock (_sync)
         {
             _read[name] = new Reading(now, device);
@@ -77,7 +85,9 @@ public sealed class InterfaceReads : IAwgDevices
             _read.Remove(update.Name);
         }
 
-        _devices.Apply(update);
+        var translated = _udp is null ? update : update with { Peers = update.Peers.Select(one => one.Endpoint is { } endpoint
+            ? one with { Endpoint = _udp.KernelEndpoint(update.Name, endpoint) } : one).ToArray() };
+        _devices.Apply(translated);
     }
 
     private sealed record Reading(DateTimeOffset At, AwgDevice? Device);
