@@ -38,7 +38,7 @@ ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
 FROM proxy-build AS tunnel
 WORKDIR /src
 COPY wstunnel/wstunnel/ ./
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/src/target \
     if [ "$BUILDARCH" = "$TARGETARCH" ]; then target=; \
     elif [ "$TARGETARCH" = arm64 ]; then target=aarch64-unknown-linux-gnu; \
@@ -51,7 +51,7 @@ ARG TARGETARCH
 WORKDIR /src
 COPY .gitmodules ./
 COPY deploy/build-quic.sh deploy/quic.commit deploy/quic-udp-only.patch deploy/quic-dependencies.patch deploy/quic-dependencies.json deploy/
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/quic-build,id=amneziageo-quic-${TARGETARCH} \
     git init --quiet wstunnel/wstunnel \
  && git -C wstunnel/wstunnel remote add origin "$(git config -f .gitmodules --get submodule.wstunnel/wstunnel.url)" \
