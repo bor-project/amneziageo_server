@@ -147,6 +147,13 @@ jobs:
           cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache-${{ matrix.name }},mode=max,ignore-error=true
           provenance: false
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+      - name: Check proxy runtimes in the image
+        env:
+          BUILT_IMAGE: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker pull "$BUILT_IMAGE"
+          python3 .github/scripts/check_server_image.py --image "$BUILT_IMAGE"
+          python3 .github/scripts/check_server_image.py --image "$BUILT_IMAGE" --isolated
       - name: Keep the digest
         shell: bash
         run: |

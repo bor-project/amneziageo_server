@@ -16,3 +16,4 @@ amneziageo-server/AmneziaGeo.Server.Updates.Host/wwwroot/
 wstunnel/wstunnel/target/
 wstunnel/wstunnel/.git
 deploy/docker/server.env
+.local/

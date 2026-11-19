@@ -66,6 +66,29 @@ docker compose exec panel amneziageo-server init --user <name>
 `--user` it refuses: host accounts do not sign in from a container. Compose builds the image for the platform of the
 host; the build takes a few minutes, most of them for `wstunnel`.
 
+## Proxy runtimes
+
+The image includes WebSocket, HTTP GET/POST and QUIC runtimes, together with the isolated proxy host.
+QUIC is built from the commit and patches in `deploy/quic.commit` and `deploy/quic-dependencies.json`,
+the same sources used by the standalone package. Proxy executables do not need host bind mounts.
+The host still supplies the AmneziaWG kernel module.
+
+Each image build checks that the proxy executables run. The release workflow also checks QUIC creation,
+two paths on UDP443, UDP traffic, rejected credentials, token revocation and restart, in both ordinary
+and isolated modes. These checks use disposable containers without host networking or published ports:
+
+```
+python3 .github/scripts/check_server_image.py --image amneziageo-server:local
+python3 .github/scripts/check_server_image.py --image amneziageo-server:local --isolated
+```
+
+Add `--previous-image <image>` to check replacement of an existing image with its database, proxy and access token preserved.
+The check creates its own initial state and does not use running installations.
+
+The checks require Docker, Python 3 and OpenSSL on the build machine. The Python fixture container shares
+only the disposable server's network namespace. Its temporary certificate, tokens and state are removed
+with the containers.
+
 ## The menu
 
 The container opens the menu of the server itself, however it was put on:

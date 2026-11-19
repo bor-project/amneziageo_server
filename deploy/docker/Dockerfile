@@ -15,16 +15,50 @@ COPY TERMS.md TERMS.ru.md PRIVACY.md PRIVACY.ru.md THIRD-PARTY.md THIRD-PARTY.ru
 RUN mkdir -p amneziageo-server/AmneziaGeo.Server.Api \
  && npm --prefix amneziageo-web run build
 
-FROM rust:1.99-bookworm AS tunnel
+FROM --platform=$BUILDPLATFORM rust:1.99-bookworm AS proxy-build
+ARG CARGO_BUILD_JOBS=2
 RUN apt-get update \
- && apt-get install -y --no-install-recommends cmake libclang-dev \
+ && apt-get install -y --no-install-recommends cmake git libclang-dev patch \
  && rm -rf /var/lib/apt/lists/*
+ARG TARGETARCH
+ARG BUILDARCH
+RUN if [ "$BUILDARCH" != "$TARGETARCH" ]; then \
+      case "$TARGETARCH" in \
+        amd64) target=x86_64-unknown-linux-gnu; compiler=gcc-x86-64-linux-gnu; headers=libc6-dev-amd64-cross ;; \
+        arm64) target=aarch64-unknown-linux-gnu; compiler=gcc-aarch64-linux-gnu; headers=libc6-dev-arm64-cross ;; \
+        *) exit 1 ;; \
+      esac \
+   && apt-get update \
+   && apt-get install -y --no-install-recommends "$compiler" "$headers" \
+   && rm -rf /var/lib/apt/lists/* \
+   && rustup target add "$target"; \
+    fi
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+FROM proxy-build AS tunnel
 WORKDIR /src
 COPY wstunnel/wstunnel/ ./
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --locked --release --package wstunnel-cli --no-default-features --features ring \
- && cp target/release/wstunnel /wstunnel
+    if [ "$BUILDARCH" = "$TARGETARCH" ]; then target=; \
+    elif [ "$TARGETARCH" = arm64 ]; then target=aarch64-unknown-linux-gnu; \
+    else target=x86_64-unknown-linux-gnu; fi \
+ && cargo build --locked --release --package wstunnel-cli --no-default-features --features ring ${target:+--target "$target"} \
+ && cp "target/${target:+$target/}release/wstunnel" /wstunnel
+
+FROM proxy-build AS quic
+ARG TARGETARCH
+WORKDIR /src
+COPY .gitmodules ./
+COPY deploy/build-quic.sh deploy/quic.commit deploy/quic-udp-only.patch deploy/quic-dependencies.patch deploy/quic-dependencies.json deploy/
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/quic-build,id=amneziageo-quic-${TARGETARCH} \
+    git init --quiet wstunnel/wstunnel \
+ && git -C wstunnel/wstunnel remote add origin "$(git config -f .gitmodules --get submodule.wstunnel/wstunnel.url)" \
+ && if [ "$BUILDARCH" = "$TARGETARCH" ]; then target=native; \
+    elif [ "$TARGETARCH" = arm64 ]; then target=aarch64-unknown-linux-gnu; \
+    else target=x86_64-unknown-linux-gnu; fi \
+ && QUIC_TARGET=$target QUIC_BUILD_ROOT=/quic-build bash deploy/build-quic.sh /wstunnel-quic
 
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:$DOTNET AS server
 ARG TARGETARCH
@@ -38,7 +72,7 @@ RUN --mount=type=cache,target=/root/.nuget/packages \
       arm64) rid=linux-arm64 ;; \
       *) echo "no build for $TARGETARCH" >&2; exit 1 ;; \
     esac \
- && for project in Api Cli; do \
+ && for project in Api Cli Proxy.Host; do \
       dotnet publish "amneziageo-server/AmneziaGeo.Server.$project" -c Release -r "$rid" --self-contained false \
         -p:Version="$VERSION" -o /out --nologo -v minimal || exit 1; \
     done \
@@ -54,14 +88,21 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose \
  && ln -s /usr/local/share/amneziageo-server/amneziageo-server /usr/local/bin/amneziageo-server
-COPY --from=tunnel /wstunnel /usr/local/bin/wstunnel
+COPY --from=tunnel /wstunnel /opt/amneziageo-server/wstunnel
 COPY --from=tunnel /wstunnel /opt/amneziageo-server/wstunnel-get
+COPY --from=quic /wstunnel-quic /opt/amneziageo-server/wstunnel-quic
 COPY --chmod=755 deploy/docker/entrypoint.sh /usr/local/bin/amneziageo-server-entrypoint
 COPY --chmod=755 deploy/docker/update.sh /usr/local/bin/amneziageo-server-update
 COPY --from=server /out/deps/ /opt/amneziageo-server/
 COPY --from=server /out/own/ /opt/amneziageo-server/
 COPY --from=web /src/amneziageo-server/AmneziaGeo.Server.Api/wwwroot/ /opt/amneziageo-server/wwwroot/
 COPY --chmod=755 deploy/amneziageo-server /usr/local/share/amneziageo-server/amneziageo-server
+RUN ln -s /opt/amneziageo-server/wstunnel /usr/local/bin/wstunnel \
+ && /usr/local/bin/wstunnel --version \
+ && /opt/amneziageo-server/wstunnel-get get-server --help > /dev/null \
+ && /opt/amneziageo-server/wstunnel-quic server --help | grep -q -- --enable-webtransport \
+ && /opt/amneziageo-server/AmneziaGeo.Server.Proxy.Host get-server --help > /dev/null \
+ && /opt/amneziageo-server/AmneziaGeo.Server.Proxy.Host credential | grep -Eq '^[0-9a-f-]{36}$'
 ARG VERSION=0.0.1
 LABEL org.opencontainers.image.source=https://github.com/bor-project/amneziageo_server \
       org.opencontainers.image.version=$VERSION
