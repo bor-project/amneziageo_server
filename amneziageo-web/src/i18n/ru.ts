@@ -399,7 +399,6 @@ export const ru: Dictionary = {
   "trafficLimits.throttled": "Квота исчерпана · скорость снижена",
   "trafficLimits.notApplied": "Лимиты не применены",
   "trafficLimits.enabled": "Включить лимиты",
-  "trafficLimits.override": "Переопределить лимиты шаблона",
   "trafficLimits.download": "К клиенту, Мбит/с",
   "trafficLimits.upload": "От клиента, Мбит/с",
   "trafficLimits.quota": "Трафик, ГБ",
