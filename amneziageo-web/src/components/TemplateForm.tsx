@@ -6,6 +6,8 @@ import { useProxies } from "@/api/proxies"
 import { usePresets } from "@/api/presets"
 import { useTemplateDefaults, useTemplatePreview, useTemplates } from "@/api/templates"
 import type { Template, TemplateDraft, TemplatePreview } from "@/api/templates"
+import { TrafficLimitsFields } from "@/components/TrafficLimitsFields"
+import { useTrafficLimits } from "@/components/useTrafficLimits"
 import { AppCaption } from "@/components/AppMark"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { choiceKey, lacksServers } from "@/components/dnsWords"
@@ -50,12 +52,13 @@ export function TemplateForm({
   )
   const resolver = useResolver(false).data
   const [draft, setDraft] = useState(start)
+  const limits = useTrafficLimits(start.limits)
   const [touched, setTouched] = useState(false)
   const preview = useTemplatePreview(touched ? draft.entries : [], draft.standIns)
   const found = preview.data ?? kept(held)
   const total = found === undefined || preview.isFetching ? null : found.total
   const heavy = total !== null && total > stopAt
-  const edited = !same(draft, start)
+  const edited = !same(draft, start) || limits.changed
   const check = useDnsCheck({ id: held?.id, template: draft })
   const lacking = lacksServers(draft.dnsMode, draft.dns, draft.standIns)
 
@@ -186,6 +189,10 @@ export function TemplateForm({
         </div>
       </Part>
 
+      <Part title={t("trafficLimits.title")}>
+        <TrafficLimitsFields id="template-limits" input={limits.input} onChange={limits.setInput} faults={limits.faults} />
+      </Part>
+
       <Part title={t("templates.partNetwork")}>
         <DnsPick
           id="template-dns-mode"
@@ -238,8 +245,8 @@ export function TemplateForm({
         </button>
         <button
           type="button"
-          onClick={() => onSave(draft)}
-          disabled={!edited || pending || preview.isFetching || heavy || lacking || draft.name.trim().length === 0}
+          onClick={() => onSave({ ...draft, limits: limits.value })}
+          disabled={!edited || pending || preview.isFetching || heavy || lacking || !limits.valid || draft.name.trim().length === 0}
           className={primary}
         >
           {pending ? t("templates.busy") : t("templates.save")}

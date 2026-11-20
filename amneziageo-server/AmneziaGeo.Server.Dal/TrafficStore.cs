@@ -72,6 +72,16 @@ public sealed class TrafficStore
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<TrafficDay>> DaysAsync(long clientId, DateOnly from, DateOnly to, CancellationToken ct)
+    {
+        var found = await _db.Traffic.AsNoTracking()
+            .Where(row => row.ClientId == clientId && row.Day >= from && row.Day <= to)
+            .OrderBy(row => row.Day)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        return [.. found.Select(Read)];
+    }
+
     private static TrafficDay Read(TrafficEntity entity) => new(
         entity.ClientId,
         entity.Day,

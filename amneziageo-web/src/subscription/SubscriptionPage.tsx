@@ -43,7 +43,7 @@ function Body({ view, language, t }: { view: View; language: Language; t: Text }
         <span>{fill(own.configs[count], { n: view.configs.length })}</span>
         <span>{fill(own.hours, { n: view.hours })}</span>
         <span>
-          {fill(own.today, { up: bytes(language, view.upload), down: bytes(language, view.download) })}
+          {fill(own.traffic, { up: bytes(language, view.upload), down: bytes(language, view.download) })}
           {view.total > 0 ? ` ${fill(own.of, { total: bytes(language, view.total) })}` : ""}
         </span>
       </div>

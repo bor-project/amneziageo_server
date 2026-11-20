@@ -115,7 +115,8 @@ public sealed class SubscriptionFeed
             (endpoint, member) => ClientText.Title(endpoint, member, naming, host),
             endpoint => DnsHandout.For(endpoint, offering, keptOut),
             held.Files,
-            Trust);
+            Trust,
+            Accounting);
         await KeepAsync(
             endpoints,
             members,
@@ -126,6 +127,15 @@ public sealed class SubscriptionFeed
             ct).ConfigureAwait(false);
 
         return feed;
+
+        (ClientUsage Used, long Limit) Accounting(TunnelClient member)
+        {
+            var current = _ledger.Of(member);
+            return current.Limits is { } limits
+                ? (new ClientUsage(limits.RxBytes, limits.TxBytes),
+                    limits.Policy.QuotaAction == TrafficQuotaAction.Block ? limits.Policy.QuotaBytes : 0)
+                : (current.Used, member.DailyLimit);
+        }
 
         ServiceTlsIdentity? Trust(ServerConfig endpoint)
         {

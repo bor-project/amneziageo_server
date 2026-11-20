@@ -6,7 +6,7 @@ namespace AmneziaGeo.Server.Api.Clients;
 /// <summary>
 /// Puts the clients the panel holds on the interfaces of the endpoints when the server starts.
 /// </summary>
-public sealed class ClientBoot : BackgroundService
+public sealed class ClientBoot : IHostedService
 {
     private readonly IServiceScopeFactory _scopes;
 
@@ -14,21 +14,29 @@ public sealed class ClientBoot : BackgroundService
 
     private readonly ILogger<ClientBoot> _logger;
 
+    private readonly ClientMeter? _meter;
+
     /// <summary>
     /// ctor
     /// </summary>
-    public ClientBoot(IServiceScopeFactory scopes, ClientHost host, ILogger<ClientBoot> logger)
+    public ClientBoot(IServiceScopeFactory scopes, ClientHost host, ILogger<ClientBoot> logger, ClientMeter? meter = null)
     {
         _scopes = scopes;
         _host = host;
         _logger = logger;
+        _meter = meter;
     }
 
     /// <summary>
     /// Walks the endpoints once and puts their clients on the host.
     /// </summary>
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task StartAsync(CancellationToken stoppingToken)
     {
+        if (_meter is not null)
+        {
+            await _meter.MeasureAsync(stoppingToken).ConfigureAwait(false);
+        }
+
         using var scope = _scopes.CreateScope();
         var configs = scope.ServiceProvider.GetRequiredService<ConfigStore>();
         var store = scope.ServiceProvider.GetRequiredService<ClientStore>();
@@ -58,4 +66,6 @@ public sealed class ClientBoot : BackgroundService
                 sync.Message);
         }
     }
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
 }

@@ -22,7 +22,7 @@ import { About } from "@/pages/About"
 import { AboutText } from "@/pages/AboutText"
 import { Accounts } from "@/pages/Accounts"
 import { BalancerRemove } from "@/pages/BalancerRemove"
-import { ClientExport, ClientSettings, ClientView, NewClient } from "@/pages/ClientPage"
+import { ClientExport, ClientInformation, ClientSettings, ClientStart, ClientView, NewClient } from "@/pages/ClientPage"
 import { ClientReleasePage } from "@/pages/ClientReleasePage"
 import { ClientReleaseRemove } from "@/pages/ClientReleaseRemove"
 import { ClientUpdates } from "@/pages/ClientUpdates"
@@ -118,10 +118,11 @@ const router = createBrowserRouter(
                 <Route path="presets/:presetId/delete" element={<PresetRemove />} />
               </Route>
               <Route path=":clientId" element={<ClientView />}>
-                <Route index element={<Navigate to="export" replace />} />
-                <Route path="export" element={<ClientExport />} />
+                <Route index element={<ClientStart />} />
+                <Route path="info" element={<ClientInformation />} />
                 <Route path="edit" element={<Navigate to="../settings" replace />} />
                 <Route element={<RequireScope scope={scopes.manageClients} />}>
+                  <Route path="export" element={<ClientExport />} />
                   <Route path="settings" element={<ClientSettings />} />
                 </Route>
               </Route>

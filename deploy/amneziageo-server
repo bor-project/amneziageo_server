@@ -3329,7 +3329,11 @@ rollback_panel() {
     fi
 
     confirm "Go back to $(basename "$(readlink "$base/previous")")?" || return 0
-    "$base/current/install.sh" --rollback || return 1
+    if [ -f /var/lib/amneziageo-server/proxy-handover/installer/install.sh ]; then
+      bash /var/lib/amneziageo-server/proxy-handover/installer/install.sh --rollback
+    else
+      "$base/current/install.sh" --rollback
+    fi || return 1
     offer_backup
     return 0
   fi

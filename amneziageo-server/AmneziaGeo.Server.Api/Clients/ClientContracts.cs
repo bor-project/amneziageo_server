@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Dal;
@@ -21,7 +22,8 @@ public sealed record ClientStateBody(
     ulong TodayRx,
     ulong TodayTx,
     ulong Used,
-    bool IsSpent);
+    bool IsSpent,
+    ClientLimitStatus? Limits = null);
 
 /// <summary>
 /// A signal to disconnect the application of a client did not take.
@@ -56,7 +58,9 @@ public sealed record ClientResponse(
     DateTimeOffset UpdatedUtc,
     ClientSignalBody? Signal = null,
     string DnsMode = DnsChoiceName.Auto,
-    IReadOnlyList<string>? Dns = null);
+    IReadOnlyList<string>? Dns = null,
+    TrafficLimits? Limits = null,
+    bool OverrideLimits = false);
 
 /// <summary>
 /// The settings a client is added or changed with.
@@ -77,7 +81,33 @@ public sealed record ClientRequest(
     bool? Disconnect = null,
     string? DnsMode = null,
     IReadOnlyList<string>? Dns = null,
-    IReadOnlyList<long>? Rules = null);
+    IReadOnlyList<long>? Rules = null,
+    TrafficLimits? Limits = null,
+    bool? OverrideLimits = null)
+{
+    private long? _templateId = TemplateId;
+
+    [JsonIgnore]
+    public bool TemplateIdSpecified { get; private set; } = TemplateId.HasValue;
+
+    public long? TemplateId
+    {
+        get => _templateId;
+        init
+        {
+            _templateId = value;
+            TemplateIdSpecified = true;
+        }
+    }
+
+    /// <summary>
+    /// ctor
+    /// </summary>
+    [JsonConstructor]
+    public ClientRequest() : this(0, null, null, null, null, null, null, null)
+    {
+    }
+}
 
 /// <summary>
 /// Whether a client is on.
@@ -179,11 +209,14 @@ public static class ClientAnswers
                 traffic.Used.Rx,
                 traffic.Used.Tx,
                 traffic.Used.Total,
-                traffic.IsSpent),
+                traffic.IsSpent,
+                Limits: traffic.Limits),
             client.CreatedUtc,
             client.UpdatedUtc,
             DnsMode: DnsChoiceName.Of(client.DnsMode),
-            Dns: client.Dns);
+            Dns: client.Dns,
+            Limits: client.Limits,
+            OverrideLimits: client.OverrideLimits);
     }
 
     /// <summary>
@@ -203,11 +236,13 @@ public static class ClientAnswers
             Address = Clean(request.Address),
             IsEnabled = request.IsEnabled ?? held?.IsEnabled ?? true,
             Note = (request.Note ?? string.Empty).Trim(),
-            TemplateId = request.TemplateId,
+            TemplateId = request.TemplateIdSpecified ? request.TemplateId : held?.TemplateId,
             DnsMode = DnsChoiceName.Read(request.DnsMode, held?.DnsMode ?? DnsChoice.Auto),
             Dns = request.Dns is null ? held?.Dns ?? [] : Clean(request.Dns),
             SubscriptionId = request.SubscriptionId?.Trim() ?? held?.SubscriptionId ?? ClientDefaults.SubscriptionId(),
             DailyLimit = request.DailyLimit ?? held?.DailyLimit ?? 0,
+            Limits = request.Limits ?? held?.Limits,
+            OverrideLimits = request.OverrideLimits ?? held?.OverrideLimits ?? false,
             Inbound = InboundName.Read(request.Inbound, held?.Inbound ?? ClientInbound.Endpoint),
             Disconnect = request.Disconnect ?? held?.Disconnect ?? true,
         };

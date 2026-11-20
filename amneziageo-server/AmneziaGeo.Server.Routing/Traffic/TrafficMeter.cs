@@ -17,6 +17,8 @@ public readonly record struct TrafficRate(double Rx, double Tx);
 /// <param name="Tx">Bytes the peer was given since it was laid.</param>
 public readonly record struct TrafficReading(long ClientId, ulong Rx, ulong Tx);
 
+public readonly record struct TrafficObservation(bool TodayKnown, bool RateKnown, DateTimeOffset? ObservedUtc, DateTimeOffset? LastActivityUtc);
+
 /// <summary>
 /// The traffic of a client over one day and the counters of its peer read last.
 /// </summary>
@@ -58,6 +60,7 @@ public sealed class TrafficMeter
             if (day.Day == Day)
             {
                 track.Used = day.Used;
+                track.TodayKnown = true;
             }
         }
     }
@@ -72,6 +75,7 @@ public sealed class TrafficMeter
         {
             track.Used = default;
             track.Dirty = false;
+            track.TodayKnown = false;
         }
     }
 
@@ -92,6 +96,11 @@ public sealed class TrafficMeter
             {
                 var added = new ClientUsage(Since(track.Seen.Rx, reading.Rx), Since(track.Seen.Tx, reading.Tx));
                 track.Used = track.Used.Add(added);
+                if (added.Rx > 0 || added.Tx > 0)
+                {
+                    track.LastActivityUtc = now;
+                }
+                track.RateKnown = track.At is { } previous && now > previous;
                 track.Rate = track.At is { } at && now > at ? Per(added, (now - at).TotalSeconds) : default;
                 track.Dirty |= counted != track.Seen;
             }
@@ -102,6 +111,7 @@ public sealed class TrafficMeter
 
             track.Seen = counted;
             track.Known = true;
+            track.TodayKnown = true;
             track.At = now;
         }
 
@@ -111,6 +121,7 @@ public sealed class TrafficMeter
             {
                 track.Rate = default;
                 track.At = null;
+                track.RateKnown = false;
             }
         }
     }
@@ -167,6 +178,9 @@ public sealed class TrafficMeter
         }
     }
 
+    public TrafficObservation Observation(long clientId) => _tracks.TryGetValue(clientId, out var track)
+        ? new TrafficObservation(track.TodayKnown, track.RateKnown, track.At, track.LastActivityUtc) : default;
+
     private Track Take(long clientId)
     {
         if (!_tracks.TryGetValue(clientId, out var track))
@@ -195,5 +209,11 @@ public sealed class TrafficMeter
         public DateTimeOffset? At { get; set; }
 
         public TrafficRate Rate { get; set; }
+
+        public bool TodayKnown { get; set; }
+
+        public bool RateKnown { get; set; }
+
+        public DateTimeOffset? LastActivityUtc { get; set; }
     }
 }

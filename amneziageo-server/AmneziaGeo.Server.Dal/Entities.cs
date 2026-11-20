@@ -1,4 +1,5 @@
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Awg.Client;
 
 namespace AmneziaGeo.Server.Dal;
 
@@ -704,6 +705,10 @@ public sealed class ClientEntity
 
     public long DailyLimit { get; set; }
 
+    public string? LimitsJson { get; set; }
+
+    public bool OverrideLimits { get; set; }
+
     public int Inbound { get; set; }
 
     public bool Disconnect { get; set; } = true;
@@ -739,6 +744,32 @@ public sealed class TrafficEntity
     public long SeenRx { get; set; }
 
     public long SeenTx { get; set; }
+}
+
+/// <summary>
+/// Keeps the traffic of a client over a calendar period.
+/// </summary>
+public sealed class TrafficPeriodEntity
+{
+    public long ClientId { get; set; }
+
+    public string Period { get; set; } = TrafficLimitPeriod.Month;
+
+    public DateTimeOffset StartedUtc { get; set; }
+
+    public DateTimeOffset EndsUtc { get; set; }
+
+    public long Rx { get; set; }
+
+    public long Tx { get; set; }
+
+    public long SeenRx { get; set; }
+
+    public long SeenTx { get; set; }
+
+    public string Generation { get; set; } = string.Empty;
+
+    public DateTimeOffset ObservedUtc { get; set; }
 }
 
 /// <summary>
@@ -803,6 +834,8 @@ public sealed class TemplateEntity
     public string ProxyIds { get; set; } = string.Empty;
 
     public bool PresetsOnly { get; set; }
+
+    public string? LimitsJson { get; set; }
 
     public DateTimeOffset? RefreshedUtc { get; set; }
 

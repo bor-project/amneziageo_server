@@ -53,7 +53,8 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
         Func<ServerConfig, TunnelClient, string>? title = null,
         Func<ServerConfig, IReadOnlyList<string>>? panel = null,
         DnsFiles? files = null,
-        Func<ServerConfig, ServiceTlsIdentity?>? services = null)
+        Func<ServerConfig, ServiceTlsIdentity?>? services = null,
+        Func<TunnelClient, (ClientUsage Used, long Limit)>? accounting = null)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentNullException.ThrowIfNull(members);
@@ -86,7 +87,8 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
                     endpoint.UpdatedUtc,
                     endpoint.IsDefault,
                     endpoint.RequireUpdate));
-                shares.Add(new Share(used(member), member.DailyLimit));
+                var counted = accounting?.Invoke(member) ?? (used(member), member.DailyLimit);
+                shares.Add(new Share(counted.Item1, counted.Item2));
             }
         }
 

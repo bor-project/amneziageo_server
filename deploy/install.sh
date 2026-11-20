@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Puts the panel of this package on the host, whole or its web interface alone, and goes back a release.
 set -euo pipefail
+umask 077
 
 base=/opt/amneziageo-server
 data=/var/lib/amneziageo-server
@@ -70,8 +71,8 @@ adopt() {
 stage_release() {
   local target=$base/releases/$release tool
   if [ -d "$target" ]; then
-    for tool in wstunnel wstunnel-get wstunnel-quic; do
-      if [ -f "$here/$tool" ]; then
+    for tool in install.sh proxy-handover.sh wstunnel wstunnel-get wstunnel-quic; do
+      if [ -f "$here/$tool" ] && ! cmp -s "$here/$tool" "$target/$tool"; then
         install -m 755 "$here/$tool" "$target/$tool"
       fi
     done
@@ -81,7 +82,7 @@ stage_release() {
   rm -rf "$target.new"
   cp -a --no-preserve=ownership "$here/publish" "$target.new"
   rm -rf "$target.new/wwwroot"
-  cp "$here/install.sh" "$here/release" "$here/server" "$target.new/"
+  cp "$here/install.sh" "$here/proxy-handover.sh" "$here/release" "$here/server" "$target.new/"
   for tool in wstunnel wstunnel-get wstunnel-quic; do
     if [ -f "$here/$tool" ]; then
       install -m 755 "$here/$tool" "$target.new/"
@@ -187,8 +188,8 @@ keep_database() {
   fi
 
   target=$data/backup/$(date -u +%Y%m%d-%H%M%S)-$release
-  mkdir -p "$target"
-  cp -a "$data"/server.db* "$target/"
+  mkdir -p "$target" || return 1
+  cp -a "$data"/server.db* "$target/" || return 1
   echo "$target"
 }
 
@@ -235,73 +236,87 @@ prune() {
   fi
 }
 
-# Puts the whole panel on and starts the server over on it, going back where the new release does not come up.
+# Restores the panel and proxy services after a failed installation.
+whole_failed() {
+  local status=$1
+  trap - EXIT
+  set +e
+  if [ "$status" = 0 ]; then return; fi
+  systemctl stop "$unit" || true
+  if [ "$handover_changed" = 1 ]; then
+    restore_database "$handover_saved" || true
+    carry_tunnel "$handover_before" "releases/$release" || true
+    if [ -n "$handover_before" ]; then point "$base/current" "$handover_before"; else rm -f "$base/current"; fi
+    if [ -n "$handover_before_web" ]; then point "$base/wwwroot" "$handover_before_web"; else rm -f "$base/wwwroot"; fi
+    if [ -n "$handover_before_previous" ]; then point "$base/previous" "$handover_before_previous"; else rm -f "$base/previous"; fi
+    if [ -n "$handover_before_previous_web" ]; then point "$base/previous-web" "$handover_before_previous_web"; else rm -f "$base/previous-web"; fi
+  fi
+  proxy_enabled "$unit" "$handover_panel_enabled" || echo 'panel autostart state rollback failed' >&2
+  if proxy_restore "$handover_proxy_saved"; then
+    if [ "$handover_was" = active ]; then systemctl start "$unit" || true; fi
+  else
+    echo 'proxy service rollback failed; the panel remains stopped; inspect systemd journals' >&2
+  fi
+  exit "$status"
+}
+
+# Puts the whole panel on and starts the server over on it.
 whole() {
-  local before before_web before_previous was saved
+  handover_before= handover_before_web= handover_before_previous= handover_before_previous_web= handover_was= handover_saved= handover_changed=0 handover_proxy_saved= handover_panel_enabled=
   if [ ! -d "$here/publish" ]; then
     fail "this package carries no server: put it on with --ui"
   fi
-
+  source "$here/proxy-handover.sh"
   install -d "$base/releases" "$base/web" "$data" /etc/amneziageo-server
   adopt
   own
-  before=$(readlink "$base/current" || true)
-  before_web=$(readlink "$base/wwwroot" || true)
-  before_previous=$(readlink "$base/previous" || true)
-  if [ "$before" = "releases/$release" ] && [ -z "$force" ]; then
-    echo "the host already runs $release"
-    return 0
-  fi
-
+  handover_before=$(readlink "$base/current" || true)
+  handover_before_web=$(readlink "$base/wwwroot" || true)
+  handover_before_previous=$(readlink "$base/previous" || true)
+  handover_before_previous_web=$(readlink "$base/previous-web" || true)
   stage_release
   stage_web "$here/publish/wwwroot"
   shared
-  configure_proxy
-  was=$(systemctl is-active "$unit" || true)
-  if [ "$was" = active ]; then
-    systemctl stop "$unit"
+  handover_was=$(systemctl is-active "$unit" || true)
+  handover_panel_enabled=$(systemctl is-enabled "$unit" 2>/dev/null || true)
+  install -d -m 700 "$data/proxy-handover"
+  handover_proxy_saved=$(mktemp -d "$data/proxy-handover/transaction.XXXXXX")
+  proxy_snapshot "$handover_proxy_saved"
+  if [ "$handover_was" != active ] && grep -Eq $'\t(active|activating|reloading)$' "$handover_proxy_saved/legacy"; then
+    fail 'start the panel before migrating its active legacy proxy services'
   fi
-
-  saved=$(keep_database)
+  if [ -n "$handover_before" ]; then proxy_remember "$handover_before" "$handover_proxy_saved"; fi
+  trap 'whole_failed $?' EXIT
+  if [ "$handover_was" = active ]; then systemctl stop "$unit"; fi
+  proxy_suspend_legacy "$handover_proxy_saved"
+  configure_proxy
+  handover_saved=$(keep_database)
+  handover_changed=1
   point "$base/current" "releases/$release"
   point "$base/wwwroot" "web/$release"
-  if [ -n "$before" ] && [ "$before" != "releases/$release" ]; then
-    point "$base/previous" "$before"
-    point "$base/previous-web" "$before_web"
+  if [ -n "$handover_before" ] && [ "$handover_before" != "releases/$release" ]; then
+    point "$base/previous" "$handover_before"
+    point "$base/previous-web" "$handover_before_web"
   fi
-
   shortcuts
   systemctl enable --quiet "$unit"
-  if [ "$was" != active ]; then
-    prune
+  if [ "$handover_was" = active ] && ! start_server; then
+    fail "journalctl -u $unit tells what stopped $release; restoring the previous release"
+  fi
+  proxy_snapshot "$handover_proxy_saved/after"
+  proxy_remember "$release" "$handover_proxy_saved/after"
+  proxy_keep_installer
+  trap - EXIT
+  prune
+  if [ "$handover_was" != active ]; then
     echo "$release is on the host, the server is not running"
     if [ ! -f "$data/server.db" ]; then
       echo "  $base/AmneziaGeo.Server.Cli init      make the first administrator"
     fi
-
     echo "  systemctl start $unit                  start it"
     return 0
   fi
-
-  if start_server; then
-    prune
-    echo "the host runs $release${before:+, install.sh --rollback goes back to ${before##*/}}"
-    return 0
-  fi
-
-  echo "$release did not come up, the host goes back to ${before##*/}" >&2
-  systemctl stop "$unit" || true
-  restore_database "$saved"
-  carry_tunnel "$before" "releases/$release"
-  point "$base/current" "$before"
-  point "$base/wwwroot" "$before_web"
-  if [ -n "$before_previous" ]; then
-    point "$base/previous" "$before_previous"
-  fi
-
-  systemctl start "$unit" || true
-  prune
-  fail "journalctl -u $unit tells what stopped $release"
+  echo "the host runs $release${handover_before:+, install.sh --rollback goes back to ${handover_before##*/}}"
 }
 
 # Puts the web interface on alone while the server runs on.
@@ -340,36 +355,56 @@ web() {
   echo "the host serves the web interface $release, the server kept running"
 }
 
-# Goes back to the release before the current one and starts the server over on it.
+# Restores the running release after a failed rollback.
+rollback_failed() {
+  local status=$1
+  trap - EXIT
+  set +e
+  if [ "$status" = 0 ]; then return; fi
+  systemctl stop "$unit" || true
+  point "$base/current" "$handover_after"
+  point "$base/previous" "$handover_before"
+  point "$base/wwwroot" "$handover_after_web"
+  if [ -n "$handover_after_previous_web" ]; then point "$base/previous-web" "$handover_after_previous_web"; else rm -f "$base/previous-web"; fi
+  if proxy_restore "$handover_proxy_saved"; then
+    if [ "$handover_was" = active ]; then systemctl start "$unit" || true; fi
+  else
+    echo 'proxy service rollback failed; the panel remains stopped; inspect systemd journals' >&2
+  fi
+  exit "$status"
+}
+
+# Goes back to the preceding panel and proxy service ownership.
 rollback() {
-  local before after web was
-  before=$(readlink "$base/previous" || true)
-  after=$(readlink "$base/current" || true)
-  if [ -z "$before" ] || [ ! -d "$base/$before" ]; then
-    fail "there is no release to go back to"
-  fi
-
-  web=web/${before##*/}
-  if [ ! -d "$base/$web" ]; then
-    web=$(readlink "$base/previous-web" || readlink "$base/wwwroot")
-  fi
-
+  handover_before= handover_after= handover_web= handover_was= handover_proxy_saved= handover_profile= handover_after_web= handover_after_previous_web=
+  source "$here/proxy-handover.sh"
+  handover_before=$(readlink "$base/previous" || true)
+  handover_after=$(readlink "$base/current" || true)
+  if [ -z "$handover_before" ] || [ ! -d "$base/$handover_before" ]; then fail "there is no release to go back to"; fi
+  handover_profile=$(proxy_profile "$handover_before")
+  if [ ! -f "$handover_profile/panel.env" ]; then fail 'proxy ownership state is missing for the preceding release'; fi
+  handover_web=web/${handover_before##*/}
+  if [ ! -d "$base/$handover_web" ]; then handover_web=$(readlink "$base/previous-web" || readlink "$base/wwwroot"); fi
   own
-  was=$(systemctl is-active "$unit" || true)
-  if [ "$was" = active ]; then
-    systemctl stop "$unit"
-  fi
-
-  carry_tunnel "$before" "$after"
-  point "$base/previous-web" "$(readlink "$base/wwwroot")"
-  point "$base/wwwroot" "$web"
-  point "$base/current" "$before"
-  point "$base/previous" "$after"
-  if [ "$was" = active ] && ! start_server; then
-    fail "the server did not come up on ${before##*/}, journalctl -u $unit tells why"
-  fi
-
-  echo "the host runs ${before##*/}, install.sh --rollback goes back to ${after##*/}"
+  handover_was=$(systemctl is-active "$unit" || true)
+  handover_after_web=$(readlink "$base/wwwroot")
+  handover_after_previous_web=$(readlink "$base/previous-web" || true)
+  install -d -m 700 "$data/proxy-handover"
+  handover_proxy_saved=$(mktemp -d "$data/proxy-handover/transaction.XXXXXX")
+  proxy_snapshot "$handover_proxy_saved"
+  proxy_remember "$handover_after" "$handover_proxy_saved"
+  trap 'rollback_failed $?' EXIT
+  if [ "$handover_was" = active ]; then systemctl stop "$unit"; fi
+  proxy_suspend_legacy "$handover_proxy_saved"
+  proxy_restore "$handover_profile"
+  carry_tunnel "$handover_before" "$handover_after"
+  point "$base/previous-web" "$handover_after_web"
+  point "$base/wwwroot" "$handover_web"
+  point "$base/current" "$handover_before"
+  point "$base/previous" "$handover_after"
+  if [ "$handover_was" = active ] && ! start_server; then fail "the server did not come up on ${handover_before##*/}"; fi
+  trap - EXIT
+  echo "the host runs ${handover_before##*/}, install.sh --rollback goes back to ${handover_after##*/}"
   echo "the database stays as it is, the copies taken before each update lie in $data/backup"
 }
 

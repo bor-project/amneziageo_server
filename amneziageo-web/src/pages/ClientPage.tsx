@@ -1,8 +1,10 @@
-import { Navigate, Outlet, useNavigate, useOutletContext, useParams, useSearchParams } from "react-router-dom"
+import { Navigate, Outlet, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from "react-router-dom"
 import { draftOf, useAddClient, useChangeClient, useClientDraft, useClients } from "@/api/clients"
 import type { Client } from "@/api/clients"
 import { scopes } from "@/api/scopes"
+import { ClientInfo } from "@/components/ClientInfo"
 import { ClientConfig } from "@/components/ClientConfig"
+import { ClientLimits } from "@/components/ClientLimits"
 import { ClientForm } from "@/components/ClientForm"
 import { Tabs } from "@/components/Tabs"
 import { useTail } from "@/components/crumbs"
@@ -39,12 +41,12 @@ export function NewClient() {
   )
 }
 
-// A client with its two tabs: what it is handed out as, and its settings.
 export function ClientView() {
   const t = useText()
   const user = useAppSelector((s) => s.auth.user)
   const { clientId } = useParams()
   const clients = useClients()
+  const location = useLocation()
   const back = useSpot("/clients")
   const held = (clients.data ?? []).find((one) => one.id === Number(clientId))
 
@@ -58,17 +60,31 @@ export function ClientView() {
     )
   }
 
-  const tabs = [{ to: `/clients/${held.id}/export`, label: t("tab.export") }]
+  const tabs = [{ to: `/clients/${held.id}/info`, label: t("tab.info") }]
   if (holds(user, scopes.manageClients)) {
+    tabs.push({ to: `/clients/${held.id}/export`, label: t("tab.export") })
     tabs.push({ to: `/clients/${held.id}/settings`, label: t("tab.settings") })
   }
 
   return (
     <>
       <Tabs items={tabs} />
+      {!location.pathname.replace(/\/+$/, "").endsWith("/info") && <ClientLimits key={held.id} one={held} editable={holds(user, scopes.manageClients)} />}
       <Outlet context={held} />
     </>
   )
+}
+
+export function ClientStart() {
+  const user = useAppSelector((s) => s.auth.user)
+
+  return <Navigate to={holds(user, scopes.manageClients) ? "export" : "info"} replace />
+}
+
+export function ClientInformation() {
+  const held = useOutletContext<Client>()
+
+  return <ClientInfo key={held.id} id={held.id} />
 }
 
 export function ClientExport() {

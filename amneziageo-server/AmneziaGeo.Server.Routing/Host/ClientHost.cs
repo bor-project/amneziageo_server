@@ -37,6 +37,10 @@ public sealed class ClientHost
     private readonly TrafficLedger? _ledger;
     private readonly UdpPorts? _udp;
 
+    private readonly Lock _counterSync = new();
+
+    private readonly SemaphoreSlim _operations = new(1, 1);
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -55,6 +59,8 @@ public sealed class ClientHost
         _udp = udp;
     }
 
+    public Func<ServerConfig, IReadOnlyList<TunnelClient>, CancellationToken, Task<BandwidthSync>>? PrepareLimits { get; set; }
+
     /// <summary>
     /// Puts the clients of an endpoint that are on and within their daily limit on its interface and into the file the
     /// host boots from.
@@ -65,24 +71,53 @@ public sealed class ClientHost
         IReadOnlyList<string> gone,
         CancellationToken ct)
     {
+        await _operations.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return await SyncCoreAsync(config, clients, gone, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _operations.Release();
+        }
+    }
+
+    private async Task<ClientSync> SyncCoreAsync(
+        ServerConfig config,
+        IReadOnlyList<TunnelClient> clients,
+        IReadOnlyList<string> gone,
+        CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(clients);
         ArgumentNullException.ThrowIfNull(gone);
 
-        var laid = Laid(clients);
         try
         {
-            await _file.WriteAsync(config, laid, ct).ConfigureAwait(false);
+            var shaping = PrepareLimits is null ? new BandwidthSync(true, string.Empty)
+                : await PrepareLimits(config, clients, ct).ConfigureAwait(false);
+            var laid = Laid(clients);
             if (!_network.HasLink(config.Name))
             {
+                await _file.WriteAsync(config, laid, ct).ConfigureAwait(false);
                 return new ClientSync(false, $"the host carries no interface called '{config.Name}'");
             }
 
-            var away = laid.Where(client => !client.IsEnabled).Select(client => client.PublicKey).Concat(gone);
-            _devices.Apply(ClientDevice.Away(config, away));
-            _devices.Apply(ClientDevice.Update(config, laid));
+            var counterGate = _ledger?.CounterGate ?? _counterSync;
+            lock (counterGate)
+            {
+                laid = Laid(clients);
+                var away = laid.Where(client => !client.IsEnabled).Select(client => client.PublicKey).Concat(gone);
+                _devices.Apply(ClientDevice.Away(config, away));
+                foreach (var client in laid.Where(client => !client.IsEnabled))
+                {
+                    _ledger?.ForgetCounters(client.Id);
+                }
+                _devices.Apply(ClientDevice.Update(config, laid));
+            }
 
-            return ClientSync.Done;
+            await _file.WriteAsync(config, Laid(clients), ct).ConfigureAwait(false);
+            return shaping.IsDone ? ClientSync.Done : new ClientSync(false, shaping.Message);
         }
         catch (Exception ex)
             when (ex is NetlinkException or SocketException or IOException or UnauthorizedAccessException

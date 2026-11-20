@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
 import type { DnsMode } from "./dns"
+import type { TrafficLimits } from "./trafficLimits"
 
 export interface Template {
   id: number
@@ -16,6 +17,7 @@ export interface Template {
   presets: number[]
   presetsOnly: boolean
   standIns: boolean
+  limits: TrafficLimits | null
   clients: number
   clientIds: number[]
   refreshedUtc: string | null
@@ -34,6 +36,7 @@ export interface TemplateDraft {
   presets: number[]
   presetsOnly: boolean
   standIns: boolean
+  limits: TrafficLimits | null
   clients: number[]
 }
 
@@ -117,6 +120,7 @@ export function draftOf(template: Template): TemplateDraft {
     presets: template.presets,
     presetsOnly: template.presetsOnly,
     standIns: template.standIns,
+    limits: template.limits ?? null,
     clients: template.clientIds,
   }
 }
@@ -132,6 +136,7 @@ export const freshTemplate: TemplateDraft = {
   presets: [],
   presetsOnly: false,
   standIns: false,
+  limits: null,
   clients: [],
 }
 

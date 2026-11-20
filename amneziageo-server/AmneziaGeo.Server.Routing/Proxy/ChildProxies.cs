@@ -67,7 +67,13 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
             var trimmed = line.Trim();
             if (trimmed.StartsWith(prefix, StringComparison.Ordinal))
             {
-                return trimmed[prefix.Length..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var value = trimmed[prefix.Length..];
+                if (value.Length >= 2 && (value[0] == '"' && value[^1] == '"' || value[0] == '\'' && value[^1] == '\''))
+                {
+                    value = value[1..^1];
+                }
+
+                return value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             }
         }
 
@@ -183,6 +189,8 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
 
         private Process? _process;
 
+        private ProxyProcessOutput? _output;
+
         private string _fault = string.Empty;
 
         private string _fell = string.Empty;
@@ -228,6 +236,7 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
             {
                 if (_process is { } process)
                 {
+                    _output?.Dispose();
                     Kill(process);
                     process.Dispose();
                     _process = null;
@@ -256,10 +265,12 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
         {
             while (Current() is { } process)
             {
+                var output = _output;
                 try
                 {
                     await process.WaitForExitAsync(token).ConfigureAwait(false);
-                    Ended(process);
+                    var failure = output is null ? string.Empty : await output.CompleteAsync().ConfigureAwait(false);
+                    Ended(process, failure);
                     await Task.Delay(_pause, token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
@@ -269,6 +280,10 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
                 catch (InvalidOperationException)
                 {
                     return;
+                }
+                finally
+                {
+                    output?.Dispose();
                 }
 
                 if (!Launch(token))
@@ -286,13 +301,14 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
             }
         }
 
-        private void Ended(Process process)
+        private void Ended(Process process, string failure)
         {
             lock (_sync)
             {
                 if (ReferenceEquals(_process, process))
                 {
-                    _fault = $"{Path.GetFileName(_command.File)} ended with code {process.ExitCode}";
+                    var description = ProxyProcessError.Description(failure);
+                    _fault = $"{Path.GetFileName(_command.File)} ended with code {process.ExitCode}" + (description.Length > 0 ? ": " + description : string.Empty);
                     _fell = _fault;
                     _falls++;
                     _process = null;
@@ -310,7 +326,11 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
                     return false;
                 }
 
-                var start = new ProcessStartInfo { FileName = _command.File, UseShellExecute = false };
+                var start = new ProcessStartInfo
+                {
+                    FileName = _command.File, UseShellExecute = false,
+                    RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true,
+                };
                 foreach (var argument in _command.Arguments)
                 {
                     start.ArgumentList.Add(argument);
@@ -320,6 +340,10 @@ public sealed class ChildProxies : IProxyRunner, IDisposable
                 {
                     _process = Process.Start(ServiceSocket.Withhold(start));
                     _fault = _process is null ? $"the host did not start {_command.File}" : string.Empty;
+                    if (_process is not null)
+                    {
+                        _output = new ProxyProcessOutput(_process, token);
+                    }
                 }
                 catch (Win32Exception ex)
                 {

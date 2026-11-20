@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Installs the independent proxy service.
 set -euo pipefail
+umask 077
 base=/opt/amneziageo-proxy
 config=/etc/amneziageo-proxy
 data=/var/lib/amneziageo-proxy
@@ -10,6 +11,17 @@ action=${1:-install}
 release=$(cat "$here/release" 2>/dev/null || date -u +%Y%m%d-%H%M%S)
 [[ $release =~ ^[a-zA-Z0-9._-]+$ ]] || { echo 'invalid release' >&2; exit 1; }
 [ "$(id -u)" = 0 ] || { echo 'run as root' >&2; exit 1; }
+source "$here/proxy-handover.sh"
+
+proxy_install_failed() {
+  local status=$1
+  trap - EXIT
+  set +e
+  if [ "$status" = 0 ]; then return; fi
+  proxy_restore_daemon "$proxy_saved" || echo 'proxy service rollback failed; inspect systemd journals' >&2
+  exit "$status"
+}
+
 point() {
   ln -sfn "$2" "$1.next"
   mv -Tf "$1.next" "$1"
@@ -28,16 +40,16 @@ case $action in
     ;;
   --rollback)
     [ -L "$base/previous" ] || { echo 'no previous proxy release' >&2; exit 1; }
+    proxy_saved=$(mktemp -d "$data/rollback.XXXXXX")
+    proxy_snapshot_daemon "$proxy_saved"
+    trap 'proxy_install_failed $?' EXIT
     before=$(readlink "$base/current")
     previous=$(readlink "$base/previous")
     point "$base/current" "$previous"
-    if systemctl restart "$unit" && systemctl is-active --quiet "$unit"; then
-      point "$base/previous" "$before"
-      exit 0
-    fi
-    point "$base/current" "$before"
-    systemctl restart "$unit" || true
-    exit 1
+    if ! systemctl restart "$unit" || ! systemctl is-active --quiet "$unit"; then exit 1; fi
+    point "$base/previous" "$before"
+    trap - EXIT
+    exit 0
     ;;
   install) ;;
   *) echo 'usage: proxy-install.sh [--disable|--remove|--rollback]' >&2; exit 2 ;;
@@ -56,10 +68,17 @@ if [ ! -d "$target" ]; then
   cp -a --no-preserve=ownership "$source" "$target.new"
   for tool in wstunnel wstunnel-get wstunnel-quic; do install -m 755 "$here/$tool" "$target.new/$tool"; done
   install -m 755 "$here/proxy-install.sh" "$target.new/proxy-install.sh"
+  install -m 755 "$here/proxy-handover.sh" "$target.new/proxy-handover.sh"
   cp "$here/release" "$target.new/release"
   chown -R root:root "$target.new"
   mv -T "$target.new" "$target"
 fi
+proxy_saved=$(mktemp -d "$data/install.XXXXXX")
+proxy_snapshot_daemon "$proxy_saved"
+trap 'proxy_install_failed $?' EXIT
+for file in proxy-install.sh proxy-handover.sh; do
+  if ! cmp -s "$here/$file" "$target/$file"; then install -m 755 "$here/$file" "$target/$file"; fi
+done
 before=$(readlink "$base/current" || true)
 point "$base/current" "releases/$release"
 if [ ! -f "$config/proxies.json" ]; then
@@ -74,11 +93,8 @@ systemctl daemon-reload
 systemctl enable "$unit"
 if systemctl restart "$unit" && systemctl is-active --quiet "$unit"; then
   if [ -n "$before" ] && [ "$before" != "releases/$release" ]; then point "$base/previous" "$before"; fi
+  trap - EXIT
   echo "proxy service installed: $release"
   exit 0
-fi
-if [ -n "$before" ]; then
-  point "$base/current" "$before"
-  systemctl restart "$unit" || true
 fi
 exit 1

@@ -65,6 +65,7 @@ public static class ServerDatabase
         services.AddScoped<ConfigStore>();
         services.AddScoped<ClientStore>();
         services.AddScoped<TrafficStore>();
+        services.AddScoped<TrafficPeriodStore>();
         services.AddScoped<GeoStore>();
         services.AddScoped<OutboundStore>();
         services.AddScoped<RouteStore>();

@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using AmneziaGeo.Server.Core.Proxy;
+using AmneziaGeo.Server.Routing.Proxy;
 
 namespace AmneziaGeo.Server.Api.Proxies;
 
@@ -136,6 +137,9 @@ public static class ProxyDaemon
         var stream = new NetworkStream(connection, false);
         await using var disposing = stream.ConfigureAwait(false);
         using var process = new Process();
+        using var stopped = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var output = default(ProxyProcessOutput);
+        var disconnected = Task.CompletedTask;
         try
         {
             using var readDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -157,10 +161,9 @@ public static class ProxyDaemon
                 throw new IOException("The proxy process did not start.");
             }
 
-            var output = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null, ct);
-            var error = process.StandardError.BaseStream.CopyToAsync(Stream.Null, ct);
-            var ended = process.WaitForExitAsync(ct);
-            var disconnected = stream.ReadAsync(new byte[1], ct).AsTask();
+            output = new ProxyProcessOutput(process, stopped.Token, logger);
+            var ended = process.WaitForExitAsync(stopped.Token);
+            disconnected = ConnectionEndedAsync(stream, logger, stopped.Token);
             var finished = await Task.WhenAny(ended, disconnected).ConfigureAwait(false);
             if (finished != ended)
             {
@@ -168,9 +171,19 @@ public static class ProxyDaemon
             }
 
             await ended.ConfigureAwait(false);
-            await Task.WhenAll(output, error).ConfigureAwait(false);
-            logger.LogInformation("A proxy process ended with code {Code}", process.ExitCode);
-            await stream.WriteAsync(Encoding.UTF8.GetBytes(process.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n"), ct).ConfigureAwait(false);
+            var failure = await output.CompleteAsync().ConfigureAwait(false);
+            var description = ProxyProcessError.Description(failure);
+            if (process.ExitCode != 0)
+            {
+                logger.LogWarning("A proxy process ended with code {Code}: {Failure}", process.ExitCode, description);
+            }
+            else
+            {
+                logger.LogInformation("A proxy process ended with code {Code}", process.ExitCode);
+            }
+
+            var answer = process.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n" + failure + "\n";
+            await stream.WriteAsync(Encoding.UTF8.GetBytes(answer), ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or SocketException or JsonException or ArgumentException or InvalidOperationException or OperationCanceledException or System.ComponentModel.Win32Exception)
         {
@@ -193,6 +206,28 @@ public static class ProxyDaemon
             {
                 logger.LogDebug(ex, "The proxy process has ended");
             }
+
+            await stopped.CancelAsync().ConfigureAwait(false);
+            if (output is not null)
+            {
+                output.Stop();
+                await output.CompleteAsync().ConfigureAwait(false);
+                output.Dispose();
+            }
+
+            await disconnected.ConfigureAwait(false);
+        }
+    }
+
+    private static async Task ConnectionEndedAsync(Stream stream, ILogger logger, CancellationToken ct)
+    {
+        try
+        {
+            await stream.ReadAsync(new byte[1], ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException)
+        {
+            logger.LogDebug(ex, "The proxy control connection ended");
         }
     }
 
@@ -235,7 +270,26 @@ public static class ProxyDaemon
             await stream.WriteAsync(JsonSerializer.SerializeToUtf8Bytes(args, Json), deadline.Token).ConfigureAwait(false);
             await stream.WriteAsync("\n"u8.ToArray(), deadline.Token).ConfigureAwait(false);
             var answer = await ReadAsync(stream, CancellationToken.None).ConfigureAwait(false);
-            return int.TryParse(Encoding.UTF8.GetString(answer), out var code) ? code : 1;
+            var code = int.TryParse(Encoding.UTF8.GetString(answer), out var parsed) ? parsed : 1;
+            if (code != 0)
+            {
+                using var reasonDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                try
+                {
+                    var reason = await ReadAsync(stream, reasonDeadline.Token, true).ConfigureAwait(false);
+                    var description = ProxyProcessError.Description(Encoding.UTF8.GetString(reason));
+                    if (description.Length > 0)
+                    {
+                        Console.Error.WriteLine(description);
+                    }
+                }
+                catch (OperationCanceledException ex) when (reasonDeadline.IsCancellationRequested)
+                {
+                    Console.Error.WriteLine(ex);
+                }
+            }
+
+            return code;
         }
         catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException)
         {
@@ -245,7 +299,7 @@ public static class ProxyDaemon
         }
     }
 
-    private static async Task<byte[]> ReadAsync(Stream stream, CancellationToken ct)
+    private static async Task<byte[]> ReadAsync(Stream stream, CancellationToken ct, bool allowEnd = false)
     {
         using var buffer = new MemoryStream();
         var one = new byte[1];
@@ -254,6 +308,11 @@ public static class ProxyDaemon
             var count = await stream.ReadAsync(one, ct).ConfigureAwait(false);
             if (count == 0)
             {
+                if (allowEnd && buffer.Length == 0)
+                {
+                    return [];
+                }
+
                 throw new IOException("The proxy control connection ended.");
             }
 

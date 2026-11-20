@@ -73,6 +73,11 @@ public sealed record ClientTemplate
     public bool PresetsOnly { get; init; }
 
     /// <summary>
+    /// Limits the traffic of clients.
+    /// </summary>
+    public TrafficLimits? Limits { get; init; }
+
+    /// <summary>
     /// When the ranges were last worked out.
     /// </summary>
     public DateTimeOffset? RefreshedUtc { get; init; }

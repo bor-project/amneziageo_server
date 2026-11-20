@@ -588,6 +588,8 @@ public sealed class ClientStore
         Dns = Parts(entity.Dns),
         SubscriptionId = entity.SubscriptionId,
         DailyLimit = entity.DailyLimit,
+        Limits = TrafficLimitsData.Read(entity.LimitsJson),
+        OverrideLimits = entity.OverrideLimits,
         Inbound = (ClientInbound)entity.Inbound,
         Disconnect = entity.Disconnect,
         DisconnectRefused = entity.DisconnectRefused,
@@ -609,6 +611,8 @@ public sealed class ClientStore
         entity.Dns = string.Join(", ", client.Dns);
         entity.SubscriptionId = client.SubscriptionId.Trim();
         entity.DailyLimit = client.DailyLimit;
+        entity.LimitsJson = TrafficLimitsData.Write(client.Limits);
+        entity.OverrideLimits = client.OverrideLimits;
         entity.Inbound = (int)client.Inbound;
         entity.Disconnect = client.Disconnect;
     }

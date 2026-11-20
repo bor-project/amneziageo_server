@@ -20,6 +20,10 @@ public sealed record AccessQuery
     /// </summary>
     public string Client { get; init; } = string.Empty;
 
+    public string Inbound { get; init; } = string.Empty;
+
+    public IReadOnlyList<string>? Sources { get; init; }
+
     /// <summary>
     /// How the records were carried, or empty for every way.
     /// </summary>

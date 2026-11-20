@@ -393,6 +393,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("LimitsJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -402,6 +405,11 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("OverrideLimits")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("PresharedKey")
                         .IsRequired()
@@ -1470,6 +1478,9 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<int?>("Keepalive")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("LimitsJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Missed")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -1565,6 +1576,46 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsUnique();
 
                     b.ToTable("Traffic");
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.TrafficPeriodEntity", b =>
+                {
+                    b.Property<long>("ClientId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Period")
+                        .HasMaxLength(5)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("EndsUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Generation")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ObservedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Rx")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("SeenRx")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("SeenTx")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("StartedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Tx")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ClientId", "Period");
+
+                    b.ToTable("TrafficPeriods");
                 });
 
             modelBuilder.Entity("AmneziaGeo.Server.Dal.TransportProxyEntity", b =>
@@ -1816,6 +1867,15 @@ namespace AmneziaGeo.Server.Dal.Migrations
                 });
 
             modelBuilder.Entity("AmneziaGeo.Server.Dal.TrafficEntity", b =>
+                {
+                    b.HasOne("AmneziaGeo.Server.Dal.ClientEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.TrafficPeriodEntity", b =>
                 {
                     b.HasOne("AmneziaGeo.Server.Dal.ClientEntity", null)
                         .WithMany()

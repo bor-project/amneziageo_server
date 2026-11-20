@@ -39,6 +39,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<TrafficEntity> Traffic => Set<TrafficEntity>();
 
+    public DbSet<TrafficPeriodEntity> TrafficPeriods => Set<TrafficPeriodEntity>();
+
     public DbSet<GeoSourceEntity> GeoSources => Set<GeoSourceEntity>();
 
     public DbSet<OutboundEntity> Outbounds => Set<OutboundEntity>();
@@ -145,6 +147,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(client => client.Note).HasMaxLength(ClientRules.MaxNoteLength);
             entity.Property(client => client.SubscriptionId).HasMaxLength(ClientRules.MaxSubscriptionLength);
             entity.Property(client => client.Disconnect).HasDefaultValue(true);
+            entity.Property(client => client.OverrideLimits).HasDefaultValue(false);
             entity.HasIndex(client => new { client.ConfigId, client.Name }).IsUnique();
             entity.HasIndex(client => client.PublicKey).IsUnique();
             entity.HasOne<ConfigEntity>()
@@ -158,6 +161,17 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
         builder.Entity<TrafficEntity>(entity =>
         {
             entity.HasIndex(row => new { row.ClientId, row.Day }).IsUnique();
+            entity.HasOne<ClientEntity>()
+                .WithMany()
+                .HasForeignKey(row => row.ClientId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TrafficPeriodEntity>(entity =>
+        {
+            entity.HasKey(row => new { row.ClientId, row.Period });
+            entity.Property(row => row.Period).HasMaxLength(5);
+            entity.Property(row => row.Generation).HasMaxLength(128);
             entity.HasOne<ClientEntity>()
                 .WithMany()
                 .HasForeignKey(row => row.ClientId)

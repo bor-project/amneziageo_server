@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
 import type { DnsMode } from "./dns"
+import type { TrafficLimits, TrafficLimitsState } from "./trafficLimits"
 
 export interface ClientState {
   isOnline: boolean
@@ -16,6 +17,7 @@ export interface ClientState {
   todayTx: number
   used: number
   isSpent: boolean
+  limits: TrafficLimitsState | null
 }
 
 export type Inbound = "off" | "server" | "network" | "endpoint"
@@ -42,6 +44,8 @@ export interface Client {
   templateId: number | null
   subscriptionId: string
   dailyLimit: number
+  limits: TrafficLimits | null
+  overrideLimits: boolean
   inbound: Inbound
   disconnect: boolean
   dnsMode: DnsMode
@@ -65,6 +69,8 @@ export interface ClientDraft {
   templateId: number | null
   subscriptionId: string
   dailyLimit: number
+  limits: TrafficLimits | null
+  overrideLimits: boolean
   inbound: Inbound
   disconnect: boolean
   dnsMode: DnsMode
@@ -120,6 +126,10 @@ export function useChangeClient() {
   return useRefreshing(({ id, draft }: { id: number; draft: ClientDraft }) => client.put(`/clients/${id}`, draft))
 }
 
+export function useResetClientLimits() {
+  return useRefreshing(async (id: number) => (await client.post<Client>(`/clients/${id}/limits/reset`)).data)
+}
+
 export function useRemoveClient() {
   return useRefreshing((id: number) => client.delete(`/clients/${id}`))
 }
@@ -158,6 +168,8 @@ export function draftOf(one: Client): ClientDraft {
     templateId: one.templateId,
     subscriptionId: one.subscriptionId,
     dailyLimit: one.dailyLimit,
+    limits: one.limits ?? null,
+    overrideLimits: one.overrideLimits ?? false,
     inbound: one.inbound,
     disconnect: one.disconnect,
     dnsMode: one.dnsMode,

@@ -101,6 +101,7 @@ if [ "$kind" = proxy ]; then
   bash "$root/deploy/build-proxy-tools.sh" "$runtime" "$out"
   install -m 755 "$root/deploy/proxy-install.sh" "$out/install.sh"
   install -m 755 "$root/deploy/proxy-install.sh" "$out/proxy-install.sh"
+  install -m 755 "$root/deploy/proxy-handover.sh" "$out/proxy-handover.sh"
   install -m 644 "$root/deploy/amneziageo-proxy.service" "$out/"
   printf '%s\n' "${version:-$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$root/Directory.Build.props")}" > "$out/version"
   tar --owner=0 --group=0 --numeric-owner -czf "$out.tar.gz" -C "$(dirname "$out")" "$(basename "$out")"
@@ -133,7 +134,7 @@ else
   cp "$root/licenses/BouncyCastle.Cryptography.txt" "$out/publish/licenses/"
   cp "$root/deploy/amneziageo-server.service" "$out/"
   cp "$root/deploy/amneziageo-proxy@.service" "$out/"
-  cp "$root/deploy/amneziageo-proxy.service" "$root/deploy/proxy-install.sh" "$out/"
+  cp "$root/deploy/amneziageo-proxy.service" "$root/deploy/proxy-install.sh" "$root/deploy/proxy-handover.sh" "$out/"
   install -m 755 "$root/deploy/amneziageo-server" "$out/"
 fi
 

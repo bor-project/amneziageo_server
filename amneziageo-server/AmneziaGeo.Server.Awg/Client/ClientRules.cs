@@ -50,6 +50,7 @@ public static partial class ClientRules
             ?? CheckNote(client.Note)
             ?? CheckSubscription(client.SubscriptionId)
             ?? CheckLimit(client.DailyLimit)
+            ?? TrafficLimitsRules.Check(client.Limits)
             ?? CheckInbound(client.Inbound)
             ?? CheckDns(client.DnsMode, client.Dns);
     }

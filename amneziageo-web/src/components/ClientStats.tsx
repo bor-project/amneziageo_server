@@ -28,10 +28,12 @@ export function Speed({ one }: { one: Client }) {
 
 export function Traffic({ one }: { one: Client }) {
   const t = useText()
-  const used = bytes(t, one.state.used)
+  const limits = one.state.limits?.policy.enabled ? one.state.limits : null
+  const used = bytes(t, limits?.usedBytes ?? one.state.used)
+  const quota = limits?.policy.enabled ? limits.policy.quotaBytes : one.dailyLimit
 
-  if (one.dailyLimit > 0) {
-    return <>{t("clients.usedOf", { used, limit: bytes(t, one.dailyLimit) })}</>
+  if (quota > 0) {
+    return <>{t("clients.usedOf", { used, limit: bytes(t, quota) })}</>
   }
 
   return <>{used}</>
@@ -43,10 +45,19 @@ export function Handshake({ one }: { one: Client }) {
 
   return (
     <>
-      {one.isEnabled && one.state.isSpent ? (
+      {one.isEnabled && one.state.limits?.isBlocked ? (
+        <span className="text-alarm">{t(one.state.limits.isExhausted ? "trafficLimits.quotaBlocked" : "trafficLimits.blocked")}</span>
+      ) : one.isEnabled && one.state.limits?.isThrottled ? (
+        <span className="text-warn">{t("trafficLimits.throttled")}</span>
+      ) : one.isEnabled && !one.state.limits && one.state.isSpent ? (
         <span className="text-warn">{t("clients.spent")}</span>
       ) : (
         <>{seen(one, t, language)}</>
+      )}
+      {one.state.limits && !one.state.limits.applied && (
+        <div className="text-xs text-warn" title={one.state.limits.error || undefined}>
+          {t("trafficLimits.notApplied")}
+        </div>
       )}
       {one.state.cut.length > 0 && (
         <div className="text-xs text-warn">{t("clients.cut", { list: one.state.cut.join(", ") })}</div>

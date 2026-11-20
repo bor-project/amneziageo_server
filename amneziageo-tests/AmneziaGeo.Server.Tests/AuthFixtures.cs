@@ -68,7 +68,7 @@ public sealed class Bench : IDisposable
     /// <summary>
     /// ctor
     /// </summary>
-    public Bench(AuthOptions? options = null, DateTimeOffset? now = null)
+    public Bench(AuthOptions? options = null, DateTimeOffset? now = null, Action<IServiceCollection>? configure = null)
     {
         _path = Path.Combine(Path.GetTempPath(), $"amneziageo-{Guid.NewGuid():N}.db");
         _geo = Path.Combine(Path.GetTempPath(), $"amneziageo-geo-{Guid.NewGuid():N}");
@@ -91,6 +91,7 @@ public sealed class Bench : IDisposable
         services.AddScoped<SubscriptionFeed>();
         services.AddSingleton(new SubscriptionPage(PagePath));
 
+        configure?.Invoke(services);
         _services = services.BuildServiceProvider();
         ServerDatabase.PrepareAsync(_services).GetAwaiter().GetResult();
         _scope = _services.CreateScope();

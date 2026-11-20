@@ -329,6 +329,29 @@ public sealed class AccessRecords
             command.Parameters.AddWithValue("$client", query.Client);
         }
 
+        if (query.Inbound.Length > 0)
+        {
+            where.Append(" AND Inbound = $inbound");
+            command.Parameters.AddWithValue("$inbound", query.Inbound);
+        }
+
+        if (query.Sources is { } sources)
+        {
+            if (sources.Count == 0)
+            {
+                where.Append(" AND 0");
+            }
+            else
+            {
+                var parameters = sources.Select((source, index) => $"$source{index}").ToArray();
+                where.Append(" AND Source IN (").AppendJoin(", ", parameters).Append(')');
+                for (var index = 0; index < sources.Count; index++)
+                {
+                    command.Parameters.AddWithValue(parameters[index], sources[index]);
+                }
+            }
+        }
+
         if (query.Verdict.Length > 0)
         {
             where.Append(" AND Verdict = $verdict");

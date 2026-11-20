@@ -78,6 +78,16 @@ public sealed record TunnelClient
     public long DailyLimit { get; init; }
 
     /// <summary>
+    /// Holds the traffic limits of the client.
+    /// </summary>
+    public TrafficLimits? Limits { get; init; }
+
+    /// <summary>
+    /// Overrides the traffic limits of the template.
+    /// </summary>
+    public bool OverrideLimits { get; init; }
+
+    /// <summary>
     /// What the client takes from the tunnel.
     /// </summary>
     public ClientInbound Inbound { get; init; }

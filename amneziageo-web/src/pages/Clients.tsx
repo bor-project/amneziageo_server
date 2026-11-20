@@ -81,8 +81,11 @@ export function Clients() {
 
   function actionsOf(one: Client): RowAction[] {
     return [
-      { label: t("action.export"), onPick: () => navigate(`/clients/${one.id}/export`) },
-      { label: t("action.settings"), onPick: () => navigate(`/clients/${one.id}/settings`) },
+      { label: t("tab.info"), onPick: () => navigate(`/clients/${one.id}/info`) },
+      ...(may ? [
+        { label: t("action.export"), onPick: () => navigate(`/clients/${one.id}/export`) },
+        { label: t("action.settings"), onPick: () => navigate(`/clients/${one.id}/settings`) },
+      ] : []),
     ]
   }
 
@@ -224,19 +227,13 @@ export function Clients() {
               body: "font-semibold text-ink",
               cell: (one) => (
                 <span className="flex min-w-0 items-center gap-2">
-                  {may ? (
-                    <Link
-                      to={`/clients/${one.id}/export`}
-                      title={one.name}
-                      className="max-w-full shrink-0 truncate hover:text-brand-ink"
-                    >
-                      {one.name}
-                    </Link>
-                  ) : (
-                    <span title={one.name} className="max-w-full shrink-0 truncate">
-                      {one.name}
-                    </span>
-                  )}
+                  <Link
+                    to={`/clients/${one.id}/${may ? "export" : "info"}`}
+                    title={one.name}
+                    className="max-w-full shrink-0 truncate hover:text-brand-ink"
+                  >
+                    {one.name}
+                  </Link>
                   <DnsMark findings={findingsAbout(report, one.id)} view="client" />
                   {one.state.isOnline && <span className="min-w-0 truncate text-xs text-good">{t("clients.online")}</span>}
                   {!one.isEnabled && <span className="min-w-0 truncate text-xs text-muted">{t("clients.off")}</span>}
@@ -291,7 +288,7 @@ export function Clients() {
               key: "traffic",
               caption: t("clients.traffic"),
               width: 112,
-              sort: (one) => one.state.used,
+              sort: (one) => one.state.limits?.usedBytes ?? one.state.used,
               cell: (one) => <Traffic one={one} />,
             },
             {
@@ -311,7 +308,7 @@ export function Clients() {
               caption: t("clients.actions"),
               width: 56,
               tail: true,
-              cell: (one) => may && <RowActions title={t("clients.actions")} actions={actionsOf(one)} />,
+              cell: (one) => <RowActions title={t("clients.actions")} actions={actionsOf(one)} />,
             },
           ]}
         />

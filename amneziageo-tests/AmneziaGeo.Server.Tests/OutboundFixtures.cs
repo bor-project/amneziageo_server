@@ -66,7 +66,13 @@ public sealed class Ledger : IHostNetwork
     /// <summary>
     /// Tells whether the host carries an interface.
     /// </summary>
-    public bool HasLink(string name) => Links.Contains(name);
+    public Action? BeforeLinkCheck { get; set; }
+
+    public bool HasLink(string name)
+    {
+        BeforeLinkCheck?.Invoke();
+        return Links.Contains(name);
+    }
 
     /// <summary>
     /// Tells whether an interface is on the host and up.

@@ -460,6 +460,7 @@ public sealed class TemplateStore
         Presets = Numbers(entity.Presets),
         ProxyIds = Numbers(entity.ProxyIds),
         PresetsOnly = entity.PresetsOnly,
+        Limits = TrafficLimitsData.Read(entity.LimitsJson),
         RefreshedUtc = entity.RefreshedUtc,
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
@@ -479,6 +480,7 @@ public sealed class TemplateStore
         entity.Presets = string.Join(", ", template.Presets);
         entity.ProxyIds = string.Join(", ", template.ProxyIds);
         entity.PresetsOnly = template.PresetsOnly;
+        entity.LimitsJson = TrafficLimitsData.Write(template.Limits);
         entity.RefreshedUtc = template.RefreshedUtc;
     }
 

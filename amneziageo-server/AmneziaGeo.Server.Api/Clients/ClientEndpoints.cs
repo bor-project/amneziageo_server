@@ -18,7 +18,7 @@ namespace AmneziaGeo.Server.Api.Clients;
 /// <summary>
 /// The routes the clients of the endpoints are managed through.
 /// </summary>
-public static class ClientEndpoints
+public static partial class ClientEndpoints
 {
     /// <summary>
     /// Maps the client management routes.
@@ -28,6 +28,8 @@ public static class ClientEndpoints
         var reading = routes.MapGroup("/api/clients").RequireScope(Scopes.ReadState);
         reading.MapGet("/", ListAsync);
         reading.MapGet("/{id:long}", FindAsync);
+        reading.MapGet("/{id:long}/info", InfoAsync);
+        reading.MapGet("/{id:long}/statistics", StatisticsAsync).RequireScope(Scopes.ManageAccess);
 
         var writing = routes.MapGroup("/api/clients").RequireScope(Scopes.ManageClients);
         writing.MapGet("/draft", DraftAsync);
@@ -38,6 +40,7 @@ public static class ClientEndpoints
         writing.MapPost("/switch", SwitchAllAsync);
         writing.MapPost("/remove", RemoveAllAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
+        writing.MapPost("/{id:long}/limits/reset", ResetLimitsAsync);
         writing.MapPost("/{id:long}/switch", SwitchAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
@@ -106,6 +109,38 @@ public static class ClientEndpoints
 
         var endpoint = await configs.FindAsync(client.ConfigId, ct).ConfigureAwait(false);
 
+        return Results.Ok(Told(Answer(client, endpoint, host, guard, ledger, Secrets(context)), signals));
+    }
+
+    private static async Task<IResult> ResetLimitsAsync(
+        long id,
+        HttpContext context,
+        ConfigStore configs,
+        ClientStore store,
+        ClientHost host,
+        ClientGuard guard,
+        TrafficLedger ledger,
+        ClientMeter meter,
+        ClientSignals signals,
+        CancellationToken ct)
+    {
+        var client = await store.FindAsync(id, ct).ConfigureAwait(false);
+        if (client is null)
+        {
+            return Refuse(StatusCodes.Status404NotFound, "unknown-client", $"there is no client under the number {id}");
+        }
+
+        if (!await meter.ResetAsync(id, ct).ConfigureAwait(false))
+        {
+            return Refuse(StatusCodes.Status400BadRequest, "client-quota-unavailable", "the client has no active traffic quota");
+        }
+
+        if (ledger.Of(client).Limits is { Applied: false, Error.Length: > 0 } limits)
+        {
+            return Refuse(StatusCodes.Status409Conflict, "client-limits-not-applied", limits.Error);
+        }
+
+        var endpoint = await configs.FindAsync(client.ConfigId, ct).ConfigureAwait(false);
         return Results.Ok(Told(Answer(client, endpoint, host, guard, ledger, Secrets(context)), signals));
     }
 

@@ -55,6 +55,7 @@ var app = builder.Build();
 app.ReportListening();
 app.WriteHealth();
 app.MigrateDatabase();
+await app.Services.GetRequiredService<ClientMeter>().InitializeAsync(CancellationToken.None).ConfigureAwait(false);
 app.SeedPanel();
 app.SettleFirewall();
 app.StartOverview();

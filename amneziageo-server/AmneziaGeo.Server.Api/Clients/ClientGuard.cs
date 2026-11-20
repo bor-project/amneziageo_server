@@ -4,6 +4,7 @@ using AmneziaGeo.Server.Awg.Netlink;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Guard;
 using AmneziaGeo.Server.Routing.Host;
+using AmneziaGeo.Server.Routing.Traffic;
 
 namespace AmneziaGeo.Server.Api.Clients;
 
@@ -56,6 +57,10 @@ public sealed class ClientGuard : BackgroundService
 
     private readonly PeerGuard _guard;
 
+    private readonly TrafficLedger? _ledger;
+
+    private readonly Lock _counterSync = new();
+
     private readonly Lock _sync = new();
 
     private readonly List<Settle> _settles = [];
@@ -86,7 +91,7 @@ public sealed class ClientGuard : BackgroundService
         GuardOptions options,
         TimeProvider time,
         ILogger<ClientGuard> logger,
-        DatabaseVersion? version = null, AmneziaGeo.Server.Api.Proxies.SharedUdpHost? udp = null)
+        DatabaseVersion? version = null, AmneziaGeo.Server.Api.Proxies.SharedUdpHost? udp = null, TrafficLedger? ledger = null)
     {
         _scopes = scopes;
         _devices = devices;
@@ -96,6 +101,7 @@ public sealed class ClientGuard : BackgroundService
         _logger = logger;
         _version = version;
         _udp = udp;
+        _ledger = ledger;
         _guard = new PeerGuard(options.IsEnabled);
     }
 
@@ -272,6 +278,11 @@ public sealed class ClientGuard : BackgroundService
 
     private void Relay(GuardCut cut, DateTimeOffset now)
     {
+        if (_ledger?.CanCarry(cut.Peer.PublicKey) == false)
+        {
+            return;
+        }
+
         _logger.LogWarning(
             "the configuration of {Peer} on {Interface} came from a second device: {Cut} is cut off, {First} is kept",
             cut.Peer.PublicKey,
@@ -281,27 +292,37 @@ public sealed class ClientGuard : BackgroundService
 
         try
         {
-            _devices.Apply(new AwgUpdate
+            var counterGate = _ledger?.CounterGate ?? _counterSync;
+            lock (counterGate)
             {
-                Name = cut.Interface,
-                Peers = [new AwgPeerUpdate { PublicKey = cut.Peer.PublicKey, Remove = true }],
-            });
-            _devices.Apply(new AwgUpdate
-            {
-                Name = cut.Interface,
-                Peers =
-                [
-                    new AwgPeerUpdate
-                    {
-                        PublicKey = cut.Peer.PublicKey,
-                        PresharedKey = cut.Peer.PresharedKey,
-                        Endpoint = cut.First,
-                        PersistentKeepalive = new AwgRange(Kick),
-                        ReplaceAllowedIps = true,
-                        AllowedIps = cut.Peer.AllowedIps,
-                    },
-                ],
-            });
+                if (_ledger?.CanCarry(cut.Peer.PublicKey) == false)
+                {
+                    return;
+                }
+
+                _devices.Apply(new AwgUpdate
+                {
+                    Name = cut.Interface,
+                    Peers = [new AwgPeerUpdate { PublicKey = cut.Peer.PublicKey, Remove = true }],
+                });
+                _ledger?.ForgetCounters(cut.Peer.PublicKey);
+                _devices.Apply(new AwgUpdate
+                {
+                    Name = cut.Interface,
+                    Peers =
+                    [
+                        new AwgPeerUpdate
+                        {
+                            PublicKey = cut.Peer.PublicKey,
+                            PresharedKey = cut.Peer.PresharedKey,
+                            Endpoint = cut.First,
+                            PersistentKeepalive = new AwgRange(Kick),
+                            ReplaceAllowedIps = true,
+                            AllowedIps = cut.Peer.AllowedIps,
+                        },
+                    ],
+                });
+            }
             _settles.Add(new Settle(cut.Interface, cut.Peer.PublicKey, cut.Peer.PersistentKeepalive, now + KickFor));
         }
         catch (NetlinkException ex)

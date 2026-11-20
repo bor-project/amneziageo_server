@@ -25,7 +25,8 @@ public sealed record TemplateResponse(
     string DnsMode = DnsChoiceName.Auto,
     IReadOnlyList<long>? ClientIds = null,
     bool PresetsOnly = false,
-    IReadOnlyList<long>? ProxyIds = null);
+    IReadOnlyList<long>? ProxyIds = null,
+    TrafficLimits? Limits = null);
 
 /// <summary>
 /// The settings a client template is added or changed with.
@@ -41,7 +42,8 @@ public sealed record TemplateRequest(
     string? DnsMode = null,
     IReadOnlyList<long>? Clients = null,
     bool? PresetsOnly = null,
-    IReadOnlyList<long>? ProxyIds = null);
+    IReadOnlyList<long>? ProxyIds = null,
+    TrafficLimits? Limits = null);
 
 /// <summary>
 /// The entries the panel asks what they come out as.
@@ -120,7 +122,8 @@ public static class TemplateAnswers
             DnsChoiceName.Of(template.DnsMode),
             clients,
             template.PresetsOnly,
-            template.ProxyIds);
+            template.ProxyIds,
+            template.Limits);
     }
 
     /// <summary>
@@ -165,6 +168,7 @@ public static class TemplateAnswers
             ProxyIds = [.. (request.ProxyIds ?? []).Distinct()],
             PresetsOnly = request.PresetsOnly ?? false,
             StandIns = request.StandIns ?? false,
+            Limits = request.Limits,
         };
     }
 
@@ -182,6 +186,7 @@ public static class TemplateAnswers
         return asked with
         {
             StandIns = request.StandIns ?? held.StandIns,
+            Limits = request.Limits ?? held.Limits,
             ProxyIds = request.ProxyIds is null ? held.ProxyIds : asked.ProxyIds,
             PresetsOnly = request.PresetsOnly ?? (held.PresetsOnly && asked.Presets.Count > 0),
         };

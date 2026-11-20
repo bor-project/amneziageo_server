@@ -32,6 +32,8 @@ public static class ClientServices
         services.AddSingleton<InterfaceFile>();
         services.AddSingleton<TrafficLedger>();
         services.AddSingleton<ClientHost>();
+        services.AddSingleton<ClientBandwidthHost>();
+        services.AddSingleton<ClientMeter>();
         services.AddScoped<TemplateRefresher>();
         services.AddScoped<TemplateRenewer>();
         services.AddSingleton<TemplateSchedule>();
@@ -45,7 +47,7 @@ public static class ClientServices
                 provider.GetService<AmneziaGeo.Server.Api.Proxies.SharedUdpHost>()));
         services.AddSingleton<ClientGuard>();
         services.AddHostedService(provider => provider.GetRequiredService<ClientGuard>());
-        services.AddHostedService<ClientMeter>();
+        services.AddHostedService(provider => provider.GetRequiredService<ClientMeter>());
         services.AddSingleton(provider =>
         {
             var host = provider.GetRequiredService<ClientHost>();

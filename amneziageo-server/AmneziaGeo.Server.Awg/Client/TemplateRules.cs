@@ -27,6 +27,7 @@ public static class TemplateRules
             ?? CheckChoice(template.DnsMode, template.Dns)
             ?? CheckMtu(template.Mtu)
             ?? CheckKeepalive(template.Keepalive)
+            ?? TrafficLimitsRules.Check(template.Limits)
             ?? CheckPresetsOnly(template.PresetsOnly, template.Presets);
     }
 

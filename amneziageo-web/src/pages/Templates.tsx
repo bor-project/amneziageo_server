@@ -51,6 +51,7 @@ export function Templates() {
         proxyIds: [],
           presetsOnly: false,
           standIns: false,
+          limits: null,
           clients: defaults.clientIds.length,
           clientIds: defaults.clientIds,
           refreshedUtc: null,
