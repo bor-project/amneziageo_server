@@ -2,11 +2,12 @@ import { useState } from "react"
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { complaint } from "@/api/auth"
-import { useClientInfo, useClientStatistics } from "@/api/clientInfo"
+import { useClientInfo, useClientStatistics, useResetClientTraffic } from "@/api/clientInfo"
 import type { ClientInformation } from "@/api/clientInfo"
 import { useFailure } from "@/api/failure"
 import { scopes } from "@/api/scopes"
-import { card, fieldBox, label } from "@/components/styles"
+import { card, danger, fieldBox, label, secondary, toolRisky } from "@/components/styles"
+import { Dialog } from "@/components/Dialog"
 import { bytes, rate, span } from "@/format"
 import { useLanguage, useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -74,11 +75,19 @@ export function ClientInfo({ id }: { id: number }) {
       </Section>
 
       <Section title={t("clients.traffic")} name="traffic" tools={
-        <select aria-label={t("clientInfo.trafficPeriod")} value={days} onChange={(event) => setDays(Number(event.target.value))} className={`max-w-full ${fieldBox}`}>
-          {[7, 30, 90].map((value) => <option key={value} value={value}>{t("clientInfo.lastDays", { days: value })}</option>)}
-        </select>
+        <div className="flex max-w-full flex-wrap items-center gap-2">
+          <select aria-label={t("clientInfo.trafficPeriod")} value={days} onChange={(event) => setDays(Number(event.target.value))} className={`max-w-full ${fieldBox}`}>
+            {[7, 30, 90].map((value) => <option key={value} value={value}>{t("clientInfo.lastDays", { days: value })}</option>)}
+          </select>
+          {traffic.total && holds(user, scopes.manageClients) && <ResetTraffic key={id} id={id} name={data.name} />}
+        </div>
       }>
         <Facts>
+          <Fact title={t("clientInfo.totalTraffic")}>{amount(traffic.total?.totalBytes ?? null)}</Fact>
+          <Fact title={t("clientInfo.totalFromClient")}>{amount(traffic.total?.rxBytes ?? null)}</Fact>
+          <Fact title={t("clientInfo.totalToClient")}>{amount(traffic.total?.txBytes ?? null)}</Fact>
+          <Fact title={t("clientInfo.accountingSince")}>{traffic.total?.resetUtc ? date(traffic.total.resetUtc) : traffic.total?.sinceDay ?? t("clientInfo.unavailable")}</Fact>
+          <Fact title={t("clientInfo.lastTrafficReset")}>{traffic.total?.resetUtc ? date(traffic.total.resetUtc) : t("clientInfo.none")}</Fact>
           <Fact title={t("clientInfo.peerFromClient")}>{amount(traffic.peerRxBytes)}</Fact>
           <Fact title={t("clientInfo.peerToClient")}>{amount(traffic.peerTxBytes)}</Fact>
           <Fact title={t("clientInfo.speedFromClient")}>{speed(traffic.rxRate)}</Fact>
@@ -128,6 +137,31 @@ export function ClientInfo({ id }: { id: number }) {
       <Statistics id={id} state={data.statistics} />
     </div>
   )
+}
+
+function ResetTraffic({ id, name }: { id: number; name: string }) {
+  const t = useText()
+  const reset = useResetClientTraffic()
+  const [asking, setAsking] = useState(false)
+
+  function close() {
+    if (!reset.isPending) {
+      setAsking(false)
+    }
+  }
+
+  return <>
+    <button type="button" className={toolRisky} disabled={reset.isPending}
+      title={t("clientInfo.resetTrafficHint")}
+      onClick={() => { reset.reset(); setAsking(true) }}>{t("clientInfo.resetTraffic")}</button>
+    {asking && <Dialog title={t("clientInfo.resetTrafficTitle", { name })} onClose={close} actions={<>
+      <button type="button" className={secondary} disabled={reset.isPending} onClick={close}>{t("clients.cancel")}</button>
+      <button type="button" className={danger} disabled={reset.isPending}
+        onClick={() => reset.mutate(id, { onSuccess: () => setAsking(false) })}>{t("clientInfo.resetTraffic")}</button>
+    </>}>
+      {reset.error !== null ? <span role="alert" className="text-alarm">{t(complaint(reset.error))}</span> : undefined}
+    </Dialog>}
+  </>
 }
 
 function Limits({ limits }: { limits: ClientInformation["limits"] }) {

@@ -497,7 +497,9 @@ function Grip() {
 // Names the whole text of a cell that is cut short.
 function hint(event: MouseEvent<HTMLTableCellElement>) {
   const cell = event.currentTarget
-  if (cell.scrollWidth > cell.clientWidth) {
+  const clipped = cell.scrollWidth > cell.clientWidth
+    || [...cell.querySelectorAll<HTMLElement>("*")].some((one) => one.scrollWidth > one.clientWidth)
+  if (clipped) {
     cell.title = cell.innerText
   } else {
     cell.removeAttribute("title")

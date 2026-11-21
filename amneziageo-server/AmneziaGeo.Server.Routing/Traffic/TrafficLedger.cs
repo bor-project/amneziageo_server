@@ -16,6 +16,8 @@ public sealed record ClientTraffic(TrafficRate Rate, ClientUsage Used, bool IsSp
     public static readonly ClientTraffic None = new(default, default, false);
 
     public ClientLimitStatus? Limits { get; init; }
+
+    public TrafficTotal? Total { get; init; }
 }
 
 public sealed record ClientTrafficSnapshot(DateOnly Day, ClientTraffic Traffic, TrafficObservation Observation);
@@ -34,6 +36,8 @@ public sealed class TrafficLedger
     private readonly TrafficMeter _meter;
 
     private readonly TrafficPeriodMeter _periods = new();
+
+    private readonly Dictionary<long, TrafficHistory> _history = [];
 
     private readonly Dictionary<long, TrafficLimits> _limits = [];
 
@@ -104,8 +108,22 @@ public sealed class TrafficLedger
         lock (_sync)
         {
             _meter.Keep(clients.Select(client => client.Id).ToHashSet());
+            var previous = readings.Select(one => one.ClientId).Distinct()
+                .ToDictionary(id => id, _meter.Used);
             _meter.Observe(readings, now);
             _periods.Observe(clients, readings, generations ?? new Dictionary<long, string>(), now);
+            foreach (var (id, before) in previous)
+            {
+                var after = _meter.Used(id);
+                var added = new ClientUsage(after.Rx - Math.Min(after.Rx, before.Rx), after.Tx - Math.Min(after.Tx, before.Tx));
+                _history[id] = History(id).Add(added, _meter.Day);
+            }
+
+            var kept = clients.Select(client => client.Id).ToHashSet();
+            foreach (var id in _history.Keys.Where(id => !kept.Contains(id)).ToArray())
+            {
+                _history.Remove(id);
+            }
         }
     }
 
@@ -142,7 +160,10 @@ public sealed class TrafficLedger
         {
             var used = _meter.Used(client.Id);
 
-            return new ClientTraffic(_meter.Rate(client.Id), used, Blocked(client, used)) { Limits = LimitStatus(client) };
+            return new ClientTraffic(_meter.Rate(client.Id), used, Blocked(client, used))
+            {
+                Limits = LimitStatus(client), Total = History(client.Id).Total(),
+            };
         }
     }
 
@@ -178,10 +199,43 @@ public sealed class TrafficLedger
         lock (_sync)
         {
             var used = _meter.Used(client.Id);
-            var traffic = new ClientTraffic(_meter.Rate(client.Id), used, Blocked(client, used)) { Limits = LimitStatus(client) };
+            var traffic = new ClientTraffic(_meter.Rate(client.Id), used, Blocked(client, used))
+            {
+                Limits = LimitStatus(client), Total = History(client.Id).Total(),
+            };
             return new ClientTrafficSnapshot(_meter.Day, traffic, _meter.Observation(client.Id));
         }
     }
+
+    public void LoadHistory(IEnumerable<TrafficHistory> rows)
+    {
+        lock (_sync)
+        {
+            foreach (var row in rows)
+            {
+                _history[row.ClientId] = row;
+            }
+        }
+    }
+
+    public ClientUsage Cumulative(long clientId)
+    {
+        lock (_sync)
+        {
+            return History(clientId).Used;
+        }
+    }
+
+    public void AcceptTrafficReset(long clientId, ClientUsage baseline, DateTimeOffset now)
+    {
+        lock (_sync)
+        {
+            _history[clientId] = History(clientId) with { Reset = baseline, ResetUtc = now };
+        }
+    }
+
+    private TrafficHistory History(long clientId) =>
+        _history.GetValueOrDefault(clientId) ?? new TrafficHistory(clientId, default, null, default, null);
 
     public TrafficObservation Observation(long clientId)
     {

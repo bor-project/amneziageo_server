@@ -82,6 +82,39 @@ public sealed class TrafficStore
         return [.. found.Select(Read)];
     }
 
+    public async Task<IReadOnlyList<TrafficHistory>> HistoryAsync(CancellationToken ct)
+    {
+        var clients = await _db.Clients.AsNoTracking()
+            .Select(one => new { one.Id, one.TrafficResetRx, one.TrafficResetTx, one.TrafficResetUtc })
+            .ToListAsync(ct).ConfigureAwait(false);
+        var totals = clients.ToDictionary(one => one.Id, one => new TrafficHistory(one.Id, default, null,
+            new ClientUsage(one.TrafficResetRx, one.TrafficResetTx), one.TrafficResetUtc));
+        await foreach (var row in _db.Traffic.AsNoTracking().AsAsyncEnumerable().WithCancellation(ct).ConfigureAwait(false))
+        {
+            if (totals.TryGetValue(row.ClientId, out var held))
+            {
+                totals[row.ClientId] = held.Add(new ClientUsage(Unsigned(row.Rx), Unsigned(row.Tx)), row.Day);
+            }
+        }
+
+        return [.. totals.Values];
+    }
+
+    public async Task<bool> ResetAsync(long clientId, ClientUsage baseline, DateTimeOffset now, CancellationToken ct)
+    {
+        var client = await _db.Clients.FindAsync([clientId], ct).ConfigureAwait(false);
+        if (client is null)
+        {
+            return false;
+        }
+
+        client.TrafficResetRx = baseline.Rx;
+        client.TrafficResetTx = baseline.Tx;
+        client.TrafficResetUtc = now;
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return true;
+    }
+
     private static TrafficDay Read(TrafficEntity entity) => new(
         entity.ClientId,
         entity.Day,

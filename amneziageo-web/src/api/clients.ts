@@ -18,6 +18,15 @@ export interface ClientState {
   used: number
   isSpent: boolean
   limits: TrafficLimitsState | null
+  total?: ClientTrafficTotal | null
+}
+
+export interface ClientTrafficTotal {
+  rxBytes: number
+  txBytes: number
+  totalBytes: number
+  sinceDay: string | null
+  resetUtc: string | null
 }
 
 export type Inbound = "off" | "server" | "network" | "endpoint"

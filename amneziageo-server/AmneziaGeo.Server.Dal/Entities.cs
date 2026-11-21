@@ -705,6 +705,12 @@ public sealed class ClientEntity
 
     public long DailyLimit { get; set; }
 
+    public ulong TrafficResetRx { get; set; }
+
+    public ulong TrafficResetTx { get; set; }
+
+    public DateTimeOffset? TrafficResetUtc { get; set; }
+
     public string? LimitsJson { get; set; }
 
     public bool OverrideLimits { get; set; }

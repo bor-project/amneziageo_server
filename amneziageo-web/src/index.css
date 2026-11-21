@@ -205,5 +205,19 @@ input[type="checkbox"]:focus-visible,
   outline-offset: 2px;
 }
 
+[data-routing-scroll] :is(a, button, input[type="checkbox"], [role="separator"]):focus-visible,
+.cell-value:focus-visible {
+  outline-offset: -2px;
+}
+
+[data-routing-scroll] td.truncate > a {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 .routing-editor { width: 100%; max-width: 100cqw; }
 .routing-editor .routing-form-footer { position: static; box-shadow: none; margin-top: 1rem; }

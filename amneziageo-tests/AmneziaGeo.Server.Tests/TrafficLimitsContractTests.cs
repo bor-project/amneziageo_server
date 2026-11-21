@@ -237,6 +237,7 @@ public class TrafficLimitsContractTests
         var migrator = bench.Db.GetService<IMigrator>();
         await migrator.MigrateAsync("RoutingDefaults").ConfigureAwait(false);
         await migrator.MigrateAsync("TrafficLimits").ConfigureAwait(false);
+        await migrator.MigrateAsync().ConfigureAwait(false);
         bench.Db.ChangeTracker.Clear();
 
         var saved = await bench.Clients.FindAsync(client.Id, CancellationToken.None).ConfigureAwait(false);

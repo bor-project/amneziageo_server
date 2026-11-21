@@ -143,6 +143,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
         builder.Entity<ClientEntity>(entity =>
         {
+            entity.Property(one => one.TrafficResetRx).HasConversion<string>();
+            entity.Property(one => one.TrafficResetTx).HasConversion<string>();
             entity.Property(client => client.Name).HasMaxLength(ClientRules.MaxNameLength);
             entity.Property(client => client.Note).HasMaxLength(ClientRules.MaxNoteLength);
             entity.Property(client => client.SubscriptionId).HasMaxLength(ClientRules.MaxSubscriptionLength);

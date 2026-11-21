@@ -15,6 +15,12 @@ Peer RX is traffic from the client; peer TX is traffic to the client. Peer total
 
 Daily traffic uses the existing TrafficStore and TrafficLedger and their server-local accounting day. The response includes that time zone. Quota periods use the UTC boundaries and effective enforcement state from the existing traffic-limit implementation. Configured policy and actual application state are separate values.
 
+`state.total` and `traffic.total` expose cumulative RX, TX and their sum, the first available accounting day and the last manual reset time. Totals include all retained daily traffic and live increments; changing the calendar or quota period does not reset them. Missing older history is not reconstructed from the current peer counters.
+
+The client table initially displays usage against the effective quota when one exists. Clicking that traffic cell switches between quota usage and cumulative traffic. Clients without a quota display cumulative traffic, including clients limited only by speed.
+
+`POST /api/clients/{id}/traffic/reset` requires `clients:write`, returns 204 on success and 404 for an unknown client. The Info traffic section offers this action with confirmation. It persists the current cumulative counters as an offset; quota consumption, daily history and connection logs are retained. Counter persistence and reset share the meter's operation gate. A failed reset leaves the previous display offset in place.
+
 The last handshake is not a session start. Last activity is the time the running panel observed a positive counter delta; it is not persisted across panel restarts. Session start is unavailable because the server does not track it.
 
 Effective DNS, AllowedIPs, MTU and keepalive use the same ClientText calculation as configuration export. Sources identify the client, template, interface or built-in defaults. AllowedIPs responses are limited to 1000 entries and include the full count and truncation flag.

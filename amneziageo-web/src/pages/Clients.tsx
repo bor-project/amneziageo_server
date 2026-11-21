@@ -9,6 +9,7 @@ import { useFailure } from "@/api/failure"
 import { scopes } from "@/api/scopes"
 import { useTemplates } from "@/api/templates"
 import { Handshake, Speed, Traffic } from "@/components/ClientStats"
+import { trafficView } from "@/components/clientTraffic"
 import { DnsMark } from "@/components/DnsMark"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
@@ -55,6 +56,7 @@ export function Clients() {
   const view = `${picked}|${kind}|${find}|${online ? 1 : 0}`
   const [choice, setChoice] = useState({ view, keys: nothing })
   const [note, setNote] = useState({ view, told: quiet })
+  const [trafficTotals, setTrafficTotals] = useState<ReadonlySet<number>>(new Set())
   const chosen = choice.view === view ? choice.keys : nothing
   const ids = shown.filter((one) => chosen.has(one.id)).map((one) => one.id)
   const told = note.view === view ? note.told : quiet
@@ -280,16 +282,26 @@ export function Clients() {
             {
               key: "speed",
               caption: t("clients.speed"),
-              width: 196,
+              width: 152,
               sort: (one) => one.state.txRate + one.state.rxRate,
               cell: (one) => <Speed one={one} />,
             },
             {
               key: "traffic",
               caption: t("clients.traffic"),
-              width: 112,
-              sort: (one) => one.state.limits?.usedBytes ?? one.state.used,
-              cell: (one) => <Traffic one={one} />,
+              width: 240,
+              sort: (one) => trafficView(one, trafficTotals.has(one.id)).value,
+              cell: (one) => <Traffic one={one} total={trafficTotals.has(one.id)} onToggle={() => {
+                setTrafficTotals((previous) => {
+                  const next = new Set(previous)
+                  if (next.has(one.id)) {
+                    next.delete(one.id)
+                  } else {
+                    next.add(one.id)
+                  }
+                  return next
+                })
+              }} />,
             },
             {
               key: "state",

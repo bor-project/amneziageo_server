@@ -2,6 +2,7 @@ import type { Client, ClientSignal, SignalError } from "@/api/clients"
 import { bytes, rate } from "@/format"
 import { useLanguage, useText } from "@/i18n"
 import type { Text, TextKey } from "@/i18n"
+import { trafficView } from "@/components/clientTraffic"
 
 const signalWords: Record<SignalError, TextKey> = {
   "no-address": "clients.signalNoAddress",
@@ -26,17 +27,23 @@ export function Speed({ one }: { one: Client }) {
   )
 }
 
-export function Traffic({ one }: { one: Client }) {
+export function Traffic({ one, total, onToggle }: { one: Client; total: boolean; onToggle: () => void }) {
   const t = useText()
-  const limits = one.state.limits?.policy.enabled ? one.state.limits : null
-  const used = bytes(t, limits?.usedBytes ?? one.state.used)
-  const quota = limits?.policy.enabled ? limits.policy.quotaBytes : one.dailyLimit
+  const shown = trafficView(one, total)
+  const used = shown.value === null ? t("clients.dash") : bytes(t, shown.value)
+  const text = shown.cumulative ? used : t("clients.usedOf", { used, limit: bytes(t, shown.quota) })
 
-  if (quota > 0) {
-    return <>{t("clients.usedOf", { used, limit: bytes(t, quota) })}</>
+  if (shown.quota <= 0) {
+    return <span className="block max-w-full truncate px-0.5" title={`${text} · ${t("clientInfo.totalTraffic")}`}>{text}</span>
   }
 
-  return <>{used}</>
+  return <button
+    type="button"
+    className="cell-value block w-full min-w-0 truncate rounded px-0.5 text-left hover:text-brand-ink"
+    aria-pressed={shown.cumulative}
+    title={`${text} · ${t(shown.cumulative ? "clientInfo.showQuota" : "clientInfo.showTotal")}`}
+    onClick={onToggle}
+  >{text}</button>
 }
 
 export function Handshake({ one }: { one: Client }) {

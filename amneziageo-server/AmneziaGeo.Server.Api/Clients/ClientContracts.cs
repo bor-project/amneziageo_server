@@ -23,7 +23,8 @@ public sealed record ClientStateBody(
     ulong TodayTx,
     ulong Used,
     bool IsSpent,
-    ClientLimitStatus? Limits = null);
+    ClientLimitStatus? Limits = null,
+    TrafficTotal? Total = null);
 
 /// <summary>
 /// A signal to disconnect the application of a client did not take.
@@ -210,7 +211,8 @@ public static class ClientAnswers
                 traffic.Used.Tx,
                 traffic.Used.Total,
                 traffic.IsSpent,
-                Limits: traffic.Limits),
+                Limits: traffic.Limits,
+                Total: traffic.Total),
             client.CreatedUtc,
             client.UpdatedUtc,
             DnsMode: DnsChoiceName.Of(client.DnsMode),

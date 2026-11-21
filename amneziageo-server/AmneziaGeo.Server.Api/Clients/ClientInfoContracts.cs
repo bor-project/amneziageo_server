@@ -35,7 +35,8 @@ public sealed record ClientTrafficInfo(
     ulong? TodayTx,
     DateOnly Day,
     string TimeZone,
-    IReadOnlyList<ClientTrafficDayInfo> History);
+    IReadOnlyList<ClientTrafficDayInfo> History,
+    TrafficTotal? Total = null);
 
 public sealed record ClientTrafficDayInfo(DateOnly Day, ulong RxBytes, ulong TxBytes);
 

@@ -81,7 +81,7 @@ public static partial class ClientEndpoints
                 ClientInformation.Reason(client, config, state, totals)),
             new ClientTrafficInfo(state.IsPresent ? state.RxBytes : null, state.IsPresent ? state.TxBytes : null,
                 measured ? totals.Rate.Rx : null, measured ? totals.Rate.Tx : null, today?.RxBytes, today?.TxBytes,
-                day, time.LocalTimeZone.Id, [.. rows.OrderBy(row => row.Day)]),
+                day, time.LocalTimeZone.Id, [.. rows.OrderBy(row => row.Day)], totals.Total),
             ClientInformation.Limits(client, template, totals.Limits), configuration,
             new ClientStatisticsInfo(available, access?.Settings.IsEnabled, access?.IsRunning, access?.Fault)));
     }

@@ -41,6 +41,7 @@ public static partial class ClientEndpoints
         writing.MapPost("/remove", RemoveAllAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapPost("/{id:long}/limits/reset", ResetLimitsAsync);
+        writing.MapPost("/{id:long}/traffic/reset", ResetTrafficAsync);
         writing.MapPost("/{id:long}/switch", SwitchAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
@@ -110,6 +111,13 @@ public static partial class ClientEndpoints
         var endpoint = await configs.FindAsync(client.ConfigId, ct).ConfigureAwait(false);
 
         return Results.Ok(Told(Answer(client, endpoint, host, guard, ledger, Secrets(context)), signals));
+    }
+
+    private static async Task<IResult> ResetTrafficAsync(long id, ClientMeter meter, CancellationToken ct)
+    {
+        return await meter.ResetTrafficAsync(id, ct).ConfigureAwait(false)
+            ? Results.NoContent()
+            : Refuse(StatusCodes.Status404NotFound, "unknown-client", $"there is no client under the number {id}");
     }
 
     private static async Task<IResult> ResetLimitsAsync(

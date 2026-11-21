@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
 import type { AccessSummary } from "./access"
 import type { TrafficLimits, TrafficLimitsState } from "./trafficLimits"
+import type { ClientTrafficTotal } from "./clients"
 
 export interface ClientInformation {
   id: number
@@ -29,6 +30,7 @@ export interface ClientInformation {
     day: string
     timeZone: string
     history: { day: string; rxBytes: number; txBytes: number }[]
+    total?: ClientTrafficTotal | null
   }
   limits: {
     status: TrafficLimitsState | null
@@ -85,6 +87,22 @@ export function useClientInfo(id: number, days: number) {
     queryKey: ["client-info", id, days],
     queryFn: async () => (await client.get<ClientInformation>(`/clients/${id}/info`, { params: { days } })).data,
     refetchInterval: 2000,
+  })
+}
+
+export function useResetClientTraffic() {
+  const queries = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: number) => (await client.post(`/clients/${id}/traffic/reset`)).data,
+    onSuccess: async (_data, id) => {
+      await queries.cancelQueries({ queryKey: ["client-info", id] })
+      await queries.cancelQueries({ queryKey: ["clients"] })
+      await Promise.all([
+        queries.invalidateQueries({ queryKey: ["client-info", id] }),
+        queries.invalidateQueries({ queryKey: ["clients"] }),
+      ])
+    },
   })
 }
 

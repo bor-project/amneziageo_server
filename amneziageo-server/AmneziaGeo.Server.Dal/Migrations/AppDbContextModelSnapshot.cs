@@ -434,6 +434,17 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<long?>("TemplateId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("TrafficResetRx")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TrafficResetTx")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("TrafficResetUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("UpdatedUtc")
                         .HasColumnType("TEXT");
 

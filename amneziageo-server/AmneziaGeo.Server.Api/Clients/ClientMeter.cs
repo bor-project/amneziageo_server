@@ -132,6 +132,7 @@ public sealed class ClientMeter : BackgroundService
         if (!_loaded)
         {
             _ledger.Load(await services.GetRequiredService<TrafficStore>().LatestAsync(ct).ConfigureAwait(false));
+            _ledger.LoadHistory(await services.GetRequiredService<TrafficStore>().HistoryAsync(ct).ConfigureAwait(false));
             _ledger.LoadPeriods(await services.GetRequiredService<TrafficPeriodStore>().ReadAsync(ct).ConfigureAwait(false));
             _loaded = true;
             _written = now;
@@ -440,6 +441,36 @@ public sealed class ClientMeter : BackgroundService
             }
             await ShapeAsync(ct).ConfigureAwait(false);
             await SettleAsync(_endpoints, _clients, ct).ConfigureAwait(false);
+            return true;
+        }
+        finally
+        {
+            _turn.Release();
+        }
+    }
+
+    public async Task<bool> ResetTrafficAsync(long clientId, CancellationToken ct)
+    {
+        await _turn.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await MeasureCoreAsync(ct).ConfigureAwait(false);
+            if (!_clients.Any(client => client.Id == clientId))
+            {
+                return false;
+            }
+
+            using var scope = _scopes.CreateScope();
+            var now = _time.GetUtcNow();
+            await WriteAsync(scope.ServiceProvider, now, ct).ConfigureAwait(false);
+            var baseline = _ledger.Cumulative(clientId);
+            if (!await scope.ServiceProvider.GetRequiredService<TrafficStore>()
+                .ResetAsync(clientId, baseline, now, ct).ConfigureAwait(false))
+            {
+                return false;
+            }
+
+            _ledger.AcceptTrafficReset(clientId, baseline, now);
             return true;
         }
         finally
