@@ -27,6 +27,14 @@ name=name if name!=PANEL+'.service' else PANEL
 trace=r/'calls.log'
 with trace.open('a') as f:f.write(' '.join(sys.argv[1:])+'\n')
 fail=r/'failure.json'
+if verb=='stop' and name==PANEL and (r/'stop-update').exists():
+ (r/'stop-update').unlink()
+ (r/'etc/amneziageo-server/proxy-awg0.yaml').write_text('updated before panel exit\n')
+if verb in ['start','restart'] and name==PANEL and (r/'api-cleanup').exists():
+ current=r/'opt/amneziageo-server/current'
+ if current.is_symlink() and os.readlink(current)=='releases/new':
+  for pattern in ['proxy-*.env','proxy-*.yaml']:
+   for file in (r/'etc/amneziageo-server').glob(pattern):file.unlink()
 if fail.exists():
  rule=json.loads(fail.read_text())
  if verb==rule['verb'] and (not rule.get('name') or rule['name']==name):
@@ -38,7 +46,10 @@ if verb=='list-units':
   if n.startswith('amneziageo-proxy@'):print(n+' loaded '+v['active']+' running fixture')
  sys.exit(0)
 if verb=='list-unit-files':
- for n,v in s.items():print(n+' '+v['enabled'])
+ pattern=next((x for x in a if '*' in x), '')
+ if pattern and not any(n.startswith('amneziageo-proxy@') for n in s):sys.exit(1)
+ for n,v in s.items():
+  if not pattern or n.startswith('amneziageo-proxy@'):print(n+' '+v['enabled'])
  sys.exit(0)
 if verb=='daemon-reload':sys.exit(0)
 v=s.get(name,{'enabled':'not-found','active':'inactive','pid':0})
@@ -95,6 +106,13 @@ class ProxyHandoverTests(unittest.TestCase):
   self.etc=self.root/'etc/amneziageo-server';self.etc.mkdir(parents=True)
   self.original_env='Web__Path=/held\nProxy__Enabled=true\nProxy__Isolated=false\n'
   (self.etc/'server.env').write_text(self.original_env)
+  self.fronts={'proxy-awg0.env':('PROXY_ARGS=ws://127.0.0.1:61001 --restrict-config /etc/amneziageo-server/proxy-awg0.yaml\n',0o600),
+               'proxy-awg0.yaml':('restrictions: []\n',0o640),
+               'proxy-awg1.env':('PROXY_ARGS=ws://127.0.0.1:61002\n',0o600),
+               'proxy-awg2.env':('PROXY_ARGS=ws://127.0.0.1:61003\n',0o640),
+               'proxy-awg4.env':('PROXY_ARGS=ws://127.0.0.1:61005\n',0o600)}
+  for name,(text,mode) in self.fronts.items():
+   p=self.etc/name;p.write_text(text);p.chmod(mode)
   (self.root/'etc/systemd/system').mkdir(parents=True)
   (self.root/'run/systemd/system').mkdir(parents=True)
   (self.root/'usr/local/bin').mkdir(parents=True)
@@ -113,10 +131,16 @@ class ProxyHandoverTests(unittest.TestCase):
  def original_restored(self):
   self.assertEqual('releases/old',os.readlink(self.panel/'current'))
   self.assertEqual(self.original_env,(self.etc/'server.env').read_text())
+  self.fronts_restored()
   for name,want in self.original.items():
    actual=self.states()[name]
    self.assertEqual(want['active'],actual['active'],name)
    self.assertEqual(want['enabled'],actual['enabled'],name)
+ def fronts_restored(self):
+  for name,(text,mode) in self.fronts.items():
+   p=self.etc/name
+   self.assertEqual(text,p.read_text(),name)
+   self.assertEqual(mode,p.stat().st_mode & 0o777,name)
  def upgraded(self):
   self.assertEqual('releases/new',os.readlink(self.panel/'current'))
   self.assertIn('Proxy__Isolated=true',(self.etc/'server.env').read_text())
@@ -148,9 +172,93 @@ class ProxyHandoverTests(unittest.TestCase):
   self.assertEqual('active',self.states()[LEGACY]['active'])
   self.assertEqual('releases/old',os.readlink(self.panel/'current'))
  def test_failed_enumeration_does_not_stop_legacy(self):
-  self.inject_failure('list-units');self.run_install(ok=False)
-  self.assertEqual('active',self.states()[LEGACY]['active'])
-  self.assertEqual('releases/old',os.readlink(self.panel/'current'))
+  for verb in ['list-units','list-unit-files']:
+   with self.subTest(verb=verb):
+    self.inject_failure(verb);p=self.run_install(ok=False)
+    self.assertIn('could not enumerate legacy proxy services',p.stderr)
+    self.assertEqual('active',self.states()[LEGACY]['active'])
+    self.assertEqual('releases/old',os.readlink(self.panel/'current'))
+ def test_install_without_legacy_units(self):
+  self.save({PANEL:self.original[PANEL]})
+  for file in self.etc.glob('proxy-*'):file.unlink()
+  self.run_install('--with-proxy')
+  self.assertEqual('active',self.states()[DAEMON]['active'])
+  self.assertEqual('releases/new',os.readlink(self.panel/'current'))
+ def test_failed_environment_snapshot_keeps_legacy_running(self):
+  environment=self.etc/'server.env';environment.chmod(0)
+  try:
+   p=self.run_install(ok=False)
+   self.assertIn('could not snapshot proxy service ownership',p.stderr)
+   self.assertEqual(self.original,self.states())
+  finally:environment.chmod(0o600)
+ def test_failed_daemon_snapshot_keeps_running_release(self):
+  self.run_install()
+  states=self.states()
+  cp=shutil.which('cp')
+  wrapper=self.bin/'cp'
+  wrapper.write_text('#!/usr/bin/env python3\nimport os,sys\n'
+   'if any("proxy-handover/transaction." in x and x.endswith("/amneziageo-proxy.service") for x in sys.argv[1:]):sys.exit(1)\n'
+   f'os.execv({cp!r},[{cp!r}]+sys.argv[1:])\n')
+  wrapper.chmod(0o755)
+  p=self.run_install(ok=False)
+  self.assertIn('could not snapshot proxy service ownership',p.stderr)
+  self.assertEqual(states,self.states())
+ def test_rollback_after_panel_withdraws_files(self):
+  (self.root/'api-cleanup').touch()
+  self.run_install()
+  self.assertEqual([],list(self.etc.glob('proxy-*')))
+  installer=self.root/'var/lib/amneziageo-server/proxy-handover/installer/install.sh'
+  for _ in range(2):
+   p=subprocess.run(['bash',str(installer),'--rollback'],env=self.env,capture_output=True,text=True)
+   self.assertEqual(0,p.returncode,p.stdout+p.stderr)
+   self.original_restored()
+   p=subprocess.run(['bash',str(installer),'--rollback'],env=self.env,capture_output=True,text=True)
+   self.assertEqual(0,p.returncode,p.stdout+p.stderr)
+   self.upgraded()
+   self.assertEqual([],list(self.etc.glob('proxy-*')))
+ def test_failed_panel_after_withdrawal_restores_files(self):
+  (self.root/'api-cleanup').touch()
+  self.inject_failure('start',PANEL)
+  self.run_install(ok=False);self.original_restored()
+ def test_restore_removes_files_absent_from_snapshot(self):
+  self.run_install()
+  (self.etc/'proxy-new.env').write_text('new')
+  (self.etc/'proxy-new.yaml').write_text('new')
+  (self.etc/'unrelated.env').write_text('held')
+  self.run_install('--rollback');self.original_restored()
+  self.assertFalse((self.etc/'proxy-new.env').exists())
+  self.assertFalse((self.etc/'proxy-new.yaml').exists())
+  self.assertEqual('held',(self.etc/'unrelated.env').read_text())
+ def test_rollback_preserves_configuration_symlinks(self):
+  (self.etc/'held').write_text('linked rules')
+  (self.etc/'proxy-linked.yaml').symlink_to('held')
+  (self.etc/'proxy-missing.env').symlink_to('absent')
+  self.run_install()
+  (self.etc/'proxy-linked.yaml').unlink();(self.etc/'proxy-missing.env').unlink()
+  self.run_install('--rollback')
+  self.assertEqual('held',os.readlink(self.etc/'proxy-linked.yaml'))
+  self.assertEqual('linked rules',(self.etc/'proxy-linked.yaml').read_text())
+  self.assertEqual('absent',os.readlink(self.etc/'proxy-missing.env'))
+ def test_older_snapshot_keeps_existing_files(self):
+  self.run_install()
+  profile=self.root/'var/lib/amneziageo-server/proxy-handover/releases/old'
+  shutil.rmtree(profile/'fronts')
+  self.run_install('--rollback');self.original_restored()
+ def test_older_snapshot_missing_files_keeps_new_release_running(self):
+  self.run_install()
+  profile=self.root/'var/lib/amneziageo-server/proxy-handover/releases/old'
+  shutil.rmtree(profile/'fronts')
+  (self.etc/'proxy-awg0.env').unlink()
+  p=self.run_install('--rollback',ok=False)
+  self.assertIn('configuration backup is missing',p.stderr)
+  self.upgraded()
+  self.assertEqual('active',self.states()[PANEL]['active'])
+ def test_snapshot_records_final_panel_writes(self):
+  (self.root/'stop-update').touch()
+  self.run_install()
+  (self.etc/'proxy-awg0.yaml').unlink()
+  self.run_install('--rollback')
+  self.assertEqual('updated before panel exit\n',(self.etc/'proxy-awg0.yaml').read_text())
  def test_unrelated_environment_survives_rollback(self):
   self.run_install()
   with (self.etc/'server.env').open('a') as f:f.write('Web__Name=changed\n')

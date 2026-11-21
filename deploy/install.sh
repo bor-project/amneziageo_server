@@ -281,13 +281,14 @@ whole() {
   handover_panel_enabled=$(systemctl is-enabled "$unit" 2>/dev/null || true)
   install -d -m 700 "$data/proxy-handover"
   handover_proxy_saved=$(mktemp -d "$data/proxy-handover/transaction.XXXXXX")
-  proxy_snapshot "$handover_proxy_saved"
+  proxy_snapshot "$handover_proxy_saved" || fail 'could not snapshot proxy service ownership'
   if [ "$handover_was" != active ] && grep -Eq $'\t(active|activating|reloading)$' "$handover_proxy_saved/legacy"; then
     fail 'start the panel before migrating its active legacy proxy services'
   fi
-  if [ -n "$handover_before" ]; then proxy_remember "$handover_before" "$handover_proxy_saved"; fi
   trap 'whole_failed $?' EXIT
   if [ "$handover_was" = active ]; then systemctl stop "$unit"; fi
+  proxy_snapshot_files "$handover_proxy_saved" || fail 'could not snapshot legacy proxy configuration files'
+  if [ -n "$handover_before" ]; then proxy_remember "$handover_before" "$handover_proxy_saved"; fi
   proxy_suspend_legacy "$handover_proxy_saved"
   configure_proxy
   handover_saved=$(keep_database)
@@ -303,7 +304,7 @@ whole() {
   if [ "$handover_was" = active ] && ! start_server; then
     fail "journalctl -u $unit tells what stopped $release; restoring the previous release"
   fi
-  proxy_snapshot "$handover_proxy_saved/after"
+  proxy_snapshot "$handover_proxy_saved/after" || fail 'could not snapshot updated proxy service ownership'
   proxy_remember "$release" "$handover_proxy_saved/after"
   proxy_keep_installer
   trap - EXIT
@@ -383,6 +384,7 @@ rollback() {
   if [ -z "$handover_before" ] || [ ! -d "$base/$handover_before" ]; then fail "there is no release to go back to"; fi
   handover_profile=$(proxy_profile "$handover_before")
   if [ ! -f "$handover_profile/panel.env" ]; then fail 'proxy ownership state is missing for the preceding release'; fi
+  proxy_check_restore_files "$handover_profile" || fail 'the preceding proxy configuration cannot be restored'
   handover_web=web/${handover_before##*/}
   if [ ! -d "$base/$handover_web" ]; then handover_web=$(readlink "$base/previous-web" || readlink "$base/wwwroot"); fi
   own
@@ -391,10 +393,11 @@ rollback() {
   handover_after_previous_web=$(readlink "$base/previous-web" || true)
   install -d -m 700 "$data/proxy-handover"
   handover_proxy_saved=$(mktemp -d "$data/proxy-handover/transaction.XXXXXX")
-  proxy_snapshot "$handover_proxy_saved"
-  proxy_remember "$handover_after" "$handover_proxy_saved"
+  proxy_snapshot "$handover_proxy_saved" || fail 'could not snapshot proxy service ownership'
   trap 'rollback_failed $?' EXIT
   if [ "$handover_was" = active ]; then systemctl stop "$unit"; fi
+  proxy_snapshot_files "$handover_proxy_saved" || fail 'could not snapshot legacy proxy configuration files'
+  proxy_remember "$handover_after" "$handover_proxy_saved"
   proxy_suspend_legacy "$handover_proxy_saved"
   proxy_restore "$handover_profile"
   carry_tunnel "$handover_before" "$handover_after"

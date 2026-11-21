@@ -3,29 +3,78 @@
 
 proxy_units() {
   {
-    systemctl list-units --all --plain --no-legend 'amneziageo-proxy@*.service' || return 1
-    systemctl list-unit-files --no-legend 'amneziageo-proxy@*.service' || return 1
+    systemctl list-units --all --plain --no-legend || return 1
+    systemctl list-unit-files --no-legend || return 1
   } | awk '$1 ~ /^amneziageo-proxy@[^/[:space:]]+\.service$/ {print $1}' | LC_ALL=C sort -u
 }
 
 proxy_snapshot() {
   local target=$1 name enabled active names
-  install -d -m 700 "$target"
-  grep -E '^Proxy__(Enabled|Isolated)=' /etc/amneziageo-server/server.env > "$target/panel.env" 2>/dev/null || true
-  : > "$target/legacy"
-  names=$(proxy_units) || return 1
+  install -d -m 700 "$target" || return 1
+  awk '/^Proxy__(Enabled|Isolated)=/' /etc/amneziageo-server/server.env > "$target/panel.env" || return 1
+  : > "$target/legacy" || return 1
+  names=$(proxy_units) || { echo 'could not enumerate legacy proxy services' >&2; return 1; }
   while IFS= read -r name; do
     [ -n "$name" ] || continue
     enabled=$(systemctl is-enabled "$name" 2>/dev/null || true)
     active=$(systemctl is-active "$name" 2>/dev/null || true)
-    printf '%s\t%s\t%s\n' "$name" "$enabled" "$active" >> "$target/legacy"
+    printf '%s\t%s\t%s\n' "$name" "$enabled" "$active" >> "$target/legacy" || return 1
   done <<< "$names"
-  proxy_snapshot_daemon "$target"
+  proxy_snapshot_daemon "$target" || return 1
+  proxy_snapshot_files "$target"
+}
+
+proxy_snapshot_files() {
+  local target=$1 file staging
+  staging=$(mktemp -d "$target/fronts.XXXXXX") || return 1
+  for file in /etc/amneziageo-server/proxy-*.env /etc/amneziageo-server/proxy-*.yaml; do
+    [ -e "$file" ] || [ -L "$file" ] || continue
+    cp -a -- "$file" "$staging/" || { rm -rf -- "$staging"; return 1; }
+  done
+  rm -rf -- "$target/fronts" || return 1
+  mv -T -- "$staging" "$target/fronts"
+}
+
+proxy_restore_files() {
+  local snapshot=$1 file name staging
+  [ -d "$snapshot/fronts" ] || return 0
+  staging=$(mktemp -d /etc/amneziageo-server/proxy-restore.XXXXXX) || return 1
+  cp -a -- "$snapshot/fronts/." "$staging/" || { rm -rf -- "$staging"; return 1; }
+  for file in /etc/amneziageo-server/proxy-*.env /etc/amneziageo-server/proxy-*.yaml; do
+    [ -e "$file" ] || [ -L "$file" ] || continue
+    name=${file##*/}
+    if [ ! -e "$staging/$name" ] && [ ! -L "$staging/$name" ]; then
+      rm -f -- "$file" || { rm -rf -- "$staging"; return 1; }
+    fi
+  done
+  for file in "$staging"/*; do
+    [ -e "$file" ] || [ -L "$file" ] || continue
+    name=${file##*/}
+    mv -fT -- "$file" "/etc/amneziageo-server/$name" || { rm -rf -- "$staging"; return 1; }
+  done
+  rmdir -- "$staging"
+}
+
+proxy_check_restore_files() {
+  local snapshot=$1 name enabled active instance
+  [ ! -d "$snapshot/fronts" ] || return 0
+  while IFS=$'\t' read -r name enabled active; do
+    case $active in
+      active|activating|reloading)
+        instance=${name#amneziageo-proxy@}
+        instance=${instance%.service}
+        if [ ! -f "/etc/amneziageo-server/proxy-$instance.env" ]; then
+          echo "legacy proxy configuration backup is missing for $name; restore the pre-upgrade configuration before rollback" >&2
+          return 1
+        fi
+        ;;
+    esac
+  done < "$snapshot/legacy"
 }
 
 proxy_snapshot_daemon() {
   local target=$1 file
-  install -d -m 700 "$target"
+  install -d -m 700 "$target" || return 1
   systemctl is-enabled amneziageo-proxy.service > "$target/daemon-enabled" 2>/dev/null || true
   systemctl is-active amneziageo-proxy.service > "$target/daemon-active" 2>/dev/null || true
   for file in current previous; do
@@ -33,12 +82,12 @@ proxy_snapshot_daemon() {
   done
   for file in /etc/systemd/system/amneziageo-proxy.service /usr/local/bin/amneziageo-proxy; do
     if [ -e "$file" ] || [ -L "$file" ]; then
-      cp -a "$file" "$target/$(basename "$file")"
+      cp -a "$file" "$target/$(basename "$file")" || return 1
     fi
   done
   file=/run/systemd/system/amneziageo-proxy.service
   if [ -e "$file" ] || [ -L "$file" ]; then
-    cp -a "$file" "$target/daemon-unit-runtime"
+    cp -a "$file" "$target/daemon-unit-runtime" || return 1
   fi
 }
 
@@ -111,13 +160,17 @@ proxy_restore_daemon() {
 proxy_restore() {
   local snapshot=$1 name enabled active failed=0
   proxy_restore_daemon "$snapshot" || return 1
+  while IFS=$'\t' read -r name enabled active; do
+    [ -n "$name" ] || continue
+    systemctl stop "$name" || return 1
+  done < "$snapshot/legacy"
+  proxy_restore_files "$snapshot" || { echo 'could not restore legacy proxy configuration files' >&2; return 1; }
   sed '/^Proxy__Enabled=/d; /^Proxy__Isolated=/d' /etc/amneziageo-server/server.env > /etc/amneziageo-server/server.env.next || failed=1
   cat "$snapshot/panel.env" >> /etc/amneziageo-server/server.env.next || failed=1
   chmod 600 /etc/amneziageo-server/server.env.next || failed=1
   mv -f /etc/amneziageo-server/server.env.next /etc/amneziageo-server/server.env || failed=1
   while IFS=$'\t' read -r name enabled active; do
     [ -n "$name" ] || continue
-    systemctl stop "$name" || failed=1
     proxy_enabled "$name" "$enabled" || failed=1
     proxy_start_saved "$name" "$active" || failed=1
   done < "$snapshot/legacy"
