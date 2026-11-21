@@ -57,7 +57,7 @@ public sealed class PlainWireGuardApiTests
 
         using var mixed = await api.PutAsJsonAsync($"/api/configs/{config.Id}", request with
         {
-            Obfuscation = ConfigAnswers.Obfuscation(ConfigDefaults.Plain() with { H1 = "5" }),
+            Obfuscation = ConfigAnswers.Obfuscation(ConfigDefaults.Plain() with { H1 = "5" }, true),
         }).ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.BadRequest, mixed.StatusCode);
         Assert.Contains("bad-type", await mixed.Content.ReadAsStringAsync().ConfigureAwait(false), StringComparison.Ordinal);
@@ -123,6 +123,6 @@ public sealed class PlainWireGuardApiTests
     private static ConfigRequest Request(ServerConfig config) => new(config.Name, config.Host, config.ListenPort,
         [.. config.Address], [.. config.Dns], [.. config.AllowedIps], config.Mtu, config.Keepalive, false,
         config.Nat, false, [.. config.Blocked], config.PrivateKey, config.PresharedKey,
-        ConfigAnswers.Obfuscation(config.Obfuscation), config.OfflineAfter, WebSocket: false, ServicesPort: config.ListenPort,
+        ConfigAnswers.Obfuscation(config.Obfuscation, true), config.OfflineAfter, WebSocket: false, ServicesPort: config.ListenPort,
         WebSocketPath: config.WebSocketPath);
 }

@@ -133,7 +133,7 @@ public sealed record KeyResponse(string Key);
 public static class ConfigAnswers
 {
     /// <summary>
-    /// Describes an endpoint as the interface reads it, with the private key only for a caller that changes it.
+    /// Describes an endpoint as the interface reads it, with the private and header protection keys only for a caller that changes it.
     /// </summary>
     public static ConfigResponse Config(ServerConfig config, bool secrets) => new(
         config.Id,
@@ -157,7 +157,7 @@ public static class ConfigAnswers
         config.PublicKey,
         secrets ? config.PrivateKey : null,
         secrets ? config.PresharedKey : null,
-        Obfuscation(config.Obfuscation),
+        Obfuscation(config.Obfuscation, secrets),
         config.CreatedUtc,
         config.UpdatedUtc,
         config.IsDefault,
@@ -167,7 +167,7 @@ public static class ConfigAnswers
     /// <summary>
     /// Describes the obfuscation of an endpoint as the interface reads it.
     /// </summary>
-    public static ObfuscationBody Obfuscation(ObfuscationSettings settings) => new(
+    public static ObfuscationBody Obfuscation(ObfuscationSettings settings, bool secrets) => new(
         settings.Jc,
         settings.Jmin,
         settings.Jmax,
@@ -184,7 +184,7 @@ public static class ConfigAnswers
         settings.I3,
         settings.I4,
         settings.I5,
-        settings.HeaderProtectionKey,
+        secrets ? settings.HeaderProtectionKey : string.Empty,
         settings.ContentPaddingAddition,
         settings.RekeyAfterTime,
         settings.RekeyTimeout,

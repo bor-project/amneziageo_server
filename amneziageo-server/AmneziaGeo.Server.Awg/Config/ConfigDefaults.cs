@@ -20,6 +20,16 @@ public static class ConfigDefaults
     public const int Mtu = 1420;
 
     /// <summary>
+    /// The packet size a new endpoint gives clients while the header protection key hides the packet header.
+    /// </summary>
+    public const int ProtectedMtu = 1400;
+
+    /// <summary>
+    /// The most junk a fresh obfuscation prepends to a transport packet.
+    /// </summary>
+    public const int MaxTransportJunk = 20;
+
+    /// <summary>
     /// How often a client of a new endpoint holds the path open, in seconds.
     /// </summary>
     public const int Keepalive = 25;
@@ -68,6 +78,7 @@ public static class ConfigDefaults
     public static ServerConfig Fresh(string name)
     {
         var pair = Curve25519.Create();
+        var obfuscation = Obfuscation();
 
         return new ServerConfig
         {
@@ -76,7 +87,7 @@ public static class ConfigDefaults
             Address = [Subnet],
             Dns = [.. Dns],
             AllowedIps = [.. AllowedIps],
-            Mtu = Mtu,
+            Mtu = obfuscation.HeaderProtectionKey.Length > 0 ? ProtectedMtu : Mtu,
             Keepalive = Keepalive,
             OfflineAfter = OfflineAfter,
             IsEnabled = true,
@@ -85,7 +96,7 @@ public static class ConfigDefaults
             WebSocketPath = WebSocketPath(),
             PrivateKey = pair.PrivateKey,
             PublicKey = pair.PublicKey,
-            Obfuscation = Obfuscation(),
+            Obfuscation = obfuscation,
         };
     }
 
@@ -109,10 +120,13 @@ public static class ConfigDefaults
             Jmax = 1000,
             S1 = first,
             S2 = Second(first),
+            S3 = RandomNumberGenerator.GetInt32(15, 150),
+            S4 = RandomNumberGenerator.GetInt32(ConfigRules.HeaderNonce, MaxTransportJunk + 1),
             H1 = types[0],
             H2 = types[1],
             H3 = types[2],
             H4 = types[3],
+            HeaderProtectionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(Curve25519.KeySize)),
             RandomTrailers = true,
             DisableCookies = true,
         };

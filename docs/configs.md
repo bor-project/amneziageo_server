@@ -64,8 +64,9 @@ export or its AmneziaGeo `vpn://` link. See [clients.md](clients.md).
 | `POST /api/configs/{id}/apply` | `interfaces:write` |
 | `DELETE /api/configs/{id}` | `interfaces:write` |
 
-Reading gives the public key to everyone who may read the state. The private key and the preshared key
-go only to a caller that holds `interfaces:write`; to anyone else they come back as null.
+Reading gives the public key to everyone who may read the state. The private key, the preshared key and
+the header protection key go only to a caller that holds `interfaces:write`; to anyone else they come
+back as null or empty.
 
 ## The settings
 
@@ -95,7 +96,7 @@ go only to a caller that holds `interfaces:write`; to anyone else they come back
 | S1 to S4 | the junk prepended to the four packet kinds |
 | H1 to H4 | the type of the four packet kinds, one number or a span like `194488238-194553774` |
 | I1 to I5 | the special packets the interface sends |
-| Header protection key | the key the packet header is hidden with, 32 bytes in base64 |
+| Header protection key | the key the packet header is hidden with, 32 bytes in base64; a fresh AWG endpoint draws its own, clients need AmneziaWG 3.1 |
 | Content padding | the padding added to the content of a transport packet, in bytes |
 | Rekey after, Rekey timeout, Reject after, Keepalive timeout, Handshake attempts | the timings of the session, each one number or a span |
 | Random trailers, Disable cookies | the two switches of the 3.1 profile |
@@ -106,9 +107,11 @@ setting leaves the kernel its own default, and the client takes the same lines t
 ## A fresh configuration
 
 `GET /api/configs/draft` answers with settings that already hold together: port 51820 or the first one
-above it that nothing listens on, `10.8.0.1/24`, MTU 1420, keepalive 25, DNS `1.1.1.1` and `1.0.0.1`,
-AllowedIPs `0.0.0.0/0` and `::/0`, a fresh pair of keys and an obfuscation drawn at random: Jc 3 to 10,
-Jmin 50, Jmax 1000, S1 and S2 from 15 to 149, H1 to H4 from 5 up, all four different. The panel offers
+above it that nothing listens on, `10.8.0.1/24`, MTU 1400, keepalive 25, DNS `1.1.1.1` and `1.0.0.1`,
+AllowedIPs `0.0.0.0/0` and `::/0`, a fresh pair of keys and an obfuscation drawn at random: Jc 4 to 12,
+Jmin 50, Jmax 1000, S1 to S3 from 15 to 149, S4 from 12 to 20, H1 to H4 from 5 up, all four different,
+and a header protection key of 32 bytes in base64. The smaller MTU leaves room for the hidden header and
+the transport junk in one datagram over IPv6; an obfuscation without the key keeps MTU 1420. The panel offers
 the first free name of the `awgN` shape and the TCP port the endpoints already serve on, 0 when there are
 none, see [services.md](services.md).
 

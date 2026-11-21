@@ -1003,7 +1003,7 @@ export const en = {
   "configs.i1Hint": "Optional signature packet. Leave empty to omit it.",
   "configs.advanced": "Advanced",
   "configs.headerKey": "HeaderProtectionKey (header protection)",
-  "configs.headerKeyHint": "Base64 32-byte key; must match on every client config. Leave empty to disable header protection.",
+  "configs.headerKeyHint": "Base64 32-byte key; must match on every client config. A fresh AWG endpoint draws its own; clients need AmneziaWG 3.1. Leave empty to disable header protection.",
   "configs.padding": "ContentPaddingAddition (content padding)",
   "configs.paddingHint": "A single integer or low high byte range added to content packets. Leave empty to disable.",
   "configs.rekeyAfter": "RekeyAfterTime (seconds)",

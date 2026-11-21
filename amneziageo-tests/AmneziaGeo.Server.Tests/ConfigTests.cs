@@ -34,6 +34,24 @@ public class ConfigTests
         Assert.NotEqual(one.S1 + ConfigRules.HandshakeGap, one.S2);
     }
 
+    [Fact]
+    public void AFreshEndpointHidesItsHeaders()
+    {
+        var one = ConfigDefaults.Fresh("awg1");
+        var other = ConfigDefaults.Fresh("awg2");
+
+        Assert.True(Curve25519.IsKey(one.Obfuscation.HeaderProtectionKey));
+        Assert.NotEqual(one.Obfuscation.HeaderProtectionKey, other.Obfuscation.HeaderProtectionKey);
+        Assert.All(new[] { one, other }, config =>
+        {
+            Assert.Null(ConfigRules.Check(config));
+            Assert.Equal(ConfigDefaults.ProtectedMtu, config.Mtu);
+            Assert.InRange(config.Obfuscation.S4, ConfigRules.HeaderNonce, ConfigDefaults.MaxTransportJunk);
+            Assert.All(new[] { config.Obfuscation.S1, config.Obfuscation.S2, config.Obfuscation.S3 },
+                size => Assert.True(size >= ConfigRules.HeaderNonce));
+        });
+    }
+
     [Theory]
     [InlineData("", "the name is empty")]
     [InlineData("Awg1", "lower case")]
@@ -115,7 +133,7 @@ public class ConfigTests
         var fresh = ConfigDefaults.Fresh("awg1");
 
         var refused = await bench.Configs.AddAsync(
-            fresh with { Obfuscation = fresh.Obfuscation with { HeaderProtectionKey = Curve25519.Create().PrivateKey } },
+            fresh with { Obfuscation = fresh.Obfuscation with { HeaderProtectionKey = Curve25519.Create().PrivateKey, S3 = 0, S4 = 0 } },
             default);
 
         Assert.Equal("bad-header-junk", refused.Code);

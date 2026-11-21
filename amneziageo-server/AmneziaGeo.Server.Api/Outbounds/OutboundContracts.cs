@@ -136,7 +136,7 @@ public static class OutboundAnswers
             outbound.ClosePrivate,
             outbound.Mark,
             outbound.Table,
-            ConfigAnswers.Obfuscation(outbound.Obfuscation),
+            ConfigAnswers.Obfuscation(outbound.Obfuscation, secrets),
             state is null ? null : State(state),
             outbound.CreatedUtc,
             outbound.UpdatedUtc);
