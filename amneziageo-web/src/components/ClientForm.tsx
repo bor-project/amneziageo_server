@@ -14,7 +14,6 @@ import { scopes } from "@/api/scopes"
 import { useTemplates } from "@/api/templates"
 import { TrafficLimitsFields } from "@/components/TrafficLimitsFields"
 import { useTrafficLimits } from "@/components/useTrafficLimits"
-import { trafficLimitsInput } from "@/components/trafficLimits"
 import { AppCaption } from "@/components/AppMark"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { choiceKey, lacksServers } from "@/components/dnsWords"
@@ -50,7 +49,10 @@ export function ClientForm({
   const others = (useClients().data ?? []).filter((one) => one.id !== self)
   const templates = useTemplates()
   const [draft, setDraft] = useState(start)
-  const limits = useTrafficLimits(start.limits)
+  const template = (templates.data ?? []).find((one) => one.id === draft.templateId)
+  const limits = useTrafficLimits(draft.overrideLimits ? start.limits : template?.limits ?? null)
+  const overrideLimits = draft.overrideLimits || limits.changed
+  const limitsLoading = draft.templateId !== null && !draft.overrideLimits && templates.data === undefined
   const [number, setNumber] = useState<string | null>(null)
   const [text, setText] = useState<string | null>(null)
   const [limit, setLimit] = useState(gigabytes(start.dailyLimit))
@@ -74,8 +76,7 @@ export function ClientForm({
   const allowed = limit === gigabytes(start.dailyLimit) ? start.dailyLimit : allowanceOf(limit)
   const check = useDnsCheck(draft.configId > 0 ? { id: self, client: draft } : null)
   const files = useResolver(false).data?.filesMode ?? "routing"
-  const template = (templates.data ?? []).find((one) => one.id === draft.templateId)
-  const limitsOn = draft.overrideLimits ? limits.input.enabled : template?.limits?.enabled === true
+  const limitsOn = limits.input.enabled
   const above =
     template === undefined
       ? t("dnsPick.asServer", { choice: t(choiceKey(files)) })
@@ -98,31 +99,25 @@ export function ClientForm({
   const everyone = rules.filter((one) => one.clients.length === 0 && !elsewhere(one))
   const edited =
     !same(draft, start) ||
-    (draft.overrideLimits && limits.changed) ||
+    limits.changed ||
     shown !== base ||
     listed !== start.address.join(", ") ||
     limit !== gigabytes(start.dailyLimit)
   const ready =
     edited &&
     !pending &&
+    !limitsLoading &&
     draft.name.trim().length > 0 &&
     !clash &&
     !misnamed &&
     (limitsOn || allowed !== null) &&
-    (!draft.overrideLimits || limits.valid) &&
+    limits.valid &&
     draft.configId > 0 &&
     !lacksServers(draft.dnsMode, draft.dns) &&
     (legacy ? parts(listed).length > 0 : whole && spans.length > 0 && problem.length === 0)
 
   function put(change: Partial<ClientDraft>) {
     setDraft({ ...draft, ...change })
-  }
-
-  function override(overrideLimits: boolean) {
-    if (overrideLimits && start.limits === null && !limits.changed) {
-      limits.setInput(trafficLimitsInput(template?.limits))
-    }
-    put({ overrideLimits })
   }
 
   function pick(configId: number) {
@@ -285,20 +280,12 @@ export function ClientForm({
       </Part>
 
       <Part title={t("trafficLimits.title")}>
-        <div className="sm:col-span-2">
-          <Switch
-            id="client-limits-override"
-            caption={t("trafficLimits.override")}
-            value={draft.overrideLimits}
-            onChange={override}
-          />
-        </div>
         <TrafficLimitsFields
           id="client-limits"
-          input={draft.overrideLimits ? limits.input : trafficLimitsInput(template?.limits)}
+          input={limits.input}
           onChange={limits.setInput}
-          faults={draft.overrideLimits ? limits.faults : {}}
-          readOnly={!draft.overrideLimits}
+          faults={limits.faults}
+          readOnly={limitsLoading}
         />
       </Part>
 
@@ -370,7 +357,8 @@ export function ClientForm({
             name: draft.name.trim(),
             address: addresses(),
             dailyLimit: limitsOn ? start.dailyLimit : (allowed ?? start.dailyLimit),
-            limits: draft.overrideLimits ? limits.value : start.limits,
+            limits: overrideLimits ? limits.value : start.limits,
+            overrideLimits,
           })}
           disabled={!ready}
           className={primary}

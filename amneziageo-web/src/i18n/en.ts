@@ -400,7 +400,6 @@ export const en = {
   "trafficLimits.throttled": "Quota used up · speed reduced",
   "trafficLimits.notApplied": "Limits not applied",
   "trafficLimits.enabled": "Enable limits",
-  "trafficLimits.override": "Override template limits",
   "trafficLimits.download": "To the client, Mbit/s",
   "trafficLimits.upload": "From the client, Mbit/s",
   "trafficLimits.quota": "Traffic, GB",
