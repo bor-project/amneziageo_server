@@ -109,6 +109,7 @@ public static class Listening
 
         var plan = Bound(entries);
         var certificate = WebCertificate.Of(Chain(options, settings), Key(options, settings));
+        builder.Services.AddSingleton(new PanelCertificates(certificate));
         var proxyCertificates = new ProxyCertificates();
         builder.Services.AddSingleton(proxyCertificates);
         builder.Services.AddSingleton(options);

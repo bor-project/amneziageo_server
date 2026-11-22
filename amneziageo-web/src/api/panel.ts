@@ -35,6 +35,46 @@ export interface NameSample {
   stamp: string
 }
 
+export interface CertificateDetails {
+  name: string
+  subject: string
+  issuer: string
+  subjectAlternativeNames: string[]
+  notBefore: string
+  notAfter: string
+  keyAlgorithm: string
+  keyOid: string
+  keyBits: number | null
+  signatureAlgorithm: string
+  sha256: string
+}
+
+export interface PanelCertificate {
+  enabled: boolean
+  certificates: CertificateDetails[]
+}
+
+export function usePanelCertificate() {
+  return useQuery({
+    queryKey: ["panel", "certificate"],
+    queryFn: async () => (await client.get<PanelCertificate>("/panel/certificate")).data,
+  })
+}
+
+export function useDownloadPanelCertificate() {
+  return useMutation({
+    mutationFn: async (chain: boolean) => {
+      const response = await client.get<Blob>(`/panel/certificate/${chain ? "chain" : "leaf"}.pem`, { responseType: "blob" })
+      const url = URL.createObjectURL(response.data)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = chain ? "panel-chain.pem" : "panel-certificate.pem"
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000)
+    },
+  })
+}
+
 export function usePanel(enabled = true) {
   return useQuery({
     queryKey: ["panel"],

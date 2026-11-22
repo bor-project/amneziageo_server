@@ -8,6 +8,7 @@ import { draftOf, useNameSample, usePanel, useSavePanel } from "@/api/panel"
 import type { Panel, PanelDraft } from "@/api/panel"
 import { scopes } from "@/api/scopes"
 import { KeepQuestion, PortNote } from "@/components/PortNote"
+import { PanelCertificateInfo } from "@/components/PanelCertificateInfo"
 import { Count, Flag, Help, Line, Multi, Part, Pick } from "@/components/fields"
 import { defaultName, fillName, unknownKeys } from "@/components/names"
 import { manual, useOpening } from "@/components/opening"
@@ -256,6 +257,8 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
           />
         </Part>
       )}
+
+      {part === "certificates" && may && <PanelCertificateInfo />}
 
       {fault !== null && <div className="text-sm text-alarm">{t(fault)}</div>}
 

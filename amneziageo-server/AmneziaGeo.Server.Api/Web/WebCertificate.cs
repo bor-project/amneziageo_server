@@ -21,6 +21,8 @@ public sealed class WebCertificate
 
     private string _stamp = "";
 
+    private string _pem = "";
+
     /// <summary>
     /// ctor
     /// </summary>
@@ -58,9 +60,39 @@ public sealed class WebCertificate
             {
                 _held = X509Certificate2.CreateFromPem(chain, key);
                 _stamp = stamp;
+                _pem = chain;
             }
 
             return _held;
+        }
+    }
+
+    /// <summary>
+    /// Exports the public certificate chain.
+    /// </summary>
+    public IReadOnlyList<string> PublicChain()
+    {
+        lock (_sync)
+        {
+            var current = Current();
+            if (_chain.Length == 0)
+            {
+                return [current.ExportCertificatePem()];
+            }
+
+            var certificates = new X509Certificate2Collection();
+            try
+            {
+                certificates.ImportFromPem(_pem);
+                return [.. certificates.Cast<X509Certificate2>().Select(one => one.ExportCertificatePem())];
+            }
+            finally
+            {
+                foreach (var one in certificates)
+                {
+                    one.Dispose();
+                }
+            }
         }
     }
 

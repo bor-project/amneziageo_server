@@ -21,6 +21,7 @@ public static class PanelEndpoints
     {
         ArgumentNullException.ThrowIfNull(routes);
 
+        routes.MapPanelCertificates();
         var reading = routes.MapGroup("/api/panel").RequireScope(Scopes.ReadState);
         reading.MapGet("/", ReadAsync);
         reading.MapGet("/names", NamesAsync);
