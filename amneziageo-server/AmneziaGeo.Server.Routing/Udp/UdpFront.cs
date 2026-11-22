@@ -98,14 +98,18 @@ public sealed class UdpFront : IAsyncDisposable
     public IPEndPoint Relay(string backend, IPEndPoint client)
     {
         var target = _backends.Single(one => one.Id == backend);
-        var flow = Get(target, Normalize(client)) ?? throw new IOException("The shared UDP listener has too many clients.");
-        return flow.Relay;
+        var flow = Get(target, Normalize(Copy(client))) ?? throw new IOException("The shared UDP listener has too many clients.");
+        return Copy(flow.Relay);
     }
 
     /// <summary>
     /// Returns the public peer endpoint of a relay.
     /// </summary>
-    public IPEndPoint? Client(IPEndPoint relay) => _flows.Values.FirstOrDefault(one => one.Relay.Equals(relay))?.Client;
+    public IPEndPoint? Client(IPEndPoint relay)
+    {
+        var client = _flows.Values.FirstOrDefault(one => one.Relay.Equals(relay))?.Client;
+        return client is null ? null : Copy(client);
+    }
 
     private async Task ReceiveAsync()
     {
@@ -113,14 +117,16 @@ public sealed class UdpFront : IAsyncDisposable
         var buffer = new byte[65536];
         try
         {
+            var ipv4Loopback = NetworkInterface.LoopbackInterfaceIndex;
+            var ipv6Loopback = NetworkInterface.IPv6LoopbackInterfaceIndex;
             while (!_stop.IsCancellationRequested)
             {
                 var result = await _socket.ReceiveMessageFromAsync(buffer, SocketFlags.None, new IPEndPoint(IPAddress.IPv6Any, 0), _stop.Token).ConfigureAwait(false);
                 Interlocked.Increment(ref _received);
                 var client = Normalize((IPEndPoint)result.RemoteEndPoint);
                 var backend = Select(buffer.AsSpan(0, result.ReceivedBytes), client);
-                var local = result.PacketInformation.Interface == NetworkInterface.LoopbackInterfaceIndex
-                    || result.PacketInformation.Interface == NetworkInterface.IPv6LoopbackInterfaceIndex;
+                var local = result.PacketInformation.Interface == ipv4Loopback
+                    || result.PacketInformation.Interface == ipv6Loopback;
                 if (backend is null || backend.LocalOnly && !local || _blocked.Contains((backend.Port, client)))
                 {
                     Interlocked.Increment(ref _dropped);
@@ -160,11 +166,15 @@ public sealed class UdpFront : IAsyncDisposable
     private UdpBackend? Select(ReadOnlySpan<byte> packet, IPEndPoint client)
     {
         var backends = _backends;
-        var handshakes = backends.Where(one => one.Reader is not null).ToArray();
-        var chosen = default(UdpBackend);
-        foreach (var backend in handshakes)
+        if (backends.Length == 1 && backends[0].Reader is null && _flows.ContainsKey((backends[0].Id, client)))
         {
-            if (!backend.Reader!.Handshake(packet))
+            return backends[0];
+        }
+
+        var chosen = default(UdpBackend);
+        foreach (var backend in backends)
+        {
+            if (backend.Reader is null || !backend.Reader.Handshake(packet))
             {
                 continue;
             }
@@ -182,9 +192,9 @@ public sealed class UdpFront : IAsyncDisposable
             return chosen;
         }
 
-        foreach (var backend in handshakes)
+        foreach (var backend in backends)
         {
-            if (backend.Reader!.Receiver(packet) is not { } receiver || !_indices.TryGetValue(receiver, out var owners)
+            if (backend.Reader?.Receiver(packet) is not { } receiver || !_indices.TryGetValue(receiver, out var owners)
                 || !owners.ContainsKey(backend.Id))
             {
                 continue;
@@ -210,10 +220,19 @@ public sealed class UdpFront : IAsyncDisposable
             return quic;
         }
 
-        var known = backends.Where(one => _flows.ContainsKey((one.Id, client))).ToArray();
-        if (known.Length == 1 && (known[0].Reader is null || known[0].Reader!.Receiver(packet) is not null))
+        var known = default(UdpBackend);
+        var count = 0;
+        foreach (var backend in backends)
         {
-            return known[0];
+            if (_flows.ContainsKey((backend.Id, client)))
+            {
+                known = backend;
+                count++;
+            }
+        }
+        if (count == 1 && (known!.Reader is null || known.Reader.Receiver(packet) is not null))
+        {
+            return known;
         }
 
         return quic is not null && packet.Length >= 21 && (packet[0] & 0xC0) == 0x40 ? quic : null;
@@ -276,9 +295,7 @@ public sealed class UdpFront : IAsyncDisposable
                     _indices.GetOrAdd(header.Value.Sender, _ => new())[flow.Backend.Id] = flow.Touched;
                 }
 
-                var address = flow.Client.AddressFamily == AddressFamily.InterNetwork
-                    ? new IPEndPoint(flow.Client.Address.MapToIPv6(), flow.Client.Port) : flow.Client;
-                await _socket.SendToAsync(buffer.AsMemory(0, size), SocketFlags.None, address, _stop.Token).ConfigureAwait(false);
+                await _socket.SendToAsync(buffer.AsMemory(0, size), SocketFlags.None, flow.Destination, _stop.Token).ConfigureAwait(false);
             }
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or SocketException)
@@ -344,6 +361,9 @@ public sealed class UdpFront : IAsyncDisposable
     private static IPEndPoint Normalize(IPEndPoint client) => client.Address.IsIPv4MappedToIPv6
         ? new IPEndPoint(client.Address.MapToIPv4(), client.Port) : client;
 
+    private static IPEndPoint Copy(IPEndPoint endpoint) => new(endpoint.AddressFamily == AddressFamily.InterNetworkV6
+        ? new IPAddress(endpoint.Address.GetAddressBytes(), endpoint.Address.ScopeId) : new IPAddress(endpoint.Address.GetAddressBytes()), endpoint.Port);
+
     public async ValueTask DisposeAsync()
     {
         await _stop.CancelAsync().ConfigureAwait(false);
@@ -369,6 +389,8 @@ public sealed class UdpFront : IAsyncDisposable
     {
         public UdpBackend Backend { get; set; } = backend;
         public IPEndPoint Client { get; } = client;
+        public IPEndPoint Destination { get; } = new(client.AddressFamily == AddressFamily.InterNetwork
+            ? client.Address.MapToIPv6() : client.Address, client.Port);
         public Socket Socket { get; } = socket;
         public IPEndPoint Relay { get; } = (IPEndPoint)socket.LocalEndPoint!;
         public long Touched = Environment.TickCount64;

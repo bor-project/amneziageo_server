@@ -33,7 +33,7 @@ public static class XHttpRelay
         }
 
         if ((method == "GET" && (context.Request.ContentLength is > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding")))
-            || context.Request.ContentLength is > 4096 || (method == "POST" && context.Request.Headers.ContainsKey("X-WG-Data"))
+            || context.Request.ContentLength is > 32768 || (method == "POST" && context.Request.Headers.ContainsKey("X-WG-Data"))
             || context.Request.Headers.ContainsKey("Upgrade"))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
@@ -72,7 +72,7 @@ public static class XHttpRelay
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
             deadline.CancelAfter(TimeSpan.FromSeconds(5));
-            var body = new byte[4097];
+            var body = new byte[32769];
             var length = 0;
             try
             {
@@ -95,7 +95,7 @@ public static class XHttpRelay
                 return;
             }
 
-            if (length > 4096)
+            if (length > 32768)
             {
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
