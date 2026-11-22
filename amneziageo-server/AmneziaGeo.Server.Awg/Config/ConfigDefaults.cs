@@ -115,7 +115,7 @@ public static class ConfigDefaults
 
         return new ObfuscationSettings
         {
-            Jc = RandomNumberGenerator.GetInt32(4, 13),
+            Jc = 1,
             Jmin = 50,
             Jmax = 1000,
             S1 = first,
@@ -126,6 +126,7 @@ public static class ConfigDefaults
             H2 = types[1],
             H3 = types[2],
             H4 = types[3],
+            I1 = QuicSignature.Create(),
             HeaderProtectionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(Curve25519.KeySize)),
             ContentPaddingAddition = "0",
             RekeyAfterTime = "120",

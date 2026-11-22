@@ -67,9 +67,9 @@ public static partial class ConfigRules
     public const uint HighestType = uint.MaxValue;
 
     /// <summary>
-    /// The longest special junk packet.
+    /// The longest special packet description.
     /// </summary>
-    public const int MaxSpecialLength = 1024;
+    public const int MaxSpecialLength = 8192;
 
     /// <summary>
     /// The longest path the websocket of an endpoint comes under.
@@ -296,9 +296,14 @@ public static partial class ConfigRules
     {
         var specials = (string?[])[obfuscation.I1, obfuscation.I2, obfuscation.I3, obfuscation.I4, obfuscation.I5];
 
-        return specials.Any(special => special is { Length: > MaxSpecialLength })
-            ? Fault("bad-special", $"a special junk packet is longer than {MaxSpecialLength} characters")
-            : null;
+        if (specials.Any(special => special is { Length: > MaxSpecialLength }))
+        {
+            return Fault("bad-special", $"a special packet description is longer than {MaxSpecialLength} characters");
+        }
+
+        return specials.All(CpsPacket.IsValid)
+            ? null
+            : Fault("bad-special", "a special packet has invalid CPS tags or exceeds the UDP packet limit");
     }
 
     /// <summary>

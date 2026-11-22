@@ -1270,7 +1270,7 @@ export const en = {
   "error.badPreshared": "The preshared key is not 32 bytes in base64",
   "error.badJunk": "The junk sizes do not hold together",
   "error.badType": "The packet types are the same or below five",
-  "error.badSpecial": "A special junk packet is longer than 1024 characters",
+  "error.badSpecial": "Invalid signature packet format or size",
   "error.badSpan": "The value takes one number or a pair separated by a dash",
   "error.badBlocked": "A closed range is not an address range",
   "error.badHeaderKey": "The header protection key is not 32 bytes in base64",

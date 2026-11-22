@@ -1269,7 +1269,7 @@ export const ru: Dictionary = {
   "error.badPreshared": "Общий ключ не 32 байта в base64",
   "error.badJunk": "Размеры мусора не сходятся",
   "error.badType": "Типы пакетов совпадают или ниже пяти",
-  "error.badSpecial": "Спецпакет длиннее 1024 символов",
+  "error.badSpecial": "Недопустимый формат или размер сигнатурного пакета",
   "error.badSpan": "Значение пишется числом или парой через дефис",
   "error.badBlocked": "Закрытая сеть записана не диапазоном",
   "error.badHeaderKey": "Ключ защиты заголовка не 32 байта в base64",

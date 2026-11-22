@@ -111,7 +111,7 @@ setting leaves the kernel its own default, and the client takes the same lines t
 
 `GET /api/configs/draft` answers with settings that already hold together: port 51820 or the first one
 above it that nothing listens on, `10.8.0.1/24`, MTU 1400, keepalive 25, DNS `1.1.1.1` and `1.0.0.1`,
-AllowedIPs `0.0.0.0/0` and `::/0`, a fresh pair of keys and an obfuscation drawn at random: Jc 4 to 12,
+AllowedIPs `0.0.0.0/0` and `::/0`, a fresh pair of keys and an obfuscation with Jc 1,
 Jmin 50, Jmax 1000, S1 to S3 from 15 to 149, S4 from 12 to 20, H1 to H4 from 5 up, all four different,
 and a header protection key of 32 bytes in base64. The smaller MTU leaves room for the hidden header and
 the transport junk in one datagram over IPv6; an obfuscation without the key keeps MTU 1420. The panel offers
@@ -122,7 +122,21 @@ New AWG endpoints show the engine's baseline settings explicitly: content paddin
 `120` seconds, rekey timeout `5` seconds, reject after `180` seconds, keepalive timeout `10` seconds,
 and `18` handshake attempts. These timings match the
 [pinned kernel defaults](https://github.com/bor-project/amneziawg-linux-kernel-module/blob/4569c4c67f3a57414969260cafbbd04694fbaae0/src/messages.h).
-Signature packets `I1`–`I5` remain empty until configured.
+New AWG endpoints also generate a QUIC Initial CPS signature in `I1`, with fresh connection identifiers,
+ClientHello values and a `ya.ru` server name. Its static prefix carries the ClientHello; a random-byte
+tag fills the remainder of the 1200-byte signature packet. `I2`–`I5` stay empty. The name belongs to the
+signature and does not cause a request to that site. Signature packets imitate a protocol prefix;
+they do not establish a QUIC session.
+New profiles send one junk packet before each handshake initiation. Existing and imported junk
+counts and signature packets are preserved, including an absent `I1`; generating a header protection
+key does not replace them. Enabling AWG on a plain draft uses the fresh signature. No migration rewrites
+the saved profiles.
+
+CPS descriptions in `I1`–`I5` accept up to 8192 characters and 512 tags each. The decoded packet is limited
+to the IPv4 UDP payload maximum of 65507 bytes; this is not the path MTU, which a custom signature must
+also fit. Static `<b 0xHEX>`, random `<r N>`, `<rc N>`, `<rd N>`, timestamp `<t>` and the kernel's counter
+`<c>` tags are checked before saving. Odd or invalid hex, unknown tags, negative sizes and oversized sums
+are refused. A static 1200-byte packet takes 2406 CPS characters and is accepted without truncation.
 
 Generating a header protection key in an interface or outbound draft also repairs `S1`–`S4` to the
 allowed `12`–`1280` byte range and keeps initiation and response packet lengths different. It fills
@@ -169,7 +183,7 @@ the code into a phrase of its own language.
 | `bad-preshared` | the preshared key is not 32 bytes in base64 |
 | `bad-junk` | a junk size is outside 0 to 1280, the shortest is above the longest, or S1 plus 56 equals S2 |
 | `bad-type` | a packet type is below 5, is neither a number nor a span, or two of the four overlap |
-| `bad-special` | a special packet is longer than 1024 characters |
+| `bad-special` | a CPS description exceeds 8192 characters or 512 tags, has invalid tags, or describes more than 65507 bytes |
 | `bad-span` | a timing is neither a number nor a span of two |
 | `bad-blocked` | a range closed to clients is not an address range |
 | `bad-header-key` | the header protection key is not 32 bytes in base64 |

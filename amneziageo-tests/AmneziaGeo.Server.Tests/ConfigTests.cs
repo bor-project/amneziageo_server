@@ -18,6 +18,7 @@ public class ConfigTests
         Assert.Equal(config.PublicKey, Curve25519.PublicOf(config.PrivateKey));
         Assert.Equal(ConfigDefaults.ListenPort, config.ListenPort);
         Assert.Equal([ConfigDefaults.Subnet], config.Address);
+        Assert.Equal(1, config.Obfuscation.Jc);
     }
 
     [Fact]
@@ -65,16 +66,21 @@ public class ConfigTests
         Assert.Equal("180", shape.RejectAfterTime);
         Assert.Equal("10", shape.KeepaliveTimeout);
         Assert.Equal("18", shape.MaxHandshakeAttempts);
-        Assert.All(new[] { shape.I1, shape.I2, shape.I3, shape.I4, shape.I5 }, value => Assert.True(string.IsNullOrEmpty(value)));
+        Assert.NotNull(shape.I1);
+        Assert.All(new[] { shape.I2, shape.I3, shape.I4, shape.I5 }, value => Assert.True(string.IsNullOrEmpty(value)));
     }
 
-    [Fact]
-    public async Task AnExistingEndpointKeepsItsEmptyTimingOverrides()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(10)]
+    public async Task AnExistingEndpointKeepsItsObfuscationOverrides(int junkCount)
     {
         using var bench = new Bench();
         var fresh = ConfigDefaults.Fresh("awg1");
         var original = fresh.Obfuscation with
         {
+            Jc = junkCount,
+            I1 = null,
             HeaderProtectionKey = string.Empty,
             S3 = 0,
             S4 = 0,
