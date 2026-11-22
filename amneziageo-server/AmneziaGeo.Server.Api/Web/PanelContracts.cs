@@ -26,7 +26,8 @@ public sealed record PanelResponse(
     string CertificateRoot,
     bool Pending,
     bool Secure,
-    PanelPlace Running);
+    PanelPlace Running,
+    string ProxyNameTemplate = ProxyName.Default);
 
 /// <summary>
 /// The settings the panel is changed with; keep leaves the port the panel held open before it moved open in the
@@ -43,7 +44,8 @@ public sealed record PanelRequest(
     string? Language,
     bool Prereleases,
     string? NameTemplate = null,
-    bool? Keep = null);
+    bool? Keep = null,
+    string? ProxyNameTemplate = null);
 
 /// <summary>
 /// What the substitutions of the name template stand for with the first client, and the name it takes when nothing is
@@ -83,7 +85,8 @@ public static class PanelAnswers
             options.CertificateRoot,
             settings.Differs(running) || secure != answering.Secure,
             secure,
-            answering);
+            answering,
+            settings.ProxyNameTemplate);
     }
 
     /// <summary>
@@ -105,6 +108,9 @@ public static class PanelAnswers
             Language = request.Language is { Length: > 0 } language ? language : PanelDefaults.Language,
             Prereleases = request.Prereleases,
             NameTemplate = Trim(request.NameTemplate) is { Length: > 0 } named ? named : ConfigName.Default,
+            ProxyNameTemplate = request.ProxyNameTemplate is null
+                ? held?.ProxyNameTemplate ?? ProxyName.Default
+                : Trim(request.ProxyNameTemplate) is { Length: > 0 } proxyName ? proxyName : ProxyName.Default,
         };
     }
 

@@ -1086,6 +1086,13 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<bool>("Prereleases")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ProxyNameTemplate")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("{PROXY}");
+
                     b.Property<DateTimeOffset>("UpdatedUtc")
                         .HasColumnType("TEXT");
 

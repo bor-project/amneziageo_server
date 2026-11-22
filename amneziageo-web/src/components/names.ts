@@ -2,6 +2,10 @@ export const defaultName = "{HOST}-{INTERFACE}-{CLIENT}"
 
 export const nameKeys = ["HOST", "INTERFACE", "CLIENT", "ID", "PORT", "NOTE", "DATE"]
 
+export const defaultProxyName = "{PROXY}"
+
+export const proxyNameKeys = ["HOST", "PROXY", "TRANSPORT", "ID", "PORT", "PATH"]
+
 const separators = "-_.| "
 
 interface Part {
@@ -9,17 +13,17 @@ interface Part {
   key: string | null
 }
 
-export function unknownKeys(template: string): string[] {
+export function unknownKeys(template: string, keys = nameKeys): string[] {
   return parts(template)
-    .filter((part) => part.key !== null && known(part.key) === null)
+    .filter((part) => part.key !== null && known(part.key, keys) === null)
     .map((part) => part.text)
 }
 
-export function fillName(template: string, values: Record<string, string>, stamp: string): string {
+export function fillName(template: string, values: Record<string, string>, stamp: string, keys = nameKeys): string {
   let name = ""
   let dropping = false
   for (const part of parts(template)) {
-    const key = part.key === null ? null : known(part.key)
+    const key = part.key === null ? null : known(part.key, keys)
     if (key !== null) {
       const value = (values[key] ?? "").trim()
       if (value.length === 0) {
@@ -42,6 +46,18 @@ export function fillName(template: string, values: Record<string, string>, stamp
   return trimmed.length > 0 ? trimmed : stamp
 }
 
+export function fillProxyName(template: string, values: Record<string, string>, stamp: string): string {
+  const original = values.PROXY ?? stamp
+  const name = template === defaultProxyName ? original : fillName(template, values, original, proxyNameKeys)
+  let length = Math.min(name.length, 64)
+  const last = name.charCodeAt(length - 1)
+  if (length < name.length && last >= 0xd800 && last <= 0xdbff) {
+    length--
+  }
+
+  return name.slice(0, length)
+}
+
 function parts(template: string): Part[] {
   const found: Part[] = []
   let at = 0
@@ -61,10 +77,10 @@ function parts(template: string): Part[] {
   return found
 }
 
-function known(key: string): string | null {
+function known(key: string, keys: string[]): string | null {
   const bare = key.trim().toUpperCase()
 
-  return nameKeys.find((one) => one === bare) ?? null
+  return keys.find((one) => one === bare) ?? null
 }
 
 function control(letter: string): boolean {

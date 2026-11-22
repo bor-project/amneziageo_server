@@ -40,7 +40,8 @@ public static class PanelRules
             ?? CheckCertificate(settings.Certificate, settings.CertificateKey)
             ?? CheckPath(settings.Path)
             ?? CheckLanguage(settings.Language)
-            ?? CheckNameTemplate(settings.NameTemplate);
+            ?? CheckNameTemplate(settings.NameTemplate)
+            ?? CheckProxyNameTemplate(settings.ProxyNameTemplate);
     }
 
     private static PanelFault? CheckPort(int port) => port is < 1 or > 65535
@@ -129,6 +130,23 @@ public static class PanelRules
         Array.IndexOf(PanelDefaults.Languages, language) < 0
             ? new PanelFault("bad-language", $"'{language}' is not a language the panel opens in")
             : null;
+
+    private static PanelFault? CheckProxyNameTemplate(string template)
+    {
+        if (template.Length > ProxyName.MaxLength)
+        {
+            return new PanelFault("long-proxy-name-template", $"the proxy name template holds {ProxyName.MaxLength} characters at most");
+        }
+
+        if (template.Any(char.IsControl))
+        {
+            return new PanelFault("bad-proxy-name-template", "the proxy name template holds one line");
+        }
+
+        return ProxyName.Unknown(template) is [var unknown, ..]
+            ? new PanelFault("bad-proxy-name-template", $"'{unknown}' is not a substitution of the proxy name template")
+            : null;
+    }
 
     private static PanelFault? CheckNameTemplate(string template)
     {

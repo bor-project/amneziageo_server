@@ -1,5 +1,6 @@
 using AmneziaGeo.Server.Api.Auth;
 using AmneziaGeo.Server.Api.Firewall;
+using AmneziaGeo.Server.Api.Proxies;
 using AmneziaGeo.Server.Api.Updates;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
@@ -25,6 +26,7 @@ public static class PanelEndpoints
         var reading = routes.MapGroup("/api/panel").RequireScope(Scopes.ReadState);
         reading.MapGet("/", ReadAsync);
         reading.MapGet("/names", NamesAsync);
+        reading.MapGet("/proxy-names", ProxyNamesAsync);
 
         var writing = routes.MapGroup("/api/panel").RequireScope(Scopes.ManageAccess);
         writing.MapPut("/", SaveAsync);
@@ -102,6 +104,15 @@ public static class PanelEndpoints
             : Results.Ok(new NameSample(
                 ClientText.Values(first.Endpoint, first.Client, context.Request.Host.Host),
                 ClientText.Stamp(first.Client)));
+    }
+
+    private static async Task<IResult> ProxyNamesAsync(HttpContext context, TransportProxyStore proxies, CancellationToken ct)
+    {
+        var first = (await proxies.ListAsync(ct).ConfigureAwait(false)).OrderBy(proxy => proxy.Id).FirstOrDefault();
+
+        return first is null
+            ? Results.Ok(new NameSample(new Dictionary<string, string>(), string.Empty))
+            : Results.Ok(new NameSample(ProxyText.Values(first, context.Request.Host.Host.Trim('[', ']')), first.Name));
     }
 
     private static async Task<IResult> SaveAsync(

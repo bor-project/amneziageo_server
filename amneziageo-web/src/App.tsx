@@ -54,7 +54,7 @@ import { Presets } from "@/pages/Presets"
 import { Proxies } from "@/pages/Proxies"
 import { ProxyPage, ProxyRemove } from "@/pages/ProxyPage"
 import { ProxyTokenPage, ProxyTokenRemove } from "@/pages/ProxyTokenPage"
-import { PanelCertificates, PanelServer } from "@/pages/Settings"
+import { PanelCertificates, PanelNames, PanelServer } from "@/pages/Settings"
 import { Subscriptions } from "@/pages/Subscriptions"
 import { TemplatePage } from "@/pages/TemplatePage"
 import { TemplateRemove } from "@/pages/TemplateRemove"
@@ -173,6 +173,7 @@ const router = createBrowserRouter(
             <Route path="settings" element={<Sectioned title="nav.settings" to="/settings" items={settings} />}>
               <Route index element={<Cards items={settings} />} />
               <Route path="server" element={<PanelServer />} />
+              <Route path="names" element={<PanelNames />} />
               <Route path="certificates" element={<PanelCertificates />} />
               <Route path="subscriptions" element={<Subscriptions />} />
               <Route element={<RequireScope scope={scopes.manageClientUpdates} />}>

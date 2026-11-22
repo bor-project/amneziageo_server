@@ -616,6 +616,10 @@ export const en = {
   "settings.domain": "Certificate domain",
   "settings.language": "Language",
   "settings.nameTemplate": "Config name template",
+  "tab.nameTemplates": "Name templates",
+  "settings.proxyNameTemplate": "Proxy name template",
+  "settings.proxyNameKeys":
+    "{HOST} - proxy address\n{PROXY} - proxy name\n{TRANSPORT} - transport\n{ID} - proxy number\n{PORT} - public port\n{PATH} - path",
   "settings.nameKeys":
     "{HOST} - server address\n{INTERFACE} - interface name\n{CLIENT} - client name\n{ID} - client number\n{PORT} - interface port\n{NOTE} - client note\n{DATE} - date the client was added",
   "settings.nameUnknown": "Unknown substitution: {list}",
@@ -1526,6 +1530,8 @@ export const en = {
   "error.badLanguage": "The panel does not open in this language",
   "error.badNameTemplate": "The name template holds an unknown substitution",
   "error.longNameTemplate": "The name template is longer than 128 characters",
+  "error.badProxyNameTemplate": "The proxy name template must be one line with known substitutions",
+  "error.longProxyNameTemplate": "The proxy name template is longer than 128 characters",
   "error.silent": "The server does not answer",
   "error.failed": "The request did not go through",
   "error.updateBusy": "The panel is busy with an update",

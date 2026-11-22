@@ -58,6 +58,11 @@ public sealed record PanelSettings
     public string NameTemplate { get; init; } = ConfigName.Default;
 
     /// <summary>
+    /// Names published proxies.
+    /// </summary>
+    public string ProxyNameTemplate { get; init; } = ProxyName.Default;
+
+    /// <summary>
     /// Returns the addresses with the port the panel binds.
     /// </summary>
     public IReadOnlyList<string> Entries => Listen.Count == 0

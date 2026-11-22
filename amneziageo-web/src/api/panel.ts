@@ -12,6 +12,7 @@ export interface PanelDraft {
   language: string
   prereleases: boolean
   nameTemplate: string
+  proxyNameTemplate: string
 }
 
 export interface PanelPlace {
@@ -91,6 +92,14 @@ export function useNameSample(enabled = true) {
   })
 }
 
+export function useProxyNameSample(enabled = true) {
+  return useQuery({
+    queryKey: ["panel", "proxy-names"],
+    queryFn: async () => (await client.get<NameSample>("/panel/proxy-names")).data,
+    enabled,
+  })
+}
+
 export function useSavePanel() {
   return useRefreshing((draft: PanelDraft & Holding) => client.put("/panel", draft))
 }
@@ -128,6 +137,7 @@ export function draftOf(panel: Panel): PanelDraft {
     language: panel.language,
     prereleases: panel.prereleases,
     nameTemplate: panel.nameTemplate,
+    proxyNameTemplate: panel.proxyNameTemplate ?? "{PROXY}",
   }
 }
 

@@ -567,6 +567,8 @@ public sealed class PanelEntity
 
     public string NameTemplate { get; set; } = string.Empty;
 
+    public string ProxyNameTemplate { get; set; } = "{PROXY}";
+
     public DateTimeOffset UpdatedUtc { get; set; }
 }
 

@@ -225,6 +225,7 @@ public sealed class PanelStore
         Language = row.Language,
         Prereleases = row.Prereleases,
         NameTemplate = row.NameTemplate.Length > 0 ? row.NameTemplate : ConfigName.Default,
+        ProxyNameTemplate = row.ProxyNameTemplate.Length > 0 ? row.ProxyNameTemplate : ProxyName.Default,
     };
 
     private static void Write(PanelEntity row, PanelSettings settings)
@@ -239,5 +240,6 @@ public sealed class PanelStore
         row.Language = settings.Language;
         row.Prereleases = settings.Prereleases;
         row.NameTemplate = settings.NameTemplate;
+        row.ProxyNameTemplate = settings.ProxyNameTemplate;
     }
 }

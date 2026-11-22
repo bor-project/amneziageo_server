@@ -253,6 +253,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(row => row.CertificateKey).HasMaxLength(PanelRules.MaxFileLength);
             entity.Property(row => row.Language).HasMaxLength(8);
             entity.Property(row => row.NameTemplate).HasMaxLength(ConfigName.MaxLength);
+            entity.Property(row => row.ProxyNameTemplate).HasMaxLength(ProxyName.MaxLength).HasDefaultValue(ProxyName.Default);
         });
 
         builder.Entity<SubscriptionEntity>(entity =>

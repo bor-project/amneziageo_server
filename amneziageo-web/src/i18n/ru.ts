@@ -615,6 +615,10 @@ export const ru: Dictionary = {
   "settings.domain": "Домен сертификата",
   "settings.language": "Язык",
   "settings.nameTemplate": "Шаблон имени конфигурации",
+  "tab.nameTemplates": "Шаблоны имён",
+  "settings.proxyNameTemplate": "Шаблон имени прокси",
+  "settings.proxyNameKeys":
+    "{HOST} - адрес прокси\n{PROXY} - имя прокси\n{TRANSPORT} - транспорт\n{ID} - номер прокси\n{PORT} - публичный порт\n{PATH} - путь",
   "settings.nameKeys":
     "{HOST} - адрес сервера\n{INTERFACE} - имя интерфейса\n{CLIENT} - имя клиента\n{ID} - номер клиента\n{PORT} - порт интерфейса\n{NOTE} - заметка клиента\n{DATE} - дата создания клиента",
   "settings.nameUnknown": "Неизвестная подстановка: {list}",
@@ -1525,6 +1529,8 @@ export const ru: Dictionary = {
   "error.badLanguage": "Такого языка в панели нет",
   "error.badNameTemplate": "В шаблоне имени неизвестная подстановка",
   "error.longNameTemplate": "Шаблон имени длиннее 128 символов",
+  "error.badProxyNameTemplate": "Шаблон имени прокси должен быть одной строкой с известными подстановками",
+  "error.longProxyNameTemplate": "Шаблон имени прокси длиннее 128 символов",
   "error.silent": "Сервер не отвечает",
   "error.failed": "Запрос не прошёл",
   "error.updateBusy": "Панель уже обновляется",

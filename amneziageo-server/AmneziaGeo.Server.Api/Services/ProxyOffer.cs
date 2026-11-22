@@ -40,6 +40,7 @@ public sealed class ProxyOffer : IHelloFeature
         var identity = await store.IdentityAsync(ct).ConfigureAwait(false);
         var selected = _options?.Enabled == false ? [] : await store.SelectedAsync(peer.Template?.ProxyIds ?? [], ct).ConfigureAwait(false);
         var panel = scope.ServiceProvider.GetService<PanelSettings>() ?? new PanelSettings();
+        var naming = (await scope.ServiceProvider.GetRequiredService<PanelStore>().ReadAsync(ct).ConfigureAwait(false)).ProxyNameTemplate;
         var options = scope.ServiceProvider.GetService<WebOptions>() ?? new WebOptions();
         selected = selected.Where(proxy => ProxySecurity.Check(proxy, Listening.Chain(options, panel), Listening.Key(options, panel),
             publicName: peer.Context.Request.Host.Host.Trim('[', ']')) is null).ToArray();
@@ -51,7 +52,7 @@ public sealed class ProxyOffer : IHelloFeature
             var modern = named.Where(item => item.Proxy.Transport is "websocket" or "quic" || item.Proxy.IsHttpV2).Select(item =>
             {
                 var proxy = item.Proxy;
-                return new ProxyItemV2(proxy.Id.ToString(CultureInfo.InvariantCulture), proxy.Name,
+                return new ProxyItemV2(proxy.Id.ToString(CultureInfo.InvariantCulture), ProxyText.Title(proxy, naming, item.Host),
                     proxy.IsHttp ? "http" : proxy.Transport, item.Host, proxy.Port, proxy.Path,
                     new ProxyTlsV2(proxy.UsesCertificate, proxy.ServerName.Length > 0 ? proxy.ServerName : item.Host, proxy.UsesCertificate ? proxy.Pin : string.Empty),
                     new ProxyAuth(proxy.IsHttp ? "hmac-sha256-v2" : "bearer", proxy.AllowAnonymous ? ProxyAccess.AnonymousCredential : TransportProxyStore.Credential(proxy, peer.Client.Id)),
@@ -69,7 +70,7 @@ public sealed class ProxyOffer : IHelloFeature
             var proxy = item.Proxy;
             return
             new ProxyItem(
-                proxy.Id.ToString(CultureInfo.InvariantCulture), proxy.Name, proxy.IsHttp ? "xhttp" : proxy.Transport,
+                proxy.Id.ToString(CultureInfo.InvariantCulture), ProxyText.Title(proxy, naming, item.Host), proxy.IsHttp ? "xhttp" : proxy.Transport,
                 item.Host, proxy.Port, proxy.Path,
                 new ProxyTls(proxy.ServerName.Length > 0 ? proxy.ServerName : item.Host, proxy.UsesCertificate ? proxy.Pin : string.Empty),
                 new ProxyAuth(proxy.IsHttp ? "vless" : "bearer", proxy.AllowAnonymous ? ProxyAccess.AnonymousCredential : TransportProxyStore.Credential(proxy, peer.Client.Id)),

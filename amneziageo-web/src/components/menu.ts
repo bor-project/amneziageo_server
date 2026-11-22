@@ -79,6 +79,7 @@ export const routing: Item[] = [
 
 export const settings: Item[] = [
   { to: "/settings/server", label: "tab.server", about: "about.server", icon: "server", scope: scopes.manageAccess },
+  { to: "/settings/names", label: "tab.nameTemplates", icon: "list", scope: scopes.manageAccess },
   {
     to: "/settings/certificates",
     label: "tab.certificates",

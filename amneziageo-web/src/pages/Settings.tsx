@@ -4,13 +4,13 @@ import { useConfigs } from "@/api/configs"
 import { useFailure } from "@/api/failure"
 import { outside, usePortState } from "@/api/firewall"
 import type { Holding } from "@/api/firewall"
-import { draftOf, useNameSample, usePanel, useSavePanel } from "@/api/panel"
+import { draftOf, useNameSample, usePanel, useProxyNameSample, useSavePanel } from "@/api/panel"
 import type { Panel, PanelDraft } from "@/api/panel"
 import { scopes } from "@/api/scopes"
 import { KeepQuestion, PortNote } from "@/components/PortNote"
 import { PanelCertificateInfo } from "@/components/PanelCertificateInfo"
 import { Count, Flag, Help, Line, Multi, Part, Pick } from "@/components/fields"
-import { defaultName, fillName, unknownKeys } from "@/components/names"
+import { defaultName, defaultProxyName, fillName, fillProxyName, proxyNameKeys, unknownKeys } from "@/components/names"
 import { manual, useOpening } from "@/components/opening"
 import { socketFault } from "@/components/ports"
 import { footer, label, primary, secondary } from "@/components/styles"
@@ -20,7 +20,7 @@ import { holds } from "@/store/authSlice"
 import { panelDrafted, same } from "@/store/draftSlice"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
 
-type Side = "server" | "certificates"
+type Side = "server" | "certificates" | "names"
 
 const own = "*"
 
@@ -30,6 +30,10 @@ export function PanelServer() {
 
 export function PanelCertificates() {
   return <Settings part="certificates" />
+}
+
+export function PanelNames() {
+  return <Settings part="names" />
 }
 
 function Settings({ part }: { part: Side }) {
@@ -56,9 +60,10 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
   const kept = useAppSelector((s) => s.drafts.panel)
   const [fault, setFault] = useState<TextKey | null>(null)
   const save = useSavePanel()
-  const names = useNameSample(part === "server")
+  const names = useNameSample(part === "names")
+  const proxyNames = useProxyNameSample(part === "names")
   const saved = draftOf(settings)
-  const draft = kept ?? saved
+  const draft = { ...saved, ...kept }
   const { able, reach, ufw } = useOpening(scopes.manageAccess)
   const [opening, setOpening] = useState(false)
   const [asking, setAsking] = useState(false)
@@ -74,9 +79,15 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
   const domain = domainOf(draft, settings.certificateRoot)
   const template = draft.nameTemplate.trim() || defaultName
   const strange = unknownKeys(template)
+  const proxyTemplate = draft.proxyNameTemplate.trim() || defaultProxyName
+  const proxyStrange = unknownKeys(proxyTemplate, proxyNameKeys)
   const sample =
     strange.length === 0 && names.data !== undefined && names.data.stamp.length > 0
       ? fillName(template, names.data.values, names.data.stamp)
+      : ""
+  const proxySample =
+    proxyStrange.length === 0 && proxyNames.data !== undefined && proxyNames.data.stamp.length > 0
+      ? fillProxyName(proxyTemplate, proxyNames.data.values, proxyNames.data.stamp)
       : ""
 
   function set(change: Partial<PanelDraft>) {
@@ -202,27 +213,47 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
             <option value="ru">{languageNames.ru}</option>
           </Pick>
 
-          <Line
-            id="panel-name-template"
-            caption={
-              <span className="flex items-center gap-1">
-                {t("settings.nameTemplate")}
-                <Help text={t("settings.nameKeys")} />
-              </span>
-            }
-            value={draft.nameTemplate}
-            placeholder={defaultName}
-            onChange={(nameTemplate) => set({ nameTemplate })}
-            preview={sample}
-            fault={strange.length > 0 ? t("settings.nameUnknown", { list: strange.join(", ") }) : ""}
-          />
-
           <div className="sm:col-span-2">
             <Flag
               id="panel-prereleases"
               caption={t("settings.prereleases")}
               value={draft.prereleases}
               onChange={(prereleases) => set({ prereleases })}
+            />
+          </div>
+        </Part>
+      ) : part === "names" ? (
+        <Part title={t("tab.nameTemplates")}>
+          <div className="min-w-0 [overflow-wrap:anywhere]">
+            <Line
+              id="panel-name-template"
+              caption={
+                <span className="flex items-center gap-1">
+                  {t("settings.nameTemplate")}
+                  <Help text={t("settings.nameKeys")} />
+                </span>
+              }
+              value={draft.nameTemplate}
+              placeholder={defaultName}
+              onChange={(nameTemplate) => set({ nameTemplate })}
+              preview={sample}
+              fault={strange.length > 0 ? t("settings.nameUnknown", { list: strange.join(", ") }) : ""}
+            />
+          </div>
+          <div className="min-w-0 [overflow-wrap:anywhere]">
+            <Line
+              id="panel-proxy-name-template"
+              caption={
+                <span className="flex items-center gap-1">
+                  {t("settings.proxyNameTemplate")}
+                  <Help text={t("settings.proxyNameKeys")} />
+                </span>
+              }
+              value={draft.proxyNameTemplate}
+              placeholder={defaultProxyName}
+              onChange={(proxyNameTemplate) => set({ proxyNameTemplate })}
+              preview={proxySample}
+              fault={proxyStrange.length > 0 ? t("settings.nameUnknown", { list: proxyStrange.join(", ") }) : ""}
             />
           </div>
         </Part>
@@ -274,7 +305,8 @@ function Editor({ settings, may, part }: { settings: Panel; may: boolean; part: 
         <button
           type="button"
           className={primary}
-          disabled={!may || (kept === null && !opening) || save.isPending || blocked || socket.length > 0}
+          disabled={!may || (kept === null && !opening) || save.isPending || blocked || socket.length > 0
+            || (part === "names" && (strange.length > 0 || proxyStrange.length > 0))}
           onClick={go}
         >
           {t("settings.save")}
