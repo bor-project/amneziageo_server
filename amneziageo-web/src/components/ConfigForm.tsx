@@ -15,6 +15,7 @@ import { scopes } from "@/api/scopes"
 import { AppCaption } from "@/components/AppMark"
 import { DnsOutcome, DnsServerChoice } from "@/components/DnsField"
 import { ObfuscationFields } from "@/components/Obfuscation"
+import { headerProtectionChange, headerProtectionMtu } from "@/components/headerProtection"
 import { KeepQuestion, PortNote } from "@/components/PortNote"
 import { Count, Flag, Help, Hinted, Line, LinkLine, Links, ListLine, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { clientItems, few, names, ruleItems } from "@/components/members"
@@ -138,20 +139,28 @@ export function ConfigForm({
   }
 
   function protocol(enabled: boolean) {
-    if (enabled && isPlainObfuscation(draft.obfuscation)) {
-      const cover = fresh.data?.obfuscation
+    if (enabled) {
+      const cover = isPlainObfuscation(draft.obfuscation) ? fresh.data?.obfuscation : draft.obfuscation
       if (cover === undefined || isPlainObfuscation(cover)) {
         return
       }
 
-      setDraft({ ...draft, obfuscation: cover })
+      setDraft({
+        ...draft,
+        mtu: headerProtectionMtu(draft.mtu, draft.obfuscation.headerProtectionKey),
+        obfuscation: { ...cover, ...headerProtectionChange(cover, false) },
+      })
     }
 
     setAmnezia(enabled)
   }
 
-  function twist(change: Partial<Obfuscation>) {
-    setDraft({ ...draft, obfuscation: { ...draft.obfuscation, ...change } })
+  function twist(change: Partial<Obfuscation>, generated = false) {
+    setDraft({
+      ...draft,
+      mtu: generated ? headerProtectionMtu(draft.mtu, draft.obfuscation.headerProtectionKey) : draft.mtu,
+      obfuscation: { ...draft.obfuscation, ...change },
+    })
   }
 
   async function pair() {

@@ -52,6 +52,47 @@ public class ConfigTests
         });
     }
 
+    [Fact]
+    public void AFreshEndpointIncludesTheEngineTimings()
+    {
+        var config = ConfigDefaults.Fresh("awg1");
+        var shape = config.Obfuscation;
+
+        Assert.Null(ConfigRules.Check(config));
+        Assert.Equal("0", shape.ContentPaddingAddition);
+        Assert.Equal("120", shape.RekeyAfterTime);
+        Assert.Equal("5", shape.RekeyTimeout);
+        Assert.Equal("180", shape.RejectAfterTime);
+        Assert.Equal("10", shape.KeepaliveTimeout);
+        Assert.Equal("18", shape.MaxHandshakeAttempts);
+        Assert.All(new[] { shape.I1, shape.I2, shape.I3, shape.I4, shape.I5 }, value => Assert.True(string.IsNullOrEmpty(value)));
+    }
+
+    [Fact]
+    public async Task AnExistingEndpointKeepsItsEmptyTimingOverrides()
+    {
+        using var bench = new Bench();
+        var fresh = ConfigDefaults.Fresh("awg1");
+        var original = fresh.Obfuscation with
+        {
+            HeaderProtectionKey = string.Empty,
+            S3 = 0,
+            S4 = 0,
+            ContentPaddingAddition = string.Empty,
+            RekeyAfterTime = string.Empty,
+            RekeyTimeout = string.Empty,
+            RejectAfterTime = string.Empty,
+            KeepaliveTimeout = string.Empty,
+            MaxHandshakeAttempts = string.Empty,
+        };
+
+        var added = await bench.Configs.AddAsync(fresh with { Obfuscation = original }, default).ConfigureAwait(false);
+        Assert.True(added.IsOk);
+        var found = await bench.Configs.FindAsync(added.Record!.Id, default).ConfigureAwait(false);
+
+        Assert.Equal(original, found!.Obfuscation);
+    }
+
     [Theory]
     [InlineData("", "the name is empty")]
     [InlineData("Awg1", "lower case")]

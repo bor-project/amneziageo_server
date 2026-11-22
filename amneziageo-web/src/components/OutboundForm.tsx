@@ -5,6 +5,7 @@ import { useImportOutbound, useOutboundKeys } from "@/api/outbounds"
 import type { OutboundDraft, OutboundKind } from "@/api/outbounds"
 import { WayUse } from "@/components/Holders"
 import { ObfuscationFields } from "@/components/Obfuscation"
+import { headerProtectionMtu } from "@/components/headerProtection"
 import { Count, Flag, Line, ListLine, Part, Switch } from "@/components/fields"
 import { danger, field, footer, footerUnder, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
@@ -44,8 +45,12 @@ export function OutboundForm({
     setDraft({ ...draft, ...change })
   }
 
-  function twist(change: Partial<Obfuscation>) {
-    setDraft({ ...draft, obfuscation: { ...draft.obfuscation, ...change } })
+  function twist(change: Partial<Obfuscation>, generated = false) {
+    setDraft({
+      ...draft,
+      mtu: generated ? headerProtectionMtu(draft.mtu, draft.obfuscation.headerProtectionKey) : draft.mtu,
+      obfuscation: { ...draft.obfuscation, ...change },
+    })
   }
 
   async function pair() {

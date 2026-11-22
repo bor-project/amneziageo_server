@@ -26,7 +26,10 @@ Create a separate endpoint with its own UDP port for clients that do not support
 `Obfuscation`, turn off `AmneziaWG`. Its settings are hidden and the saved configuration has no
 obfuscation parameters, including packet types, special packets, padding and timing overrides.
 Turning it back on before saving restores the draft settings. Enabling AmneziaWG on an existing
-plain endpoint loads fresh AmneziaWG defaults. The endpoint port, addresses and keys are preserved.
+plain endpoint loads fresh AmneziaWG defaults. Enabling it fills empty timing overrides and generates
+a missing header protection key. A key already in the draft is preserved. The endpoint port, addresses
+and WireGuard keys are preserved. Adding header protection changes the standard MTU from 1420 to 1400;
+custom MTU values remain unchanged.
 Save the endpoint and enable it as usual.
 
 New endpoints have AmneziaWG enabled. Existing endpoints and imported files retain their protocol:
@@ -114,6 +117,21 @@ and a header protection key of 32 bytes in base64. The smaller MTU leaves room f
 the transport junk in one datagram over IPv6; an obfuscation without the key keeps MTU 1420. The panel offers
 the first free name of the `awgN` shape and the TCP port the endpoints already serve on, 0 when there are
 none, see [services.md](services.md).
+
+New AWG endpoints show the engine's baseline settings explicitly: content padding `0`, rekey after
+`120` seconds, rekey timeout `5` seconds, reject after `180` seconds, keepalive timeout `10` seconds,
+and `18` handshake attempts. These timings match the
+[pinned kernel defaults](https://github.com/bor-project/amneziawg-linux-kernel-module/blob/4569c4c67f3a57414969260cafbbd04694fbaae0/src/messages.h).
+Signature packets `I1`–`I5` remain empty until configured.
+
+Generating a header protection key in an interface or outbound draft also repairs `S1`–`S4` to the
+allowed `12`–`1280` byte range and keeps initiation and response packet lengths different. It fills
+empty padding and timing overrides with the baseline values above, preserving explicit values and
+ranges. Compatible sizes, packet types, signature packets and flags are preserved. Manual key entry
+and clearing remain available and the server still validates the submitted settings. Opening a saved
+configuration does not change it; generated values reach storage only on Save, and Cancel discards them.
+The standard MTU also changes from 1420 to 1400 when the first header protection key is generated;
+an existing key and custom MTU values preserve the current MTU.
 
 The host of the draft is the one another endpoint names, else the domain of the certificate of the panel or the
 first of its names, else the host the request came to when clients from outside reach it by that name or address,

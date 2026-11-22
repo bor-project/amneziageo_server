@@ -1,5 +1,6 @@
 import type { Obfuscation } from "@/api/configs"
 import { Count, Flag, Hinted, Line, Regenerate } from "@/components/fields"
+import { headerProtectionChange } from "@/components/headerProtection"
 import { useText } from "@/i18n"
 
 export function ObfuscationFields({
@@ -9,7 +10,7 @@ export function ObfuscationFields({
 }: {
   id: string
   cover: Obfuscation
-  onChange: (change: Partial<Obfuscation>) => void
+  onChange: (change: Partial<Obfuscation>, generated?: boolean) => void
 }) {
   const t = useText()
 
@@ -168,7 +169,7 @@ export function ObfuscationFields({
             after={
               <Regenerate
                 title={t("configs.generate")}
-                onClick={() => onChange({ headerProtectionKey: randomHeaderKey() })}
+                onClick={() => onChange(headerProtectionChange(cover), true)}
               />
             }
             wide
@@ -191,9 +192,4 @@ export function ObfuscationFields({
       </details>
     </>
   )
-}
-function randomHeaderKey() {
-  const bytes = new Uint8Array(32)
-  crypto.getRandomValues(bytes)
-  return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""))
 }

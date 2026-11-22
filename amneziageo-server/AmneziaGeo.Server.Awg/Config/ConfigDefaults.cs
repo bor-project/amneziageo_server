@@ -127,6 +127,12 @@ public static class ConfigDefaults
             H3 = types[2],
             H4 = types[3],
             HeaderProtectionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(Curve25519.KeySize)),
+            ContentPaddingAddition = "0",
+            RekeyAfterTime = "120",
+            RekeyTimeout = "5",
+            RejectAfterTime = "180",
+            KeepaliveTimeout = "10",
+            MaxHandshakeAttempts = "18",
             RandomTrailers = true,
             DisableCookies = true,
         };
