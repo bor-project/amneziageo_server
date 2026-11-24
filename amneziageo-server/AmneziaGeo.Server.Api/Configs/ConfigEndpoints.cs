@@ -17,7 +17,7 @@ namespace AmneziaGeo.Server.Api.Configs;
 /// <summary>
 /// The routes the server endpoints are managed through.
 /// </summary>
-public static class ConfigEndpoints
+public static partial class ConfigEndpoints
 {
     /// <summary>
     /// Maps the endpoint management routes.
@@ -41,6 +41,10 @@ public static class ConfigEndpoints
         writing.MapPost("/{id:long}/open", OpenAsync);
         writing.MapPost("/{id:long}/default", DefaultAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
+        writing.MapPost("/{id:long}/preview", PreviewAsync);
+        writing.MapGet("/{id:long}/pending", PendingAsync);
+        writing.MapPost("/{id:long}/pending/apply", ApplyPendingAsync);
+        writing.MapDelete("/{id:long}/pending", CancelPendingAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
         return routes;
@@ -162,6 +166,8 @@ public static class ConfigEndpoints
         ConfigRequest request,
         HttpContext http,
         ConfigStore store,
+        ConfigDraftStore drafts,
+        ConfigChangeReader changes,
         ClientStore clients,
         RouteStore rules,
         EndpointHost host,
@@ -173,23 +179,56 @@ public static class ConfigEndpoints
         CancellationToken ct)
     {
         using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
+        var transaction = await drafts.BeginAsync(ct).ConfigureAwait(false);
+        await using var release = transaction.ConfigureAwait(false);
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
+        if (held is null)
+        {
+            return Refuse(404, "unknown-config", "the interface no longer exists");
+        }
+        if (request.ExpectedRevision is { } expected && expected != ConfigDraftStore.Revision(held))
+        {
+            return Refuse(409, "config-change-stale", "the interface changed after the draft was prepared");
+        }
+        if (request.ExpectedDraftRevision is { } draftRevision)
+        {
+            var pending = await drafts.FindAsync(id, ct).ConfigureAwait(false);
+            if (pending is null || ConfigDraftStore.PayloadRevision(pending.Payload) != draftRevision)
+            {
+                return Refuse(409, "config-change-stale", "the pending interface change was replaced or cancelled");
+            }
+        }
         var draft = ConfigAnswers.Draft(request, held);
         if (ConfigRules.CheckReach(draft) is { } unreached)
         {
             return Refuse(StatusCodes.Status400BadRequest, unreached.Code, unreached.Message);
         }
 
-        if (held is not null
-            && await RuleNaming.RefuseAsync(http, rules, RuleSide.Inbounds, held.Name, request.Rules, ct).ConfigureAwait(false) is { } refused)
+        if (await RuleNaming.RefuseAsync(http, rules, RuleSide.Inbounds, held.Name, request.Rules, ct).ConfigureAwait(false) is { } refused)
         {
             return refused;
         }
 
+        var impact = await changes.PreviewAsync(held, draft, ct).ConfigureAwait(false);
+        if (request.ExpectedClientsRevision is { } clientsRevision && clientsRevision != impact.ClientsRevision)
+        {
+            return Refuse(409, "config-change-stale", "the effective client configurations changed after the draft was prepared");
+        }
         var previous = request.Keep == true ? await firewall.PlanAsync(ct).ConfigureAwait(false) : null;
         if (await services.CheckUdpAsync(ct, draft, id).ConfigureAwait(false) is { } udp)
         {
             return Refuse(409, udp.Error, udp.Message);
+        }
+
+        if (request.Defer)
+        {
+            if (ConfigRules.Check(draft) is { } invalid)
+            {
+                return Refuse(400, invalid.Code, invalid.Message);
+            }
+            await drafts.SaveAsync(held, System.Text.Json.JsonSerializer.Serialize(request with { Defer = false, ExpectedRevision = ConfigDraftStore.Revision(held), ExpectedClientsRevision = impact.ClientsRevision }), ct).ConfigureAwait(false);
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+            return Results.Ok(ConfigAnswers.Config(held, true));
         }
 
         var result = await store.ChangeAsync(id, draft, (previous, stop) => host.WithdrawAsync(previous.Name, stop), ct).ConfigureAwait(false);
@@ -198,7 +237,9 @@ public static class ConfigEndpoints
             return Explain(result);
         }
 
+        await drafts.RemoveAsync(id, ct).ConfigureAwait(false);
         await RuleNaming.NameAsync(rules, RuleSide.Inbounds, result.Record!.Name, request.Rules, ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
         await services.PrepareUdpAsync(ct).ConfigureAwait(false);
         var raised = await RaiseAsync(store, clients, host, keeper, result.Record!, ct).ConfigureAwait(false);
         await routes.SettleAsync(ct).ConfigureAwait(false);

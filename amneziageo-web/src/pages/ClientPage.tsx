@@ -6,6 +6,7 @@ import { ClientInfo } from "@/components/ClientInfo"
 import { ClientConfig } from "@/components/ClientConfig"
 import { ClientLimits } from "@/components/ClientLimits"
 import { ClientForm } from "@/components/ClientForm"
+import { PendingConfigChange } from "@/components/PendingConfigChange"
 import { Tabs } from "@/components/Tabs"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
@@ -69,6 +70,7 @@ export function ClientView() {
   return (
     <>
       <Tabs items={tabs} />
+      {holds(user, scopes.manageInterfaces) && <PendingConfigChange id={held.configId} />}
       {!location.pathname.replace(/\/+$/, "").endsWith("/info") && <ClientLimits key={held.id} one={held} editable={holds(user, scopes.manageClients)} />}
       <Outlet context={held} />
     </>

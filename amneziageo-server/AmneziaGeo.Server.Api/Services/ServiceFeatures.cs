@@ -258,12 +258,14 @@ public sealed class SubscriptionOffer : IHelloFeature
         }
 
         var revision = SubscriptionAnswer.Revision(feed.Body);
+        var sheet = feed.Sheets.FirstOrDefault(one => one.MemberId == client.Id);
+        var configurationRevision = sheet is null ? string.Empty : ConfigurationRevision.Of(sheet.Text);
         if (_certificates?.Of(url) is { IsGood: false } verdict)
         {
-            return new SubscriptionFeature(url, revision, string.Empty, verdict.Fault, verdict.Detail);
+            return new SubscriptionFeature(url, revision, string.Empty, verdict.Fault, verdict.Detail, configurationRevision);
         }
 
-        return new SubscriptionFeature(url, revision, settings.Separate ? string.Empty : Pin(peer.Context));
+        return new SubscriptionFeature(url, revision, settings.Separate ? string.Empty : Pin(peer.Context), ConfigurationRevision: configurationRevision);
     }
 
     // Returns the SHA-256 of the certificate the port answered under, empty without one.

@@ -94,7 +94,7 @@ public sealed record ServicesFeature(int Port, string Inside);
 /// <param name="Fault">What keeps the client from reading the subscription: a certificate not every client takes; empty
 /// when nothing does.</param>
 /// <param name="Detail">The date, the name or the authority the fault is about.</param>
-public sealed record SubscriptionFeature(string Url, string Revision, string Pin, string Fault = "", string Detail = "");
+public sealed record SubscriptionFeature(string Url, string Revision, string Pin, string Fault = "", string Detail = "", string ConfigurationRevision = "");
 
 /// <summary>
 /// One geo source the client fetches its lists from.

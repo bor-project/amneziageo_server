@@ -85,6 +85,9 @@ export interface ConfigDraft {
   privateKey: string
   presharedKey: string
   obfuscation: Obfuscation
+  defer?: boolean
+  expectedRevision?: string
+  expectedClientsRevision?: string
   rules?: number[]
 }
 
@@ -178,6 +181,7 @@ export function downedOf(error: unknown): Downed | null {
 }
 
 export function failure(t: Text, error: unknown): string {
+  if (axios.isAxiosError(error) && error.response?.data?.error === "config-change-stale") return t("error.configChangeStale")
   const downed = downedOf(error)
   if (downed?.error === "raise-failed") {
     return t("error.raiseFailed", { reason: downed.message })
@@ -223,9 +227,41 @@ function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) 
     mutationFn: call,
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["configs"] })
+      await queryClient.invalidateQueries({ queryKey: ["clients"] })
+      await queryClient.invalidateQueries({ queryKey: ["client-config"] })
+      await queryClient.invalidateQueries({ queryKey: ["client-info"] })
       await queryClient.invalidateQueries({ queryKey: ["firewall", "port"] })
       await queryClient.invalidateQueries({ queryKey: ["dns-conflicts"] })
       await queryClient.invalidateQueries({ queryKey: ["rules"] })
     },
   })
+}
+
+export interface ConfigChangePreview {
+  baseRevision: string
+  clientsRevision: string
+  clients: { id: number; name: string; revision: string; fields: string[]; requiresCoordination: boolean }[]
+}
+export interface PendingConfigChange {
+  configId: number
+  name: string
+  createdUtc: string
+  stale: boolean
+  preview: ConfigChangePreview
+}
+export function useConfigPreview() {
+  return useMutation({ mutationFn: async ({ id, draft }: { id: number; draft: ConfigDraft & Holding }) =>
+    (await client.post<ConfigChangePreview>(`/configs/${id}/preview`, draft)).data })
+}
+export function usePendingConfig(id: number) {
+  return useQuery({ queryKey: ["configs", id, "pending"], queryFn: async () => {
+    const reply = await client.get<PendingConfigChange>(`/configs/${id}/pending`)
+    return reply.status === 204 ? null : reply.data
+  } })
+}
+export function useApplyPendingConfig() {
+  return useRefreshing((id: number) => client.post(`/configs/${id}/pending/apply`))
+}
+export function useCancelPendingConfig() {
+  return useRefreshing((id: number) => client.delete(`/configs/${id}/pending`))
 }

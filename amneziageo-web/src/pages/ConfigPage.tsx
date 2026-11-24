@@ -1,6 +1,11 @@
 import { useState } from "react"
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
-import { downedOf, draftOf, failure, useAddConfig, useChangeConfig, useConfigs, useFreshConfig } from "@/api/configs"
+import { downedOf, draftOf, failure, useAddConfig, useChangeConfig, useConfigPreview, useConfigs, useFreshConfig } from "@/api/configs"
+import type { ConfigChangePreview, ConfigDraft } from "@/api/configs"
+import type { Holding } from "@/api/firewall"
+import { Dialog } from "@/components/Dialog"
+import { PendingConfigChange } from "@/components/PendingConfigChange"
+import { primary, secondary } from "@/components/styles"
 import type { Config } from "@/api/configs"
 import { scopes } from "@/api/scopes"
 import { ConfigForm } from "@/components/ConfigForm"
@@ -62,6 +67,8 @@ function HeldConfig({ configId }: { configId: number }) {
   const { state } = useLocation()
   const configs = useConfigs()
   const change = useChangeConfig()
+  const preview = useConfigPreview()
+  const [proposed, setProposed] = useState<{ draft: ConfigDraft & Holding; preview: ConfigChangePreview } | null>(null)
   const [round, setRound] = useState(0)
   const may = holds(user, scopes.manageInterfaces)
   const arrived = (state as { fault?: string } | null)?.fault ?? ""
@@ -80,30 +87,45 @@ function HeldConfig({ configId }: { configId: number }) {
     )
   }
 
-  return (
+  function save(draft: ConfigDraft & Holding, impact?: ConfigChangePreview, defer = false) {
+    void change.mutateAsync({ id: configId, draft: { ...draft, defer, expectedRevision: impact?.baseRevision, expectedClientsRevision: impact?.clientsRevision } }).then(
+      () => navigate(back),
+      (error: unknown) => { setProposed(null); if (downedOf(error) !== null) setRound(one => one + 1) },
+    )
+  }
+
+  return (<>
+    {may && <PendingConfigChange id={configId} />}
+    {preview.error && <div role="alert" className="mt-3 text-alarm">{failure(t, preview.error)}</div>}
     <ConfigForm
       key={round}
       start={draftOf(held)}
       publicKey={held.publicKey}
       self={held.id}
-      pending={change.isPending}
+      pending={change.isPending || preview.isPending}
       error={change.error}
       fault={change.error === null ? arrived : ""}
       faultOf={change.error === null ? arrivedOf : ""}
-      onSave={(draft, holding) =>
-        void change.mutateAsync({ id: held.id, draft: { ...draft, ...holding } }).then(
-          () => navigate(back),
-          (error: unknown) => {
-            if (downedOf(error) !== null) {
-              setRound((one) => one + 1)
-            }
-          },
-        )
-      }
+      onSave={(draft, holding) => {
+        const submitted = { ...draft, ...holding }
+        void preview.mutateAsync({ id: held.id, draft: submitted }).then(impact => {
+          if (impact.clients.length > 0) setProposed({ draft: submitted, preview: impact })
+          else save(submitted, impact)
+        }, () => {})
+      }}
       onClose={() => navigate(back)}
       onRemove={may ? () => navigate(`/interfaces/${held.id}/delete`) : undefined}
     />
-  )
+    {proposed && <Dialog title={t("configs.applyChangeTitle")} onClose={() => { if (!change.isPending) setProposed(null) }} actions={<>
+      <button className={secondary} disabled={change.isPending} onClick={() => setProposed(null)}>{t("configs.cancel")}</button>
+      <button className={secondary} disabled={change.isPending} onClick={() => save(proposed.draft, proposed.preview, true)}>{t("configs.applyLater")}</button>
+      <button className={primary} disabled={change.isPending} onClick={() => save(proposed.draft, proposed.preview)}>{t("configs.applyNow")}</button>
+    </>}>
+      <div>{t("configs.affectedClients", { count: proposed.preview.clients.length })}</div>
+      {proposed.preview.clients.some(one => one.requiresCoordination) && <div className="mt-2 text-alarm">{t("configs.connectionChangeWarning")}</div>}
+      <div className="mt-2 max-h-56 overflow-auto">{proposed.preview.clients.map(one => <div key={one.id} className="break-words">{one.name}: {one.fields.join(", ")}</div>)}</div>
+    </Dialog>}
+  </>)
 }
 
 function nextName(configs: Config[] | undefined): string {

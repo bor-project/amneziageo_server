@@ -94,7 +94,11 @@ public sealed record ConfigRequest(
     bool? IsDefault = null,
     bool? RequireUpdate = null,
     IReadOnlyList<long>? Rules = null,
-    bool? UdpPrivate = null);
+    bool? UdpPrivate = null,
+    bool Defer = false,
+    string? ExpectedRevision = null,
+    string? ExpectedDraftRevision = null,
+    string? ExpectedClientsRevision = null);
 
 /// <summary>
 /// What a request to turn an endpoint on or off carries.

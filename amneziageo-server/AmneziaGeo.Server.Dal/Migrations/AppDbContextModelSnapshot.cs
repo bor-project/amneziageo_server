@@ -511,6 +511,27 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.ToTable("ClientUpdates");
                 });
 
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.ConfigDraftEntity", b =>
+                {
+                    b.Property<long>("ConfigId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BaseRevision")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ConfigId");
+
+                    b.ToTable("ConfigDrafts");
+                });
+
             modelBuilder.Entity("AmneziaGeo.Server.Dal.ConfigEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -1873,6 +1894,15 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.HasOne("AmneziaGeo.Server.Dal.ConfigEntity", null)
                         .WithMany()
                         .HasForeignKey("ConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.ConfigDraftEntity", b =>
+                {
+                    b.HasOne("AmneziaGeo.Server.Dal.ConfigEntity", null)
+                        .WithOne()
+                        .HasForeignKey("AmneziaGeo.Server.Dal.ConfigDraftEntity", "ConfigId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

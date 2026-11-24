@@ -1,6 +1,15 @@
 import type { Dictionary } from "./en"
 
 export const ru: Dictionary = {
+  "configs.connectionChangeWarning": "Подключения могут прерваться до обновления конфигураций клиентов.",
+  "configs.pendingChange": "Отложенное изменение интерфейса",
+  "configs.discardChange": "Отменить изменение",
+  "configs.applyNow": "Применить сейчас",
+  "configs.applyLater": "Позже",
+  "configs.applyChangeTitle": "Применить изменения интерфейса и обновить конфигурации клиентов?",
+  "configs.affectedClients": "Затронуто клиентов: {count}",
+  "error.configChangeStale": "Настройки интерфейса или клиентов изменились. Подготовьте изменение заново.",
+
   "error.defaultTemplateNameFixed": "Имя конфигурации по умолчанию нельзя изменить",
   "templates.reset": "Сбросить по умолчанию",
   "templates.resetConfirm": "Сбросить настройки конфигурации по умолчанию?",

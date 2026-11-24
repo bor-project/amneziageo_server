@@ -1,4 +1,13 @@
 export const en = {
+  "configs.connectionChangeWarning": "Connections may be interrupted until client configurations are updated.",
+  "configs.pendingChange": "Pending interface change",
+  "configs.discardChange": "Discard",
+  "configs.applyNow": "Apply now",
+  "configs.applyLater": "Later",
+  "configs.applyChangeTitle": "Apply interface changes and update client configurations?",
+  "configs.affectedClients": "Affected clients: {count}",
+  "error.configChangeStale": "Interface or client settings changed. Prepare the change again.",
+
   "error.defaultTemplateNameFixed": "The default configuration name cannot be changed",
   "templates.reset": "Reset to defaults",
   "templates.resetConfirm": "Reset the default configuration?",

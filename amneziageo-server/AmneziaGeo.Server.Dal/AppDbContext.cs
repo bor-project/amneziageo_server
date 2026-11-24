@@ -35,6 +35,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<ConfigEntity> Configs => Set<ConfigEntity>();
 
+    public DbSet<ConfigDraftEntity> ConfigDrafts => Set<ConfigDraftEntity>();
+
     public DbSet<ClientEntity> Clients => Set<ClientEntity>();
 
     public DbSet<TrafficEntity> Traffic => Set<TrafficEntity>();
@@ -141,6 +143,12 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(config => config.Host).HasMaxLength(ConfigRules.MaxHostLength);
             entity.Property(config => config.WebSocketPath).HasMaxLength(ConfigRules.MaxWebSocketPathLength);
             entity.HasIndex(config => config.Name).IsUnique();
+        });
+
+        builder.Entity<ConfigDraftEntity>(entity =>
+        {
+            entity.HasKey(one => one.ConfigId);
+            entity.HasOne<ConfigEntity>().WithOne().HasForeignKey<ConfigDraftEntity>(one => one.ConfigId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<ClientEntity>(entity =>
