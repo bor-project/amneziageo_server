@@ -142,7 +142,7 @@ public sealed class ClientMeter : BackgroundService
         {
             _endpoints = await services.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false);
             _clients = await services.GetRequiredService<ClientStore>().ListAsync(ct).ConfigureAwait(false);
-            _templates = await services.GetRequiredService<TemplateStore>().ListAsync(ct).ConfigureAwait(false);
+            _templates = await services.GetRequiredService<TemplateStore>().EffectiveListAsync(ct).ConfigureAwait(false);
             _ledger.SetLimits(_clients, _templates);
             _seen = version;
         }
@@ -319,7 +319,7 @@ public sealed class ClientMeter : BackgroundService
             using var scope = _scopes.CreateScope();
             var services = scope.ServiceProvider;
             var clients = await services.GetRequiredService<ClientStore>().ListAsync(ct).ConfigureAwait(false);
-            var templates = await services.GetRequiredService<TemplateStore>().ListAsync(ct).ConfigureAwait(false);
+            var templates = await services.GetRequiredService<TemplateStore>().EffectiveListAsync(ct).ConfigureAwait(false);
             _ledger.SetLimits(clients, templates);
             var index = 0u;
             lock (_ledger.CounterGate)

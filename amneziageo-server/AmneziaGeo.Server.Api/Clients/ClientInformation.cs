@@ -34,7 +34,7 @@ public static class ClientInformation
             },
             DnsChoiceName.Of(dns.Choice),
             [.. ranges.Take(1000)],
-            template is null ? "interface"
+            template is null || template.IsDefault && template.AllowedIps.Count == 0 && dns.From != DnsFrom.StandIns ? "interface"
                 : template.AllowedIps.Count > 0 || dns.From == DnsFrom.StandIns ? "template"
                 : config.AllowedIps.Count > 0 ? "interface" : "default",
             ranges.Count,

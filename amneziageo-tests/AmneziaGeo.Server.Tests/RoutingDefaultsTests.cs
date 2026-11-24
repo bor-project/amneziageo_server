@@ -119,7 +119,7 @@ public sealed class RoutingDefaultsTests
         var changed = await bench.Presets.ChangeAsync(preset.Id, preset with { Name = "My preset", Proxy = ["domain:example.test"], IsDefault = false, ReadOnly = true }, default).ConfigureAwait(false);
         var rule = await bench.Rules.AddAsync(RouteDefaults.Fresh("kept") with { Action = RouteAction.Block, Groups = [group.Id] }, default).ConfigureAwait(false);
         Assert.True(rule.IsOk, rule.Message);
-        var template = (await bench.Templates.ListAsync(default).ConfigureAwait(false)).First();
+        var template = (await bench.Templates.AddAsync(new AmneziaGeo.Server.Awg.Client.ClientTemplate { Name = "custom" }, default).ConfigureAwait(false)).Record!;
         var assigned = await bench.Templates.ChangeAsync(template.Id, template with { Presets = [preset.Id] }, default).ConfigureAwait(false);
         Assert.True(assigned.IsOk, assigned.Message);
 

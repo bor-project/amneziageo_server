@@ -158,7 +158,7 @@ public static class DnsChecks
 
         if (request.Template is { } template)
         {
-            var held = id > 0 ? world.Templates.FirstOrDefault(one => one.Id == id) : null;
+            var held = id >= 0 ? world.Templates.FirstOrDefault(one => one.Id == id) : null;
             var draft = TemplateAnswers.Draft(template) with { Id = id, AllowedIps = ranges ?? held?.AllowedIps ?? [] };
             var handed = TemplateAnswers.Members(template);
             var after = world with
@@ -166,7 +166,7 @@ public static class DnsChecks
                 Templates = [.. world.Templates.Where(one => one.Id != id), draft],
                 Clients = Handed(world.Clients, id, handed),
             };
-            var members = id > 0 || handed is not null ? after.Clients.Where(one => one.TemplateId == id).ToArray() : [];
+            var members = id >= 0 || handed is not null ? after.Clients.Where(one => (one.TemplateId ?? 0) == id).ToArray() : [];
 
             return Spread(
                 after,
@@ -260,7 +260,7 @@ public static class DnsChecks
         return
         [
             .. clients.Select(one => members.Contains(one.Id)
-                ? one with { TemplateId = template }
+                ? one with { TemplateId = template == 0 ? null : template }
                 : one.TemplateId == template ? one with { TemplateId = null } : one),
         ];
     }
@@ -283,7 +283,7 @@ public static class DnsChecks
             Settings = settings,
             KeptOut = await doors.KeptOutAsync(settings with { IsEnabled = true }, endpoints, ct).ConfigureAwait(false),
             Configs = endpoints,
-            Templates = await templates.ListAsync(ct).ConfigureAwait(false),
+            Templates = await templates.EffectiveListAsync(ct).ConfigureAwait(false),
             Clients = await clients.ListAsync(ct).ConfigureAwait(false),
             Holders = await clients.ResolverHeldAsync(ct).ConfigureAwait(false),
             Groups = plans.Held?.Groups ?? [],

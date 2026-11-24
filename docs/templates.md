@@ -17,6 +17,21 @@ of the settings. The page `Default` names the clients without a template and tak
 templates off; a client leaves it only for a template, in the settings of that template. The settings of a client
 carry the choice of its template and a link to it.
 
+## Default configuration
+
+The Default row serves clients without a selected template. Its settings can be edited through the same form
+as a custom template; its name is fixed. Reset to defaults asks for confirmation and restores inheritance from
+the interface without removing clients, keys, assignments or custom templates. A custom template takes precedence
+over Default. Proxy selection in Default is included in authenticated hello and authorizes those clients at the proxy.
+
+A fresh installation shows only Default. Further configurations are created by the user. Upgrades preserve all
+existing custom templates, including a previously seeded template named `default`, and keep the old inherited
+behavior until Default is edited.
+
+`GET /api/templates/default` reads the settings, `PUT /api/templates/default` saves them and
+`POST /api/templates/default/reset` restores factory inheritance. The existing `/api/templates/defaults` endpoint
+continues to report factory placeholders. `template list` includes Default; `template reset-default` resets it.
+
 ## What a template names
 
 A template names what the file of a client takes in place of the settings of its interface: the ranges the

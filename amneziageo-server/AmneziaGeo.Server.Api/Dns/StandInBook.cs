@@ -85,7 +85,7 @@ public sealed class StandInBook
         try
         {
             Interlocked.Exchange(ref _next, (_time.GetUtcNow() + Every).UtcTicks);
-            var templates = (await services.GetRequiredService<TemplateStore>().ListAsync(ct).ConfigureAwait(false))
+            var templates = (await services.GetRequiredService<TemplateStore>().EffectiveListAsync(ct).ConfigureAwait(false))
                 .Where(template => template.StandIns)
                 .ToArray();
             if (templates.Length == 0)
@@ -147,7 +147,7 @@ public sealed class StandInBook
         var found = new Dictionary<IPAddress, DomainMatcher>();
         foreach (var client in clients)
         {
-            if (!client.IsEnabled || client.TemplateId is not { } id || !matchers.TryGetValue(id, out var matcher))
+            if (!client.IsEnabled || !matchers.TryGetValue(client.TemplateId ?? 0, out var matcher))
             {
                 continue;
             }

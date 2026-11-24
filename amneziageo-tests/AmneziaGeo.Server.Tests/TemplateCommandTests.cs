@@ -72,6 +72,23 @@ public sealed class TemplateCommandTests : IDisposable
         Assert.False((await Read(id)).PresetsOnly);
     }
 
+#pragma warning disable xUnit1030
+    [Fact]
+    public async Task ResetDefaultRestoresInterfaceInheritance()
+    {
+        using (var context = Context.Open(Database))
+        {
+            var start = await context.Templates.DefaultAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.True((await context.Templates.ChangeDefaultAsync(start with { Mtu = 1280 }, null, CancellationToken.None).ConfigureAwait(false)).IsOk);
+        }
+
+        Assert.Equal(["default: factory settings restored"], await Said("template", "reset-default").ConfigureAwait(false));
+        using var read = Context.Open(Database);
+        Assert.Null(await read.Templates.EffectiveAsync(null, CancellationToken.None).ConfigureAwait(false));
+    }
+
+#pragma warning restore xUnit1030
+
     private async Task<long> AddPreset(string name)
     {
         using var context = Context.Open(Database);

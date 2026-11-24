@@ -244,9 +244,7 @@ public static partial class ClientEndpoints
             return Missing(client.ConfigId);
         }
 
-        var template = client.TemplateId is { } chosen
-            ? await templates.FindAsync(chosen, ct).ConfigureAwait(false)
-            : null;
+        var template = await templates.EffectiveAsync(client.TemplateId, ct).ConfigureAwait(false);
 
         var held = await dns.ReadAsync(ct).ConfigureAwait(false);
         var names = DnsHandout.For(endpoint, resolver.Handing ?? held with { IsEnabled = false }, resolver.KeptOut);

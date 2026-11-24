@@ -11,7 +11,7 @@ import { useDnsCheck, useResolver } from "@/api/dns"
 import { useRules } from "@/api/rules"
 import type { Rule } from "@/api/rules"
 import { scopes } from "@/api/scopes"
-import { useTemplates } from "@/api/templates"
+import { useDefaultTemplate, useTemplates } from "@/api/templates"
 import { TrafficLimitsFields } from "@/components/TrafficLimitsFields"
 import { useTrafficLimits } from "@/components/useTrafficLimits"
 import { AppCaption } from "@/components/AppMark"
@@ -49,10 +49,11 @@ export function ClientForm({
   const others = (useClients().data ?? []).filter((one) => one.id !== self)
   const templates = useTemplates()
   const [draft, setDraft] = useState(start)
-  const template = (templates.data ?? []).find((one) => one.id === draft.templateId)
+  const defaults = useDefaultTemplate()
+  const template = draft.templateId === null ? defaults.data : (templates.data ?? []).find((one) => one.id === draft.templateId)
   const limits = useTrafficLimits(draft.overrideLimits ? start.limits : template?.limits ?? null)
   const overrideLimits = draft.overrideLimits || limits.changed
-  const limitsLoading = draft.templateId !== null && !draft.overrideLimits && templates.data === undefined
+  const limitsLoading = !draft.overrideLimits && (draft.templateId === null ? defaults.data === undefined : templates.data === undefined)
   const [number, setNumber] = useState<string | null>(null)
   const [text, setText] = useState<string | null>(null)
   const [limit, setLimit] = useState(gigabytes(start.dailyLimit))
@@ -287,6 +288,7 @@ export function ClientForm({
           faults={limits.faults}
           readOnly={limitsLoading}
         />
+        {draft.templateId === null && defaults.error !== null && <div className="text-sm text-alarm sm:col-span-2">{t(complaint(defaults.error))}</div>}
       </Part>
 
       <Part title={t("clients.partAccess")}>

@@ -699,6 +699,21 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.ToTable("Configs");
                 });
 
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.DefaultTemplateEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DefaultTemplates");
+                });
+
             modelBuilder.Entity("AmneziaGeo.Server.Dal.DnsSettingsEntity", b =>
                 {
                     b.Property<long>("Id")

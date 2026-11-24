@@ -168,7 +168,7 @@ public static class DnsConflicts
             return null;
         }
 
-        var template = client.TemplateId is { } id ? world.Templates.FirstOrDefault(one => one.Id == id) : null;
+        var template = world.Templates.FirstOrDefault(one => one.Id == (client.TemplateId ?? 0));
 
         return Written(world, config, client, template);
     }
@@ -187,7 +187,7 @@ public static class DnsConflicts
             return false;
         }
 
-        var template = client.TemplateId is { } id ? world.Templates.FirstOrDefault(one => one.Id == id) : null;
+        var template = world.Templates.FirstOrDefault(one => one.Id == (client.TemplateId ?? 0));
 
         return Wants(world, config, client, template) && !Written(world, config, client, template).IsPanel;
     }
@@ -306,7 +306,7 @@ public static class DnsConflicts
                 continue;
             }
 
-            var template = client.TemplateId is { } id ? templates.GetValueOrDefault(id) : null;
+            var template = templates.GetValueOrDefault(client.TemplateId ?? 0);
             var line = Written(world, config, client, template);
             var wanted = Wants(world, config, client, template);
             var outside = Beyond(line.Servers, ClientText.Routed(config, client, template, line));

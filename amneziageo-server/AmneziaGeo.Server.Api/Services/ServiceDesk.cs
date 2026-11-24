@@ -659,9 +659,8 @@ public sealed class ServiceDesk
             return Proven.No(new HelloFailure("replayed", "that token was already taken"));
         }
 
-        var template = client.TemplateId is { } id
-            ? await scope.ServiceProvider.GetRequiredService<TemplateStore>().FindAsync(id, ct).ConfigureAwait(false)
-            : null;
+        var template = await scope.ServiceProvider.GetRequiredService<TemplateStore>()
+            .EffectiveAsync(client.TemplateId, ct).ConfigureAwait(false);
 
         return new Proven(client, endpoint, template, shared, null);
     }

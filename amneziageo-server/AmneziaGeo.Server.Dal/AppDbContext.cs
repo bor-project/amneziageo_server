@@ -67,6 +67,8 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<TemplateEntity> Templates => Set<TemplateEntity>();
 
+    public DbSet<DefaultTemplateEntity> DefaultTemplates => Set<DefaultTemplateEntity>();
+
     public DbSet<RoutingPresetEntity> RoutingPresets => Set<RoutingPresetEntity>();
 
     public DbSet<SubscriptionEntity> Subscription => Set<SubscriptionEntity>();

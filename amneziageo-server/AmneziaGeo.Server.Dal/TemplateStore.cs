@@ -44,7 +44,7 @@ public sealed record TemplateResult(TemplateOutcome Outcome, string Code, string
 /// <summary>
 /// Adds, changes and removes the client templates the panel holds.
 /// </summary>
-public sealed class TemplateStore
+public sealed partial class TemplateStore
 {
     private static readonly char[] Breaks = [',', ' ', '\t', '\n', '\r'];
 
@@ -128,25 +128,9 @@ public sealed class TemplateStore
             .ConfigureAwait(false);
 
     /// <summary>
-    /// Puts the built in template in place, once, in a fresh database.
+    /// Keeps the default template implicit.
     /// </summary>
-    public Task SeedAsync(CancellationToken ct) => _db.AloneAsync(() => AddBuiltInAsync(ct), ct);
-
-    // Adds the built in template when the database holds no template.
-    private async Task AddBuiltInAsync(CancellationToken ct)
-    {
-        if (await _db.Templates.AnyAsync(ct).ConfigureAwait(false))
-        {
-            return;
-        }
-
-        var now = _time.GetUtcNow();
-        var entity = new TemplateEntity { CreatedUtc = now, UpdatedUtc = now };
-        Write(entity, TemplateDefaults.Fresh());
-
-        _db.Templates.Add(entity);
-        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
-    }
+    public Task SeedAsync(CancellationToken ct) => Task.CompletedTask;
 
     /// <summary>
     /// Returns why a template cannot be written under the number, or null when it can.
@@ -249,6 +233,11 @@ public sealed class TemplateStore
     {
         ArgumentNullException.ThrowIfNull(renewed);
 
+        if (renewed.IsDefault)
+        {
+            return await RenewDefaultAsync(renewed, ct).ConfigureAwait(false);
+        }
+
         var entity = await _db.Templates
             .FirstOrDefaultAsync(template => template.Id == renewed.Id, ct)
             .ConfigureAwait(false);
@@ -334,14 +323,14 @@ public sealed class TemplateStore
         return TemplateResult.Done(gone);
     }
 
-    private async Task<TemplateResult?> RefusalAsync(ClientTemplate draft, long id, CancellationToken ct)
+    private async Task<TemplateResult?> RefusalAsync(ClientTemplate draft, long id, CancellationToken ct, bool defaultTemplate = false)
     {
         if ((TemplateRules.Check(draft) ?? TemplateList.Check(draft.Entries)) is { } fault)
         {
             return TemplateResult.No(TemplateOutcome.Invalid, fault.Code, fault.Message);
         }
 
-        if (await _db.Templates.AnyAsync(one => one.Name == draft.Name && one.Id != id, ct).ConfigureAwait(false))
+        if (!defaultTemplate && await _db.Templates.AnyAsync(one => one.Name == draft.Name && one.Id != id, ct).ConfigureAwait(false))
         {
             return TemplateResult.No(
                 TemplateOutcome.NameTaken,
@@ -363,7 +352,7 @@ public sealed class TemplateStore
         }
 
         var named = draft.ProxyIds.ToList();
-        var previous = id == 0 ? "" : await _db.Templates.Where(one => one.Id == id).Select(one => one.ProxyIds).FirstOrDefaultAsync(ct).ConfigureAwait(false) ?? "";
+        var previous = defaultTemplate ? string.Join(",", (await DefaultAsync(ct).ConfigureAwait(false)).ProxyIds) : id == 0 ? "" : await _db.Templates.Where(one => one.Id == id).Select(one => one.ProxyIds).FirstOrDefaultAsync(ct).ConfigureAwait(false) ?? "";
         var added = named.Except(Numbers(previous)).ToArray();
         if (await _db.TransportProxies.AnyAsync(proxy => added.Contains(proxy.Id)
             && (!proxy.IsEnabled || proxy.UseCertificate == false || proxy.OriginHttp), ct).ConfigureAwait(false))

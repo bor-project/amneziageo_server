@@ -249,6 +249,7 @@ public sealed partial class TransportProxyStore
                 endpoint.UpdatedUtc = DateTimeOffset.UtcNow;
             }
 
+            await new TemplateStore(_db).PruneDefaultAsync(id, null, ct).ConfigureAwait(false);
             _db.TransportProxies.Remove(held);
             foreach (var template in await _db.Templates.ToListAsync(ct).ConfigureAwait(false))
             {
@@ -266,8 +267,9 @@ public sealed partial class TransportProxyStore
     {
         var templates = await _db.Templates.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
         var selected = templates.Where(template => Numbers(template.ProxyIds).Contains(proxy.Id)).Select(template => template.Id).ToArray();
+        var fallback = (await new TemplateStore(_db).EffectiveAsync(null, ct).ConfigureAwait(false))?.ProxyIds.Contains(proxy.Id) == true;
         var clients = await _db.Clients.AsNoTracking()
-            .Where(client => client.IsEnabled && client.TemplateId != null && selected.Contains(client.TemplateId.Value))
+            .Where(client => client.IsEnabled && (client.TemplateId == null ? fallback : selected.Contains(client.TemplateId.Value)))
             .Select(client => client.Id).ToListAsync(ct).ConfigureAwait(false);
         var credentials = clients.Select(id => Credential(proxy, id)).Concat(TokenCredentials(proxy));
         return [.. (proxy.AllowAnonymous ? credentials.Append(ProxyAccess.AnonymousCredential) : credentials).Distinct(StringComparer.Ordinal)];

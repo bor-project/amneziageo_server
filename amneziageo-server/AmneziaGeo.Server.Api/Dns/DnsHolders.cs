@@ -47,7 +47,7 @@ public sealed class DnsHolders
         return clients.Count(client => client.IsEnabled
             && endpoints.TryGetValue(client.ConfigId, out var config)
             && config.IsEnabled
-            && ClientText.Picks(client, client.TemplateId is { } id ? held.GetValueOrDefault(id) : null, files));
+            && ClientText.Picks(client, held.GetValueOrDefault(client.TemplateId ?? 0), files));
     }
 
     /// <summary>
@@ -61,7 +61,7 @@ public sealed class DnsHolders
         var count = await clients.ResolverHoldersAsync(ct).ConfigureAwait(false);
         var picked = Picking(
             await clients.ListAsync(ct).ConfigureAwait(false),
-            await services.GetRequiredService<TemplateStore>().ListAsync(ct).ConfigureAwait(false),
+            await services.GetRequiredService<TemplateStore>().EffectiveListAsync(ct).ConfigureAwait(false),
             await services.GetRequiredService<ConfigStore>().ListAsync(ct).ConfigureAwait(false),
             (await services.GetRequiredService<DnsStore>().ReadAsync(ct).ConfigureAwait(false)).Files);
         Keep(count, picked);

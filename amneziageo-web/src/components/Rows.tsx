@@ -250,7 +250,7 @@ export function Rows<T>({
     </div>
   )
 
-  const nothing = items.length === 0 && (
+  const nothing = sorted.length === 0 && (
     <div className="border-t border-line-soft px-4 py-6 text-center text-sm text-muted">
       {empty ?? t("table.nothing")}
     </div>

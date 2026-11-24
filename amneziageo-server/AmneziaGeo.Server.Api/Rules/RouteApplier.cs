@@ -238,7 +238,7 @@ public sealed class RouteApplier
     // Tells whether the resolver answers some clients with stand-in addresses.
     private async Task<bool> StandInsAsync(DnsSettings resolver, CancellationToken ct) =>
         resolver.IsEnabled
-        && (await _templates.ListAsync(ct).ConfigureAwait(false)).Any(template => template.StandIns);
+        && (await _templates.EffectiveListAsync(ct).ConfigureAwait(false)).Any(template => template.StandIns);
 
     private async Task<RoutePlan> LayAsync(RoutePlan plan, CancellationToken ct)
     {

@@ -1,7 +1,7 @@
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { usePresets, useRemovePreset } from "@/api/presets"
-import { useTemplates } from "@/api/templates"
+import { useDefaultTemplate, useTemplates } from "@/api/templates"
 import { useTail } from "@/components/crumbs"
 import { LinkLine } from "@/components/fields"
 import { templateItems } from "@/components/members"
@@ -16,6 +16,8 @@ export function PresetRemove() {
   const { presetId } = useParams()
   const presets = usePresets()
   const templates = useTemplates()
+  const defaults = useDefaultTemplate().data
+  const all = defaults === undefined ? (templates.data ?? []) : [{ ...defaults, name: t("clients.noTemplate") }, ...(templates.data ?? [])]
   const remove = useRemovePreset()
   const held = presets.data?.find((one) => one.id === Number(presetId))
 
@@ -43,7 +45,7 @@ export function PresetRemove() {
         {held.templateIds.length > 0 && (
           <div className="text-[13px] text-muted">
             {`${t("presets.partTemplates")}: `}
-            <LinkLine items={templateItems((templates.data ?? []).filter((one) => held.templateIds.includes(one.id)))} />
+            <LinkLine items={templateItems(all.filter((one) => held.templateIds.includes(one.id)))} />
           </div>
         )}
       </div>

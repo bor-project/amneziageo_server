@@ -12,7 +12,7 @@ import { AppCaption } from "@/components/AppMark"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { choiceKey, lacksServers } from "@/components/dnsWords"
 import { EntryList } from "@/components/EntryList"
-import { Hinted, Line, Links, Part, Switch } from "@/components/fields"
+import { Hinted, Line, Links, Part, Shown, Switch } from "@/components/fields"
 import { clientItems, presetItems, proxyItems } from "@/components/members"
 import { ResolverTrouble } from "@/components/ResolverTrouble"
 import { troubleOf } from "@/components/trouble"
@@ -32,6 +32,9 @@ export function TemplateForm({
   onSave,
   onClose,
   onRemove,
+  onReset,
+  fixedName = false,
+  readOnly = false,
 }: {
   start: TemplateDraft
   held?: Template
@@ -40,6 +43,9 @@ export function TemplateForm({
   onSave: (draft: TemplateDraft) => void
   onClose: () => void
   onRemove?: () => void
+  onReset?: () => void
+  fixedName?: boolean
+  readOnly?: boolean
 }) {
   const t = useText()
   const defaults = useTemplateDefaults().data
@@ -78,14 +84,19 @@ export function TemplateForm({
 
   return (
     <div className="mt-4 flex flex-col gap-4">
+      <fieldset disabled={readOnly || pending} className="contents">
       <Part title={t("templates.partMain")}>
-        <Line
-          id="template-name"
-          caption={t("templates.name")}
-          value={draft.name}
-          onChange={(name) => put({ name })}
-          wide
-        />
+        {fixedName ? (
+          <Shown id="template-name" caption={t("templates.name")} value={t("clients.noTemplate")} wide />
+        ) : (
+          <Line
+            id="template-name"
+            caption={t("templates.name")}
+            value={draft.name}
+            onChange={(name) => put({ name })}
+            wide
+          />
+        )}
       </Part>
 
       <Part title={t("templates.partClients")}>
@@ -93,6 +104,7 @@ export function TemplateForm({
           <Links
             id="template-clients"
             value={draft.clients.map(String)}
+            fixed={fixedName ? start.clients.map(String) : undefined}
             items={members}
             placeholder={t("templates.addClient")}
             onChange={(keys) => put({ clients: keys.map(Number) })}
@@ -232,9 +244,20 @@ export function TemplateForm({
         />
       </Part>
 
+      </fieldset>
+
       {error !== null && error !== undefined && <div className="text-sm text-alarm">{t(complaint(error))}</div>}
 
       <div className={footer}>
+        {onReset !== undefined && !readOnly && (
+          <button type="button" onClick={onReset} disabled={pending} className={`mr-auto ${secondary}`}>
+            {t("templates.reset")}
+          </button>
+        )}
+        {readOnly ? (
+          <button type="button" onClick={onClose} className={secondary}>{t("action.backToList")}</button>
+        ) : (<>
+
         {onRemove !== undefined && (
           <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
             {t("templates.remove")}
@@ -251,6 +274,7 @@ export function TemplateForm({
         >
           {pending ? t("templates.busy") : t("templates.save")}
         </button>
+        </>)}
       </div>
     </div>
   )

@@ -255,7 +255,7 @@ public sealed class TrafficLedger
             foreach (var client in clients)
             {
                 _clients[client.PublicKey] = client;
-                var template = client.TemplateId is { } id ? held.GetValueOrDefault(id) : null;
+                var template = held.GetValueOrDefault(client.TemplateId ?? 0);
                 if (TrafficLimitPolicy.Resolve(client, template) is { } policy)
                 {
                     _limits[client.Id] = policy;

@@ -12,6 +12,8 @@ public sealed record ClientTemplate
     /// </summary>
     public long Id { get; init; }
 
+    public bool IsDefault { get; init; }
+
     /// <summary>
     /// The name the template is listed under.
     /// </summary>

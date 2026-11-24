@@ -129,6 +129,7 @@ const complaints: Record<string, TextKey> = {
   "bad-archive": "error.badReleaseArchive",
   "bad-manifest": "error.badReleaseManifest",
   "bad-template-name": "error.badTemplateName",
+  "default-name-fixed": "error.defaultTemplateNameFixed",
   "unknown-template": "error.unknownTemplate",
   "template-in-use": "error.templateInUse",
   "bad-preset-name": "error.badPresetName",

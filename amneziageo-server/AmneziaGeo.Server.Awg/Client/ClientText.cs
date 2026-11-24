@@ -177,7 +177,7 @@ public static class ClientText
         }
 
         var (from, choice, servers) = Chosen(client, template, files);
-        var otherwise = template is null ? config.Dns : Either(config.Dns, TemplateDefaults.Dns);
+        var otherwise = template is null || template.IsDefault ? config.Dns : Either(config.Dns, TemplateDefaults.Dns);
 
         return choice switch
         {
@@ -239,6 +239,11 @@ public static class ClientText
     private static IReadOnlyList<string> Carried(ServerConfig config, TunnelClient client, ClientTemplate? template, bool stood)
     {
         if (template is null)
+        {
+            return config.AllowedIps;
+        }
+
+        if (template.IsDefault && !stood && template.AllowedIps.Count == 0)
         {
             return config.AllowedIps;
         }

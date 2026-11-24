@@ -34,6 +34,7 @@ public static class TemplateEndpoints
         var reading = routes.MapGroup(prefix).RequireScope(Scopes.ReadState);
         reading.MapGet("/", ListAsync);
         reading.MapGet("/defaults", DefaultsAsync);
+        reading.MapGet("/default", DefaultAsync);
         reading.MapGet("/{id:long}", FindAsync);
 
         var writing = routes.MapGroup(prefix).RequireScope(Scopes.ManageClients);
@@ -41,6 +42,9 @@ public static class TemplateEndpoints
         writing.MapPost("/preview", PreviewAsync);
         writing.MapPut("/{id:long}", ChangeAsync);
         writing.MapPut("/default/clients", FreeAsync);
+        writing.MapPut("/default", ChangeDefaultAsync);
+        writing.MapPost("/default/reset", ResetDefaultAsync);
+        writing.MapPost("/default/refresh", RefreshDefaultAsync);
         writing.MapPost("/{id:long}/refresh", RefreshAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
     }
@@ -72,6 +76,64 @@ public static class TemplateEndpoints
         var plain = await store.PlainAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(TemplateAnswers.Defaults(found.SelectMany(config => config.Address), plain));
+    }
+
+    private static async Task<IResult> DefaultAsync(TemplateStore store, CancellationToken ct) =>
+        Results.Ok(TemplateAnswers.Template(await store.DefaultAsync(ct).ConfigureAwait(false),
+            await store.PlainAsync(ct).ConfigureAwait(false)));
+
+    private static async Task<IResult> ChangeDefaultAsync(
+        TemplateRequest request, HttpContext context, TemplateStore store,
+        TemplateRefresher refresher, RouteApplier routes, CancellationToken ct)
+    {
+        if (request.Name is not null && request.Name != TemplateDefaults.Name)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, "default-name-fixed", "the default template name is fixed");
+        }
+
+        var held = await store.DefaultAsync(ct).ConfigureAwait(false);
+        var draft = TemplateAnswers.Change(request with { Name = TemplateDefaults.Name }, held);
+        if (await ProxyRefusalAsync(draft.ProxyIds, held.ProxyIds, context.RequestServices, ct).ConfigureAwait(false) is { } security)
+        {
+            return security;
+        }
+
+        if (await store.RefuseDefaultAsync(draft, ct).ConfigureAwait(false) is { } refusal)
+        {
+            return Explain(refusal);
+        }
+
+        var full = await refresher.ResolveAsync(draft, ct).ConfigureAwait(false);
+        var result = await store.ChangeDefaultAsync(full, TemplateAnswers.Members(request), ct).ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
+
+        await routes.FollowStandInsAsync(ct).ConfigureAwait(false);
+        return await DefaultAsync(store, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> ResetDefaultAsync(TemplateStore store, RouteApplier routes, CancellationToken ct)
+    {
+        await store.ResetDefaultAsync(ct).ConfigureAwait(false);
+        await routes.FollowStandInsAsync(ct).ConfigureAwait(false);
+        return await DefaultAsync(store, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> RefreshDefaultAsync(
+        TemplateStore store, TemplateRefresher refresher, RouteApplier routes, CancellationToken ct)
+    {
+        var held = await store.DefaultAsync(ct).ConfigureAwait(false);
+        var full = await refresher.ResolveAsync(held, ct).ConfigureAwait(false);
+        var result = await store.ChangeDefaultAsync(full, null, ct).ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
+
+        await routes.FollowStandInsAsync(ct).ConfigureAwait(false);
+        return await DefaultAsync(store, ct).ConfigureAwait(false);
     }
 
     private static async Task<IResult> AddAsync(

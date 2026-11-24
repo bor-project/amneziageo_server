@@ -68,7 +68,7 @@ public sealed record ClientFeed(IReadOnlyList<string> Links, ulong Upload, ulong
         {
             foreach (var member in members.Where(one => one.ConfigId == endpoint.Id && one.IsEnabled && one.PrivateKey.Length > 0))
             {
-                var template = member.TemplateId is { } chosen ? templates.GetValueOrDefault(chosen) : null;
+                var template = templates.GetValueOrDefault(member.TemplateId ?? 0);
                 var names = resolver?.Invoke(endpoint);
                 var picked = panel?.Invoke(endpoint);
                 var name = title?.Invoke(endpoint, member) ?? ClientText.Title(endpoint, member);

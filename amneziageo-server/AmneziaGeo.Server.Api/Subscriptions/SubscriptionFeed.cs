@@ -86,7 +86,7 @@ public sealed class SubscriptionFeed
         }
 
         var endpoints = await _configs.ListAsync(ct).ConfigureAwait(false);
-        var templates = (await _templates.ListAsync(ct).ConfigureAwait(false)).ToDictionary(one => one.Id);
+        var templates = (await _templates.EffectiveListAsync(ct).ConfigureAwait(false)).ToDictionary(one => one.Id);
         var held = await _dns.ReadAsync(ct).ConfigureAwait(false);
         var handing = _resolver.Handing ?? held with { IsEnabled = false };
         var offering = _resolver.Chosen ?? held;
@@ -171,7 +171,7 @@ public sealed class SubscriptionFeed
             var picked = panel(endpoint);
             foreach (var member in members.Where(one => one.ConfigId == endpoint.Id && one.IsEnabled && one.PrivateKey.Length > 0))
             {
-                var template = member.TemplateId is { } chosen ? templates.GetValueOrDefault(chosen) : null;
+                var template = templates.GetValueOrDefault(member.TemplateId ?? 0);
                 (ClientText.Dns(endpoint, member, template, names, picked, files).IsPanel ? named : unnamed).Add(member.Id);
             }
         }

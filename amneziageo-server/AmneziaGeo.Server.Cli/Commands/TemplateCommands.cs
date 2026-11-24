@@ -21,6 +21,7 @@ public static class TemplateCommands
         {
             "list" => await ListAsync(context, ct).ConfigureAwait(false),
             "set" => await SetAsync(context, args, ct).ConfigureAwait(false),
+            "reset-default" => await ResetDefaultAsync(context, ct).ConfigureAwait(false),
             _ => Usage(),
         };
     }
@@ -32,12 +33,14 @@ public static class TemplateCommands
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var templates = await context.Templates.ListAsync(ct).ConfigureAwait(false);
+        var templates = new[] { await context.Templates.DefaultAsync(ct).ConfigureAwait(false) }
+            .Concat(await context.Templates.ListAsync(ct).ConfigureAwait(false));
         var uses = await context.Templates.UsesAsync(ct).ConfigureAwait(false);
+        var plain = (await context.Templates.PlainAsync(ct).ConfigureAwait(false)).Count;
         var presets = (await context.Presets.ListAsync(ct).ConfigureAwait(false)).ToDictionary(preset => preset.Id, preset => preset.Name);
         foreach (var template in templates)
         {
-            Terminal.Say($"{template.Name}: {Line(template, uses.GetValueOrDefault(template.Id), presets)}");
+            Terminal.Say($"{template.Name}: {Line(template, template.IsDefault ? plain : uses.GetValueOrDefault(template.Id), presets)}");
         }
 
         return 0;
@@ -72,6 +75,13 @@ public static class TemplateCommands
             ? $"{saved.Record.Name}: the applications of its clients route its configurations by its routing presets alone"
             : $"{saved.Record.Name}: the applications of its clients may route by lists of their own");
 
+        return 0;
+    }
+
+    private static async Task<int> ResetDefaultAsync(Context context, CancellationToken ct)
+    {
+        await context.Templates.ResetDefaultAsync(ct).ConfigureAwait(false);
+        Terminal.Say("default: factory settings restored");
         return 0;
     }
 

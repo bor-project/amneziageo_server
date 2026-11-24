@@ -34,7 +34,7 @@ export function templateItems(templates: Template[], note?: (one: Template) => s
     .map((one) => ({
       key: String(one.id),
       name: one.name,
-      to: `/clients/templates/${one.id}/edit`,
+      to: one.id === 0 ? "/clients/templates/default" : `/clients/templates/${one.id}/edit`,
       ...(note === undefined ? {} : { note: note(one) }),
     }))
 }

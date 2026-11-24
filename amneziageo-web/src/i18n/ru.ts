@@ -1,6 +1,9 @@
 import type { Dictionary } from "./en"
 
 export const ru: Dictionary = {
+  "error.defaultTemplateNameFixed": "Имя конфигурации по умолчанию нельзя изменить",
+  "templates.reset": "Сбросить по умолчанию",
+  "templates.resetConfirm": "Сбросить настройки конфигурации по умолчанию?",
   "app.name": "AmneziaGeo",
   "app.subtitle": "Управление сервером",
 

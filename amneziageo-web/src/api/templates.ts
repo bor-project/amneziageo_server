@@ -77,6 +77,25 @@ export function useTemplateDefaults() {
   })
 }
 
+export function useDefaultTemplate() {
+  return useQuery({
+    queryKey: ["templates", "default"],
+    queryFn: async () => (await client.get<Template>("/templates/default")).data,
+  })
+}
+
+export function useChangeDefaultTemplate() {
+  return useRefreshing((draft: TemplateDraft) => client.put("/templates/default", draft, slow))
+}
+
+export function useResetDefaultTemplate() {
+  return useRefreshing(() => client.post("/templates/default/reset"))
+}
+
+export function useRefreshDefaultTemplate() {
+  return useRefreshing(() => client.post("/templates/default/refresh", null, slow))
+}
+
 export function useTemplatePreview(entries: string[], standIns = false) {
   return useQuery({
     queryKey: ["template-preview", entries, standIns],

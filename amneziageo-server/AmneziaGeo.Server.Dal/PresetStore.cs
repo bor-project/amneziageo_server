@@ -111,13 +111,8 @@ public sealed class PresetStore
     /// </summary>
     public async Task<IReadOnlyDictionary<long, IReadOnlyList<long>>> HoldersAsync(CancellationToken ct)
     {
-        var found = await _db.Templates.AsNoTracking()
-            .OrderBy(template => template.Id)
-            .Select(template => new { template.Id, template.Presets })
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
-
-        return found.SelectMany(template => Numbers(template.Presets).Distinct().Select(preset => (Preset: preset, Template: template.Id)))
+        var found = await new TemplateStore(_db).EffectiveListAsync(ct).ConfigureAwait(false);
+        return found.OrderBy(template => template.Id).SelectMany(template => template.Presets.Distinct().Select(preset => (Preset: preset, Template: template.Id)))
             .GroupBy(pair => pair.Preset)
             .ToDictionary(group => group.Key, group => (IReadOnlyList<long>)group.Select(pair => pair.Template).ToArray());
     }
@@ -127,14 +122,8 @@ public sealed class PresetStore
     /// </summary>
     public async Task<IReadOnlyDictionary<long, int>> UsesAsync(CancellationToken ct)
     {
-        var lists = await _db.Templates.AsNoTracking()
-            .Select(template => template.Presets)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
-
-        return lists.SelectMany(list => Numbers(list).Distinct())
-            .GroupBy(id => id)
-            .ToDictionary(group => group.Key, group => group.Count());
+        var holders = await HoldersAsync(ct).ConfigureAwait(false);
+        return holders.ToDictionary(pair => pair.Key, pair => pair.Value.Count);
     }
 
     /// <summary>
@@ -285,7 +274,7 @@ public sealed class PresetStore
             .Select(template => template.Id)
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        var missing = wanted.Except(held).ToArray();
+        var missing = wanted.Except(held.Append(0)).ToArray();
 
         return missing.Length == 0
             ? null
@@ -302,6 +291,7 @@ public sealed class PresetStore
         }
 
         var wanted = templates.Distinct().ToArray();
+        await new TemplateStore(_db).AssignDefaultPresetAsync(id, wanted.Contains(0), now, ct).ConfigureAwait(false);
         var held = await _db.Templates.ToListAsync(ct).ConfigureAwait(false);
         foreach (var template in held)
         {

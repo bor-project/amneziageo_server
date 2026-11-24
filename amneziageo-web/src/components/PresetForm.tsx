@@ -2,7 +2,7 @@ import { useState } from "react"
 import { complaint } from "@/api/auth"
 import { usePresets } from "@/api/presets"
 import type { PresetDraft } from "@/api/presets"
-import { useTemplates } from "@/api/templates"
+import { useDefaultTemplate, useTemplates } from "@/api/templates"
 import { usePanelDocs } from "@/components/docs"
 import { EntryList } from "@/components/EntryList"
 import { Flag, Hinted, Line, Links, Part } from "@/components/fields"
@@ -44,7 +44,9 @@ export function PresetForm({
   const language = useLanguage()
   const presets = usePresets().data ?? []
   const titles = new Map(presets.map((one): [number, string] => [one.id, one.name]))
-  const holders = templateItems(useTemplates().data ?? [], (one) =>
+  const defaults = useDefaultTemplate().data
+  const templates = useTemplates().data ?? []
+  const holders = templateItems(defaults === undefined ? templates : [{ ...defaults, name: t("clients.noTemplate") }, ...templates], (one) =>
     one.presets.length === 0 ? t("presets.noPresets") : one.presets.map((id) => titles.get(id) ?? "").join(", "),
   )
   const [draft, setDraft] = useState(start)

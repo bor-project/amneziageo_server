@@ -4,7 +4,7 @@ import { findingsOf, useDnsConflicts } from "@/api/dns"
 import { useFailure } from "@/api/failure"
 import { usePresets } from "@/api/presets"
 import { scopes } from "@/api/scopes"
-import { useTemplateDefaults, useTemplates } from "@/api/templates"
+import { useDefaultTemplate, useTemplateDefaults, useTemplates } from "@/api/templates"
 import type { Template } from "@/api/templates"
 import { RowActions } from "@/components/RowActions"
 import type { RowAction } from "@/components/RowActions"
@@ -34,30 +34,8 @@ export function Templates() {
   const all = templates.data ?? []
   const list = all.filter((one) => matches(one, find) && (preset === "" || one.presets.includes(Number(preset))))
   const allowed = defaults?.allowedIps.join(", ") ?? ""
-  const plain: Template | null =
-    defaults === undefined
-      ? null
-      : {
-          id: 0,
-          name: t("clients.noTemplate"),
-          entries: [],
-          allowedIps: defaults.allowedIps,
-          missed: [],
-          dnsMode: "auto",
-          dns: defaults.dns,
-          mtu: defaults.mtu,
-          keepalive: defaults.keepalive,
-          presets: [],
-        proxyIds: [],
-          presetsOnly: false,
-          standIns: false,
-          limits: null,
-          clients: defaults.clientIds.length,
-          clientIds: defaults.clientIds,
-          refreshedUtc: null,
-          createdUtc: "",
-          updatedUtc: "",
-        }
+  const storedDefault = useDefaultTemplate().data
+  const plain: Template | null = storedDefault === undefined ? null : { ...storedDefault, name: t("clients.noTemplate") }
 
   function put(key: string, value: string) {
     const kept = new URLSearchParams(params)
@@ -101,14 +79,14 @@ export function Templates() {
         {failed !== null && (
           <div className={all.length === 0 ? alarmLine : alarmBar}>{t(complaint(failed))}</div>
         )}
-        {templates.isSuccess && all.length === 0 && (
+        {templates.isSuccess && all.length === 0 && plain === null && (
           <div className="px-4 py-6 text-sm text-muted">{t("templates.empty")}</div>
         )}
 
-        {all.length > 0 && (
+        {(all.length > 0 || plain !== null) && (
           <Rows
             items={list}
-            pinned={plain !== null && preset === "" && matches(plain, find) ? [plain] : []}
+            pinned={plain !== null && (preset === "" || plain.presets.includes(Number(preset))) && matches(plain, find) ? [plain] : []}
             keyOf={(one) => one.id}
             tools={
               <div className="flex flex-wrap items-center gap-2">
@@ -143,14 +121,14 @@ export function Templates() {
                     {may ? (
                       <Link
                         to={pageOf(one)}
-                        className={`truncate hover:text-brand-ink ${one.id === 0 ? "font-normal text-muted" : ""}`}
+                        className="truncate hover:text-brand-ink"
                       >
                         {one.name}
                       </Link>
                     ) : (
-                      <span className={`truncate ${one.id === 0 ? "font-normal text-muted" : ""}`}>{one.name}</span>
+                      <span className="truncate">{one.name}</span>
                     )}
-                    {one.id > 0 && (
+                    {one.id >= 0 && (
                       <DnsMark findings={findingsOf(report, "template", one.id)} view="template" members={one.clientIds} />
                     )}
                   </span>

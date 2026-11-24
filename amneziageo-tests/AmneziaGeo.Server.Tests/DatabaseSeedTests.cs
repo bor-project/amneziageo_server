@@ -32,13 +32,13 @@ public sealed class DatabaseSeedTests : IDisposable
     }
 
     [Fact]
-    public async Task TemplatesSeededAtOnceLeaveOneBuiltIn()
+    public async Task TemplatesSeededAtOnceDoNotAddCustomTemplates()
     {
         await MigrateAsync();
 
         await AtOnceAsync(services => services.GetRequiredService<TemplateStore>().SeedAsync(CancellationToken.None));
 
-        Assert.Equal(1, await CountAsync(db => db.Templates.CountAsync()));
+        Assert.Equal(0, await CountAsync(db => db.Templates.CountAsync()));
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public sealed class DatabaseSeedTests : IDisposable
         Assert.Equal(1, await CountAsync(db => db.Roles.CountAsync()));
         Assert.Equal(Scopes.All.Length, await CountAsync(db => db.RoleClaims.CountAsync()));
         Assert.Equal(1, await CountAsync(db => db.Outbounds.CountAsync()));
-        Assert.Equal(1, await CountAsync(db => db.Templates.CountAsync()));
+        Assert.Equal(0, await CountAsync(db => db.Templates.CountAsync()));
     }
 
     private ServiceProvider Provider()

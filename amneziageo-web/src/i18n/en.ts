@@ -1,4 +1,7 @@
 export const en = {
+  "error.defaultTemplateNameFixed": "The default configuration name cannot be changed",
+  "templates.reset": "Reset to defaults",
+  "templates.resetConfirm": "Reset the default configuration?",
   "app.name": "AmneziaGeo",
   "app.subtitle": "Server management",
 

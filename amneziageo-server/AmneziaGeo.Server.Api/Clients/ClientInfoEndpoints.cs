@@ -42,8 +42,7 @@ public static partial class ClientEndpoints
         }
 
         var config = await configs.FindAsync(client.ConfigId, ct).ConfigureAwait(false);
-        var template = client.TemplateId is { } templateId
-            ? await templates.FindAsync(templateId, ct).ConfigureAwait(false) : null;
+        var template = await templates.EffectiveAsync(client.TemplateId, ct).ConfigureAwait(false);
         var state = config is null ? ClientState.Missing(client) : Seen(host.States(config, [client])[0], config, client, guard);
         var snapshot = ledger.Snapshot(client);
         var totals = snapshot.Traffic;

@@ -37,7 +37,7 @@ public sealed class TemplateRenewer
     /// </summary>
     public async Task<IReadOnlyList<string>> RenewAsync(TimeSpan? olderThan, CancellationToken ct)
     {
-        var held = await _store.ListAsync(ct).ConfigureAwait(false);
+        var held = await _store.EffectiveListAsync(ct).ConfigureAwait(false);
         var now = _time.GetUtcNow();
         var renewed = new List<string>();
 
