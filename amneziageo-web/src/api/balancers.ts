@@ -35,7 +35,6 @@ export interface BalancerDraft {
   strategy: BalanceStrategy
   members: string[]
   dns: string[]
-  rules?: number[]
 }
 
 export function useBalancers() {
@@ -91,7 +90,7 @@ function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
     mutationFn: call,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["balancers"] })
-      await queryClient.invalidateQueries({ queryKey: ["rules"] })
+      await queryClient.invalidateQueries({ queryKey: ["routing-entries"] })
       await queryClient.invalidateQueries({ queryKey: ["dns-conflicts"] })
     },
   })

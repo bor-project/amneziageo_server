@@ -6,15 +6,13 @@ namespace AmneziaGeo.Server.Routing.Dns;
 /// <summary>
 /// Keeps upstream connections by DNS policy.
 /// </summary>
-public sealed class DnsRoutes : IDisposable
+public sealed class DnsRoutes : IDnsUpstream, IDisposable
 {
     public const int MaxPools = 128;
 
     private readonly Func<RoutePlan?> _plan;
 
-    private DnsSettings _settings;
-
-    private readonly Func<IReadOnlyList<string>, uint, IDnsUpstream> _create;
+    private readonly Func<DnsResolution, IDnsUpstream> _create;
 
     private readonly Dictionary<string, Pool> _pools = new(StringComparer.Ordinal);
 
@@ -31,27 +29,17 @@ public sealed class DnsRoutes : IDisposable
     /// </summary>
     public DnsRoutes(
         Func<RoutePlan?> plan,
-        DnsSettings settings,
-        Func<IReadOnlyList<string>, uint, IDnsUpstream>? create = null)
+        Func<IReadOnlyList<string>, uint, IDnsUpstream>? create = null,
+        TimeSpan? wait = null)
     {
         _plan = plan;
-        _settings = settings;
-        _create = create ?? ((servers, mark) => new DnsUpstream(servers, DnsDefaults.Wait, () => mark));
+        _create = create is null
+            ? selected => new DnsUpstream(selected.Servers, wait ?? DnsDefaults.Wait, () => selected.Way.Mark,
+                device: selected.Device, sourceAddresses: selected.SourceAddresses)
+            : selected => create(selected.Servers, selected.Way.Mark!.Value);
     }
 
     public string? Fault => Volatile.Read(ref _fault);
-
-    public void Follow(string old, string anew)
-    {
-        lock (_sync)
-        {
-            var settings = _settings;
-            if (string.Equals(settings.Outbound, old, StringComparison.Ordinal))
-            {
-                Volatile.Write(ref _settings, settings with { Outbound = anew });
-            }
-        }
-    }
 
     public DnsResolution Select(string name, IPAddress? client = null, string? inbound = null)
     {
@@ -64,7 +52,7 @@ public sealed class DnsRoutes : IDisposable
             inbound = origins.Length == 1 ? origins[0] : null;
         }
 
-        var selected = DnsRouting.Select(Volatile.Read(ref _settings), plan, name, client, inbound, Interlocked.Increment(ref _turn));
+        var selected = DnsRouting.Select(plan, name, client, inbound, Interlocked.Increment(ref _turn));
         if (selected.Way.Fault is { } fault)
         {
             Volatile.Write(ref _fault, fault.Message);
@@ -77,7 +65,16 @@ public sealed class DnsRoutes : IDisposable
         new Bound(this, Select(name, client, inbound));
 
     public IDnsUpstream ForRule(DnsWarmName name) => new Bound(this,
-        DnsRouting.Select(Volatile.Read(ref _settings), _plan(), name.Name, turn: Interlocked.Increment(ref _turn), rule: name.Rule));
+        DnsRouting.Select(_plan(), name.Name, turn: Interlocked.Increment(ref _turn), rule: name.Rule));
+
+    public Task<byte[]?> AskAsync(ReadOnlyMemory<byte> question, bool stream, CancellationToken ct)
+    {
+        var message = DnsMessage.Read(question.Span);
+
+        return message is null || message.IsResponse
+            ? Task.FromResult<byte[]?>(null)
+            : AskAsync(Select(message.Question), question, stream, ct);
+    }
 
     public async Task<byte[]?> AskAsync(DnsResolution selected, ReadOnlyMemory<byte> question, bool stream, CancellationToken ct)
     {
@@ -97,7 +94,9 @@ public sealed class DnsRoutes : IDisposable
         try
         {
             var answer = await pool.Upstream.AskAsync(question, stream, ct).ConfigureAwait(false);
-            Volatile.Write(ref _fault, answer is null ? $"no name server answers through '{selected.Way.Outbound}'" : null);
+            Volatile.Write(ref _fault, answer is null
+                ? (pool.Upstream as DnsUpstream)?.Fault ?? $"no name server answers through '{selected.Way.Outbound}'"
+                : null);
 
             return answer;
         }
@@ -151,7 +150,7 @@ public sealed class DnsRoutes : IDisposable
                 (spare.Value.Upstream as IDisposable)?.Dispose();
             }
 
-            var added = new Pool(_create(selected.Servers, selected.Way.Mark.Value));
+            var added = new Pool(_create(selected));
             _pools.Add(selected.Key, added);
 
             return added;

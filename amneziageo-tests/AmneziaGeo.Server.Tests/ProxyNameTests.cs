@@ -48,11 +48,11 @@ public sealed class ProxyNameTests
     }
 
     [Fact]
-    public void TheDefaultKeepsTheOriginalLabelIncludingItsSeparators()
+    public void TheOriginalNameTemplateKeepsItsSeparators()
     {
         var proxy = Proxy();
         proxy.Name = "_.relay-_";
-        Assert.Equal(proxy.Name, ProxyText.Title(proxy, ProxyName.Default));
+        Assert.Equal(proxy.Name, ProxyText.Title(proxy, "{PROXY}"));
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public sealed class ProxyNameTests
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var before = JsonSerializer.SerializeToElement(await offer.OfferAsync(peer, default).ConfigureAwait(false), options);
         var first = Assert.Single(before.GetProperty("items").EnumerateArray());
-        Assert.Equal(proxy.Name, first.GetProperty("name").GetString());
+        Assert.Equal("relay-cdn.example-" + (proxy.IsHttp ? "http" : transport), first.GetProperty("name").GetString());
         await bench.Panel.SaveAsync(PanelDefaults.Settings with { ProxyNameTemplate = "{HOST}-{TRANSPORT}-{PROXY}" }, default).ConfigureAwait(false);
         var after = JsonSerializer.SerializeToElement(await offer.OfferAsync(peer, default).ConfigureAwait(false), options);
         var second = Assert.Single(after.GetProperty("items").EnumerateArray());
@@ -151,7 +151,7 @@ public sealed class ProxyNameTests
     }
 
     [Fact]
-    public async Task UpgradingAnExistingDatabaseKeepsProxyIdentityAndDefaultsToTheOriginalName()
+    public async Task UpgradingAnExistingDatabaseKeepsProxyIdentityAndUsesTheNewDefault()
     {
         using var bench = new Bench();
         await bench.Panel.SaveAsync(PanelDefaults.Settings with { NameTemplate = "{CLIENT}-office" }, default).ConfigureAwait(false);
@@ -160,21 +160,48 @@ public sealed class ProxyNameTests
         bench.Db.TransportProxies.Add(proxy);
         await bench.Db.SaveChangesAsync().ConfigureAwait(false);
         var identity = await new TransportProxyStore(bench.Db).IdentityAsync(default).ConfigureAwait(false);
-        var migrator = bench.Db.GetService<IMigrator>();
-        await migrator.MigrateAsync("LifetimeTraffic").ConfigureAwait(false);
-        bench.Db.ChangeTracker.Clear();
-        await migrator.MigrateAsync().ConfigureAwait(false);
-        var settings = await bench.Panel.ReadAsync(default).ConfigureAwait(false);
-        var held = (await new TransportProxyStore(bench.Db).FindAsync(proxy.Id, default).ConfigureAwait(false))!;
-        var source = await new TransportProxyStore(bench.Db).IdentityAsync(default).ConfigureAwait(false);
+        await using var legacy = await LegacyDatabase.FromAsync(bench.Db, "LifetimeTraffic").ConfigureAwait(false);
+        await legacy.MigrateAsync().ConfigureAwait(false);
+        var settings = await new PanelStore(legacy.Db).ReadAsync(default).ConfigureAwait(false);
+        var held = (await new TransportProxyStore(legacy.Db).FindAsync(proxy.Id, default).ConfigureAwait(false))!;
+        var source = await new TransportProxyStore(legacy.Db).IdentityAsync(default).ConfigureAwait(false);
         Assert.Equal(ProxyName.Default, settings.ProxyNameTemplate);
         Assert.Equal("{CLIENT}-office", settings.NameTemplate);
-        Assert.Equal(proxy.Name, ProxyText.Title(held, settings.ProxyNameTemplate));
+        Assert.Equal("relay-cdn.example-http", ProxyText.Title(held, settings.ProxyNameTemplate));
         Assert.Equal(proxy.Secret, held.Secret);
         Assert.Equal(proxy.Host, held.Host);
         Assert.Equal(proxy.Path, held.Path);
         Assert.Equal(identity.Source, source.Source);
         Assert.Equal(identity.IdentityKey, source.IdentityKey);
+    }
+
+    [Theory]
+    [InlineData("websocket", "relay-cdn.example-websocket")]
+    [InlineData("http", "relay-cdn.example-http")]
+    [InlineData("quic", "relay-cdn.example-quic")]
+    public void TheDefaultIncludesTheNameHostAndTransport(string transport, string expected)
+    {
+        var proxy = Proxy();
+        proxy.Transport = transport;
+        Assert.Equal("{PROXY}-{HOST}-{TRANSPORT}", ProxyName.Default);
+        Assert.Equal(expected, ProxyText.Title(proxy, ProxyName.Default));
+    }
+
+    [Theory]
+    [InlineData("{PROXY}", "{PROXY}-{HOST}-{TRANSPORT}")]
+    [InlineData("{TRANSPORT}:{PROXY}", "{TRANSPORT}:{PROXY}")]
+    public async Task UpgradingTheDefaultPreservesCustomTemplates(string original, string expected)
+    {
+        using var bench = new Bench();
+        await bench.Panel.SaveAsync(PanelDefaults.Settings with
+        {
+            ProxyNameTemplate = original, NameTemplate = "{CLIENT}-custom",
+        }, default).ConfigureAwait(false);
+        await using var legacy = await LegacyDatabase.FromAsync(bench.Db, "PendingInterfaceChanges").ConfigureAwait(false);
+        await legacy.MigrateAsync().ConfigureAwait(false);
+        var held = await new PanelStore(legacy.Db).ReadAsync(default).ConfigureAwait(false);
+        Assert.Equal(expected, held.ProxyNameTemplate);
+        Assert.Equal("{CLIENT}-custom", held.NameTemplate);
     }
 
     private static TransportProxyEntity Proxy() => new()

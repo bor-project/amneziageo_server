@@ -28,8 +28,7 @@ public static class RoutingCommands
     }
 
     /// <summary>
-    /// Writes the routing of the panel to a file: the rules, the basic lists, the presets and the addresses of the
-    /// geo sources.
+    /// Exports routing rules, entries, presets and geo sources.
     /// </summary>
     public static async Task<int> ExportAsync(Context context, Arguments args, CancellationToken ct)
     {
@@ -45,8 +44,8 @@ public static class RoutingCommands
         await File.WriteAllTextAsync(file, RoutingExport.Text(doc), ct).ConfigureAwait(false);
 
         Terminal.Say(
-            $"the routing of the panel left for {file}: {Count(doc.Rules.Count)} rules, " +
-            $"{Count(doc.Basic.Direct.Count + doc.Basic.Block.Count)} basic entries, " +
+            $"the routing of the panel left for {file}: {Count(doc.Rules.Count)} address sets, " +
+            $"{Count(doc.Entries.Count)} rules, " +
             $"{Count(doc.Presets.Count)} presets, {Count(doc.Sources.Count)} geo sources");
 
         return 0;
@@ -83,7 +82,7 @@ public static class RoutingCommands
         }
 
         var plan = await RoutingImport
-            .PlanAsync(read.Doc!, context.Rules, context.Presets, context.Geo, context.Outbounds, context.Clients, ct)
+            .PlanAsync(read.Doc!, context.Rules, context.Presets, context.Geo, context.Outbounds, context.Clients, ct, context.Balancers)
             .ConfigureAwait(false);
         Plan(plan);
 
@@ -97,11 +96,6 @@ public static class RoutingCommands
         var answer = await RoutingImport.ApplyAsync(plan, context.Rules, context.Presets, context.Geo, ct).ConfigureAwait(false);
         Lines("taken in", answer.Added);
         Lines("replaced", answer.Replaced);
-        if (answer.BasicReplaced)
-        {
-            Terminal.Say("the basic lists were laid over");
-        }
-
         Lines("refused", answer.Refused);
         Lines("off the host yet", answer.Detached);
 
@@ -110,17 +104,14 @@ public static class RoutingCommands
 
     private static void Plan(RoutingPlan plan)
     {
-        Lines("added", plan.NewRules.Select(name => $"rule '{name}'")
+        Lines("added", plan.NewRules.Select(name => $"address set '{name}'")
+            .Concat(plan.NewEntries.Select(name => $"rule '{name}'"))
             .Concat(plan.NewPresets.Select(name => $"preset '{name}'"))
             .Concat(plan.NewSources.Select(name => $"source '{name}'")));
-        Lines("replaced", plan.ReplacedRules.Select(name => $"rule '{name}'")
+        Lines("replaced", plan.ReplacedRules.Select(name => $"address set '{name}'")
+            .Concat(plan.ReplacedEntries.Select(name => $"rule '{name}'"))
             .Concat(plan.ReplacedPresets.Select(name => $"preset '{name}'"))
             .Concat(plan.ReplacedSources.Select(name => $"source '{name}'")));
-        if (plan.ReplacesBasic)
-        {
-            Terminal.Say("the basic lists would be laid over");
-        }
-
         Lines("off the host yet", plan.Detached);
     }
 
@@ -149,12 +140,12 @@ public static class RoutingCommands
     }
 
     /// <summary>
-    /// Restores the bundled routing groups and presets.
+    /// Restores bundled traffic rules and presets.
     /// </summary>
     public static async Task<int> DefaultsAsync(Context context, CancellationToken ct)
     {
         var restored = await context.RoutingDefaults.RestoreAllAsync(ct).ConfigureAwait(false);
-        Terminal.Say($"added {restored.Groups} address groups and {restored.Presets} routing presets");
+        Terminal.Say($"added {restored.Rules} address sets and {restored.Presets} routing presets");
 
         return 0;
     }

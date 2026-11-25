@@ -3,8 +3,8 @@ import type { FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { complaint, reason } from "@/api/auth"
 import { useClients } from "@/api/clients"
-import { blockList, directList, useRouteTest, useRules } from "@/api/rules"
-import type { RouteAnswer, RouteMember, RouteStep } from "@/api/rules"
+import { useRouteTest, useRoutingEntries } from "@/api/routingEntries"
+import type { RouteAnswer, RouteMember, RouteStep } from "@/api/routingEntries"
 import { scopes } from "@/api/scopes"
 import { Line, Pick } from "@/components/fields"
 import { card, primary } from "@/components/styles"
@@ -26,7 +26,7 @@ const start: Question = { target: "", port: "443", protocol: "tcp", client: "", 
 export function RouteTest() {
   const t = useText()
   const clients = useClients()
-  const rules = useRules()
+  const rules = useRoutingEntries()
   const test = useRouteTest()
   const user = useAppSelector((s) => s.auth.user)
   const may = holds(user, scopes.manageRouting)
@@ -184,7 +184,7 @@ function Answer({
               {answer.steps.map((step) => (
                 <tr key={step.rule} className="border-t border-line-soft">
                   <td className="px-4 py-3 text-faint tabular-nums">{places.get(step.rule) ?? ""}</td>
-                  <td className="truncate px-4 py-3 text-ink">{listName(step.rule, step.name, t)}</td>
+                  <td className="truncate px-4 py-3 text-ink">{step.name}</td>
                   <td className={`truncate px-4 py-3 ${step.outcome === "match" ? "text-good" : "text-muted"}`}>
                     {t(outcome(step))}
                   </td>
@@ -216,14 +216,6 @@ function RuleName({
     return <span className="text-muted">{t("test.noRule")}</span>
   }
 
-  if (id === blockList || id === directList) {
-    return (
-      <Link to="/routing/basic" className="hover:text-brand-ink">
-        {listName(id, name, t)}
-      </Link>
-    )
-  }
-
   const text = `#${places.get(id) ?? ""} ${name}`
 
   return may ? (
@@ -233,14 +225,6 @@ function RuleName({
   ) : (
     <span>{text}</span>
   )
-}
-
-function listName(id: number, name: string, t: Text): string {
-  if (id === blockList) {
-    return t("basic.block")
-  }
-
-  return id === directList ? t("basic.direct") : name
 }
 
 function number(text: string): number | null {

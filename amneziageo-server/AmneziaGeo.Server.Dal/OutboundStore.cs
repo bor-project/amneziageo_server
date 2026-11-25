@@ -202,10 +202,9 @@ public sealed class OutboundStore
     }
 
     /// <summary>
-    /// Removes an outbound, unless a rule, a balancer or the resolver leaves through it; live names the outbound
-    /// the running resolver asks through.
+    /// Removes an unused linked server.
     /// </summary>
-    public async Task<OutboundResult> RemoveAsync(long id, string live, CancellationToken ct)
+    public async Task<OutboundResult> RemoveAsync(long id, CancellationToken ct)
     {
         var entity = await _db.Outbounds.FirstOrDefaultAsync(outbound => outbound.Id == id, ct).ConfigureAwait(false);
         if (entity is null)
@@ -213,7 +212,7 @@ public sealed class OutboundStore
             return Missing(id);
         }
 
-        if (await UserAsync(entity.Name, live, ct).ConfigureAwait(false) is { } user)
+        if (await UserAsync(entity.Name, ct).ConfigureAwait(false) is { } user)
         {
             return OutboundResult.No(OutboundOutcome.Invalid, "outbound-in-use", user);
         }
@@ -257,7 +256,7 @@ public sealed class OutboundStore
         return OutboundResult.Done(Read(entity));
     }
 
-    private async Task<string?> UserAsync(string name, string live, CancellationToken ct)
+    private async Task<string?> UserAsync(string name, CancellationToken ct)
     {
         if (await _db.Rules.AnyAsync(rule => rule.Outbound == name, ct).ConfigureAwait(false))
         {
@@ -271,14 +270,7 @@ public sealed class OutboundStore
             return $"the balancer '{balancer.Name}' picks from the outbound '{name}'";
         }
 
-        if (await NameFollow.AsksThroughAsync(_db, name, ct).ConfigureAwait(false))
-        {
-            return $"the resolver asks through the outbound '{name}'";
-        }
-
-        return string.Equals(live, name, StringComparison.Ordinal)
-            ? $"the resolver asks through the outbound '{name}' until it is restarted"
-            : null;
+        return null;
     }
 
     private async Task<bool> TakenAsync(string name, long id, CancellationToken ct)
@@ -337,7 +329,6 @@ public sealed class OutboundStore
         PeerKey = entity.PeerKey,
         PresharedKey = entity.PresharedKey,
         Address = Parts(entity.Address),
-        Dns = Parts(entity.Dns),
         Mtu = entity.Mtu,
         Keepalive = entity.Keepalive,
         Probe = entity.Probe,
@@ -345,6 +336,7 @@ public sealed class OutboundStore
         ClosePrivate = entity.ClosePrivate,
         Mark = (uint)entity.Mark,
         Table = entity.Table,
+        Dns = Parts(entity.Dns),
         CreatedUtc = entity.CreatedUtc,
         UpdatedUtc = entity.UpdatedUtc,
         Obfuscation = new ObfuscationSettings
@@ -379,6 +371,7 @@ public sealed class OutboundStore
 
     private static void Write(OutboundEntity entity, OutboundConfig outbound)
     {
+        entity.Dns = string.Join(", ", outbound.Dns);
         entity.Name = outbound.Name;
         entity.Kind = outbound.Kind;
         entity.Position = outbound.Position;
@@ -391,7 +384,6 @@ public sealed class OutboundStore
         entity.PeerKey = outbound.PeerKey.Trim();
         entity.PresharedKey = outbound.PresharedKey.Trim();
         entity.Address = string.Join(", ", outbound.Address);
-        entity.Dns = string.Join(", ", outbound.Dns);
         entity.Mtu = outbound.Mtu;
         entity.Keepalive = outbound.Keepalive;
         entity.Probe = outbound.Probe.Trim();

@@ -1,10 +1,9 @@
+using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Geo.Files;
-using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Dns;
-using AmneziaGeo.Server.Routing.Route;
 using AmneziaGeo.Server.Routing.Template;
 
 namespace AmneziaGeo.Server.Api.Clients;
@@ -29,15 +28,7 @@ public sealed class TemplateRefresher
 
     private readonly IGeoFileStore _files;
 
-    private readonly DnsStore _dns;
-
-    private readonly DnsState _resolver;
-
-    private readonly OutboundStore _outbounds;
-
-    private readonly BalanceStore _balancers;
-
-    private readonly BalanceLive _live;
+    private readonly RouteApplier _routing;
 
     private readonly TimeProvider _time;
 
@@ -47,20 +38,12 @@ public sealed class TemplateRefresher
     public TemplateRefresher(
         GeoStore geo,
         IGeoFileStore files,
-        DnsStore dns,
-        DnsState resolver,
-        OutboundStore outbounds,
-        BalanceStore balancers,
-        BalanceLive live,
+        RouteApplier routing,
         TimeProvider time)
     {
         _geo = geo;
         _files = files;
-        _dns = dns;
-        _resolver = resolver;
-        _outbounds = outbounds;
-        _balancers = balancers;
-        _live = live;
+        _routing = routing;
         _time = time;
     }
 
@@ -108,16 +91,13 @@ public sealed class TemplateRefresher
         }
 
         var sources = await _geo.ListAsync(ct).ConfigureAwait(false);
-        var settings = _resolver.Settings ?? await _dns.ReadAsync(ct).ConfigureAwait(false);
-        var outbounds = await _outbounds.ListAsync(ct).ConfigureAwait(false);
-        var balancers = await _balancers.ListAsync(ct).ConfigureAwait(false);
-        var way = DnsExit.Way(settings, new RouteWays(outbounds, balancers, _live.Alive));
-        using var upstream = new DnsUpstream(settings.Upstreams, Wait, () => way.Mark);
-        var tally = new Tally(upstream);
+        var plan = await _routing.ReadAsync(ct).ConfigureAwait(false);
+        using var routes = new DnsRoutes(() => plan, wait: Wait);
+        var tally = new Tally(routes);
         var resolver = new TemplateResolver(tally);
         var found = await resolver.ResolveAsync(entries, GeoIndex.Load(sources, _files), standIns, ct).ConfigureAwait(false);
 
-        return (found, tally.Silence(upstream.Fault, way.Fault?.Message));
+        return (found, tally.Silence(routes.Fault, null));
     }
 
     private ClientTemplate Taken(ClientTemplate template, TemplateResolution found) =>

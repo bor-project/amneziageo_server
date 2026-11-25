@@ -105,20 +105,17 @@ public sealed class RouteUpgradeTests
         }, CancellationToken.None).ConfigureAwait(false);
         Assert.True(added.IsOk, added.Message);
         Assert.True(disabled.IsOk, disabled.Message);
-        bench.Db.RouteBasics.Add(new RouteBasicEntity
+        await bench.Rules.SaveBasicAsync(new RouteBasic
         {
-            Id = 1,
-            Block = "10.0.0.0/8, fd00::/8",
-            Direct = "198.51.100.7/32, 2001:db8:9::7/128",
-            UpdatedUtc = bench.Clock.GetUtcNow(),
-        });
-        await bench.Db.SaveChangesAsync().ConfigureAwait(false);
+            Block = ["10.0.0.0/8", "fd00::/8"],
+            Direct = ["198.51.100.7/32", "2001:db8:9::7/128"],
+        }, default).ConfigureAwait(false);
         var beforeRules = await bench.Rules.ListAsync(CancellationToken.None).ConfigureAwait(false);
         var basic = await bench.Rules.ReadBasicAsync(CancellationToken.None).ConfigureAwait(false);
         var before = Plan(beforeRules, basic, protocol, alive, dns);
 
-        await bench.Rules.MigrateBasicAsync(CancellationToken.None).ConfigureAwait(false);
-        await bench.Rules.MigrateBasicAsync(CancellationToken.None).ConfigureAwait(false);
+        await bench.Db.Database.MigrateAsync(CancellationToken.None).ConfigureAwait(false);
+        await bench.Db.Database.MigrateAsync(CancellationToken.None).ConfigureAwait(false);
 
         var afterRules = await bench.Rules.TableAsync(CancellationToken.None).ConfigureAwait(false);
         var after = Plan(afterRules, await bench.Rules.ReadBasicAsync(CancellationToken.None).ConfigureAwait(false), protocol, alive, dns);
@@ -188,43 +185,14 @@ public sealed class RouteUpgradeTests
     }
 
     [Fact]
-    public async Task ALongLegacyExceptionKeepsItsPreviousFault()
+    public async Task ALongExceptionIsStoredAsAReusableRule()
     {
         using var bench = new Bench();
-        bench.Db.RouteBasics.Add(new RouteBasicEntity
-        {
-            Id = 1,
-            Block = string.Join(", ", Enumerable.Range(1, 100).Select(index => "192.0.2." + index)),
-            UpdatedUtc = bench.Clock.GetUtcNow(),
-        });
-        await bench.Db.SaveChangesAsync().ConfigureAwait(false);
-        var before = Plan([], await bench.Rules.ReadBasicAsync(CancellationToken.None).ConfigureAwait(false), RouteProtocol.Tcp, true, false);
-
-        await bench.Rules.MigrateBasicAsync(CancellationToken.None).ConfigureAwait(false);
-        var after = Plan(await bench.Rules.TableAsync(CancellationToken.None).ConfigureAwait(false), RouteBasic.Empty, RouteProtocol.Tcp, true, false);
-
-        Assert.Equal("too-many", Assert.Single(before.Legs).Fault?.Code);
-        Assert.Equal(Assert.Single(before.Legs).Fault, Assert.Single(after.Legs).Fault);
-        Assert.Equal(100, (await bench.Rules.FindAsync(RouteBasic.BlockId, CancellationToken.None).ConfigureAwait(false))!.Targets.Count);
-        Assert.Equal(RouteRuleset.Text(before), RouteRuleset.Text(after));
-    }
-
-    [Fact]
-    public async Task VerificationFailureRollsBackTheTransfer()
-    {
-        using var bench = new Bench();
-        var added = await bench.Rules.AddAsync(RouteDefaults.Fresh("kept") with { Action = RouteAction.Direct }, CancellationToken.None).ConfigureAwait(false);
-        var entity = await bench.Db.Rules.SingleAsync(rule => rule.Id == added.Record!.Id).ConfigureAwait(false);
-        entity.Position = int.MinValue;
-        bench.Db.RouteBasics.Add(new RouteBasicEntity { Id = 1, Direct = "192.0.2.1", UpdatedUtc = bench.Clock.GetUtcNow() });
-        await bench.Db.SaveChangesAsync().ConfigureAwait(false);
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => bench.Rules.MigrateBasicAsync(CancellationToken.None)).ConfigureAwait(false);
-        bench.Db.ChangeTracker.Clear();
-
-        Assert.Null(await bench.Rules.FindAsync(RouteBasic.DirectId, CancellationToken.None).ConfigureAwait(false));
-        Assert.Equal("192.0.2.1", (await bench.Db.RouteBasics.SingleAsync().ConfigureAwait(false)).Direct);
-        Assert.Equal(int.MinValue, (await bench.Rules.FindAsync(added.Record.Id, CancellationToken.None).ConfigureAwait(false))!.Position);
+        var basic = new RouteBasic { Block = [.. Enumerable.Range(1, 100).Select(index => "192.0.2." + index)] };
+        Assert.Null(await bench.Rules.SaveBasicAsync(basic, default).ConfigureAwait(false));
+        var after = Plan(await bench.Rules.TableAsync(default).ConfigureAwait(false), RouteBasic.Empty, RouteProtocol.Tcp, true, false);
+        Assert.Null(Assert.Single(after.Legs).Fault);
+        Assert.Equal(100, (await bench.Rules.FindAsync(RouteBasic.BlockId, default).ConfigureAwait(false))!.Targets.Count);
     }
 
     [Fact]
@@ -238,7 +206,6 @@ public sealed class RouteUpgradeTests
             collection.AddLogging();
             collection.AddServerDatabase(path, new AuthOptions(), Path.Combine(folder.FullName, "geo"));
             using var services = collection.BuildServiceProvider();
-            await ServerDatabase.PrepareAsync(services).ConfigureAwait(false);
             using (var scope = services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -257,9 +224,9 @@ public sealed class RouteUpgradeTests
             using var afterScope = services.CreateScope();
             var after = afterScope.ServiceProvider.GetRequiredService<RouteStore>();
             Assert.Equal([RouteBasic.BlockId, RouteBasic.DirectId],
-                (await after.TableAsync(CancellationToken.None).ConfigureAwait(false)).Select(rule => rule.Id));
+                (await after.TableAsync(CancellationToken.None).ConfigureAwait(false)).Where(rule => rule.Id < 0).Select(rule => rule.Id));
             using var saved = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite("Data Source=" + backup.FullName).Options);
-            Assert.Equal("192.0.2.1", (await saved.RouteBasics.AsNoTracking().SingleAsync().ConfigureAwait(false)).Direct);
+            Assert.Equal("192.0.2.1", (await saved.Database.SqlQueryRaw<string>("SELECT Direct AS Value FROM RouteBasics WHERE Id = 1").ToListAsync().ConfigureAwait(false)).Single());
             Assert.False((await saved.Database.GetAppliedMigrationsAsync().ConfigureAwait(false)).Any(name => name.EndsWith("_RoutingTable", StringComparison.Ordinal)));
         }
         finally

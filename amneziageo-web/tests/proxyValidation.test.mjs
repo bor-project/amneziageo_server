@@ -50,3 +50,13 @@ test("legacy insecure or unsupported transports cannot be saved accidentally", (
   assert.equal(faults({ transport: "xhttp" }).transport, "error.proxyTransport")
   assert.equal(faults({ transport: "http", protocolVersion: 2, httpMethod: "POST" }).transport, "")
 })
+
+test("names remain required and are unique within the protocol", () => {
+  assert.equal(faults({ name: "" }).name, "error.proxyName")
+  assert.equal(faults({ name: "   " }).name, "error.proxyName")
+  assert.equal(faults({}, [{ ...draft, id: 1, name: " relay " }]).name, "error.nameTaken")
+  assert.equal(faults({}, [{ ...draft, id: 1, name: "RELAY", transport: "websocket" }]).name, "")
+  assert.equal(faults({ transport: "http", protocolVersion: 2, httpMethod: "POST" }, [{ ...draft, id: 1, name: "RELAY", transport: "http", protocolVersion: 2, httpMethod: "GET" }]).name, "error.nameTaken")
+  assert.equal(faults({ transport: "http", protocolVersion: 2 }, [{ ...draft, id: 1, name: "RELAY", transport: "xhttp", protocolVersion: 2 }]).name, "error.nameTaken")
+  assert.equal(faults({ transport: "http", protocolVersion: 2 }, [{ ...draft, id: 1, name: "RELAY", transport: "xhttp", protocolVersion: 0 }]).name, "error.nameTaken")
+})

@@ -70,7 +70,7 @@ export function OutboundForm({
       peerKey: found.peerKey,
       presharedKey: found.presharedKey ?? "",
       address: found.address,
-      dns: found.dns,
+      dns: found.dns ?? [],
       mtu: found.mtu,
       keepalive: found.keepalive,
       obfuscation: found.obfuscation,
@@ -108,7 +108,7 @@ export function OutboundForm({
             onChange={(e) => put({ kind: e.target.value as OutboundKind })}
             className={`mt-1 ${field}`}
           >
-            <option value="local">{t("outbounds.kindLocal")}</option>
+            {draft.kind === "local" && <option value="local">{t("rules.actionDirect")}</option>}
             <option value="wg">{t("outbounds.kindWg")}</option>
             <option value="ws">{t("outbounds.kindWs")}</option>
           </select>
@@ -118,9 +118,7 @@ export function OutboundForm({
       {self !== undefined && (
         <WayUse
           name={self}
-          rules={draft.rules}
           balancers={draft.balancers}
-          onRules={(rules) => put({ rules })}
           onBalancers={(balancers) => put({ balancers })}
         />
       )}
@@ -170,12 +168,6 @@ export function OutboundForm({
             onChange={(address) => put({ address })}
             wide
           />
-          <ListLine
-            id="outbound-dns"
-            caption={t("outbounds.dns")}
-            value={draft.dns}
-            onChange={(dns) => put({ dns })}
-          />
           <Count
             id="outbound-mtu"
             caption={t("outbounds.mtu")}
@@ -196,6 +188,10 @@ export function OutboundForm({
           />
         </Part>
       )}
+
+      <Part title={t("tab.dns")}>
+        <div className="sm:col-span-2"><ListLine id="outbound-dns" caption={t("routing.serverDns")} value={draft.dns} onChange={(dns) => put({ dns })} /></div>
+      </Part>
 
       {tunnel && (
         <Part title={t("outbounds.keys")}>

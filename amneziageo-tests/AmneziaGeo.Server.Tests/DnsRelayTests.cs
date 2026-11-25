@@ -18,15 +18,6 @@ public class DnsRelayTests
 
     private static readonly DnsSettings On = DnsDefaults.Settings with { IsEnabled = true };
 
-    private static readonly IPAddress Router = IPAddress.Parse("10.254.253.252");
-
-    private static readonly HostRoute[] Lan =
-    [
-        new(IPAddress.Any, 0, false),
-        new(IPAddress.Parse("10.254.0.0"), 16, false),
-        new(IPAddress.Parse("10.253.0.0"), 16, true),
-    ];
-
     [Fact]
     public void TheConnectionIsLookedUpByTheWayItsAnswersGoBack()
     {
@@ -95,104 +86,73 @@ public class DnsRelayTests
         Assert.Null(ConntrackOrigin.Destination([new NetlinkMessage(0x0100, 0, 2, ReadOnlyMemory<byte>.Empty)]));
 
     [Fact]
-    public async Task AQuestionForAPrivateServerIsAskedOfItAndFeedsTheSets()
+    public async Task TheRuleSelectedDnsFeedsTheSetsAndCache()
     {
         var host = new Ledger();
         var sets = new DnsSets(host);
         var plan = Plan();
-        var relay = new Relay("10.1.2.3");
-        var resolver = Resolver(sets, plan, relay, ct => sets.FlushAsync(plan, On.NameLifetime, ct));
+        var book = new Book("1.2.3.4");
+        using var routes = new DnsRoutes(() => plan, (_, _) => book);
+        var resolver = new DnsResolver(routes, new DnsCache(16), sets, () => plan, On, new DnsState(),
+            ct => sets.FlushAsync(plan, On.NameLifetime, ct), routes: routes);
 
-        var answer = await resolver.AnswerAsync(DnsBuilder.Question(3, "www.youtube.com"), false, null, Router, CancellationToken.None);
-
-        Assert.Equal(["10.1.2.3"], DnsMessage.Read(answer)!.Addresses.Select(address => address.ToString()));
-        Assert.Equal([Router], relay.Asked);
-        Assert.Contains("add element inet amneziageo_rt n1v4 { 10.1.2.3 timeout 3600s }", host.Ruleset, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task TheAnswerOfAPrivateServerStaysOutOfTheCache()
-    {
-        var resolver = Resolver(new DnsSets(new Ledger()), Plan(), new Relay("10.1.2.3"), _ => Task.CompletedTask);
-
-        await resolver.AnswerAsync(DnsBuilder.Question(3, "nas.lan"), false, null, Router, CancellationToken.None);
-        var later = await resolver.AnswerAsync(DnsBuilder.Question(4, "nas.lan"), false, CancellationToken.None);
-
-        Assert.Equal(["1.2.3.4"], DnsMessage.Read(later)!.Addresses.Select(address => address.ToString()));
-    }
-
-    [Fact]
-    public async Task APrivateServerThatDoesNotAnswerLeavesTheQuestionToTheResolver()
-    {
-        var state = new DnsState();
-        var resolver = new DnsResolver(
-            new Book("1.2.3.4"), new DnsCache(16), new DnsSets(new Ledger()), Plan, On, state, _ => Task.CompletedTask, relay: new Relay(null));
-
-        var answer = await resolver.AnswerAsync(DnsBuilder.Question(3, "nas.lan"), false, null, Router, CancellationToken.None);
+        var answer = await resolver.AnswerAsync(DnsBuilder.Question(3, "www.youtube.com"), false, CancellationToken.None).ConfigureAwait(false);
+        var cached = await resolver.AnswerAsync(DnsBuilder.Question(4, "www.youtube.com"), false, CancellationToken.None).ConfigureAwait(false);
 
         Assert.Equal(["1.2.3.4"], DnsMessage.Read(answer)!.Addresses.Select(address => address.ToString()));
-        Assert.Equal(0, state.Failed);
+        Assert.Equal(["1.2.3.4"], DnsMessage.Read(cached)!.Addresses.Select(address => address.ToString()));
+        Assert.Equal(1, book.Calls);
+        Assert.Contains("add element inet amneziageo_rt n1v4 { 1.2.3.4 timeout 3600s }", host.Ruleset, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task APrivateServerThatGaveNoAnswerIsPassedOverAfterwards()
+    public async Task TheServerUsesTheRuleSelectedDns()
     {
-        var relay = new Relay(null);
-        var resolver = Resolver(new DnsSets(new Ledger()), Plan(), relay, _ => Task.CompletedTask);
-
-        await resolver.AnswerAsync(DnsBuilder.Question(3, "nas.lan"), false, null, Router, CancellationToken.None);
-        var later = await resolver.AnswerAsync(DnsBuilder.Question(4, "nas.lan"), false, null, Router, CancellationToken.None);
-
-        Assert.Equal(["1.2.3.4"], DnsMessage.Read(later)!.Addresses.Select(address => address.ToString()));
-        Assert.Equal([Router], relay.Asked);
-    }
-
-    [Theory]
-    [InlineData("10.254.253.252", "10.1.2.3")]
-    [InlineData("8.8.8.8", "1.2.3.4")]
-    [InlineData("127.0.0.1", "1.2.3.4")]
-    [InlineData("192.168.77.99", "1.2.3.4")]
-    [InlineData("10.253.0.1", "1.2.3.4")]
-    public async Task TheServerHandsOnOnlyTheQuestionsAClientSentToAPrivateServerBehindIt(string sent, string expected)
-    {
-        var resolver = Resolver(new DnsSets(new Ledger()), Plan(), new Relay("10.1.2.3"), _ => Task.CompletedTask);
-        await using var server = new DnsServer(resolver, (_, _, _) => IPAddress.Parse(sent), () => Lan);
+        var plan = Plan();
+        using var routes = new DnsRoutes(() => plan, (_, _) => new Book("1.2.3.4"));
+        var resolver = new DnsResolver(routes, new DnsCache(16), new DnsSets(new Ledger()), () => plan,
+            On, new DnsState(), _ => Task.CompletedTask, routes: routes);
+        await using var server = new DnsServer(resolver);
         var port = Free();
         server.Start([IPAddress.Loopback], port);
 
         using var client = new UdpClient(AddressFamily.InterNetwork);
         client.Connect(IPAddress.Loopback, port);
-        await client.SendAsync(DnsBuilder.Question(5, "www.youtube.com"));
+        await client.SendAsync(DnsBuilder.Question(5, "www.youtube.com")).ConfigureAwait(false);
         using var wait = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var received = await client.ReceiveAsync(wait.Token);
+        var received = await client.ReceiveAsync(wait.Token).ConfigureAwait(false);
 
-        Assert.Equal([expected], DnsMessage.Read(received.Buffer)!.Addresses.Select(address => address.ToString()));
+        Assert.Equal(["1.2.3.4"], DnsMessage.Read(received.Buffer)!.Addresses.Select(address => address.ToString()));
     }
 
-    [Theory]
-    [InlineData("10.0.0.1", true)]
-    [InlineData("100.100.100.100", true)]
-    [InlineData("172.31.255.1", true)]
-    [InlineData("192.168.1.1", true)]
-    [InlineData("fd12::1", true)]
-    [InlineData("172.32.0.1", false)]
-    [InlineData("1.1.1.1", false)]
-    [InlineData("2606:4700:4700::1111", false)]
-    public void ThePrivateRangesNameTheNetworksBehindTheServer(string address, bool inside) =>
-        Assert.Equal(inside, RouteProbe.Within(DnsDefaults.Private, IPAddress.Parse(address)));
+    [Fact]
+    public async Task AnUnmatchedQuestionCannotUseAnotherDnsPolicy()
+    {
+        var plan = Plan();
+        var calls = 0;
+        using var routes = new DnsRoutes(() => plan, (_, _) =>
+        {
+            calls++;
+
+            return new Book("1.2.3.4");
+        });
+        var resolver = new DnsResolver(routes, new DnsCache(16), new DnsSets(new Ledger()), () => plan,
+            On, new DnsState(), _ => Task.CompletedTask, routes: routes);
+
+        var answer = await resolver.AnswerAsync(DnsBuilder.Question(3, "nas.lan"), false, CancellationToken.None).ConfigureAwait(false);
+
+        Assert.Equal(DnsMessage.ServerFailure, DnsMessage.Read(answer)!.Code);
+        Assert.Equal(0, calls);
+    }
 
     private static RoutePlan Plan() =>
         RoutePlan.Build(
-            [RouteDefaults.Fresh("rule") with { Id = 1, Action = RouteAction.Out, Outbound = "direct", Targets = ["youtube.com"] }],
+            [RouteDefaults.Fresh("rule") with { Id = 1, Action = RouteAction.Out, Outbound = "direct", Targets = ["youtube.com"], Dns = ["1.2.3.4"] }],
             Ways,
             GeoIndex.Load([], new MemoryGeoFiles()),
             ["awg1"],
             On);
 
-    private static DnsResolver Resolver(DnsSets sets, RoutePlan plan, IDnsRelay relay, Func<CancellationToken, Task> land) =>
-        new(new Book("1.2.3.4"), new DnsCache(16), sets, () => plan, On, new DnsState(), land, relay: relay);
-
-    // Returns a loopback port nobody listens on.
     private static int Free()
     {
         var probe = new TcpListener(IPAddress.Loopback, 0);
@@ -203,28 +163,17 @@ public class DnsRelayTests
         return port;
     }
 
-    private static byte[] Told(ReadOnlyMemory<byte> question, string address)
-    {
-        var asked = DnsMessage.Read(question.Span)!;
-
-        return DnsBuilder.Answer(asked.Id, asked.Question, asked.Type, new Told(asked.Question, asked.Type, 300, address));
-    }
-
     private sealed class Book(string address) : IDnsUpstream
     {
-        public Task<byte[]?> AskAsync(ReadOnlyMemory<byte> question, bool stream, CancellationToken ct) =>
-            Task.FromResult<byte[]?>(Told(question, address));
-    }
+        public int Calls { get; private set; }
 
-    private sealed class Relay(string? address) : IDnsRelay
-    {
-        public List<IPAddress> Asked { get; } = [];
-
-        public Task<byte[]?> AskAsync(IPAddress server, ReadOnlyMemory<byte> question, bool stream, CancellationToken ct)
+        public Task<byte[]?> AskAsync(ReadOnlyMemory<byte> question, bool stream, CancellationToken ct)
         {
-            Asked.Add(server);
+            Calls++;
+            var asked = DnsMessage.Read(question.Span)!;
 
-            return Task.FromResult(address is null ? null : Told(question, address));
+            return Task.FromResult<byte[]?>(DnsBuilder.Answer(asked.Id, asked.Question, asked.Type,
+                new Told(asked.Question, asked.Type, 300, address)));
         }
     }
 }

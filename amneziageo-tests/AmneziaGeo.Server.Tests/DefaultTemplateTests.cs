@@ -134,21 +134,21 @@ public sealed class DefaultTemplateTests
     public async Task AnUpgradePreservesExistingTemplatesAndInheritedConfiguration()
     {
         using var bench = new Bench();
-        var migrator = bench.Db.GetService<IMigrator>();
-        await migrator.MigrateAsync("20261122135207_ProxyNameTemplate").ConfigureAwait(false);
         var custom = (await bench.Templates.AddAsync(new ClientTemplate { Name = "default", Mtu = 1300 }, default).ConfigureAwait(false)).Record!;
         var endpoint = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), default).ConfigureAwait(false)).Record!;
         var client = (await bench.Clients.AddAsync(ClientDefaults.Fresh(endpoint.Id, "phone"), default).ConfigureAwait(false)).Record!;
         var before = ClientText.Text(endpoint, client);
-        await migrator.MigrateAsync().ConfigureAwait(false);
-        await bench.Templates.SeedAsync(default).ConfigureAwait(false);
-        Assert.Equivalent(custom, await bench.Templates.FindAsync(custom.Id, default).ConfigureAwait(false));
-        Assert.Equal(before, ClientText.Text(endpoint, client, await bench.Templates.EffectiveAsync(null, default).ConfigureAwait(false)));
-        var start = await bench.Templates.DefaultAsync(default).ConfigureAwait(false);
-        Assert.True((await bench.Templates.ChangeDefaultAsync(start with { ProxyIds = [] }, null, default).ConfigureAwait(false)).IsOk);
-        Assert.Equal(before, ClientText.Text(endpoint, client, await bench.Templates.EffectiveAsync(null, default).ConfigureAwait(false)));
+        await using var legacy = await LegacyDatabase.FromAsync(bench.Db, "20261122135207_ProxyNameTemplate").ConfigureAwait(false);
+        await legacy.MigrateAsync().ConfigureAwait(false);
+        var templates = new TemplateStore(legacy.Db);
+        await templates.SeedAsync(default).ConfigureAwait(false);
+        Assert.Equivalent(custom, await templates.FindAsync(custom.Id, default).ConfigureAwait(false));
+        Assert.Equal(before, ClientText.Text(endpoint, client, await templates.EffectiveAsync(null, default).ConfigureAwait(false)));
+        var start = await templates.DefaultAsync(default).ConfigureAwait(false);
+        Assert.True((await templates.ChangeDefaultAsync(start with { ProxyIds = [] }, null, default).ConfigureAwait(false)).IsOk);
+        Assert.Equal(before, ClientText.Text(endpoint, client, await templates.EffectiveAsync(null, default).ConfigureAwait(false)));
         var empty = endpoint with { AllowedIps = [], Dns = [] };
         Assert.Equal(ClientText.Text(empty, client), ClientText.Text(empty, client,
-            await bench.Templates.EffectiveAsync(null, default).ConfigureAwait(false)));
+            await templates.EffectiveAsync(null, default).ConfigureAwait(false)));
     }
 }

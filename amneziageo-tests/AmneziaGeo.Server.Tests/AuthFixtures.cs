@@ -8,6 +8,7 @@ using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Routing.Traffic;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -97,6 +98,8 @@ public sealed class Bench : IDisposable
         _scope = _services.CreateScope();
 
         Db = _scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Db.Rules.ExecuteDelete();
+        Db.TrafficRules.ExecuteDelete();
         Users = _scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         RoleStore = _scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();
         Access = _scope.ServiceProvider.GetRequiredService<AccessResolver>();

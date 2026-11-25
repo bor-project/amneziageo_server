@@ -14,7 +14,6 @@ public class DnsStoreTests
 
         Assert.True(held.IsEnabled);
         Assert.Equal(DnsDefaults.Port, held.Port);
-        Assert.Equal(DnsDefaults.Upstreams, held.Upstreams);
         Assert.Empty(held.Listen);
     }
 
@@ -26,8 +25,6 @@ public class DnsStoreTests
         {
             IsEnabled = true,
             Port = 5300,
-            Upstreams = ["9.9.9.9", "1.1.1.1:5353"],
-            Outbound = "bor",
             Listen = ["10.8.0.1"],
             NameMinutes = 30,
             CacheSize = 128,
@@ -41,8 +38,6 @@ public class DnsStoreTests
         Assert.True(saved.IsOk, saved.Message);
         Assert.True(held.IsEnabled);
         Assert.Equal(5300, held.Port);
-        Assert.Equal(["9.9.9.9", "1.1.1.1:5353"], held.Upstreams);
-        Assert.Equal("bor", held.Outbound);
         Assert.Equal(["10.8.0.1"], held.Listen);
         Assert.Equal(30, held.NameMinutes);
         Assert.Equal(128, held.CacheSize);
@@ -85,10 +80,10 @@ public class DnsStoreTests
     {
         using var bench = new Bench();
 
-        var refused = await bench.Resolver.SaveAsync(DnsDefaults.Settings with { Upstreams = ["nowhere"] }, CancellationToken.None);
+        var refused = await bench.Resolver.SaveAsync(DnsDefaults.Settings with { Listen = ["nowhere"] }, CancellationToken.None);
 
         Assert.False(refused.IsOk);
-        Assert.Equal("bad-upstream", refused.Code);
+        Assert.Equal("bad-listen", refused.Code);
         Assert.Empty(bench.Db.Resolver);
     }
 }

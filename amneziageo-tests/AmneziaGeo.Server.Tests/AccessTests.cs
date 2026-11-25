@@ -26,7 +26,7 @@ public class AccessTests
         new() { Name = "awgoff", Kind = OutboundKind.Wg, Mark = 0xA603, Table = 42603, IsEnabled = false },
     ];
 
-    private static readonly DnsSettings Resolver = DnsDefaults.Settings with { IsEnabled = true, Upstreams = ["1.1.1.1"] };
+    private static readonly DnsSettings Resolver = DnsDefaults.Settings with { IsEnabled = true };
 
     [Fact]
     public void EveryRuleLogsWhatItDecidesUnderItsOwnPrefix()

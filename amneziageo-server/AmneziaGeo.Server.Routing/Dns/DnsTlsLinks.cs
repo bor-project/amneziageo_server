@@ -4,7 +4,6 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
-using AmneziaGeo.Server.Routing.Outbound;
 
 namespace AmneziaGeo.Server.Routing.Dns;
 
@@ -29,15 +28,22 @@ public sealed class DnsTlsLinks : IDisposable
 
     private readonly TimeProvider _time;
 
+    private readonly string? _device;
+
+    private readonly IReadOnlyList<string> _sourceAddresses;
+
     private volatile bool _closed;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public DnsTlsLinks(X509Certificate2Collection? roots = null, TimeProvider? time = null)
+    public DnsTlsLinks(X509Certificate2Collection? roots = null, TimeProvider? time = null,
+        string? device = null, IReadOnlyList<string>? sourceAddresses = null)
     {
         _roots = roots;
         _time = time ?? TimeProvider.System;
+        _device = device;
+        _sourceAddresses = sourceAddresses?.ToArray() ?? [];
     }
 
     /// <summary>
@@ -173,10 +179,7 @@ public sealed class DnsTlsLinks : IDisposable
         var socket = new Socket(server.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
         try
         {
-            if (!OutboundMark.Put(socket, mark))
-            {
-                throw new IOException("the mark of the outbound did not take");
-            }
+            DnsSocketBinding.Apply(socket, server, mark, _device, _sourceAddresses);
 
             await socket.ConnectAsync(server, ct).ConfigureAwait(false);
 

@@ -2,8 +2,11 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import type { BalanceStrategy, BalancerDraft } from "@/api/balancers"
+import { useDnsDefaults } from "@/api/trafficRules"
+import { DnsPolicyView } from "@/components/EffectiveDns"
+import { dnsPolicy } from "@/components/dnsPolicy"
 import { useOutbounds } from "@/api/outbounds"
-import { Line, ListArea, Part, Switch } from "@/components/fields"
+import { Line, ListLine, Part, Switch } from "@/components/fields"
 import { WayUse } from "@/components/Holders"
 import { wayTo } from "@/components/members"
 import { danger, field, footer, footerUnder, label, primary, quiet, secondary } from "@/components/styles"
@@ -32,9 +35,20 @@ export function BalancerForm({
 }) {
   const t = useText()
   const outbounds = useOutbounds()
+  const defaults = useDnsDefaults()
   const [draft, setDraft] = useState(start)
   const rest = (outbounds.data ?? []).filter((one) => !draft.members.includes(one.name))
   const edited = !same(draft, start)
+  const previewName = draft.name || self || "balance"
+  const preview = { ...draft, id: 0, position: 0, name: previewName, createdUtc: "", updatedUtc: "", state: {
+    isLive: true,
+    members: draft.members.map((name) => {
+      const one = outbounds.data?.find((item) => item.name === name)
+      return { name, isKnown: one !== undefined, isEnabled: one?.isEnabled ?? false, isAlive: one?.state?.carries ?? false, mark: one?.mark ?? 0 }
+    }),
+  } }
+  const policy = dnsPolicy({ name: "", targets: [], dnsMode: "default", dns: [], dnsMembers: {} },
+    { action: "out", outbound: previewName }, outbounds.data ?? [], [preview], defaults.data?.servers ?? [])
 
   function put(change: Partial<BalancerDraft>) {
     setDraft({ ...draft, ...change })
@@ -91,7 +105,7 @@ export function BalancerForm({
                 className="flex items-center justify-between border-b border-line px-3 py-2 text-sm text-ink last:border-b-0"
               >
                 {wayTo(name, outbounds.data ?? [], []) === undefined ? (
-                  <span>{name}</span>
+                  <span>{outbounds.data?.some((one) => one.name === name && one.kind === "local") ? `${t("rules.actionDirect")} (${name})` : name}</span>
                 ) : (
                   <Link to={wayTo(name, outbounds.data ?? [], []) ?? ""} className="text-brand-ink hover:text-brand-lit">
                     {name}
@@ -136,7 +150,7 @@ export function BalancerForm({
                   <option value="">{t("balancers.pick")}</option>
                   {rest.map((one) => (
                     <option key={one.id} value={one.name}>
-                      {one.name}
+                      {one.kind === "local" ? `${t("rules.actionDirect")} (${one.name})` : one.name}
                     </option>
                   ))}
                 </select>
@@ -147,12 +161,11 @@ export function BalancerForm({
       </Part>
 
       <Part title={t("tab.dns")}>
-        <div className="sm:col-span-2">
-          <ListArea id="balancer-dns" caption={t("dns.override")} value={draft.dns} onChange={(dns) => put({ dns })} />
-        </div>
+        <div className="sm:col-span-2"><ListLine id="balancer-dns" caption={t("routing.balancerDns")} value={draft.dns} onChange={(dns) => put({ dns })} /></div>
+        <div className="sm:col-span-2"><DnsPolicyView policy={policy} /></div>
       </Part>
 
-      {self !== undefined && <WayUse name={self} rules={draft.rules} onRules={(rules) => put({ rules })} />}
+      {self !== undefined && <WayUse name={self} />}
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>

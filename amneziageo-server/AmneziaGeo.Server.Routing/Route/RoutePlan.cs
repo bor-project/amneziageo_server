@@ -36,6 +36,8 @@ public sealed record RouteLeg(
 
     public DomainMatcher? DnsMatcher { get; init; }
 
+    public IReadOnlyDictionary<long, DomainMatcher> DnsCriteria { get; init; } = new Dictionary<long, DomainMatcher>();
+
     /// <summary>
     /// Tells whether the rule goes on the host.
     /// </summary>
@@ -108,14 +110,9 @@ public sealed record RouteWays(
 /// <param name="Inbound">The interfaces the clients arrive on.</param>
 public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<string> Inbound)
 {
-    /// <summary>
-    /// The address groups referenced by the rules.
-    /// </summary>
-    public IReadOnlyList<AddressGroup> Groups { get; init; } = [];
-
-    public IReadOnlyDictionary<long, DomainMatcher> DnsGroups { get; init; } = new Dictionary<long, DomainMatcher>();
-
     public IReadOnlyList<DnsOrigin> DnsOrigins { get; init; } = [];
+
+    public IReadOnlyList<string> HostDns { get; init; } = [];
 
     /// <summary>
     /// The resolver the clients of the tunnels are given.
@@ -169,8 +166,7 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
         IReadOnlyList<Balancer>? balancers = null,
         IReadOnlySet<string>? alive = null,
         IReadOnlyList<TunnelClient>? clients = null,
-        RouteBasic? basic = null,
-        IReadOnlyList<AddressGroup>? groups = null)
+        RouteBasic? basic = null)
     {
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(outbounds);
@@ -179,31 +175,27 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
         var ways = new RouteWays(outbounds, balancers ?? [], alive);
         var interfaces = inbound.Where(name => name.Length > 0).Distinct(StringComparer.Ordinal).ToArray();
         var known = new RouteKnown(clients ?? [], interfaces);
-        var named = (groups ?? []).ToDictionary(group => group.Id);
         var identities = rules.Select(rule => rule.Id).ToHashSet();
         var legs = (basic ?? RouteBasic.Empty).Rules()
             .Where(rule => !identities.Contains(rule.Id))
             .Concat(rules)
             .OrderBy(rule => rule.Position)
-            .Select(rule => Leg(rule, ways, index, known, named))
-            .Select(leg => dns?.Selection == DnsSelection.Routing ? leg with { DnsMatcher = new DomainMatcher(leg.Domains) } : leg)
+            .Select(rule => Leg(rule, ways, index, known))
+            .Select(leg => leg with { DnsMatcher = new DomainMatcher(leg.Domains) })
             .ToArray();
 
         return new RoutePlan(legs, interfaces)
         {
             Dns = dns ?? DnsDefaults.Settings,
             Ways = ways,
-            Groups = groups ?? [],
-            DnsGroups = named.Values.Where(group => group.Dns.Count > 0).ToDictionary(group => group.Id, group => new DomainMatcher(
-                GeoMaterializer.Materialize(group.Targets.Select(RouteRules.Target).OfType<GeoRule>().ToArray(), index).Domains)),
         };
     }
 
-    private static RouteLeg Leg(RouteRule rule, RouteWays ways, GeoIndex index, RouteKnown known, IReadOnlyDictionary<long, AddressGroup> groups)
+    private static RouteLeg Leg(RouteRule rule, RouteWays ways, GeoIndex index, RouteKnown known)
     {
-        var targets = rule.Targets
-            .Concat(rule.Groups.Where(groups.ContainsKey).SelectMany(id => groups[id].Targets))
-            .Select(RouteRules.Target).OfType<GeoRule>().ToArray();
+        var selected = rule.Criteria.Count == 0 ? rule.Targets
+            : rule.Criteria.SelectMany(one => one.Targets).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var targets = selected.Select(RouteRules.Target).OfType<GeoRule>().ToArray();
         var found = GeoMaterializer.Materialize(targets, index);
         var cidrs4 = found.Cidrs.Where(cidr => !cidr.Contains(':', StringComparison.Ordinal)).Distinct().ToArray();
         var cidrs6 = found.Cidrs.Where(cidr => cidr.Contains(':', StringComparison.Ordinal)).Distinct().ToArray();
@@ -220,9 +212,11 @@ public sealed record RoutePlan(IReadOnlyList<RouteLeg> Legs, IReadOnlyList<strin
             [.. Family(sources, AddressFamily.InterNetwork)],
             [.. Family(sources, AddressFamily.InterNetworkV6)],
             Fault(rule, way.Fault, cidrs4.Length + cidrs6.Length + found.Domains.Count,
-                rule.Groups.Any(id => !groups.ContainsKey(id))
-                    ? new RouteFault("unknown-address-group", "the rule names an unknown address group")
-                    : known.Missing(rule)));
+                known.Missing(rule)))
+        {
+            DnsCriteria = rule.Criteria.ToDictionary(one => one.Id, one => new DomainMatcher(
+                GeoMaterializer.Materialize(one.Targets.Select(RouteRules.Target).OfType<GeoRule>().ToArray(), index).Domains)),
+        };
     }
 
     private static (RouteExit Exit, RouteFault? Fault) Way(RouteRule rule, RouteWays ways)

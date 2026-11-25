@@ -16,180 +16,163 @@ export function ObfuscationFields({
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-3">
-        <Count
-          id={`${id}-jc`}
-          caption={t("configs.jc")}
-          value={cover.jc}
-          onChange={(value) => onChange({ jc: value })}
-        />
-        <Count
-          id={`${id}-jmin`}
-          caption={t("configs.jmin")}
-          value={cover.jmin}
-          onChange={(value) => onChange({ jmin: value })}
-        />
-        <Count
-          id={`${id}-jmax`}
-          caption={t("configs.jmax")}
-          value={cover.jmax}
-          onChange={(value) => onChange({ jmax: value })}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-3">
-        <Count
-          id={`${id}-s1`}
-          caption={t("configs.s1")}
-          value={cover.s1}
-          onChange={(value) => onChange({ s1: value })}
-        />
-        <Count
-          id={`${id}-s2`}
-          caption={t("configs.s2")}
-          value={cover.s2}
-          onChange={(value) => onChange({ s2: value })}
-        />
-        <Line
-          id={`${id}-h1`}
-          caption={<Hinted caption={t("configs.h1")} text={t("configs.h1Hint")} />}
-          value={cover.h1}
-          onChange={(value) => onChange({ h1: value })}
-        />
-        <Line
-          id={`${id}-h2`}
-          caption={t("configs.h2")}
-          value={cover.h2}
-          onChange={(value) => onChange({ h2: value })}
-        />
-        <Line
-          id={`${id}-h3`}
-          caption={t("configs.h3")}
-          value={cover.h3}
-          onChange={(value) => onChange({ h3: value })}
-        />
-        <Line
-          id={`${id}-h4`}
-          caption={t("configs.h4")}
-          value={cover.h4}
-          onChange={(value) => onChange({ h4: value })}
-        />
-      </div>
-
-      <details className="rounded-md border border-line px-3 py-2 sm:col-span-2">
-        <summary className="cursor-pointer select-none text-xs font-medium tracking-wide text-muted uppercase">
-          {t("configs.advanced")}
-        </summary>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Count
-            id={`${id}-s3`}
-            caption={t("configs.s3")}
-            value={cover.s3}
-            onChange={(value) => onChange({ s3: value })}
+      <Count
+        id={`${id}-jc`}
+        caption={t("configs.jc")}
+        value={cover.jc}
+        onChange={(value) => onChange({ jc: value })}
+      />
+      <Count
+        id={`${id}-jmin`}
+        caption={t("configs.jmin")}
+        value={cover.jmin}
+        onChange={(value) => onChange({ jmin: value })}
+      />
+      <Count
+        id={`${id}-jmax`}
+        caption={t("configs.jmax")}
+        value={cover.jmax}
+        onChange={(value) => onChange({ jmax: value })}
+      />
+      <Count
+        id={`${id}-s1`}
+        caption={t("configs.s1")}
+        value={cover.s1}
+        onChange={(value) => onChange({ s1: value })}
+      />
+      <Count
+        id={`${id}-s2`}
+        caption={t("configs.s2")}
+        value={cover.s2}
+        onChange={(value) => onChange({ s2: value })}
+      />
+      <Line
+        id={`${id}-h1`}
+        caption={<Hinted caption={t("configs.h1")} text={t("configs.h1Hint")} />}
+        value={cover.h1}
+        onChange={(value) => onChange({ h1: value })}
+      />
+      <Line
+        id={`${id}-h2`}
+        caption={t("configs.h2")}
+        value={cover.h2}
+        onChange={(value) => onChange({ h2: value })}
+      />
+      <Line
+        id={`${id}-h3`}
+        caption={t("configs.h3")}
+        value={cover.h3}
+        onChange={(value) => onChange({ h3: value })}
+      />
+      <Line
+        id={`${id}-h4`}
+        caption={t("configs.h4")}
+        value={cover.h4}
+        onChange={(value) => onChange({ h4: value })}
+      />
+      <Count
+        id={`${id}-s3`}
+        caption={t("configs.s3")}
+        value={cover.s3}
+        onChange={(value) => onChange({ s3: value })}
+      />
+      <Count
+        id={`${id}-s4`}
+        caption={t("configs.s4")}
+        value={cover.s4}
+        onChange={(value) => onChange({ s4: value })}
+      />
+      <Line
+        id={`${id}-padding`}
+        caption={<Hinted caption={t("configs.padding")} text={t("configs.paddingHint")} />}
+        value={cover.contentPaddingAddition}
+        onChange={(value) => onChange({ contentPaddingAddition: value })}
+      />
+      <Line
+        id={`${id}-rekey-after`}
+        caption={<Hinted caption={t("configs.rekeyAfter")} text={t("configs.rekeyAfterHint")} />}
+        value={cover.rekeyAfterTime}
+        onChange={(value) => onChange({ rekeyAfterTime: value })}
+      />
+      <Line
+        id={`${id}-rekey-timeout`}
+        caption={t("configs.rekeyTimeout")}
+        value={cover.rekeyTimeout}
+        onChange={(value) => onChange({ rekeyTimeout: value })}
+      />
+      <Line
+        id={`${id}-reject-after`}
+        caption={t("configs.rejectAfter")}
+        value={cover.rejectAfterTime}
+        onChange={(value) => onChange({ rejectAfterTime: value })}
+      />
+      <Line
+        id={`${id}-keepalive-timeout`}
+        caption={t("configs.keepaliveTimeout")}
+        value={cover.keepaliveTimeout}
+        onChange={(value) => onChange({ keepaliveTimeout: value })}
+      />
+      <Line
+        id={`${id}-attempts`}
+        caption={<Hinted caption={t("configs.attempts")} text={t("configs.attemptsHint")} />}
+        value={cover.maxHandshakeAttempts}
+        onChange={(value) => onChange({ maxHandshakeAttempts: value })}
+      />
+      <Line
+        id={`${id}-i1`}
+        caption={<Hinted caption={t("configs.i1")} text={t("configs.i1Hint")} />}
+        value={cover.i1 ?? ""}
+        onChange={(value) => onChange({ i1: value })}
+      />
+      <Line
+        id={`${id}-i2`}
+        caption={t("configs.i2")}
+        value={cover.i2 ?? ""}
+        onChange={(value) => onChange({ i2: value })}
+      />
+      <Line
+        id={`${id}-i3`}
+        caption={t("configs.i3")}
+        value={cover.i3 ?? ""}
+        onChange={(value) => onChange({ i3: value })}
+      />
+      <Line
+        id={`${id}-i4`}
+        caption={t("configs.i4")}
+        value={cover.i4 ?? ""}
+        onChange={(value) => onChange({ i4: value })}
+      />
+      <Line
+        id={`${id}-i5`}
+        caption={t("configs.i5")}
+        value={cover.i5 ?? ""}
+        onChange={(value) => onChange({ i5: value })}
+      />
+      <Line
+        id={`${id}-header-key`}
+        caption={<Hinted caption={t("configs.headerKey")} text={t("configs.headerKeyHint")} />}
+        value={cover.headerProtectionKey}
+        onChange={(value) => onChange({ headerProtectionKey: value.trim() })}
+        after={
+          <Regenerate
+            title={t("configs.generate")}
+            onClick={() => onChange(headerProtectionChange(cover), true)}
           />
-          <Count
-            id={`${id}-s4`}
-            caption={t("configs.s4")}
-            value={cover.s4}
-            onChange={(value) => onChange({ s4: value })}
-          />
-          <Line
-            id={`${id}-padding`}
-            caption={<Hinted caption={t("configs.padding")} text={t("configs.paddingHint")} />}
-            value={cover.contentPaddingAddition}
-            onChange={(value) => onChange({ contentPaddingAddition: value })}
-          />
-          <Line
-            id={`${id}-rekey-after`}
-            caption={<Hinted caption={t("configs.rekeyAfter")} text={t("configs.rekeyAfterHint")} />}
-            value={cover.rekeyAfterTime}
-            onChange={(value) => onChange({ rekeyAfterTime: value })}
-          />
-          <Line
-            id={`${id}-rekey-timeout`}
-            caption={t("configs.rekeyTimeout")}
-            value={cover.rekeyTimeout}
-            onChange={(value) => onChange({ rekeyTimeout: value })}
-          />
-          <Line
-            id={`${id}-reject-after`}
-            caption={t("configs.rejectAfter")}
-            value={cover.rejectAfterTime}
-            onChange={(value) => onChange({ rejectAfterTime: value })}
-          />
-          <Line
-            id={`${id}-keepalive-timeout`}
-            caption={t("configs.keepaliveTimeout")}
-            value={cover.keepaliveTimeout}
-            onChange={(value) => onChange({ keepaliveTimeout: value })}
-          />
-          <Line
-            id={`${id}-attempts`}
-            caption={<Hinted caption={t("configs.attempts")} text={t("configs.attemptsHint")} />}
-            value={cover.maxHandshakeAttempts}
-            onChange={(value) => onChange({ maxHandshakeAttempts: value })}
-          />
-        </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Line
-            id={`${id}-i1`}
-            caption={<Hinted caption={t("configs.i1")} text={t("configs.i1Hint")} />}
-            value={cover.i1 ?? ""}
-            onChange={(value) => onChange({ i1: value })}
-          />
-          <Line
-            id={`${id}-i2`}
-            caption={t("configs.i2")}
-            value={cover.i2 ?? ""}
-            onChange={(value) => onChange({ i2: value })}
-          />
-          <Line
-            id={`${id}-i3`}
-            caption={t("configs.i3")}
-            value={cover.i3 ?? ""}
-            onChange={(value) => onChange({ i3: value })}
-          />
-          <Line
-            id={`${id}-i4`}
-            caption={t("configs.i4")}
-            value={cover.i4 ?? ""}
-            onChange={(value) => onChange({ i4: value })}
-          />
-          <Line
-            id={`${id}-i5`}
-            caption={t("configs.i5")}
-            value={cover.i5 ?? ""}
-            onChange={(value) => onChange({ i5: value })}
-          />
-          <Line
-            id={`${id}-header-key`}
-            caption={<Hinted caption={t("configs.headerKey")} text={t("configs.headerKeyHint")} />}
-            value={cover.headerProtectionKey}
-            onChange={(value) => onChange({ headerProtectionKey: value.trim() })}
-            after={
-              <Regenerate
-                title={t("configs.generate")}
-                onClick={() => onChange(headerProtectionChange(cover), true)}
-              />
-            }
-            wide
-          />
-        </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Flag
-            id={`${id}-trailers`}
-            caption={<Hinted caption={t("configs.trailers")} text={t("configs.trailersHint")} />}
-            value={cover.randomTrailers}
-            onChange={(value) => onChange({ randomTrailers: value })}
-          />
-          <Flag
-            id={`${id}-cookies`}
-            caption={<Hinted caption={t("configs.cookies")} text={t("configs.cookiesHint")} />}
-            value={cover.disableCookies}
-            onChange={(value) => onChange({ disableCookies: value })}
-          />
-        </div>
-      </details>
+        }
+        wide
+      />
+      <Flag
+        id={`${id}-trailers`}
+        caption={<Hinted caption={t("configs.trailers")} text={t("configs.trailersHint")} />}
+        value={cover.randomTrailers}
+        onChange={(value) => onChange({ randomTrailers: value })}
+      />
+      <Flag
+        id={`${id}-cookies`}
+        caption={<Hinted caption={t("configs.cookies")} text={t("configs.cookiesHint")} />}
+        value={cover.disableCookies}
+        onChange={(value) => onChange({ disableCookies: value })}
+      />
     </>
   )
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
@@ -151,6 +152,34 @@ public sealed class IpHostNetwork : IHostNetwork
         await RunAsync([Ip, "route", "replace", "default", "dev", name, "table", number], ct).ConfigureAwait(false);
         await RunAsync([Ip, "-6", "route", "replace", "default", "dev", name, "table", number], ct)
             .ConfigureAwait(false);
+        await DnsPolicyAsync(name, ct).ConfigureAwait(false);
+    }
+
+    private async Task DnsPolicyAsync(string name, CancellationToken ct)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        try
+        {
+            LinkPolicy.AcceptLocal(name);
+            return;
+        }
+        catch (Exception ex) when (ex is NetlinkException or DllNotFoundException or EntryPointNotFoundException)
+        {
+            Trace.TraceWarning("{0}", ex);
+        }
+
+        try
+        {
+            await RunAsync(["sysctl", "-w", $"net/ipv4/conf/{name}/accept_local=1"], ct).ConfigureAwait(false);
+        }
+        catch (HostNetworkException ex)
+        {
+            Trace.TraceWarning("{0}", ex);
+        }
     }
 
     /// <summary>

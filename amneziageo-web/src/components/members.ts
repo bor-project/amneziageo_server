@@ -6,7 +6,7 @@ import type { Outbound } from "@/api/outbounds"
 import type { Preset } from "@/api/presets"
 import type { TransportProxy } from "@/api/proxies"
 import type { Role } from "@/api/roles"
-import type { Rule } from "@/api/rules"
+import type { RoutingEntry } from "@/api/routingEntries"
 import type { Template } from "@/api/templates"
 import type { User } from "@/api/users"
 import type { LinkItem } from "@/components/fields"
@@ -43,9 +43,13 @@ export function templateItems(templates: Template[], note?: (one: Template) => s
 export function proxyItems(proxies: TransportProxy[]): LinkItem[] {
   return [...proxies]
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((one) => ({ key: String(one.id), name: one.name, to: `/routing/proxies/${one.id}/edit`,
-      disabled: !one.isEnabled || one.useCertificate === false || one.originHttp || Boolean(one.fault),
-      note: `${one.transport === "xhttp" ? "XHTTP" : "WebSocket"} · ${one.host}:${one.port}/${one.path}` }))
+    .map((one) => {
+      const transport = one.transport === "quic" ? "QUIC" : one.transport === "http" || one.transport === "xhttp" && one.protocolVersion === 2
+        ? `HTTP ${one.httpMethod}` : one.transport === "xhttp" ? "XHTTP" : "WebSocket"
+      return { key: String(one.id), name: one.name, to: `/routing/proxies/${one.id}/edit`, mark: transport,
+        disabled: !one.isEnabled || one.useCertificate === false || one.originHttp || Boolean(one.fault),
+        note: `${transport} · ${one.host}:${one.port}/${one.path}` }
+    })
 }
 
 // Links to presets by name.
@@ -57,9 +61,9 @@ export function presetItems(presets: Preset[]): LinkItem[] {
 
 // Links to rules in their order, each with what the note and the mark say of it.
 export function ruleItems(
-  rules: Rule[],
-  note?: (one: Rule) => string | undefined,
-  mark?: (one: Rule) => string | undefined,
+  rules: RoutingEntry[],
+  note?: (one: RoutingEntry) => string | undefined,
+  mark?: (one: RoutingEntry) => string | undefined,
 ): LinkItem[] {
   return [...rules]
     .sort((a, b) => a.position - b.position)
@@ -81,7 +85,7 @@ export function ruleItems(
 export function balancerItems(balancers: Balancer[]): LinkItem[] {
   return [...balancers]
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((one) => ({ key: String(one.id), name: one.name, to: `/routing/channels/groups/${one.id}/edit` }))
+    .map((one) => ({ key: String(one.id), name: one.name, to: `/routing/balancers/${one.id}/edit` }))
 }
 
 // Links to accounts by name, each with the title of the role it holds.
@@ -107,12 +111,12 @@ export function tokenItems(tokens: ApiToken[]): LinkItem[] {
 export function wayTo(name: string, outbounds: Outbound[], balancers: Balancer[]): string | undefined {
   const outbound = outbounds.find((one) => one.name === name)
   if (outbound !== undefined) {
-    return `/routing/channels/${outbound.id}/edit`
+    return outbound.kind === "local" ? undefined : `/routing/channels/${outbound.id}/edit`
   }
 
   const balancer = balancers.find((one) => one.name === name)
 
-  return balancer === undefined ? undefined : `/routing/channels/groups/${balancer.id}/edit`
+  return balancer === undefined ? undefined : `/routing/balancers/${balancer.id}/edit`
 }
 
 // Returns the page of a client by name, whatever the case.
@@ -130,17 +134,17 @@ export function configTo(name: string, configs: Config[]): string | undefined {
 }
 
 // Tells whether a rule names the client or the interface: clients whatever the case, interfaces exactly.
-export function names(rule: Rule, side: Side, name: string): boolean {
+export function names(rule: RoutingEntry, side: Side, name: string): boolean {
   return side === "clients"
     ? rule.clients.some((one) => one.toLowerCase() === name.toLowerCase())
     : rule.inbounds.includes(name)
 }
 
 // Returns the rules the removal of clients and interfaces takes the names off and the rules it turns off.
-export function gone(rules: Rule[], clients: string[], inbounds: string[]): { left: Rule[]; off: Rule[] } {
+export function gone(rules: RoutingEntry[], clients: string[], inbounds: string[]): { left: RoutingEntry[]; off: RoutingEntry[] } {
   const lowered = clients.map((one) => one.toLowerCase())
-  const left: Rule[] = []
-  const off: Rule[] = []
+  const left: RoutingEntry[] = []
+  const off: RoutingEntry[] = []
   for (const rule of rules) {
     const keptClients = rule.clients.filter((one) => !lowered.includes(one.toLowerCase()))
     const keptInbounds = rule.inbounds.filter((one) => !inbounds.includes(one))

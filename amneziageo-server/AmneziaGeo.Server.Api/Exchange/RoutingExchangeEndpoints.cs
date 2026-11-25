@@ -62,6 +62,7 @@ public static class RoutingExchangeEndpoints
         GeoStore sources,
         OutboundStore outbounds,
         ClientStore clients,
+        BalanceStore balancers,
         CancellationToken ct)
     {
         if (context.Caller() is null)
@@ -75,7 +76,7 @@ public static class RoutingExchangeEndpoints
             return Refuse(read);
         }
 
-        var plan = await RoutingImport.PlanAsync(read.Doc!, rules, presets, sources, outbounds, clients, ct).ConfigureAwait(false);
+        var plan = await RoutingImport.PlanAsync(read.Doc!, rules, presets, sources, outbounds, clients, ct, balancers).ConfigureAwait(false);
 
         return Results.Ok(plan);
     }
@@ -87,6 +88,7 @@ public static class RoutingExchangeEndpoints
         GeoStore sources,
         OutboundStore outbounds,
         ClientStore clients,
+        BalanceStore balancers,
         RouteApplier applier,
         IAuditLog audit,
         CancellationToken ct)
@@ -102,7 +104,7 @@ public static class RoutingExchangeEndpoints
             return Refuse(read);
         }
 
-        var plan = await RoutingImport.PlanAsync(read.Doc!, rules, presets, sources, outbounds, clients, ct).ConfigureAwait(false);
+        var plan = await RoutingImport.PlanAsync(read.Doc!, rules, presets, sources, outbounds, clients, ct, balancers).ConfigureAwait(false);
         var answer = await RoutingImport.ApplyAsync(plan, rules, presets, sources, ct).ConfigureAwait(false);
 
         try

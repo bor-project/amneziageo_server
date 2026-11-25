@@ -65,6 +65,7 @@ public sealed class Context : IDisposable
         RoutingDefaults = scope.ServiceProvider.GetRequiredService<RoutingDefaultsStore>();
         Templates = scope.ServiceProvider.GetRequiredService<TemplateStore>();
         Outbounds = scope.ServiceProvider.GetRequiredService<OutboundStore>();
+        Balancers = scope.ServiceProvider.GetRequiredService<BalanceStore>();
         Rules = scope.ServiceProvider.GetRequiredService<RouteStore>();
         Geo = scope.ServiceProvider.GetRequiredService<GeoStore>();
     }
@@ -102,6 +103,8 @@ public sealed class Context : IDisposable
     public TemplateStore Templates { get; }
 
     public OutboundStore Outbounds { get; }
+
+    public BalanceStore Balancers { get; }
 
     public RouteStore Rules { get; }
 

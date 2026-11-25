@@ -48,9 +48,9 @@ public sealed record DnsWorld
     public IReadOnlyList<RouteRule> Rules { get; init; } = [];
 
     /// <summary>
-    /// The address groups.
+    /// The reusable traffic rules.
     /// </summary>
-    public IReadOnlyList<AddressGroup> Groups { get; init; } = [];
+    public IReadOnlyList<TrafficRule> TrafficRules { get; init; } = [];
 
     /// <summary>
     /// Tells whether the routing needs the resolver.

@@ -6,6 +6,7 @@ using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Cli;
 using AmneziaGeo.Server.Cli.Commands;
 using AmneziaGeo.Server.Routing.Dns;
+using AmneziaGeo.Server.Routing.Route;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -30,51 +31,48 @@ public sealed class DnsCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task AFreshPanelRunsTheResolverWhileTheRoutingNeedsIt()
+    public async Task AFreshPanelRunsTheResolverAndInheritsDns()
     {
-        Assert.Equal(0, await Run("dns", "show"));
-        Assert.Equal(0, await Run("dns", "get", "enabled", "encrypted", "upstreams"));
+        Assert.Equal(0, await Run("dns", "show").ConfigureAwait(false));
+        Assert.Equal(0, await Run("dns", "get", "enabled", "port").ConfigureAwait(false));
+        Assert.True((await Held().ConfigureAwait(false)).IsEnabled);
+        using var context = Context.Open(Database);
+        var rules = await context.Rules.TableAsync(CancellationToken.None).ConfigureAwait(false);
 
-        var held = await Held();
-
-        Assert.True(held.IsEnabled);
-        Assert.Equal(DnsDefaults.Upstreams, held.Upstreams);
+        var fallback = Assert.Single(rules);
+        Assert.Equal(RouteAction.Direct, fallback.Action);
+        var addresses = Assert.Single(fallback.Criteria);
+        Assert.Equal(TrafficDnsMode.Default, addresses.DnsMode);
+        Assert.Empty(addresses.Dns);
+        Assert.Empty(addresses.DnsMembers);
     }
 
     [Fact]
-    public async Task TurningTheResolverOnWritesItDownWithTheNameServersAskedEncrypted()
+    public async Task TurningTheResolverOffAndOnKeepsTrafficRuleDns()
     {
-        Assert.Equal(0, await Run("dns", "set", "--enabled", "on"));
+        using var before = Context.Open(Database);
+        var rules = await before.Rules.TableAsync(CancellationToken.None).ConfigureAwait(false);
+        Assert.Equal(0, await Run("dns", "set", "--enabled", "off").ConfigureAwait(false));
+        Assert.False((await Held().ConfigureAwait(false)).IsEnabled);
+        Assert.Equal(0, await Run("dns", "set", "--enabled", "on").ConfigureAwait(false));
+        Assert.True((await Held().ConfigureAwait(false)).IsEnabled);
+        using var after = Context.Open(Database);
+        var current = await after.Rules.TableAsync(CancellationToken.None).ConfigureAwait(false);
 
-        var held = await Held();
-
-        Assert.True(held.IsEnabled);
-        Assert.Equal(DnsDefaults.Upstreams, held.Upstreams);
-        Assert.All(held.Upstreams, one => Assert.True(DnsRules.Server(one, out var server) && server.IsEncrypted));
+        Assert.Equal(rules.SelectMany(rule => rule.Criteria).SelectMany(rule => rule.Dns),
+            current.SelectMany(rule => rule.Criteria).SelectMany(rule => rule.Dns));
     }
 
-    [Fact]
-    public async Task TurningTheResolverOffKeepsItsNameServers()
+    [Theory]
+    [InlineData("dns", "set", "--upstreams", "1.1.1.1")]
+    [InlineData("dns", "set", "--outbound", "bor")]
+    [InlineData("dns", "get", "upstreams")]
+    [InlineData("dns", "get", "outbound")]
+    [InlineData("dns", "get", "encrypted")]
+    public async Task ObsoleteIndependentDnsPolicyCommandsAreRefused(params string[] words)
     {
-        Assert.Equal(0, await Run("dns", "set", "--enabled", "on", "--upstreams", "tls://9.9.9.9,https://1.0.0.1/dns-query"));
-        Assert.Equal(0, await Run("dns", "set", "--enabled", "off"));
-
-        var held = await Held();
-
-        Assert.False(held.IsEnabled);
-        Assert.Equal(["tls://9.9.9.9", "https://1.0.0.1/dns-query"], held.Upstreams);
-    }
-
-    [Fact]
-    public async Task TheNameServersAPanelStartsWithComeBackByTheirWord()
-    {
-        Assert.Equal(0, await Run("dns", "set", "--upstreams", "1.1.1.1"));
-        var plain = await Held();
-        Assert.Equal(0, await Run("dns", "set", "--upstreams", DnsCommands.Usual));
-        var usual = await Held();
-
-        Assert.Equal(["1.1.1.1"], plain.Upstreams);
-        Assert.Equal(DnsDefaults.Upstreams, usual.Upstreams);
+        Assert.Equal(2, await Run(words).ConfigureAwait(false));
+        Assert.True((await Held().ConfigureAwait(false)).IsEnabled);
     }
 
     [Fact]
@@ -121,7 +119,6 @@ public sealed class DnsCommandTests : IDisposable
         var held = await Held();
 
         Assert.True(held.IsEnabled);
-        Assert.Equal(DnsDefaults.Upstreams, held.Upstreams);
     }
 
     [Fact]

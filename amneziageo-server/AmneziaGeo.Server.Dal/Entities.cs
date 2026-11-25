@@ -1,5 +1,7 @@
+using AmneziaGeo.Server.Routing.Route;
 using AmneziaGeo.Server.Auth;
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Core.Panel;
 
 namespace AmneziaGeo.Server.Dal;
 
@@ -375,6 +377,8 @@ public sealed class OutboundEntity
 {
     public long Id { get; set; }
 
+    public string Dns { get; set; } = string.Empty;
+
     public string Name { get; set; } = string.Empty;
 
     public string Kind { get; set; } = string.Empty;
@@ -398,8 +402,6 @@ public sealed class OutboundEntity
     public string PresharedKey { get; set; } = string.Empty;
 
     public string Address { get; set; } = string.Empty;
-
-    public string Dns { get; set; } = string.Empty;
 
     public int Mtu { get; set; }
 
@@ -473,70 +475,48 @@ public sealed class OutboundEntity
 /// <summary>
 /// One routing rule as the database holds it.
 /// </summary>
-public sealed class RouteRuleEntity
+public sealed class RoutingEntryEntity
 {
     public long Id { get; set; }
-
     public string Name { get; set; } = string.Empty;
-
     public int Position { get; set; }
-
     public bool IsEnabled { get; set; }
-
     public string Action { get; set; } = string.Empty;
-
     public string Outbound { get; set; } = string.Empty;
-
-    public string Targets { get; set; } = string.Empty;
-
-    public string Groups { get; set; } = string.Empty;
-
     public string Clients { get; set; } = string.Empty;
-
     public string Inbounds { get; set; } = string.Empty;
-
     public string Ports { get; set; } = string.Empty;
-
     public string SourcePorts { get; set; } = string.Empty;
-
     public string Protocol { get; set; } = string.Empty;
-
+    public ICollection<RoutingEntryRuleEntity> Matches { get; set; } = new List<RoutingEntryRuleEntity>();
     public DateTimeOffset CreatedUtc { get; set; }
-
     public DateTimeOffset UpdatedUtc { get; set; }
 }
 
 /// <summary>
-/// The basic routing lists as the database holds them.
+/// Stores an ordered rule reference.
 /// </summary>
-public sealed class RouteBasicEntity
+public sealed class RoutingEntryRuleEntity
+{
+    public long EntryId { get; set; }
+    public long RuleId { get; set; }
+    public int Position { get; set; }
+    public TrafficRuleEntity Rule { get; set; } = null!;
+}
+
+/// <summary>
+/// Stores destinations and name servers.
+/// </summary>
+public sealed class TrafficRuleEntity
 {
     public long Id { get; set; }
-
-    public string Direct { get; set; } = string.Empty;
-
-    public string Block { get; set; } = string.Empty;
-
-    public DateTimeOffset UpdatedUtc { get; set; }
-}
-
-/// <summary>
-/// Stores an address group.
-/// </summary>
-public sealed class AddressGroupEntity
-{
     public string? DefaultKey { get; set; }
-
-    public string Dns { get; set; } = string.Empty;
-
-    public long Id { get; set; }
-
     public string Name { get; set; } = string.Empty;
-
     public string Targets { get; set; } = string.Empty;
-
+    public string DnsMode { get; set; } = TrafficDnsMode.Custom;
+    public string Dns { get; set; } = string.Empty;
+    public string DnsMembers { get; set; } = "{}";
     public DateTimeOffset CreatedUtc { get; set; }
-
     public DateTimeOffset UpdatedUtc { get; set; }
 }
 
@@ -567,7 +547,7 @@ public sealed class PanelEntity
 
     public string NameTemplate { get; set; } = string.Empty;
 
-    public string ProxyNameTemplate { get; set; } = "{PROXY}";
+    public string ProxyNameTemplate { get; set; } = ProxyName.Default;
 
     public DateTimeOffset UpdatedUtc { get; set; }
 }
@@ -577,17 +557,11 @@ public sealed class PanelEntity
 /// </summary>
 public sealed class DnsSettingsEntity
 {
-    public string Selection { get; set; } = "global";
-
     public long Id { get; set; }
 
     public bool IsEnabled { get; set; }
 
     public int Port { get; set; }
-
-    public string Upstreams { get; set; } = string.Empty;
-
-    public string Outbound { get; set; } = string.Empty;
 
     public string Listen { get; set; } = string.Empty;
 
@@ -659,9 +633,9 @@ public sealed class TermsEntity
 /// </summary>
 public sealed class BalancerEntity
 {
-    public string Dns { get; set; } = string.Empty;
-
     public long Id { get; set; }
+
+    public string Dns { get; set; } = string.Empty;
 
     public string Name { get; set; } = string.Empty;
 

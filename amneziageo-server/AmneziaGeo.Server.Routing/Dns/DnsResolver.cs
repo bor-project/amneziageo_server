@@ -10,8 +10,6 @@ namespace AmneziaGeo.Server.Routing.Dns;
 /// </summary>
 public sealed class DnsResolver
 {
-    private const int QuietLimit = 4096;
-
     private readonly IDnsUpstream _upstream;
 
     private readonly DnsCache _cache;
@@ -32,13 +30,9 @@ public sealed class DnsResolver
 
     private readonly Func<IPAddress, DomainMatcher?>? _standing;
 
-    private readonly IDnsRelay? _relay;
-
     private readonly DnsRoutes? _routes;
 
     private readonly Lock _sync = new();
-
-    private readonly Dictionary<IPAddress, long> _quiet = [];
 
     private RoutePlan? _seen;
 
@@ -58,10 +52,8 @@ public sealed class DnsResolver
         Action<IPAddress?, DnsMessage>? heard = null,
         DnsStandIns? standIns = null,
         Func<IPAddress, DomainMatcher?>? standing = null,
-        IDnsRelay? relay = null,
         DnsRoutes? routes = null)
     {
-        _relay = relay;
         _routes = routes;
         _upstream = upstream;
         _cache = cache;
@@ -82,21 +74,9 @@ public sealed class DnsResolver
         AnswerAsync(question, stream, null, ct);
 
     /// <summary>
-    /// Returns the answer to send back to a client, or null when the question is not one.
+    /// Answers a client question.
     /// </summary>
-    public Task<byte[]?> AnswerAsync(ReadOnlyMemory<byte> question, bool stream, IPAddress? client, CancellationToken ct) =>
-        AnswerAsync(question, stream, client, null, ct);
-
-    /// <summary>
-    /// Returns the answer to send back to a client, the one of the private name server it asked when it asked one, or
-    /// null when the question is not one.
-    /// </summary>
-    public async Task<byte[]?> AnswerAsync(
-        ReadOnlyMemory<byte> question,
-        bool stream,
-        IPAddress? client,
-        IPAddress? server,
-        CancellationToken ct)
+    public async Task<byte[]?> AnswerAsync(ReadOnlyMemory<byte> question, bool stream, IPAddress? client, CancellationToken ct)
     {
         var asked = DnsMessage.Read(question.Span);
         if (asked is null || asked.IsResponse)
@@ -105,15 +85,6 @@ public sealed class DnsResolver
         }
 
         _state.Asked();
-        if (_settings.Selection == DnsSelection.Global && server is not null && _relay is { } relay && !Quiet(server))
-        {
-            var relayed = await RelayAsync(relay, question, stream, client, server, asked, ct).ConfigureAwait(false);
-            if (relayed is not null)
-            {
-                return relayed;
-            }
-        }
-
         var selected = _routes?.Select(asked.Question, client);
         if (selected?.Way.Fault is not null)
         {
@@ -149,75 +120,6 @@ public sealed class DnsResolver
         _cache.Keep(read.Question, read.Type, answer, Lifetime(read), selected?.Key ?? string.Empty);
 
         return await TellAsync(question, stream, client, asked, answer, read, ct, selected?.Key ?? string.Empty).ConfigureAwait(false);
-    }
-
-    // Returns the answer of the private name server the client asked, kept out of the cache and handed on as an answer
-    // of the upstreams is, or null when it gave none.
-    private async Task<byte[]?> RelayAsync(
-        IDnsRelay relay,
-        ReadOnlyMemory<byte> question,
-        bool stream,
-        IPAddress? client,
-        IPAddress server,
-        DnsMessage asked,
-        CancellationToken ct)
-    {
-        var answer = await relay.AskAsync(server, question, stream, ct).ConfigureAwait(false);
-        if (answer is null)
-        {
-            Hush(server);
-
-            return null;
-        }
-
-        var read = DnsMessage.Read(answer);
-
-        return read is { Code: 0 }
-            ? await TellAsync(question, stream, client, asked, answer, read, ct).ConfigureAwait(false)
-            : Carried(question, stream, answer);
-    }
-
-    // Tells whether a private name server that gave no answer is passed over still.
-    private bool Quiet(IPAddress server)
-    {
-        var now = Environment.TickCount64;
-        lock (_sync)
-        {
-            if (!_quiet.TryGetValue(server, out var until))
-            {
-                return false;
-            }
-
-            if (now < until)
-            {
-                return true;
-            }
-
-            _quiet.Remove(server);
-
-            return false;
-        }
-    }
-
-    // Passes over a private name server that gave no answer for a while.
-    private void Hush(IPAddress server)
-    {
-        var now = Environment.TickCount64;
-        lock (_sync)
-        {
-            if (_quiet.Count >= QuietLimit)
-            {
-                foreach (var gone in _quiet.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToArray())
-                {
-                    _quiet.Remove(gone);
-                }
-            }
-
-            if (_quiet.Count < QuietLimit)
-            {
-                _quiet[server] = now + (DnsDefaults.QuietSeconds * 1000L);
-            }
-        }
     }
 
     // Returns the answer as the asking side takes it: whole over a stream, within the size of a datagram otherwise.

@@ -425,10 +425,11 @@ alone, the same way.
 ```
 
 points `current` back at the release before and starts the server over on it, with the web interface that came
-with that release; the same command again returns to the newer one. The database stays as it is: every update copies it aside first, into
-`/var/lib/amneziageo-server/backup`, which keeps the last five copies. `install.sh --list` shows the releases
-the host keeps. `amneziageo-server rollback` goes back the same way and offers to put a copy of the database back
-as well.
+with that release; the same command again returns to the newer one. Each switch restores the database snapshot
+bound to that exact release/build and saves the current database first. If a matching snapshot is unavailable,
+the command refuses before stopping the running server. If the target fails to start, the current database and
+release are restored. `install.sh --list` shows the retained releases. `amneziageo-server rollback` uses the same
+procedure; see [updates.md](updates.md#rollback).
 
 ### What the host keeps
 
@@ -439,7 +440,8 @@ as well.
 | `/opt/amneziageo-server/current` | the release that runs |
 | `/opt/amneziageo-server/previous` | the release before it, where `--rollback` goes |
 | `/opt/amneziageo-server/wwwroot` | the web interface the server serves |
-| `/var/lib/amneziageo-server/backup` | the last five copies of the database, each taken before an update or a restore |
+| `/var/lib/amneziageo-server/backup` | database snapshots bound to retained builds and the five newest unbound copies |
+| `/var/lib/amneziageo-server/rollback` | bindings from exact release/build identities to database snapshots |
 | `/usr/local/bin/amneziageo-server` | the menu of the release that runs |
 
 The host keeps the current release and the one before it, each with its web interface, and the web interface

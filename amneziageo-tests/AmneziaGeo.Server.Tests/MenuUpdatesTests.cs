@@ -47,7 +47,7 @@ public sealed class MenuUpdatesTests : IDisposable
         Skip.IfNot(OperatingSystem.IsLinux());
 
         var (_, told, _) = await MenuQuestionsTests.RunAsync(
-            $"role() {{ printf {role}; }}; kind() {{ printf package; }}; updates_kind() {{ printf docker; }}; install_host; echo code $?",
+            $"answers_file='{_root.FullName}/answers'; role() {{ printf {role}; }}; kind() {{ printf package; }}; updates_kind() {{ printf docker; }}; install_host; echo code $?",
             string.Empty);
 
         Assert.Contains(line + "\n", told, StringComparison.Ordinal);

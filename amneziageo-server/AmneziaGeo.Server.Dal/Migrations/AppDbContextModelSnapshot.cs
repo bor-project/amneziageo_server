@@ -179,48 +179,6 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.ToTable("Access");
                 });
 
-            modelBuilder.Entity("AmneziaGeo.Server.Dal.AddressGroupEntity", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTimeOffset>("CreatedUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("DefaultKey")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Dns")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue("");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Targets")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTimeOffset>("UpdatedUtc")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DefaultKey")
-                        .IsUnique();
-
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.ToTable("AddressGroups");
-                });
-
             modelBuilder.Entity("AmneziaGeo.Server.Dal.ApiTokenEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -769,26 +727,10 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<int>("NameMinutes")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Outbound")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<int>("Port")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Selection")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue("global");
-
                     b.Property<DateTimeOffset>("UpdatedUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Upstreams")
-                        .IsRequired()
-                        .HasMaxLength(512)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -1127,7 +1069,7 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(128)
                         .HasColumnType("TEXT")
-                        .HasDefaultValue("{PROXY}");
+                        .HasDefaultValue("{PROXY}-{HOST}-{TRANSPORT}");
 
                     b.Property<DateTimeOffset>("UpdatedUtc")
                         .HasColumnType("TEXT");
@@ -1197,29 +1139,7 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
-            modelBuilder.Entity("AmneziaGeo.Server.Dal.RouteBasicEntity", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Block")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Direct")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTimeOffset>("UpdatedUtc")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("RouteBasics");
-                });
-
-            modelBuilder.Entity("AmneziaGeo.Server.Dal.RouteRuleEntity", b =>
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.RoutingEntryEntity", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -1236,12 +1156,6 @@ namespace AmneziaGeo.Server.Dal.Migrations
 
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("TEXT");
-
-                    b.Property<string>("Groups")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue("");
 
                     b.Property<string>("Inbounds")
                         .IsRequired()
@@ -1276,10 +1190,6 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Targets")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<DateTimeOffset>("UpdatedUtc")
                         .HasColumnType("TEXT");
 
@@ -1287,7 +1197,28 @@ namespace AmneziaGeo.Server.Dal.Migrations
 
                     b.HasIndex("Position");
 
-                    b.ToTable("Rules");
+                    b.ToTable("RoutingEntries", (string)null);
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.RoutingEntryRuleEntity", b =>
+                {
+                    b.Property<long>("EntryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RuleId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EntryId", "RuleId");
+
+                    b.HasIndex("RuleId");
+
+                    b.HasIndex("EntryId", "Position")
+                        .IsUnique();
+
+                    b.ToTable("RoutingEntryRules");
                 });
 
             modelBuilder.Entity("AmneziaGeo.Server.Dal.RoutingPresetEntity", b =>
@@ -1672,6 +1603,57 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.ToTable("TrafficPeriods");
                 });
 
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.TrafficRuleEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Dns")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DnsMembers")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DnsMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("custom");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Targets")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DefaultKey")
+                        .IsUnique();
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("TrafficRules");
+                });
+
             modelBuilder.Entity("AmneziaGeo.Server.Dal.TransportProxyEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -1725,7 +1707,8 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
 
                     b.Property<bool>("Opened")
                         .HasColumnType("INTEGER");
@@ -1784,7 +1767,7 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.HasIndex("LegacyConfigId")
                         .IsUnique();
 
-                    b.HasIndex("Name")
+                    b.HasIndex("Name", "Transport")
                         .IsUnique();
 
                     b.ToTable("TransportProxies");
@@ -1918,6 +1901,23 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Navigation("Session");
                 });
 
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.RoutingEntryRuleEntity", b =>
+                {
+                    b.HasOne("AmneziaGeo.Server.Dal.RoutingEntryEntity", null)
+                        .WithMany("Matches")
+                        .HasForeignKey("EntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AmneziaGeo.Server.Dal.TrafficRuleEntity", "Rule")
+                        .WithMany()
+                        .HasForeignKey("RuleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Rule");
+                });
+
             modelBuilder.Entity("AmneziaGeo.Server.Dal.SessionEntity", b =>
                 {
                     b.HasOne("AmneziaGeo.Server.Auth.AppUser", "User")
@@ -1996,6 +1996,11 @@ namespace AmneziaGeo.Server.Dal.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("AmneziaGeo.Server.Dal.RoutingEntryEntity", b =>
+                {
+                    b.Navigation("Matches");
                 });
 #pragma warning restore 612, 618
         }

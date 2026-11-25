@@ -59,15 +59,15 @@ export const clients: Item[] = [
   },
 ]
 
-export const routingTabs: Item[] = [
-  { to: "/routing/rules", label: "tab.rules", icon: "fork", scope: scopes.readState },
-  { to: "/routing/channels", label: "routing.directions", icon: "route", scope: scopes.readState },
+export const routingMain: Item[] = [
+  { to: "/routing/rules", label: "routing.table", icon: "fork", scope: scopes.readState },
+  { to: "/routing/addresses", label: "routing.addresses", icon: "fork", scope: scopes.readState },
+  { to: "/routing/channels", label: "routing.linkedServers", icon: "route", scope: scopes.readState },
   { to: "/routing/balancers", label: "routing.balancers", icon: "fork", scope: scopes.readState },
-  { to: "/routing/address-groups", label: "routing.addressGroups", icon: "list", scope: scopes.readState },
 ]
 
 export const routing: Item[] = [
-  ...routingTabs,
+  ...routingMain,
   { to: "/routing/basic", label: "tab.basic", icon: "list", scope: scopes.readState, unlisted: true },
   { to: "/routing/test", label: "tab.test", icon: "flask", scope: scopes.readState, unlisted: true },
   { to: "/routing/proxies", label: "proxies.title", icon: "route", scope: scopes.readState,

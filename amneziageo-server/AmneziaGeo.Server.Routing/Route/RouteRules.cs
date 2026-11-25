@@ -40,12 +40,44 @@ public static class RouteRules
         return CheckName(rule.Name)
             ?? CheckAction(rule)
             ?? CheckProtocol(rule.Protocol)
-            ?? CheckTargets(rule.Targets, MaxConditions)
-            ?? CheckGroups(rule.Groups)
+            ?? CheckCriteria(rule)
+            ?? CheckDns(rule.Dns, rule.DnsMembers)
             ?? CheckClients(rule.Clients)
             ?? CheckInbounds(rule.Inbounds)
             ?? CheckPorts(rule.Ports, "bad-port", "ports")
             ?? CheckPorts(rule.SourcePorts, "bad-source-port", "source ports");
+    }
+
+    /// <summary>
+    /// Validates a traffic rule.
+    /// </summary>
+    public static RouteFault? Check(TrafficRule rule) =>
+        CheckName(rule.Name)
+        ?? (!TrafficDnsMode.Known(rule.DnsMode) ? new RouteFault("bad-dns-mode", "the DNS mode is unknown") : null)
+        ?? CheckTargets(rule.Targets, MaxBasic)
+        ?? CheckDns(rule.Dns, rule.DnsMembers);
+
+    private static RouteFault? CheckCriteria(RouteRule rule)
+    {
+        if (rule.RuleIds.Count > MaxBasic)
+        {
+            return Many(MaxBasic, "rules");
+        }
+
+        if (rule.RuleIds.Any(id => rule.Criteria.All(one => one.Id != id)))
+        {
+            return new RouteFault("unknown-traffic-rule", "the routing entry names an unknown traffic rule");
+        }
+
+        foreach (var criterion in rule.Criteria)
+        {
+            if (Check(criterion) is { } fault)
+            {
+                return fault;
+            }
+        }
+
+        return rule.Criteria.Count == 0 ? CheckTargets(rule.Targets, MaxBasic) : null;
     }
 
     /// <summary>
@@ -59,24 +91,35 @@ public static class RouteRules
     }
 
     /// <summary>
-    /// Validates an address group.
+    /// Validates resolver addresses.
     /// </summary>
-    public static RouteFault? CheckGroup(AddressGroup group)
+    public static RouteFault? CheckDns(IReadOnlyList<string> servers, IReadOnlyDictionary<string, IReadOnlyList<string>> members)
     {
-        ArgumentNullException.ThrowIfNull(group);
+        if (CheckServers(servers) is { } fault)
+        {
+            return new RouteFault(fault.Code, fault.Message);
+        }
 
-        return CheckName(group.Name)
-            ?? (group.Targets.Count == 0 ? new RouteFault("empty-address-group", "the address group contains no destinations") : null)
-            ?? CheckTargets(group.Targets, MaxBasic)
-            ?? (Dns.DnsRules.Servers(group.Dns) is { } dns ? new RouteFault(dns.Code, dns.Message) : null);
+        foreach (var pair in members)
+        {
+            if (ConfigRules.CheckName(pair.Key) is { } name)
+            {
+                return new RouteFault(name.Code, name.Message);
+            }
+
+            if (CheckServers(pair.Value) is { } member)
+            {
+                return new RouteFault(member.Code, member.Message);
+            }
+        }
+
+        return null;
     }
 
-    private static RouteFault? CheckGroups(IReadOnlyList<long> groups) =>
-        groups.Count > MaxConditions
-            ? Many("address groups")
-            : groups.Any(id => id <= 0)
-                ? new RouteFault("unknown-address-group", "the rule names an unknown address group")
-                : null;
+    private static Dns.DnsFault? CheckServers(IReadOnlyList<string> servers) =>
+        servers.FirstOrDefault(server => !Dns.DnsRules.Server(server, out _)) is { } wrong
+            ? new Dns.DnsFault("bad-dns", $"'{wrong}' is not a name server")
+            : null;
 
     /// <summary>
     /// Returns why the name of a rule is unusable, or null when it holds.

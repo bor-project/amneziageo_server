@@ -71,7 +71,7 @@ adopt() {
 stage_release() {
   local target=$base/releases/$release tool
   if [ -d "$target" ]; then
-    for tool in install.sh proxy-handover.sh wstunnel wstunnel-get wstunnel-quic; do
+    for tool in install.sh proxy-handover.sh database-handover.sh wstunnel wstunnel-get wstunnel-quic; do
       if [ -f "$here/$tool" ] && ! cmp -s "$here/$tool" "$target/$tool"; then
         install -m 755 "$here/$tool" "$target/$tool"
       fi
@@ -82,7 +82,7 @@ stage_release() {
   rm -rf "$target.new"
   cp -a --no-preserve=ownership "$here/publish" "$target.new"
   rm -rf "$target.new/wwwroot"
-  cp "$here/install.sh" "$here/proxy-handover.sh" "$here/release" "$here/server" "$target.new/"
+  cp "$here/install.sh" "$here/proxy-handover.sh" "$here/database-handover.sh" "$here/release" "$here/server" "$target.new/"
   for tool in wstunnel wstunnel-get wstunnel-quic; do
     if [ -f "$here/$tool" ]; then
       install -m 755 "$here/$tool" "$target.new/"
@@ -180,27 +180,14 @@ shortcuts() {
   done
 }
 
-# Copies the database of the stopped server aside and prints where.
+# Copies the database of the stopped server aside.
 keep_database() {
-  local target
-  if [ ! -f "$data/server.db" ]; then
-    return 0
-  fi
-
-  target=$data/backup/$(date -u +%Y%m%d-%H%M%S)-$release
-  mkdir -p "$target" || return 1
-  cp -a "$data"/server.db* "$target/" || return 1
-  echo "$target"
+  db_save "$data" "native:$1"
 }
 
-# Puts a copy of the database back.
+# Restores a matching database snapshot.
 restore_database() {
-  if [ -z "$1" ] || [ ! -d "$1" ]; then
-    return 0
-  fi
-
-  rm -f "$data/server.db-wal" "$data/server.db-shm"
-  cp -a "$1"/server.db* "$data/"
+  db_restore "$data" "$1"
 }
 
 # Starts the server and tells whether it came up and stayed up.
@@ -232,7 +219,7 @@ prune() {
   done
 
   if [ -d "$data/backup" ]; then
-    find "$data/backup" -mindepth 1 -maxdepth 1 -type d | sort | head -n -5 | xargs -r rm -rf
+    db_prune "$data" native "native:$(readlink "$base/current")" "native:$(readlink "$base/previous" || true)"
   fi
 }
 
@@ -267,6 +254,7 @@ whole() {
     fail "this package carries no server: put it on with --ui"
   fi
   source "$here/proxy-handover.sh"
+  source "$here/database-handover.sh"
   install -d "$base/releases" "$base/web" "$data" /etc/amneziageo-server
   adopt
   own
@@ -291,7 +279,7 @@ whole() {
   if [ -n "$handover_before" ]; then proxy_remember "$handover_before" "$handover_proxy_saved"; fi
   proxy_suspend_legacy "$handover_proxy_saved"
   configure_proxy
-  handover_saved=$(keep_database)
+  handover_saved=$(keep_database "$handover_before")
   handover_changed=1
   point "$base/current" "releases/$release"
   point "$base/wwwroot" "web/$release"
@@ -363,6 +351,10 @@ rollback_failed() {
   set +e
   if [ "$status" = 0 ]; then return; fi
   systemctl stop "$unit" || true
+  if ! restore_database "$handover_saved"; then
+    echo 'the database of the running release could not be restored; the panel remains stopped' >&2
+    exit "$status"
+  fi
   point "$base/current" "$handover_after"
   point "$base/previous" "$handover_before"
   point "$base/wwwroot" "$handover_after_web"
@@ -377,14 +369,20 @@ rollback_failed() {
 
 # Goes back to the preceding panel and proxy service ownership.
 rollback() {
-  handover_before= handover_after= handover_web= handover_was= handover_proxy_saved= handover_profile= handover_after_web= handover_after_previous_web=
+  handover_before= handover_after= handover_web= handover_was= handover_proxy_saved= handover_profile= handover_after_web= handover_after_previous_web= handover_saved= handover_database=
   source "$here/proxy-handover.sh"
+  source "$here/database-handover.sh"
   handover_before=$(readlink "$base/previous" || true)
   handover_after=$(readlink "$base/current" || true)
   if [ -z "$handover_before" ] || [ ! -d "$base/$handover_before" ]; then fail "there is no release to go back to"; fi
   handover_profile=$(proxy_profile "$handover_before")
   if [ ! -f "$handover_profile/panel.env" ]; then fail 'proxy ownership state is missing for the preceding release'; fi
   proxy_check_restore_files "$handover_profile" || fail 'the preceding proxy configuration cannot be restored'
+  handover_database=$(db_find "$data" "native:$handover_before") || {
+    [ ! -f "$data/server.db" ] || fail 'the matching database backup for the preceding release is missing; the running release was kept'
+    handover_database=
+  }
+  echo "restoring ${handover_before##*/} with its pre-upgrade database; the current database will be saved in $data/backup"
   handover_web=web/${handover_before##*/}
   if [ ! -d "$base/$handover_web" ]; then handover_web=$(readlink "$base/previous-web" || readlink "$base/wwwroot"); fi
   own
@@ -398,9 +396,11 @@ rollback() {
   if [ "$handover_was" = active ]; then systemctl stop "$unit"; fi
   proxy_snapshot_files "$handover_proxy_saved" || fail 'could not snapshot legacy proxy configuration files'
   proxy_remember "$handover_after" "$handover_proxy_saved"
+  handover_saved=$(keep_database "$handover_after")
   proxy_suspend_legacy "$handover_proxy_saved"
   proxy_restore "$handover_profile"
   carry_tunnel "$handover_before" "$handover_after"
+  restore_database "$handover_database" || fail 'the preceding database could not be restored'
   point "$base/previous-web" "$handover_after_web"
   point "$base/wwwroot" "$handover_web"
   point "$base/current" "$handover_before"
@@ -408,7 +408,7 @@ rollback() {
   if [ "$handover_was" = active ] && ! start_server; then fail "the server did not come up on ${handover_before##*/}"; fi
   trap - EXIT
   echo "the host runs ${handover_before##*/}, install.sh --rollback goes back to ${handover_after##*/}"
-  echo "the database stays as it is, the copies taken before each update lie in $data/backup"
+  echo "the matching database was restored; the database of the release before rollback is kept in $data/backup"
 }
 
 # Shows the releases the host keeps.

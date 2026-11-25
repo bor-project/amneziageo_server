@@ -810,7 +810,7 @@ image_tag() {
 
 # Writes the tag of the image into the .env of the compose project and keeps its other lines.
 write_tag() {
-  local lines=
+  local lines= temporary
   if [ -f "$docker_dir/.env" ]; then
     lines=$(sed "s/^AMNEZIAGEO_TAG=.*/AMNEZIAGEO_TAG=$1/" "$docker_dir/.env")
   fi
@@ -819,7 +819,15 @@ write_tag() {
     lines=$lines${lines:+$'\n'}AMNEZIAGEO_TAG=$1
   fi
 
-  printf '%s\n' "$lines" > "$docker_dir/.env"
+  temporary=$(mktemp "$docker_dir/.env.XXXXXX") || return 1
+  if ! printf '%s\n' "$lines" > "$temporary"; then
+    rm -f "$temporary"
+    return 1
+  fi
+  if [ -f "$docker_dir/.env" ]; then
+    chmod --reference="$docker_dir/.env" "$temporary" || { rm -f "$temporary"; return 1; }
+  fi
+  mv -f "$temporary" "$docker_dir/.env" || { rm -f "$temporary"; return 1; }
 }
 
 # Prints the image the container of the panel runs, or the one its compose project names.
@@ -3317,9 +3325,33 @@ restore_file() {
   restore_copy "$file"
 }
 
+# Loads the database handover functions.
+load_database_handover() {
+  local helper temporary
+  for helper in "$(dirname "$installer_source")/database-handover.sh" "$base/current/database-handover.sh" /usr/local/share/amneziageo-server/database-handover.sh; do
+    if [ -f "$helper" ]; then source "$helper"; return; fi
+  done
+  temporary=$(mktemp) || return 1
+  if ! dcompose exec -T panel cat /usr/local/share/amneziageo-server/database-handover.sh > "$temporary"; then
+    rm -f "$temporary"
+    return 1
+  fi
+  source "$temporary"
+  rm -f "$temporary"
+}
+
+# Restores the image and database after a failed downgrade.
+docker_rollback_failed() {
+  local tag=$1 saved=$2 dir=$3
+  dcompose stop panel > /dev/null || return 1
+  db_restore "$dir" "$saved" || return 1
+  write_tag "$tag" || return 1
+  dcompose up -d --force-recreate --no-deps panel > /dev/null && wait_panel
+}
+
 # Item 4: goes back to the release before the current one.
 rollback_panel() {
-  local current previous
+  local current previous current_build previous_build dir saved target
   need_panel || return 1
   host_only "going back to an older image" || return 1
   if [ "$(kind)" = package ]; then
@@ -3328,13 +3360,12 @@ rollback_panel() {
       return 1
     fi
 
-    confirm "Go back to $(basename "$(readlink "$base/previous")")?" || return 0
+    confirm "Restore $(basename "$(readlink "$base/previous")") and its pre-upgrade database? The current database will be saved in $(data_dir)/backup." || return 0
     if [ -f /var/lib/amneziageo-server/proxy-handover/installer/install.sh ]; then
       bash /var/lib/amneziageo-server/proxy-handover/installer/install.sh --rollback
     else
       "$base/current/install.sh" --rollback
     fi || return 1
-    offer_backup
     return 0
   fi
 
@@ -3346,10 +3377,36 @@ rollback_panel() {
     return 1
   fi
 
-  confirm "Go back from $current to $previous?" || return 0
-  write_tag "$previous"
-  dcompose up -d > /dev/null && wait_panel
-  offer_backup
+  confirm "Restore $previous and its pre-upgrade database? The current database will be saved in $(data_dir)/backup." || return 0
+  load_database_handover || { bad 'database handover tools are unavailable; the running image was kept'; return 1; }
+  current_build=$(docker inspect -f '{{.Image}}' "$(container_id)") || return 1
+  previous_build=$(docker image inspect -f '{{.Id}}' "$(panel_repository):$previous") || return 1
+  [ -n "$current_build" ] && [ -n "$previous_build" ] || return 1
+  dir=$(data_dir)
+  target=$(db_find "$dir" "docker:$previous_build") || {
+    bad 'the matching database backup for the preceding image is missing; the running image was kept'
+    return 1
+  }
+  dcompose stop panel > /dev/null || return 1
+  saved=$(db_save "$dir" "docker:$current_build") || {
+    dcompose up -d > /dev/null
+    bad 'the running database could not be copied; the running image was kept'
+    return 1
+  }
+  if ! db_restore "$dir" "$target"; then
+    docker_rollback_failed "$current" "$saved" "$dir"
+    return 1
+  fi
+  if ! write_tag "$previous"; then
+    docker_rollback_failed "$current" "$saved" "$dir" || bad 'the running image and database could not be restored'
+    return 1
+  fi
+  if ! { dcompose up -d --force-recreate --no-deps panel > /dev/null && wait_panel; }; then
+    docker_rollback_failed "$current" "$saved" "$dir" || bad 'the running image and database could not be restored'
+    return 1
+  fi
+  db_prune "$dir" docker "docker:$current_build" "docker:$previous_build"
+  good 'restored the matching database; the database before rollback remains in backup'
 }
 
 # Lists the releases the host keeps.

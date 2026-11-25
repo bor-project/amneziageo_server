@@ -5,7 +5,7 @@ namespace AmneziaGeo.Server.Core.Panel;
 /// </summary>
 public static class ProxyName
 {
-    public const string Default = "{PROXY}";
+    public const string Default = "{PROXY}-{HOST}-{TRANSPORT}";
 
     public const int MaxLength = 128;
 
@@ -27,7 +27,7 @@ public static class ProxyName
         ArgumentNullException.ThrowIfNull(values);
 
         var original = values.GetValueOrDefault("PROXY", string.Empty);
-        var filled = template == Default ? original : NamePattern.Fill(template, values, Keys);
+        var filled = template == "{PROXY}" ? original : NamePattern.Fill(template, values, Keys);
         var name = filled.Length > 0 ? filled : original;
         var length = Math.Min(name.Length, MaxNameLength);
         if (length < name.Length && char.IsHighSurrogate(name[length - 1]))

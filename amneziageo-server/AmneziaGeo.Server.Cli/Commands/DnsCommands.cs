@@ -7,16 +7,10 @@ using AmneziaGeo.Server.Routing.Dns;
 namespace AmneziaGeo.Server.Cli.Commands;
 
 /// <summary>
-/// The commands that read the resolver of the clients, turn it on and off, name its name servers and pick the name servers of
-/// the files of the clients.
+/// Manages the resolver and client DNS choices.
 /// </summary>
 public static class DnsCommands
 {
-    /// <summary>
-    /// The word that stands for the name servers a panel starts with.
-    /// </summary>
-    public const string Usual = "default";
-
     private const string Holders = "holders";
 
     private const string Choices = "routing | panel | network | own | endpoint";
@@ -41,7 +35,7 @@ public static class DnsCommands
     }
 
     /// <summary>
-    /// Prints whether the resolver answers the clients and how it asks outside.
+    /// Prints resolver settings.
     /// </summary>
     public static async Task<int> ShowAsync(Context context, CancellationToken ct)
     {
@@ -50,9 +44,6 @@ public static class DnsCommands
         var held = await context.Dns.ReadAsync(ct).ConfigureAwait(false);
         Terminal.Say($"answering    {(held.IsEnabled ? "while the routing needs it" : "off")}");
         Terminal.Say($"port         {held.Port.ToString(CultureInfo.InvariantCulture)}");
-        Terminal.Say($"asks         {string.Join(", ", held.Upstreams)}");
-        Terminal.Say($"encrypted    {Encrypted(held)}");
-        Terminal.Say($"through      {(held.Outbound.Length == 0 ? "the way out of the host" : held.Outbound)}");
         Terminal.Say($"for clients  {Picked(held)}");
         var holders = await context.Clients.ResolverHoldersAsync(ct).ConfigureAwait(false);
         if (holders > 0)
@@ -81,7 +72,7 @@ public static class DnsCommands
             .ToList();
         if (names.Count == 0 || values.Any(value => value is null))
         {
-            return Refuse("dns get enabled | port | upstreams | encrypted | outbound | files | files-dns | holders ...");
+            return Refuse("dns get enabled | port | files | files-dns | holders ...");
         }
 
         foreach (var value in values)
@@ -93,7 +84,7 @@ public static class DnsCommands
     }
 
     /// <summary>
-    /// Turns the resolver on or off or names its name servers, and has the running panel take the change.
+    /// Saves resolver settings.
     /// </summary>
     public static async Task<int> SetAsync(Context context, Arguments args, CancellationToken ct)
     {
@@ -103,7 +94,7 @@ public static class DnsCommands
         var held = await context.Dns.ReadAsync(ct).ConfigureAwait(false);
         if (Draft(held, args) is not { } draft)
         {
-            return Refuse($"dns set [--enabled auto | off] [--upstreams <servers> | {Usual}] [--files {Choices}] [--files-dns <servers>]");
+            return Refuse($"dns set [--enabled auto | off] [--files {Choices}] [--files-dns <servers>]");
         }
 
         var saved = await context.Dns.SaveAsync(draft, ct).ConfigureAwait(false);
@@ -112,7 +103,7 @@ public static class DnsCommands
             return Refuse(saved.Message);
         }
 
-        Terminal.Say($"saved: the resolver {(saved.Record.IsEnabled ? "runs while the routing needs it" : "is off")} and asks {string.Join(", ", saved.Record.Upstreams)}");
+        Terminal.Say($"saved: the resolver {(saved.Record.IsEnabled ? "runs while the routing needs it" : "is off")}");
         Terminal.Say($"the files of the clients name {Picked(saved.Record)}, unless a template or a client picks otherwise");
         var holders = saved.Record.IsEnabled ? 0 : await context.Clients.ResolverHoldersAsync(ct).ConfigureAwait(false);
         if (holders > 0)
@@ -129,27 +120,22 @@ public static class DnsCommands
     private static DnsSettings? Draft(DnsSettings held, Arguments args)
     {
         var enabled = args.Value("enabled") is { } word ? Mode(word) : held.IsEnabled;
-        var upstreams = args.Value("upstreams") is { } list ? Servers(list) : held.Upstreams;
         var files = args.Value("files") is { } choice ? DnsChoiceName.ReadServer(choice, held.FilesMode) : held.FilesMode;
         var named = args.Value("files-dns") is { } servers
             ? servers.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             : held.FilesDns;
-        if (enabled is null || !(args.Has("enabled") || args.Has("upstreams") || args.Has("files") || args.Has("files-dns")))
+        if (enabled is null || args.Has("upstreams") || args.Has("outbound") || args.Has("selection") || args.Has("encrypted")
+            || !(args.Has("enabled") || args.Has("files") || args.Has("files-dns")))
         {
             return null;
         }
 
-        return held with { IsEnabled = enabled.Value, Upstreams = upstreams, FilesMode = files, FilesDns = named };
+        return held with { IsEnabled = enabled.Value, FilesMode = files, FilesDns = named };
     }
 
     // Reads the word the resolver is set with: auto and on let it run while the routing needs it, off keeps it off.
     private static bool? Mode(string word) =>
         string.Equals(word.Trim(), "auto", StringComparison.OrdinalIgnoreCase) ? true : PanelEdit.SwitchOf(word);
-
-    private static IReadOnlyList<string> Servers(string list) =>
-        string.Equals(list.Trim(), Usual, StringComparison.OrdinalIgnoreCase)
-            ? DnsDefaults.Upstreams
-            : list.Split(Breaks, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     // Has the running panel start the resolver over on what was saved; a panel that is down takes it at its start.
     private static async Task<int> TakeAsync(Context context, CancellationToken ct)
@@ -220,9 +206,6 @@ public static class DnsCommands
     {
         "enabled" => Switch(held.IsEnabled),
         "port" => held.Port.ToString(CultureInfo.InvariantCulture),
-        "upstreams" => string.Join(",", held.Upstreams),
-        "encrypted" => Encrypted(held),
-        "outbound" => held.Outbound,
         "files" => DnsChoiceName.Of(held.FilesMode),
         "files-dns" => string.Join(",", held.FilesDns),
         _ => null,
@@ -238,18 +221,6 @@ public static class DnsCommands
         _ => "the resolver of the panel while the routing needs it, the name servers of their endpoint otherwise",
     };
 
-    // Tells whether the questions leave the host encrypted: all, none or partly.
-    private static string Encrypted(DnsSettings held)
-    {
-        var encrypted = held.Upstreams.Count(one => DnsRules.Server(one, out var server) && server.IsEncrypted);
-        if (encrypted == held.Upstreams.Count)
-        {
-            return "all";
-        }
-
-        return encrypted == 0 ? "none" : "partly";
-    }
-
     private static string Switch(bool on) => on ? "on" : "off";
 
     private static int Refuse(string message)
@@ -260,5 +231,5 @@ public static class DnsCommands
     }
 
     private static int Usage() => Refuse(
-        $"usage: amneziageo-server dns show | get <name>... | set [--enabled auto | off] [--upstreams <servers> | {Usual}] [--files {Choices}] [--files-dns <servers>]");
+        $"usage: amneziageo-server dns show | get <name>... | set [--enabled auto | off] [--files {Choices}] [--files-dns <servers>]");
 }

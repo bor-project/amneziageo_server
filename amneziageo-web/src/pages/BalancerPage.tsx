@@ -3,6 +3,7 @@ import { draftOf, freshBalancer, useAddBalancer, useBalancers, useChangeBalancer
 import { BalancerForm } from "@/components/BalancerForm"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
+import { useRelatedReturn } from "@/components/routingReturn"
 import { useSpot } from "@/store/spots"
 
 export function BalancerPage() {
@@ -13,8 +14,8 @@ export function BalancerPage() {
 
 function NewBalancer() {
   const t = useText()
-  const navigate = useNavigate()
-  const back = useSpot("/routing/channels")
+  const back = useSpot("/routing/balancers")
+  const close = useRelatedReturn(back)
   const add = useAddBalancer()
 
   useTail([{ label: t("balancers.newTitle") }])
@@ -24,8 +25,8 @@ function NewBalancer() {
       start={freshBalancer}
       pending={add.isPending}
       error={add.error}
-      onSave={(draft) => void add.mutateAsync(draft).then(() => navigate(back))}
-      onClose={() => navigate(back)}
+      onSave={(draft) => void add.mutateAsync(draft).then(() => close()).catch(() => undefined)}
+      onClose={() => close()}
     />
   )
 }
@@ -33,7 +34,8 @@ function NewBalancer() {
 function HeldBalancer({ balancerId }: { balancerId: number }) {
   const t = useText()
   const navigate = useNavigate()
-  const back = useSpot("/routing/channels")
+  const back = useSpot("/routing/balancers")
+  const close = useRelatedReturn(back)
   const balancers = useBalancers()
   const change = useChangeBalancer()
   const all = balancers.data ?? []
@@ -55,9 +57,9 @@ function HeldBalancer({ balancerId }: { balancerId: number }) {
       self={held.name}
       pending={change.isPending}
       error={change.error}
-      onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}
-      onClose={() => navigate(back)}
-      onRemove={() => navigate(`/routing/channels/groups/${held.id}/delete`)}
+      onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => close({ outbound: draft.name.trim() })).catch(() => undefined)}
+      onClose={() => close()}
+      onRemove={() => navigate(`/routing/balancers/${held.id}/delete`)}
     />
   )
 }

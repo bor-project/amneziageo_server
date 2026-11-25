@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Sockets;
 using AmneziaGeo.Server.Api.Firewall;
 using AmneziaGeo.Server.Api.Rules;
-using AmneziaGeo.Server.Awg.Netlink;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Access;
 using AmneziaGeo.Server.Routing.Dns;
@@ -50,8 +49,6 @@ public sealed class DnsHost : BackgroundService
 
     private DnsServer? _server;
 
-    private DnsUpstream? _upstream;
-
     private DnsRoutes? _routes;
 
     private readonly SemaphoreSlim _poke = new(0, 1);
@@ -59,8 +56,6 @@ public sealed class DnsHost : BackgroundService
     private readonly Dictionary<DnsWarmName, DnsWarmTry> _asked = new();
 
     private DnsSettings _settings = DnsDefaults.Settings;
-
-    private long _turns;
 
     private long _saved;
 
@@ -112,11 +107,6 @@ public sealed class DnsHost : BackgroundService
     public DnsSettings Settings => _settings;
 
     /// <summary>
-    /// The outbound the resolver asks through right now, empty when it is off or leaves through the host.
-    /// </summary>
-    public string Asking => _settings.IsEnabled ? _settings.Outbound : string.Empty;
-
-    /// <summary>
     /// Returns the addresses a name answers with through its DNS policy.
     /// </summary>
     public async Task<IReadOnlyList<IPAddress>?> AskAsync(
@@ -130,12 +120,7 @@ public sealed class DnsHost : BackgroundService
             return await DnsLookup.AskAsync(routes.ForClient(name, client, inbound), name, ct).ConfigureAwait(false);
         }
 
-        if (_settings.Selection != DnsSelection.Global)
-        {
-            return [];
-        }
-
-        return _upstream is { } upstream ? await DnsLookup.AskAsync(upstream, name, ct).ConfigureAwait(false) : null;
+        return [];
     }
 
     /// <summary>
@@ -147,29 +132,6 @@ public sealed class DnsHost : BackgroundService
     /// Starts the resolver over on the addresses of the configurations with the settings it runs with.
     /// </summary>
     public Task RebindAsync(CancellationToken ct) => StartAsync(false, ct);
-
-    /// <summary>
-    /// Carries a new name of the outbound or the balancer the resolver asks through into the settings it runs with.
-    /// </summary>
-    public async Task FollowAsync(string old, string anew, CancellationToken ct)
-    {
-        await _turn.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (!string.Equals(_settings.Outbound, old, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            Volatile.Write(ref _settings, _settings with { Outbound = anew });
-            _routes?.Follow(old, anew);
-            _state.Took(_settings, DnsNeed.Running(_settings, DnsNeed.Kept(_state.Needed, _state.Holders, _state.Picked)));
-        }
-        finally
-        {
-            _turn.Release();
-        }
-    }
 
     /// <inheritdoc/>
     public override async Task StopAsync(CancellationToken ct)
@@ -273,13 +235,9 @@ public sealed class DnsHost : BackgroundService
 
     private void Serve(IReadOnlyList<IPAddress> addresses)
     {
-        var upstream = new DnsUpstream(
-            _settings.Upstreams,
-            DnsDefaults.Wait,
-            () => Way(Volatile.Read(ref _settings), Interlocked.Increment(ref _turns)).Mark);
-        var routes = _settings.Selection == DnsSelection.Global ? null : new DnsRoutes(() => _plans.Held, _settings);
+        var routes = new DnsRoutes(() => _plans.Held);
         var resolver = new DnsResolver(
-            upstream,
+            routes,
             new DnsCache(_settings.CacheSize, _time),
             _sets,
             () => _plans.Held,
@@ -289,10 +247,9 @@ public sealed class DnsHost : BackgroundService
             _names.Hear,
             _standIns,
             _book.For,
-            new DnsRelay(DnsDefaults.Wait),
             routes);
 
-        var server = new DnsServer(resolver, ConntrackOrigin.Find);
+        var server = new DnsServer(resolver);
         var taken = default(IReadOnlyList<IPAddress>);
         try
         {
@@ -300,35 +257,28 @@ public sealed class DnsHost : BackgroundService
         }
         catch (SocketException ex)
         {
-            upstream.Dispose();
-            routes?.Dispose();
+            routes.Dispose();
             _state.Stopped(ex.Message);
             _logger.LogWarning(ex, "the resolver did not take the addresses of the tunnels");
             return;
         }
 
         _server = server;
-        _upstream = upstream;
         _routes = routes;
         _asked.Clear();
         _state.Started([.. taken.Select(address => address.ToString())], _time.GetUtcNow());
         _logger.LogInformation(
-            "the resolver answers on {Addresses} port {Port} and asks {Servers} through {Exit}",
+            "the resolver answers on {Addresses} port {Port}",
             string.Join(", ", _state.Listening),
-            _settings.Port,
-            string.Join(", ", _settings.Upstreams),
-            Exit());
+            _settings.Port);
         Look();
     }
 
     // Lets the name servers go, with the connections kept to them.
     private void Hush()
     {
-        var upstream = _upstream;
-        _upstream = null;
         _routes?.Dispose();
         _routes = null;
-        upstream?.Dispose();
     }
 
     // Rests until the soonest work of the resolver falls due, or the plan or an answer wakes it; a stopped resolver
@@ -336,7 +286,7 @@ public sealed class DnsHost : BackgroundService
     private async Task RestAsync(CancellationToken ct)
     {
         var now = _time.GetUtcNow();
-        var rest = _upstream is null
+        var rest = _routes is null
             ? Rest(_settings.NameLifetime)
             : DnsPace.Rest(now, _warmAt, _saving, now + DnsSets.Sweep);
         await Task.Delay(DnsPace.Least, _time, ct).ConfigureAwait(false);
@@ -489,20 +439,14 @@ public sealed class DnsHost : BackgroundService
     private static TimeSpan Rest(TimeSpan lifetime) =>
         TimeSpan.FromTicks(Math.Clamp(lifetime.Ticks / 4, Between.Ticks, Saving.Ticks));
 
-    private string Exit() => _settings.Outbound.Length == 0 ? "the host" : _settings.Outbound;
-
-    private DnsWay Way(DnsSettings settings, long turn) =>
-        DnsExit.Way(settings, _plans.Held?.Ways ?? RouteWays.None, turn);
-
     private void Look()
     {
-        if (_upstream is not { } upstream)
+        if (_routes is not { } routes)
         {
             return;
         }
 
-        var way = _routes is null ? Way(_settings, 0).Fault?.Message : _routes.Fault;
-        var fault = way ?? upstream.Fault;
+        var fault = routes.Fault;
         if (fault == _state.Way)
         {
             return;
@@ -511,21 +455,17 @@ public sealed class DnsHost : BackgroundService
         _state.Leaves(fault);
         if (fault is null)
         {
-            _logger.LogInformation("the resolver is answered again through {Exit}", Exit());
-        }
-        else if (way is null)
-        {
-            _logger.LogWarning("the questions of the resolver go unanswered: {Fault}", fault);
+            _logger.LogInformation("the resolver is answered again");
         }
         else
         {
-            _logger.LogWarning("the way out of the resolver is broken: {Fault}", fault);
+            _logger.LogWarning("the questions of the resolver go unanswered: {Fault}", fault);
         }
     }
 
     private async Task WarmAsync(CancellationToken ct)
     {
-        if (_upstream is not { } upstream)
+        if (_routes is not { } routes)
         {
             return;
         }
@@ -547,7 +487,7 @@ public sealed class DnsHost : BackgroundService
             return;
         }
 
-        var found = await DnsWarm.AskAsync(upstream, wanted, ct, _routes is { } routes ? routes.ForRule : null).ConfigureAwait(false);
+        var found = await DnsWarm.AskAsync(routes, wanted, ct, routes.ForRule).ConfigureAwait(false);
         var answered = found.Select(one => one.Name).ToHashSet();
         var now = _time.GetUtcNow();
         foreach (var one in wanted)

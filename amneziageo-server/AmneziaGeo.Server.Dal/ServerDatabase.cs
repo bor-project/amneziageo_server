@@ -70,7 +70,7 @@ public static class ServerDatabase
         services.AddScoped<GeoStore>();
         services.AddScoped<OutboundStore>();
         services.AddScoped<RouteStore>();
-        services.AddScoped<AddressGroupStore>();
+        services.AddScoped<TrafficRuleStore>();
         services.AddScoped<BalanceStore>();
         services.AddScoped<DnsStore>();
         services.AddScoped<DnsStandingStore>();
@@ -107,7 +107,7 @@ public static class ServerDatabase
         var loggers = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
         var existed = File.Exists(database.GetDbConnection().DataSource);
         var pending = await database.GetPendingMigrationsAsync(ct).ConfigureAwait(false);
-        if (pending.Any(name => (name.EndsWith("_RoutingTable", StringComparison.Ordinal) || name.EndsWith("_DnsRouting", StringComparison.Ordinal)))
+        if (pending.Any(name => (name.EndsWith("_RoutingTable", StringComparison.Ordinal) || name.EndsWith("_DnsRouting", StringComparison.Ordinal) || name.EndsWith("_RoutingModel", StringComparison.Ordinal)))
             && existed)
         {
             var backup = await scope.ServiceProvider.GetRequiredService<DatabaseBackup>().CopyAsync(ct).ConfigureAwait(false);
@@ -115,7 +115,6 @@ public static class ServerDatabase
         }
 
         await database.MigrateAsync(ct).ConfigureAwait(false);
-        await scope.ServiceProvider.GetRequiredService<RouteStore>().MigrateBasicAsync(ct).ConfigureAwait(false);
         var moves = await db.AloneAsync(() => RuleSources.MoveAsync(db, ct), ct).ConfigureAwait(false);
         DatabaseFiles.Hide(database.GetDbConnection().DataSource, loggers.CreateLogger(typeof(DatabaseFiles).FullName!));
         var roles = scope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();

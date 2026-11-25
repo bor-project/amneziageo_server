@@ -47,11 +47,11 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
     public DbSet<OutboundEntity> Outbounds => Set<OutboundEntity>();
 
-    public DbSet<RouteRuleEntity> Rules => Set<RouteRuleEntity>();
+    public DbSet<RoutingEntryEntity> Rules => Set<RoutingEntryEntity>();
 
-    public DbSet<RouteBasicEntity> RouteBasics => Set<RouteBasicEntity>();
+    public DbSet<TrafficRuleEntity> TrafficRules => Set<TrafficRuleEntity>();
 
-    public DbSet<AddressGroupEntity> AddressGroups => Set<AddressGroupEntity>();
+    public DbSet<RoutingEntryRuleEntity> RoutingEntryRules => Set<RoutingEntryRuleEntity>();
 
     public DbSet<BalancerEntity> Balancers => Set<BalancerEntity>();
 
@@ -228,8 +228,6 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
 
         builder.Entity<DnsSettingsEntity>(entity =>
         {
-            entity.Property(row => row.Selection).HasMaxLength(16).HasDefaultValue("global");
-            entity.Property(row => row.Upstreams).HasMaxLength(512);
             entity.Property(row => row.Listen).HasMaxLength(512);
             entity.Property(row => row.FilesDns).HasMaxLength(512);
         });
@@ -294,28 +292,36 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.HasIndex(balancer => balancer.Position);
         });
 
-        builder.Entity<RouteRuleEntity>(entity =>
+        builder.Entity<RoutingEntryEntity>(entity =>
         {
-            entity.Property(rule => rule.Name).HasMaxLength(RouteRules.MaxNameLength);
-            entity.Property(rule => rule.Action).HasMaxLength(16);
-            entity.Property(rule => rule.Protocol).HasMaxLength(16);
-            entity.Property(rule => rule.Outbound).HasMaxLength(ConfigRules.MaxNameLength);
-            entity.HasIndex(rule => rule.Position);
-            entity.Property(rule => rule.Groups).HasDefaultValue(string.Empty);
+            entity.ToTable("RoutingEntries");
+            entity.Property(row => row.Name).HasMaxLength(RouteRules.MaxNameLength);
+            entity.Property(row => row.Action).HasMaxLength(16);
+            entity.Property(row => row.Protocol).HasMaxLength(16);
+            entity.Property(row => row.Outbound).HasMaxLength(ConfigRules.MaxNameLength);
+            entity.HasIndex(row => row.Position);
+            entity.HasMany(row => row.Matches).WithOne().HasForeignKey(match => match.EntryId).OnDelete(DeleteBehavior.Cascade);
         });
 
-        builder.Entity<AddressGroupEntity>(entity =>
+        builder.Entity<RoutingEntryRuleEntity>(entity =>
         {
-            entity.Property(record => record.DefaultKey).HasMaxLength(32);
-            entity.HasIndex(record => record.DefaultKey).IsUnique();
-            entity.Property(group => group.Name).HasMaxLength(RouteRules.MaxNameLength);
-            entity.Property(group => group.Dns).HasDefaultValue(string.Empty);
-            entity.HasIndex(group => group.Name).IsUnique();
+            entity.HasKey(match => new { match.EntryId, match.RuleId });
+            entity.HasOne(match => match.Rule).WithMany().HasForeignKey(match => match.RuleId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(match => new { match.EntryId, match.Position }).IsUnique();
+        });
+
+        builder.Entity<TrafficRuleEntity>(entity =>
+        {
+            entity.Property(rule => rule.Name).HasMaxLength(RouteRules.MaxNameLength);
+            entity.Property(rule => rule.DefaultKey).HasMaxLength(32);
+            entity.Property(rule => rule.DnsMode).HasMaxLength(16).HasDefaultValue("custom");
+            entity.HasIndex(rule => rule.Name).IsUnique();
+            entity.HasIndex(rule => rule.DefaultKey).IsUnique();
         });
 
         builder.Entity<TransportProxyEntity>(entity =>
         {
-            entity.Property(proxy => proxy.Name).HasMaxLength(64);
+            entity.Property(proxy => proxy.Name).HasMaxLength(64).UseCollation("NOCASE");
             entity.Property(proxy => proxy.Transport).HasMaxLength(16);
             entity.Property(proxy => proxy.Hosted).HasDefaultValue(true);
             entity.Property(proxy => proxy.HttpMethod).HasMaxLength(4).HasDefaultValue("GET");
@@ -325,7 +331,7 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, AppRole, long>
             entity.Property(proxy => proxy.TokensJson).HasDefaultValue(string.Empty);
             entity.Property(proxy => proxy.AllowAnonymous).HasDefaultValue(false);
             entity.Property(proxy => proxy.AccessVersion).HasDefaultValue(0L);
-            entity.HasIndex(proxy => proxy.Name).IsUnique();
+            entity.HasIndex(proxy => new { proxy.Name, proxy.Transport }).IsUnique();
             entity.HasIndex(proxy => proxy.LegacyConfigId).IsUnique();
         });
 

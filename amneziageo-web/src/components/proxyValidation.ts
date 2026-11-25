@@ -20,7 +20,7 @@ export function proxyHost(value: string): boolean {
 export function proxyFaults(t: Text, draft: ProxyDraft, id: number, all: TransportProxy[], path: string): Record<ProxyField, string> {
   const result: Record<ProxyField, string> = { name: "", host: "", port: "", listenPort: "", path, transport: "", targets: "", certificate: "", serverName: "", pin: "" }
   if (draft.name.trim().length === 0 || draft.name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(draft.name)) { result.name = t("error.proxyName") }
-  else if (all.some((one) => one.id !== id && one.name.trim().toLowerCase() === draft.name.trim().toLowerCase())) { result.name = t("error.nameTaken") }
+  else if (all.some((one) => one.id !== id && protocol(one) === protocol(draft) && one.name.trim().toLowerCase() === draft.name.trim().toLowerCase())) { result.name = t("error.nameTaken") }
   if (!proxyHost(draft.host)) { result.host = t("error.proxyHost") }
   if (!Number.isInteger(draft.port) || draft.port < 1 || draft.port > 65535) { result.port = t("error.badPort") }
   if (!Number.isInteger(draft.listenPort) || draft.listenPort < 0 || draft.listenPort > 65535) { result.listenPort = t("error.badPort") }
@@ -36,4 +36,8 @@ export function proxyFaults(t: Text, draft: ProxyDraft, id: number, all: Transpo
   if (draft.useCertificate !== true || draft.originHttp) { result.certificate = t("error.proxyTlsRequired") }
   if (draft.transport === "xhttp" || draft.transport === "http" && (draft.protocolVersion !== 2 || !["GET", "POST"].includes(draft.httpMethod))) { result.transport = t("error.proxyTransport") }
   return result
+}
+
+function protocol(proxy: ProxyDraft): string {
+  return proxy.transport === "xhttp" ? "http" : proxy.transport
 }

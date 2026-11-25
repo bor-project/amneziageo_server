@@ -35,6 +35,9 @@ public sealed record Balancer
     /// </summary>
     public IReadOnlyList<string> Members { get; init; } = [];
 
+    /// <summary>
+    /// Names the default resolvers.
+    /// </summary>
     public IReadOnlyList<string> Dns { get; init; } = [];
 
     /// <summary>

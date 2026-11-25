@@ -18,14 +18,13 @@ public static class RouteEndpoints
     {
         ArgumentNullException.ThrowIfNull(routes);
 
-        var reading = routes.MapGroup("/api/rules").RequireScope(Scopes.ReadState);
+        var reading = routes.MapGroup("/api/routing-entries").RequireScope(Scopes.ReadState);
         reading.MapGet("/", ListAsync);
         reading.MapGet("/table", TableAsync);
         reading.MapGet("/{id:long}", FindAsync);
-        reading.MapGet("/basic", BasicAsync);
         reading.MapPost("/test", TestAsync);
 
-        var writing = routes.MapGroup("/api/rules").RequireScope(Scopes.ManageRouting);
+        var writing = routes.MapGroup("/api/routing-entries").RequireScope(Scopes.ManageRouting);
         writing.MapGet("/draft", Draft);
         writing.MapGet("/ruleset", RulesetAsync);
         writing.MapPost("/", AddAsync);
@@ -34,10 +33,9 @@ public static class RouteEndpoints
         writing.MapPost("/{id:long}/move", MoveAsync);
         writing.MapPost("/table/{id:long}/move", MoveTableAsync);
         writing.MapPost("/apply", ApplyAsync);
-        writing.MapPut("/basic", ChangeBasicAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
-        return routes.MapAddressGroups();
+        return routes.MapTrafficRules();
     }
 
     private static async Task<IResult> TableAsync(RouteStore store, RouteApplier applier, CancellationToken ct)
@@ -132,6 +130,11 @@ public static class RouteEndpoints
         RouteApplier applier,
         CancellationToken ct)
     {
+        if (request.RuleIds is not { Count: > 0 })
+        {
+            return Refuse(StatusCodes.Status400BadRequest, "no-traffic-rule", "select at least one traffic rule");
+        }
+
         if (RouteAnswers.Dropped(request) is { } dropped)
         {
             return Refuse(StatusCodes.Status400BadRequest, dropped.Code, dropped.Message);
@@ -146,7 +149,7 @@ public static class RouteEndpoints
         var plan = await applier.SettleAsync(ct).ConfigureAwait(false);
 
         return Results.Created(
-            $"/api/rules/{result.Record!.Id}",
+            $"/api/routing-entries/{result.Record!.Id}",
             RouteAnswers.Rule(result.Record, Leg(plan, result.Record.Id)));
     }
 
@@ -157,6 +160,11 @@ public static class RouteEndpoints
         RouteApplier applier,
         CancellationToken ct)
     {
+        if (request.RuleIds is not { Count: > 0 })
+        {
+            return Refuse(StatusCodes.Status400BadRequest, "no-traffic-rule", "select at least one traffic rule");
+        }
+
         if (RouteAnswers.Dropped(request) is { } dropped)
         {
             return Refuse(StatusCodes.Status400BadRequest, dropped.Code, dropped.Message);

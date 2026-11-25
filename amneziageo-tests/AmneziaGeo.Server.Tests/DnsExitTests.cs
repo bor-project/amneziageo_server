@@ -20,8 +20,6 @@ public class DnsExitTests
     private static RouteWays Ways(IReadOnlySet<string>? alive = null, params Balancer[] balancers) =>
         new(Outbounds, balancers, alive);
 
-    private static DnsSettings Through(string name) => DnsDefaults.Settings with { Outbound = name };
-
     private static Balancer Mix(string strategy) => new()
     {
         Id = 1,
@@ -33,7 +31,7 @@ public class DnsExitTests
     [Fact]
     public void WithoutAChannelTheQuestionsLeaveThroughTheHost()
     {
-        var way = DnsExit.Way(DnsDefaults.Settings, Ways());
+        var way = DnsExit.Way(string.Empty, Ways());
 
         Assert.Equal(0u, way.Mark);
         Assert.Null(way.Fault);
@@ -42,7 +40,7 @@ public class DnsExitTests
     [Fact]
     public void TheQuestionsCarryTheMarkOfTheChannel()
     {
-        var way = DnsExit.Way(Through("bor"), Ways());
+        var way = DnsExit.Way("bor", Ways());
 
         Assert.Equal(0xA603u, way.Mark);
         Assert.Equal("bor", way.Outbound);
@@ -52,7 +50,7 @@ public class DnsExitTests
     [Fact]
     public void AChannelThePanelDoesNotHoldAsksNothing()
     {
-        var way = DnsExit.Way(Through("gone"), Ways());
+        var way = DnsExit.Way("gone", Ways());
 
         Assert.Null(way.Mark);
         Assert.Equal("unknown-outbound", way.Fault?.Code);
@@ -61,13 +59,13 @@ public class DnsExitTests
     [Fact]
     public void TheChannelIsTakenByItsExactName()
     {
-        Assert.Null(DnsExit.Way(Through("BOR"), Ways()).Mark);
+        Assert.Null(DnsExit.Way("BOR", Ways()).Mark);
     }
 
     [Fact]
     public void AChannelThatIsTurnedOffAsksNothing()
     {
-        var way = DnsExit.Way(Through("spare"), Ways());
+        var way = DnsExit.Way("spare", Ways());
 
         Assert.Null(way.Mark);
         Assert.Equal("outbound-off", way.Fault?.Code);
@@ -76,7 +74,7 @@ public class DnsExitTests
     [Fact]
     public void AChannelThatCarriesNothingIsStillAskedThroughAndSaysSo()
     {
-        var way = DnsExit.Way(Through("bor"), Ways(new HashSet<string> { "myvpn" }));
+        var way = DnsExit.Way("bor", Ways(new HashSet<string> { "myvpn" }));
 
         Assert.Equal(0xA603u, way.Mark);
         Assert.Equal("outbound-down", way.Fault?.Code);
@@ -85,7 +83,7 @@ public class DnsExitTests
     [Fact]
     public void ABalancerTakesItsFirstMemberWhileBothCarry()
     {
-        var way = DnsExit.Way(Through("mix"), Ways(null, Mix(BalanceStrategy.Priority)));
+        var way = DnsExit.Way("mix", Ways(null, Mix(BalanceStrategy.Priority)));
 
         Assert.Equal(0xA603u, way.Mark);
         Assert.Equal("bor", way.Outbound);
@@ -95,7 +93,7 @@ public class DnsExitTests
     [Fact]
     public void ABalancerHandsTheQuestionsToItsFirstLiveMember()
     {
-        var way = DnsExit.Way(Through("mix"), Ways(new HashSet<string> { "myvpn" }, Mix(BalanceStrategy.Priority)));
+        var way = DnsExit.Way("mix", Ways(new HashSet<string> { "myvpn" }, Mix(BalanceStrategy.Priority)));
 
         Assert.Equal(0xA602u, way.Mark);
         Assert.Equal("myvpn", way.Outbound);
@@ -107,7 +105,7 @@ public class DnsExitTests
     {
         var ways = Ways(null, Mix(BalanceStrategy.Round));
 
-        var marks = new long[] { 0, 1, 2 }.Select(turn => DnsExit.Way(Through("mix"), ways, turn).Mark);
+        var marks = new long[] { 0, 1, 2 }.Select(turn => DnsExit.Way("mix", ways, turn).Mark);
 
         Assert.Equal(new uint?[] { 0xA603, 0xA602, 0xA603 }, marks);
     }
@@ -117,7 +115,7 @@ public class DnsExitTests
     {
         var ways = Ways(null, Mix(BalanceStrategy.Sticky));
 
-        var marks = new long[] { 0, 1, 2 }.Select(turn => DnsExit.Way(Through("mix"), ways, turn).Mark);
+        var marks = new long[] { 0, 1, 2 }.Select(turn => DnsExit.Way("mix", ways, turn).Mark);
 
         Assert.Equal(new uint?[] { 0xA603, 0xA603, 0xA603 }, marks);
     }
@@ -125,7 +123,7 @@ public class DnsExitTests
     [Fact]
     public void ABalancerWithNothingLiveStillAsksThroughItsFirstMember()
     {
-        var way = DnsExit.Way(Through("mix"), Ways(new HashSet<string>(), Mix(BalanceStrategy.Priority)));
+        var way = DnsExit.Way("mix", Ways(new HashSet<string>(), Mix(BalanceStrategy.Priority)));
 
         Assert.Equal(0xA603u, way.Mark);
         Assert.Equal("no-live-member", way.Fault?.Code);
@@ -134,7 +132,7 @@ public class DnsExitTests
     [Fact]
     public void ABalancerThatIsTurnedOffAsksNothing()
     {
-        var way = DnsExit.Way(Through("mix"), Ways(null, Mix(BalanceStrategy.Priority) with { IsEnabled = false }));
+        var way = DnsExit.Way("mix", Ways(null, Mix(BalanceStrategy.Priority) with { IsEnabled = false }));
 
         Assert.Null(way.Mark);
         Assert.Equal("balancer-off", way.Fault?.Code);
@@ -145,7 +143,7 @@ public class DnsExitTests
     {
         var balancer = Mix(BalanceStrategy.Priority) with { Members = ["spare", "gone"] };
 
-        var way = DnsExit.Way(Through("mix"), Ways(null, balancer));
+        var way = DnsExit.Way("mix", Ways(null, balancer));
 
         Assert.Null(way.Mark);
         Assert.Equal("no-member", way.Fault?.Code);
@@ -169,9 +167,9 @@ public class DnsExitTests
         var closed = new DnsUpstream([$"127.0.0.1:{port}"], TimeSpan.FromMilliseconds(300), () => null);
         var open = new DnsUpstream([$"127.0.0.1:{port}"], TimeSpan.FromMilliseconds(300), () => 0u);
 
-        var answer = await closed.AskAsync(new byte[12], false, CancellationToken.None);
+        var answer = await closed.AskAsync(new byte[12], false, CancellationToken.None).ConfigureAwait(false);
         var before = server.Available;
-        await open.AskAsync(new byte[12], false, CancellationToken.None);
+        await open.AskAsync(new byte[12], false, CancellationToken.None).ConfigureAwait(false);
 
         Assert.Null(answer);
         Assert.Equal(0, before);

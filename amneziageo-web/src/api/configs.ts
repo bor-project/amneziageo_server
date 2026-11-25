@@ -234,7 +234,7 @@ function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) 
       await queryClient.invalidateQueries({ queryKey: ["client-info"] })
       await queryClient.invalidateQueries({ queryKey: ["firewall", "port"] })
       await queryClient.invalidateQueries({ queryKey: ["dns-conflicts"] })
-      await queryClient.invalidateQueries({ queryKey: ["rules"] })
+      await queryClient.invalidateQueries({ queryKey: ["routing-entries"] })
     },
   })
 }

@@ -52,8 +52,6 @@ public sealed record DnsReadingBody(
 public sealed record DnsResponse(
     bool IsEnabled,
     int Port,
-    IReadOnlyList<string> Upstreams,
-    string Outbound,
     IReadOnlyList<string> Listen,
     int NameMinutes,
     int CacheSize,
@@ -63,8 +61,7 @@ public sealed record DnsResponse(
     DnsStateBody State,
     DnsReadingBody Reading,
     string FilesMode = DnsChoiceName.Routing,
-    IReadOnlyList<string>? FilesDns = null,
-    string Selection = DnsSelection.Global);
+    IReadOnlyList<string>? FilesDns = null);
 
 /// <summary>
 /// The settings the resolver is changed with.
@@ -72,16 +69,13 @@ public sealed record DnsResponse(
 public sealed record DnsRequest(
     bool IsEnabled,
     int Port,
-    IReadOnlyList<string>? Upstreams,
-    string? Outbound,
     IReadOnlyList<string>? Listen,
     int NameMinutes,
     int CacheSize,
     int MinTtl,
     int MaxTtl,
     string? FilesMode = null,
-    IReadOnlyList<string>? FilesDns = null,
-    string? Selection = null);
+    IReadOnlyList<string>? FilesDns = null);
 
 /// <summary>
 /// Turns the resolver settings into what the panel reads and back.
@@ -110,8 +104,6 @@ public static class DnsAnswers
         return new DnsResponse(
             settings.IsEnabled,
             settings.Port,
-            settings.Upstreams,
-            settings.Outbound,
             settings.Listen,
             settings.NameMinutes,
             settings.CacheSize,
@@ -135,8 +127,7 @@ public static class DnsAnswers
                 state.Picked),
             reading ?? new DnsReadingBody(false, false, 0, 0, 0, 0, 0, 0, 0),
             DnsChoiceName.Of(settings.FilesMode),
-            settings.FilesDns,
-            settings.Selection);
+            settings.FilesDns);
     }
 
     /// <summary>
@@ -151,9 +142,6 @@ public static class DnsAnswers
         {
             IsEnabled = request.IsEnabled,
             Port = request.Port,
-            Upstreams = Clean(request.Upstreams),
-            Outbound = (request.Outbound ?? string.Empty).Trim(),
-            Selection = request.Selection?.Trim() ?? held?.Selection ?? DnsSelection.Global,
             Listen = Clean(request.Listen),
             NameMinutes = request.NameMinutes,
             CacheSize = request.CacheSize,

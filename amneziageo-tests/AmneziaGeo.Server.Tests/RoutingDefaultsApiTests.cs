@@ -15,10 +15,10 @@ namespace AmneziaGeo.Server.Tests;
 public sealed class RoutingDefaultsApiTests
 {
     [Theory]
-    [InlineData("groups", "", 401)]
-    [InlineData("groups", Scopes.ReadState, 403)]
-    [InlineData("groups", Scopes.ManageClients, 403)]
-    [InlineData("groups", Scopes.ManageRouting, 200)]
+    [InlineData("rules", "", 401)]
+    [InlineData("rules", Scopes.ReadState, 403)]
+    [InlineData("rules", Scopes.ManageClients, 403)]
+    [InlineData("rules", Scopes.ManageRouting, 200)]
     [InlineData("presets", "", 401)]
     [InlineData("presets", Scopes.ReadState, 403)]
     [InlineData("presets", Scopes.ManageRouting, 403)]
@@ -43,18 +43,18 @@ public sealed class RoutingDefaultsApiTests
 
             await next(context).ConfigureAwait(false);
         });
-        app.MapAddressGroups();
+        app.MapTrafficRules();
         app.MapPresets();
         await app.StartAsync().ConfigureAwait(false);
         try
         {
             using var api = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
-            var path = part == "groups" ? "/api/address-groups/defaults" : "/api/templates/routing/defaults";
+            var path = part == "rules" ? "/api/traffic-rules/defaults" : "/api/templates/routing/defaults";
             using var response = await api.PostAsync(path, null).ConfigureAwait(false);
             Assert.Equal((HttpStatusCode)status, response.StatusCode);
             if (status == 200)
             {
-                Assert.Equal(part == "groups" ? new RoutingDefaultsResult(7, 0) : new RoutingDefaultsResult(0, 7),
+                Assert.Equal(part == "rules" ? new RoutingDefaultsResult(7, 0) : new RoutingDefaultsResult(0, 7),
                     await response.Content.ReadFromJsonAsync<RoutingDefaultsResult>().ConfigureAwait(false));
                 using var repeated = await api.PostAsync(path, null).ConfigureAwait(false);
                 Assert.Equal(new RoutingDefaultsResult(0, 0),
@@ -63,7 +63,7 @@ public sealed class RoutingDefaultsApiTests
             else
             {
                 Assert.Empty(await bench.Presets.ListAsync(default).ConfigureAwait(false));
-                Assert.Empty(await new AddressGroupStore(bench.Db).ListAsync(default).ConfigureAwait(false));
+                Assert.Empty(await new TrafficRuleStore(bench.Db).ListAsync(default).ConfigureAwait(false));
             }
         }
         finally

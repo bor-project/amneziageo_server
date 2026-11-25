@@ -171,10 +171,9 @@ public sealed class BalanceStore
     }
 
     /// <summary>
-    /// Removes a balancer, unless a rule or the resolver leaves through it; live names the outbound the running
-    /// resolver asks through.
+    /// Removes an unused balancer.
     /// </summary>
-    public async Task<BalanceResult> RemoveAsync(long id, string live, CancellationToken ct)
+    public async Task<BalanceResult> RemoveAsync(long id, CancellationToken ct)
     {
         var entity = await _db.Balancers
             .FirstOrDefaultAsync(balancer => balancer.Id == id, ct)
@@ -192,22 +191,6 @@ public sealed class BalanceStore
                 BalanceOutcome.Invalid,
                 "balancer-in-use",
                 $"a rule leaves through the balancer '{name}'");
-        }
-
-        if (await NameFollow.AsksThroughAsync(_db, name, ct).ConfigureAwait(false))
-        {
-            return BalanceResult.No(
-                BalanceOutcome.Invalid,
-                "balancer-in-use",
-                $"the resolver asks through the balancer '{name}'");
-        }
-
-        if (string.Equals(live, name, StringComparison.Ordinal))
-        {
-            return BalanceResult.No(
-                BalanceOutcome.Invalid,
-                "balancer-in-use",
-                $"the resolver asks through the balancer '{name}' until it is restarted");
         }
 
         var gone = Read(entity);
@@ -324,12 +307,12 @@ public sealed class BalanceStore
 
     private static void Write(BalancerEntity entity, Balancer balancer)
     {
+        entity.Dns = string.Join(", ", balancer.Dns);
         entity.Name = balancer.Name.Trim();
         entity.Position = balancer.Position;
         entity.IsEnabled = balancer.IsEnabled;
         entity.Strategy = balancer.Strategy;
         entity.Members = string.Join(", ", balancer.Members);
-        entity.Dns = string.Join(", ", balancer.Dns);
     }
 
     private static IReadOnlyList<string> Parts(string text) =>

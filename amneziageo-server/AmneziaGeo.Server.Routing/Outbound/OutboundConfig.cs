@@ -73,7 +73,7 @@ public sealed record OutboundConfig
     public IReadOnlyList<string> Address { get; init; } = [];
 
     /// <summary>
-    /// The name servers reachable through the outbound.
+    /// Names the default resolvers.
     /// </summary>
     public IReadOnlyList<string> Dns { get; init; } = [];
 

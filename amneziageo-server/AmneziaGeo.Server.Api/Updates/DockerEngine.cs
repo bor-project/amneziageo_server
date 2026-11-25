@@ -47,6 +47,14 @@ public sealed class DockerEngine : IDisposable
         };
     }
 
+    /// <summary>
+    /// ctor
+    /// </summary>
+    public DockerEngine(HttpClient http)
+    {
+        _http = http;
+    }
+
     /// <inheritdoc/>
     public void Dispose() => _http.Dispose();
 

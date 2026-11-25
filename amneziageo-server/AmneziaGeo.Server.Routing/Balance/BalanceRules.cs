@@ -1,5 +1,3 @@
-using AmneziaGeo.Server.Routing.Dns;
-
 namespace AmneziaGeo.Server.Routing.Balance;
 
 /// <summary>
@@ -27,7 +25,7 @@ public static class BalanceRules
         return CheckName(balancer.Name)
             ?? CheckStrategy(balancer.Strategy)
             ?? CheckMembers(balancer.Members)
-            ?? (DnsRules.Servers(balancer.Dns) is { } dns ? new BalanceFault(dns.Code, dns.Message) : null);
+            ?? (Route.RouteRules.CheckDns(balancer.Dns, new Dictionary<string, IReadOnlyList<string>>()) is { } dns ? new BalanceFault(dns.Code, dns.Message) : null);
     }
 
     /// <summary>

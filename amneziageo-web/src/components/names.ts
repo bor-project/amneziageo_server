@@ -2,7 +2,7 @@ export const defaultName = "{HOST}-{INTERFACE}-{CLIENT}"
 
 export const nameKeys = ["HOST", "INTERFACE", "CLIENT", "ID", "PORT", "NOTE", "DATE"]
 
-export const defaultProxyName = "{PROXY}"
+export const defaultProxyName = "{PROXY}-{HOST}-{TRANSPORT}"
 
 export const proxyNameKeys = ["HOST", "PROXY", "TRANSPORT", "ID", "PORT", "PATH"]
 
@@ -48,7 +48,7 @@ export function fillName(template: string, values: Record<string, string>, stamp
 
 export function fillProxyName(template: string, values: Record<string, string>, stamp: string): string {
   const original = values.PROXY ?? stamp
-  const name = template === defaultProxyName ? original : fillName(template, values, original, proxyNameKeys)
+  const name = template === "{PROXY}" ? original : fillName(template, values, original, proxyNameKeys)
   let length = Math.min(name.length, 64)
   const last = name.charCodeAt(length - 1)
   if (length < name.length && last >= 0xd800 && last <= 0xdbff) {

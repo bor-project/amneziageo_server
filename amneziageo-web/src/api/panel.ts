@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
+import { defaultProxyName } from "@/components/names"
 import type { Holding } from "./firewall"
 
 export interface PanelDraft {
@@ -137,7 +138,7 @@ export function draftOf(panel: Panel): PanelDraft {
     language: panel.language,
     prereleases: panel.prereleases,
     nameTemplate: panel.nameTemplate,
-    proxyNameTemplate: panel.proxyNameTemplate ?? "{PROXY}",
+    proxyNameTemplate: panel.proxyNameTemplate ?? defaultProxyName,
   }
 }
 

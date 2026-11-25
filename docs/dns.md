@@ -1,17 +1,18 @@
 # The resolver
 
-The panel answers the name questions of the tunnel clients itself. It passes a question on to a name
-server outside, over HTTPS unless told otherwise, gives the answer back, and puts the addresses it saw into the sets
-of the routing rules that match the name. This is what makes a rule by domain work: the kernel decides by address,
-and the answer of the resolver is where the addresses come from. It also keeps what the clients ask about from
-leaving the server in the open.
+The panel answers DNS questions from tunnel clients and places resolved destination addresses into the sets used
+by routing rules. Address sets in **Routing → Addresses** define the resolver policy. Ordered **Rules** select
+the processing method and additional client/interface/port filters; see [rules.md](rules.md).
 
-The resolver runs while the routing needs it: a rule or a basic list on the host matches by name, or a template
-answers with stand-in addresses. It also runs while a client that is on picks it, see
-[The name servers of a file](#the-name-servers-of-a-file), or holds a file that names it, see
-[Files that name the resolver](#files-that-name-the-resolver). Until then the clients are handed the name servers of
-their configuration and ask them through the tunnel, and those questions leave the server as plain DNS. A fresh panel and an updated one are
-automatic; [keeping it off](#turning-the-resolver-on) takes the menu, a command or the panel.
+DNS selects the first rule matching the name, client and incoming interface. Application protocol and port filters
+are ignored for DNS selection, while application traffic still uses every filter. Within that rule the first
+matching address set supplies DNS. Questions travel through the rule's linked server, selected balancer member or
+direct path. Blocking does not forward them. There is no independent Global/Outbound/Routing DNS-exit selector.
+
+The resolver runs automatically while domain routing, stand-in addresses, clients choosing it or previously
+exported client configurations require it. Its service page retains listener, port, cache and client-file settings.
+The DNS choices of individual client configurations and templates remain separate from the server's resolver
+selection for routed questions.
 
 ## Rights
 
@@ -30,8 +31,6 @@ automatic; [keeping it off](#turning-the-resolver-on) takes the menu, a command 
 | Mode | `Automatic` runs the resolver while the routing needs it, `Off` keeps it off |
 | Port | the port questions are taken on, 53 by default |
 | Listen on | the addresses questions are taken on, empty for the addresses of the configurations |
-| Upstream servers | the name servers questions are passed to and the way each is asked, see [How the name servers are asked](#how-the-name-servers-are-asked) |
-| Queries to them | `Direct` for the way out of the host, or `Through a channel` with the outbound or the balancer of `Channel` the questions leave through |
 | An address lives | how long an answered address stays in the set of a rule, in minutes |
 | Answers held in memory | how many answers are kept back, zero for none |
 | An answer lives from, to | the bounds the lifetime of a kept answer is clamped to, in seconds |
@@ -42,7 +41,7 @@ resolver answers on the rest.
 
 ## How the name servers are asked
 
-An entry of `Upstream servers` names a name server by its address and tells how it is asked:
+A custom DNS entry of an address set names a resolver by address and determines its transport:
 
 | Entry | Asked |
 |---|---|
@@ -50,14 +49,21 @@ An entry of `Upstream servers` names a name server by its address and tells how 
 | `tls://1.1.1.1`, `tls://1.1.1.1:853` | DNS over TLS, port 853 unless another is written |
 | `1.1.1.1`, `8.8.8.8:5300`, `[2606:4700:4700::1111]:53` | in the open: UDP, and TCP for a client that came over TCP, port 53 unless another is written |
 
-A fresh panel asks `https://1.1.1.1/dns-query` and `https://8.8.4.4/dns-query`. A panel that saved its name servers
-before keeps them as they are, plain ones included, until they are changed here, in the menu or with
-`amneziageo-server dns set --upstreams default`.
+A new address set starts in Default mode. For a linked server it uses the saved DNS of that connection; a
+balancer uses its own DNS or that of the selected member; direct access uses the host DNS. The read-only endpoint
+`GET /api/traffic-rules/dns-defaults` returns the host's current resolver addresses. Empty default sources are
+reported as missing; they do not automatically choose a public provider. Presets store explicit addresses and
+custom mode accepts the forms below. Plain IP presets use plain DNS; TLS or HTTPS requires the corresponding URL.
+
+Earlier saved resolver addresses and custom member overrides are retained when a shared address set has one
+compatible DNS policy. If its former policies conflict, migration keeps the shared set and selects Default DNS from
+each rule's processing method; the effective resolver addresses can change. DNS follows its rule's processing
+method even where earlier independent DNS settings selected a different exit. Details of the data mapping are in
+[rules.md](rules.md#migration-and-existing-configurations).
 
 A name server asked over TLS or HTTPS is named by its address, not by a name, so nothing has to be resolved first.
 The certificate it shows is checked against that address under the roots the host trusts, and a server whose
-certificate does not carry the address is not asked; Cloudflare, Google and Quad9 carry theirs. `PUT /api/dns`
-refuses an entry that is none of the three forms with `bad-upstream`.
+certificate does not carry the address is not asked; Cloudflare, Google and Quad9 carry theirs. The address-set API refuses an unsupported resolver form with `bad-dns`.
 
 The connections that answered are kept for the questions that follow. The servers are asked in the order written;
 one that gave no answer is asked after the ones that answer for thirty seconds, and then asked aside, so no client
@@ -66,7 +72,7 @@ it. When three questions in a row find no server, the panel says why: `fault` in
 log carry `no name server answers: https://1.1.1.1:443/dns-query: ...`, and the services count the resolver as down,
 until a server answers again.
 
-`Through a channel` carries the questions the same way whatever they travel in.
+The selected processing path carries questions regardless of whether their resolver transport is plain DNS, TLS or HTTPS.
 
 An answer larger than the datagram a client takes, 512 bytes or the size its question names, goes back cut down to
 the question and marked as cut, so the client asks again over TCP and gets it whole.
@@ -107,24 +113,15 @@ let them in. On the host, item 23 of the menu, subitem 13, or `amneziageo-server
 item 29 and the installation offer the same once the resolver answers. A host without ufw keeps nobody out, and a
 ufw whose rules nftables shows only as matches of iptables names nothing.
 
-The questions leave through the way out of the host until a channel is picked. Where the local network
-answers about a service differently from the network behind the channel, a rule by name fills its set with
-the wrong addresses or with none at all, and the traffic never reaches the channel the rule sends it to.
-`Through a channel` puts the mark of the outbound of `Channel` on the questions, the mark its probe already
-carries, so the answers come from where the traffic is going. `PUT /api/dns` refuses a channel the panel
-does not hold with `unknown-outbound`. The entries of the client templates are resolved the same way.
+The processing rule determines the socket mark used for the query. A linked server uses its own mark, and a
+balancer selects an available member using its strategy. Priority uses the first available member; round can
+select different members for successive queries; sticky uses the client context when it is available. Custom
+member overrides are selected only for the member carrying the question. With Default mode, a balancer's own DNS
+takes precedence over its member's source DNS.
 
-The channel is picked again for every question. A balancer hands the questions to its first member that
-carries traffic, and a `round` balancer hands them out to the members that carry in turn; a `sticky` one acts
-as `priority`, since every question comes from the host itself. So the resolver outlives the death of one
-channel the way the rules do. When none of the members carries, or the one outbound picked carries nothing,
-the questions still go into the channel, and `fault` in the state of the resolver says what is wrong.
-
-A question is never sent through the way out of the host once a channel is picked. While the outbound is
-turned off, the balancer is turned off or holds no outbound that is on, or the panel holds nothing under the name,
-the resolver asks nothing and answers the clients with `SERVFAIL`; the same goes for the names of the rules it
-asks about itself, the route tester and the entries of the templates. `fault` then names the reason, and the
-panel shows it on the `DNS` page.
+A selected object that is disabled, missing or unavailable causes the question to fail instead of leaving through
+the host. A default source without DNS also fails. Changing a shared address set's DNS takes effect for each rule
+using it; it does not rewrite the client configuration or create another independent routing policy.
 
 `Save` writes the settings down, and the resolver and the rules take them at `Restart`, the button that
 shows in the header while saved settings wait for it. It calls `POST /api/dns/restart`, or starts the whole
@@ -160,7 +157,7 @@ What a client of another make does with each choice, from what the clients say a
 
 | Choice | Full tunnel (`0.0.0.0/0`) | Chosen networks |
 |---|---|---|
-| `panel` | the questions go to the panel through the tunnel; the way out of the panel is encrypted | the same: the address of the resolver goes into `AllowedIPs` |
+| `panel` | the questions go to the panel through the tunnel; the panel uses the resolver transport configured by the matching address set | the same: the address of the resolver goes into `AllowedIPs` |
 | `network` | the device asks its network past the tunnel, in the open; a name server outside the subnet of the device (mobile data) is asked through the tunnel, where the panel takes the question on port 53 while the resolver answers the endpoint; AmneziaWG for Windows locks that out in a full tunnel and resolves no name | the device asks its network past the tunnel |
 | `own`, `endpoint`, `routing` without the resolver | the questions go through the tunnel, and while the resolver answers the endpoint the panel takes them on port 53; with a rule by name it also refuses DNS over TLS and HTTPS, so Android falls back to port 53, and without one Android asks a server that speaks DNS over TLS that way, past the resolver | the questions go past the tunnel to those servers |
 
@@ -205,7 +202,7 @@ addresses.
 
 ## What contradicts
 
-`GET /api/dns/conflicts` says who needs the resolver (`needs`: the rules and basic lists by name, the templates with
+`GET /api/dns/conflicts` says who needs the resolver (`needs`: the ordered rules matching names, the templates with
 Route by name, the clients that pick it and the clients that hold a file naming it) and what the settings that decide
 the `DNS` line of the clients contradict (`findings`). A finding carries a `code`, a `level`, the settings that bring
 it (`subjects`: `dns`, `rule`, `basic`, `template`, `config` or `client`, with the number and the name) and the
@@ -213,7 +210,7 @@ clients it touches, each with where its name servers were picked and what they a
 
 | Code | Level | When |
 |---|---|---|
-| `rule-off` | `error` | a rule or a basic list by name while the resolver is off: it does not work |
+| `rule-off` | `error` | a rule matching names while the resolver is off: it does not work |
 | `standins-off` | `error` | a template with Route by name while the resolver is off |
 | `holders-off` | `error` | clients hold a file that names the resolver while it is off: they get no answer to a name |
 | `panel-off` | `warning` | a client, a template or the server picks the resolver while it is off: the files take other name servers |
@@ -241,9 +238,9 @@ A save is never refused for a contradiction.
 | Where | How |
 |---|---|
 | the installation | no question: a fresh panel is automatic; `resolver` set to `no` in a file of answers keeps it off, see [install.md](install.md#the-menu) |
-| the menu | item 29, `DNS for Clients`; the status under the menu shows `DNS: automatic, asks outside encrypted` |
+| the menu | item 29, `DNS for Clients` |
 | the script | `amneziageo-server dns on`, `amneziageo-server dns off`, `amneziageo-server dns` to be asked |
-| the utility | `dns show`, `dns get enabled port upstreams encrypted outbound files files-dns holders`, `dns set --enabled auto` (or `on`) or `off`, `dns set --upstreams <servers>` or `default` for the ones a fresh panel asks, `dns set --files routing \| panel \| network \| own \| endpoint` with `--files-dns <servers>` for `own` |
+| the utility | `dns show`, `dns get enabled port files files-dns holders`, `dns set --enabled auto` (or `on`) or `off`, and `dns set --files routing \| panel \| network \| own \| endpoint` with `--files-dns <servers>` for `own` |
 | the panel | `Mode` in `DNS server for clients` on the `DNS` page, then `Restart` |
 
 The menu and the commands work the same on a package and in a container: there they go through
@@ -270,15 +267,10 @@ chain resolve {
 }
 ```
 
-The resolver reads out of the connection tracking of the host where a question turned to it was first sent. A
-question to a private address (`10.0.0.0/8`, `100.64.0.0/10`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`, `fe80::/10`) that is not an address of the host
-goes on to that server as plain DNS through the host, so a router in the network behind the server answers its own
-names; the answer feeds the sets of the rules and the stand-ins the way an answer of the upstreams does, and stays
-out of the cache. Only a network the host reaches by a route of its own goes there: the routes of the host
-(`/proc/net/route`, `/proc/net/ipv6_route`) are read again every half a minute, and an address the host reaches by
-its default route only, or by a route that turns the traffic away, is answered by the resolver itself through the
-upstreams. So is a question the private server gave no answer to in time, and that server is passed over for five
-minutes.
+Intercepted questions use the DNS policy of the matching processing rule. Their original destination does not
+create an independent DNS route. To query a private resolver behind a linked server, select that server in the rule
+and use its imported DNS or an explicit custom resolver address in the address set. Direct processing uses the host
+DNS in Default mode, including local resolvers configured on the host.
 
 The guards that keep a client off the name servers it carries its own way, since a question inside TLS or HTTPS is
 a question the resolver never sees, live in a table of their own, `amneziageo_dns`, laid after the rules and never
@@ -315,18 +307,17 @@ plain DNS does it without waiting and lands in `asked4`; one that never asks por
 own three times in a short while is let go. The lines take only the clients the rules by name take: a rule limited
 to interfaces or clients puts its conditions in front of them.
 
-The table stands while the resolver answers, a rule or a basic list on the host matches by name and the panel reads
+The table stands while the resolver answers, a rule on the host matches by name and the panel reads
 no names out of the connections; otherwise the panel takes it away. A host that does not take the table gets a line
 in the log, and the rules stay as they were laid.
 
 ## A server that leaves through another
 
-A panel whose outbound is a tunnel to another AmneziaGeo server is a client of that server, and with `Ask through
-the channel` its questions arrive there like the traffic of any client. The server at the far end passes them on
-while none of its own rules matches by name. Where it does hold such a rule, its guards refuse a question carried
-over TLS or HTTPS until the near panel has tried three times in a short while, and then let it go for a day. The
-near panel may also name its upstream in the open, as `1.1.1.1`, and ask through the channel: the tunnel carries
-the question to the far end, whose resolver takes it and asks outside over HTTPS.
+A linked server is a VPN client of the remote server. A rule selecting it carries its DNS questions through that
+same connection. Default mode commonly uses the remote resolver address imported in the linked-server profile;
+custom mode can instead name another resolver reachable by that connection. The remote server's own DNS
+interception, routing and guards continue to apply. Choosing a remote server does not discover an unconfigured
+resolver address automatically.
 
 ## The sets of the rules
 
@@ -365,7 +356,7 @@ lets its address go.
 
 An answer of the resolver is not the only place a name shows. A client that asks a name server of its own, or
 any client while the resolver is off, goes to an address no answer of the panel ever carried, and the set of a
-rule by name would not hold it. So while a rule or a basic list on the host matches by name, the panel reads the
+rule by name would not hold it. So while a rule on the host matches by name, the panel reads the
 name out of the connection itself, the resolver on or off: the server name of the first message of TLS on TCP
 443, the `Host` header of a request on TCP 80, and the server name inside the first packets of QUIC on UDP 443.
 The address goes into the sets of the rules the name falls under, the way an answered address does, and stays

@@ -14,8 +14,6 @@ public static partial class HandoverCommand
     /// </summary>
     public const string Name = "handover";
 
-    private const int Backups = 5;
-
     private static readonly TimeSpan Patience = TimeSpan.FromMinutes(3);
 
     private static readonly TimeSpan Stopping = TimeSpan.FromSeconds(30);
@@ -66,68 +64,83 @@ public static partial class HandoverCommand
         return Tags().IsMatch(held) ? Tags().Replace(held, line) : held.TrimEnd('\n') + "\n" + line + "\n";
     }
 
-    private static async Task<int> MoveAsync(DockerEngine engine, Handover move, CancellationToken ct)
+    public static async Task<int> MoveAsync(DockerEngine engine, Handover move, CancellationToken ct)
     {
         Say($"moving {move.Service} of {move.Project} from {move.From} to {move.Image}");
         var id = await FoundAsync(engine, move, ct).ConfigureAwait(false);
         var container = await engine.ContainerAsync(id, ct).ConfigureAwait(false);
         var name = DockerEngine.Text(container["Name"]).TrimStart('/');
         var image = DockerEngine.Text(container["Config"]?["Image"]);
-        if (name.Length == 0 || image.Length == 0)
+        var build = DockerEngine.Text(container["Image"]);
+        if (name.Length == 0 || image.Length == 0 || build.Length == 0)
         {
-            throw new InvalidOperationException($"the daemon names neither the container {id} nor its image");
+            throw new InvalidOperationException($"the daemon did not identify container {id} and its image build");
         }
-
-        var baseline = await engine.ImageAsync(image, ct).ConfigureAwait(false);
+        var baseline = await engine.ImageAsync(build, ct).ConfigureAwait(false);
         var spare = name + "-" + move.From;
         await FreeAsync(engine, spare, ct).ConfigureAwait(false);
-        var backup = Backup(move);
-        var env = Tag(move.Folder, move.To);
-
-        Say($"stopping {name}");
-        await engine.StopAsync(id, Stopping, ct).ConfigureAwait(false);
-        await engine.RenameAsync(id, spare, ct).ConfigureAwait(false);
-
+        var backup = string.Empty;
+        var env = default(string);
+        var tagged = false;
+        var stopped = false;
+        var renamed = false;
         var made = string.Empty;
         var fault = string.Empty;
+        var cancellation = default(OperationCanceledException);
         try
         {
+            Say($"stopping {name}");
+            await engine.StopAsync(id, Stopping, ct).ConfigureAwait(false);
+            stopped = true;
+            backup = ReleaseDatabases.Save(move.Data, "docker:" + build);
+            env = Tag(move.Folder, move.To);
+            tagged = true;
+            await engine.RenameAsync(id, spare, ct).ConfigureAwait(false);
+            renamed = true;
             Say($"starting {name} on {move.Image}");
             made = await engine.CreateAsync(name, DockerSwap.Spec(container, baseline, move.Image), ct).ConfigureAwait(false);
             await engine.StartAsync(made, ct).ConfigureAwait(false);
             var state = await WaitAsync(engine, made, ct).ConfigureAwait(false);
             fault = state is "healthy" or "running" ? string.Empty : $"the container of {move.To} is {state}";
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
+            Console.Error.WriteLine(ex);
             fault = ex.Message;
+            cancellation = ex as OperationCanceledException;
         }
-
         if (fault.Length == 0)
         {
+            var target = DockerEngine.Text((await engine.ContainerAsync(made, ct).ConfigureAwait(false))["Image"]);
             await Quietly(() => engine.RemoveAsync(id, ct)).ConfigureAwait(false);
-            Prune(move.Data);
+            ReleaseDatabases.Prune(move.Data, "docker:" + build, "docker:" + target);
             Say($"{move.Service} runs {move.To}");
-
             return 0;
         }
-
         Say($"{move.To} did not come up: {fault}");
         if (made.Length > 0)
         {
-            Say($"the last lines of {name} on {move.To}:");
-            await Quietly(async () => Console.Write(await engine.LogsAsync(made, 40, ct).ConfigureAwait(false)))
-                .ConfigureAwait(false);
-            await Quietly(() => engine.StopAsync(made, Stopping, ct)).ConfigureAwait(false);
-            await Quietly(() => engine.RemoveAsync(made, ct)).ConfigureAwait(false);
+            await Quietly(async () => Console.Write(await engine.LogsAsync(made, 40, CancellationToken.None).ConfigureAwait(false))).ConfigureAwait(false);
+            await engine.StopAsync(made, Stopping, CancellationToken.None).ConfigureAwait(false);
+            await engine.RemoveAsync(made, CancellationToken.None).ConfigureAwait(false);
         }
-
-        Say($"{move.Service} goes back to {move.From}");
-        Restore(backup, move.Data);
-        Untag(move.Folder, env);
-        await engine.RenameAsync(id, name, ct).ConfigureAwait(false);
-        await engine.StartAsync(id, ct).ConfigureAwait(false);
-
+        if (stopped)
+        {
+            ReleaseDatabases.Restore(move.Data, backup);
+            if (tagged)
+            {
+                Untag(move.Folder, env);
+            }
+            if (renamed)
+            {
+                await engine.RenameAsync(id, name, CancellationToken.None).ConfigureAwait(false);
+            }
+            await engine.StartAsync(id, CancellationToken.None).ConfigureAwait(false);
+        }
+        if (cancellation is not null)
+        {
+            throw cancellation;
+        }
         return 1;
     }
 
@@ -193,66 +206,13 @@ public static partial class HandoverCommand
             ? started
             : DateTimeOffset.UtcNow;
 
-    private static string Backup(Handover move)
-    {
-        if (!File.Exists(Path.Combine(move.Data, "server.db")))
-        {
-            return string.Empty;
-        }
-
-        var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-        var folder = Path.Combine(move.Data, "backup", $"{stamp}-{move.From}");
-        Directory.CreateDirectory(folder);
-        foreach (var file in Directory.EnumerateFiles(move.Data, "server.db*"))
-        {
-            File.Copy(file, Path.Combine(folder, Path.GetFileName(file)), overwrite: true);
-        }
-
-        Say($"the database is copied to {folder}");
-
-        return folder;
-    }
-
-    private static void Restore(string backup, string data)
-    {
-        if (backup.Length == 0 || !Directory.Exists(backup))
-        {
-            return;
-        }
-
-        foreach (var name in new[] { "server.db-wal", "server.db-shm" })
-        {
-            File.Delete(Path.Combine(data, name));
-        }
-
-        foreach (var file in Directory.EnumerateFiles(backup, "server.db*"))
-        {
-            File.Copy(file, Path.Combine(data, Path.GetFileName(file)), overwrite: true);
-        }
-
-        Say($"the database is back from {backup}");
-    }
-
-    private static void Prune(string data)
-    {
-        var folder = Path.Combine(data, "backup");
-        if (!Directory.Exists(folder))
-        {
-            return;
-        }
-
-        var held = Directory.EnumerateDirectories(folder).Order(StringComparer.Ordinal).ToList();
-        foreach (var old in held.Take(Math.Max(0, held.Count - Backups)))
-        {
-            Directory.Delete(old, recursive: true);
-        }
-    }
-
     private static string? Tag(string folder, string to)
     {
         var path = Path.Combine(folder, ".env");
         var held = File.Exists(path) ? File.ReadAllText(path) : null;
-        File.WriteAllText(path, Tagged(held, "AMNEZIAGEO_TAG=" + to));
+        var stage = path + "." + Guid.NewGuid().ToString("N");
+        File.WriteAllText(stage, Tagged(held, "AMNEZIAGEO_TAG=" + to));
+        File.Move(stage, path, overwrite: true);
         Say($"{path} names {to}");
 
         return held;
@@ -296,7 +256,7 @@ public static partial class HandoverCommand
     [GeneratedRegex("(?m)^AMNEZIAGEO_TAG=.*$")]
     private static partial Regex Tags();
 
-    private sealed record Handover(
+    public sealed record Handover(
         string Project,
         string Service,
         string Folder,

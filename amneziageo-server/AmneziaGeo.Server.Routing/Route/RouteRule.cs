@@ -10,6 +10,10 @@ public sealed record RouteRule
     /// </summary>
     public long Id { get; init; }
 
+    public IReadOnlyList<long> RuleIds { get; init; } = [];
+
+    public IReadOnlyList<TrafficRule> Criteria { get; init; } = [];
+
     /// <summary>
     /// The name the rule is shown under.
     /// </summary>
@@ -41,14 +45,19 @@ public sealed record RouteRule
     public IReadOnlyList<string> Targets { get; init; } = [];
 
     /// <summary>
-    /// Names the address groups.
+    /// Names the resolvers.
     /// </summary>
-    public IReadOnlyList<long> Groups { get; init; } = [];
+    public IReadOnlyList<string> Dns { get; init; } = [];
+
+    /// <summary>
+    /// Names the resolvers of selected balancer members.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> DnsMembers { get; init; } = new Dictionary<string, IReadOnlyList<string>>();
 
     /// <summary>
     /// Identifies a destination filter.
     /// </summary>
-    public bool HasTargets => Targets.Count > 0 || Groups.Count > 0;
+    public bool HasTargets => Criteria.Count > 0 ? Criteria.All(rule => rule.Targets.Count > 0) : Targets.Count > 0;
 
     /// <summary>
     /// The clients of the panel the traffic comes from, by name.

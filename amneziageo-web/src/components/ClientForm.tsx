@@ -8,8 +8,8 @@ import type { Client, ClientDraft, Inbound } from "@/api/clients"
 import { useConfigs } from "@/api/configs"
 import type { Config } from "@/api/configs"
 import { useDnsCheck, useResolver } from "@/api/dns"
-import { useRules } from "@/api/rules"
-import type { Rule } from "@/api/rules"
+import { useRoutingEntries } from "@/api/routingEntries"
+import type { RoutingEntry } from "@/api/routingEntries"
 import { scopes } from "@/api/scopes"
 import { useDefaultTemplate, useTemplates } from "@/api/templates"
 import { TrafficLimitsFields } from "@/components/TrafficLimitsFields"
@@ -85,13 +85,13 @@ export function ClientForm({
           choice: t(choiceKey(template.standIns ? "panel" : template.dnsMode === "auto" ? files : template.dnsMode)),
         })
   const user = useAppSelector((s) => s.auth.user)
-  const rules = useRules().data ?? []
+  const rules = useRoutingEntries().data ?? []
   const mayRoute = holds(user, scopes.manageRouting)
   const endpoint = configs.find((one) => one.id === draft.configId)?.name ?? ""
   const naming = start.name.length === 0 ? [] : rules.filter((one) => names(one, "clients", start.name))
   const picked = draft.rules ?? naming.map((one) => one.id)
   const lastOnes = naming.filter((one) => one.clients.length === 1).map((one) => String(one.id))
-  const elsewhere = (one: Rule) => endpoint.length > 0 && one.inbounds.length > 0 && !one.inbounds.includes(endpoint)
+  const elsewhere = (one: RoutingEntry) => endpoint.length > 0 && one.inbounds.length > 0 && !one.inbounds.includes(endpoint)
   const ruled = ruleItems(
     rules.filter((one) => one.clients.length > 0),
     (one) => few(one.clients, (count) => t("templates.more", { count: String(count) })),

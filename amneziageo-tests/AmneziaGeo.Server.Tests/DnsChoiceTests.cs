@@ -289,5 +289,5 @@ public class DnsChoiceTests
     private static TunnelClient Client() => ClientDefaults.Fresh(1, "anna") with { Address = ["10.8.0.2/32"] };
 
     private static DnsRequest Request(string? mode, string[]? servers) =>
-        new(true, 53, ["https://1.1.1.1/dns-query"], string.Empty, [], 60, 1000, 0, 3600, mode, servers);
+        new(true, 53, [], 60, 1000, 0, 3600, mode, servers);
 }

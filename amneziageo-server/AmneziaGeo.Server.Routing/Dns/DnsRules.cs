@@ -46,36 +46,9 @@ public static class DnsRules
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (!DnsSelection.Known(settings.Selection))
-        {
-            return new DnsFault("bad-dns-selection", "the DNS selection mode is unknown");
-        }
-
-        if (settings.Selection == DnsSelection.Outbound && string.IsNullOrWhiteSpace(settings.Outbound))
-        {
-            return new DnsFault("no-dns-outbound", "the DNS selection names no outbound");
-        }
-
         if (settings.Port is < 1 or > 65535)
         {
             return new DnsFault("bad-port", "the port of the resolver is outside 1 to 65535");
-        }
-
-        if (settings.Upstreams.Count == 0)
-        {
-            return new DnsFault("no-upstream", "the resolver has no name server to pass the questions to");
-        }
-
-        if (settings.Upstreams.Count > MaxUpstreams)
-        {
-            return new DnsFault("no-upstream", $"the resolver takes at most {MaxUpstreams} name servers");
-        }
-
-        if (settings.Upstreams.FirstOrDefault(one => !Server(one, out _)) is { } wrong)
-        {
-            return new DnsFault(
-                "bad-upstream",
-                $"'{wrong}' is not a name server: an address, tls://address or https://address/path, with a port when it is not the usual one");
         }
 
         if (settings.Listen.Count > MaxListen)

@@ -245,6 +245,7 @@ export function Pick({
   children,
   wide = false,
   disabled = false,
+  note,
 }: {
   id: string
   caption: ReactNode
@@ -253,6 +254,7 @@ export function Pick({
   children: ReactNode
   wide?: boolean
   disabled?: boolean
+  note?: ReactNode
 }) {
   return (
     <div className={wide ? "sm:col-span-2" : ""}>
@@ -268,6 +270,7 @@ export function Pick({
       >
         {children}
       </select>
+      {note}
     </div>
   )
 }

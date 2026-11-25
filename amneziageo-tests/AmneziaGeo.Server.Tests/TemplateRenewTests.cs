@@ -1,7 +1,11 @@
 using System.Net;
 using System.Net.Sockets;
 using AmneziaGeo.Server.Api.Clients;
+using AmneziaGeo.Server.Api.Dns;
+using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Awg.Client;
+using AmneziaGeo.Server.Geo;
+using AmneziaGeo.Server.Routing.Route;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Dns;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -103,18 +107,17 @@ public class TemplateRenewTests
 
     private static TemplateRefresher Refresher(Bench bench, IPEndPoint server)
     {
-        var resolver = new DnsState();
-        resolver.Took(DnsDefaults.Settings with { Upstreams = [$"{server.Address}:{server.Port}"] });
+        var plans = new RoutePlans();
+        var rule = new TrafficRule { Id = 1, Name = "template-dns", Dns = [$"{server.Address}:{server.Port}"] };
+        plans.Keep(RoutePlan.Build(
+            [new RouteRule { Id = 1, Name = "templates", Action = RouteAction.Direct, RuleIds = [1], Criteria = [rule] }],
+            [], GeoIndex.Load([], bench.GeoFiles), []));
+        var sets = new DnsSets(new Ledger());
+        var routing = new RouteApplier(bench.Rules, bench.Outbounds, bench.Balancers, bench.Configs,
+            bench.Geo, bench.Resolver, new DnsState(), bench.GeoFiles, plans, new BalanceLive(), sets, bench.Clients,
+            null!, null!, null!, bench.Templates, new StandInBook(bench.Clock), new Ledger(), NullLogger<RouteApplier>.Instance);
 
-        return new TemplateRefresher(
-            bench.Geo,
-            bench.GeoFiles,
-            bench.Resolver,
-            resolver,
-            bench.Outbounds,
-            bench.Balancers,
-            new BalanceLive(),
-            bench.Clock);
+        return new TemplateRefresher(bench.Geo, bench.GeoFiles, routing, bench.Clock);
     }
 
     // Returns a port of the loopback nobody listens on.

@@ -34,7 +34,7 @@ public static class ProxyEndpoints
         writing.AddEndpointFilter<UdpChangesFilter>();
         writing.MapGet("/draft", (PanelSettings panel) => Results.Ok(ProxyResponse.Of(new TransportProxyEntity
         {
-            Port = panel.Port, Path = ConfigDefaults.WebSocketPath(), UseCertificate = true,
+            Name = "proxy", Port = panel.Port, Path = ConfigDefaults.WebSocketPath(), UseCertificate = true,
             TargetsJson = ProxyTargetRules.Write(ProxyTargetRules.LocalOnly),
         })));
         writing.MapPost("/", (ProxyRequest draft, HttpContext context, CancellationToken ct) => SaveAsync(0, draft, context, ct));
@@ -128,9 +128,10 @@ public static class ProxyEndpoints
         }
 
         var all = await store.ListAsync(ct).ConfigureAwait(false);
-        if (all.Any(proxy => proxy.Id != id && string.Equals(proxy.Name, draft.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+        if (all.Any(proxy => proxy.Id != id && (proxy.Transport == draft.Transport || proxy.IsHttp && draft.IsHttp)
+            && string.Equals(proxy.Name, draft.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
         {
-            return Refuse("name-taken", "a proxy already uses that name", 409);
+            return Refuse("name-taken", "a proxy already uses that name and transport", 409);
         }
 
         if (await services.GetRequiredService<ProxyRules>().ConflictAsync(draft.ListenPort == 0 ? draft.Port : draft.ListenPort, draft.Path, id, held?.LegacyConfigId, ct).ConfigureAwait(false) is { } conflict)

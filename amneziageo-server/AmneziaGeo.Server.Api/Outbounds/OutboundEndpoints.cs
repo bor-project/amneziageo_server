@@ -93,7 +93,7 @@ public static class OutboundEndpoints
 
         return result.Outbound is null
             ? Refuse(StatusCodes.Status400BadRequest, result.Fault!.Code, result.Fault.Message)
-            : Results.Ok(OutboundAnswers.Outbound(result.Outbound, null, true));
+            : Results.Ok(OutboundAnswers.Outbound(result.Outbound, null, true) with { SuggestedDns = result.SuggestedDns });
     }
 
     private static async Task<IResult> AddAsync(
@@ -151,7 +151,6 @@ public static class OutboundEndpoints
         RouteStore rules,
         OutboundHost host,
         RouteApplier routes,
-        DnsHost resolver,
         CancellationToken ct)
     {
         using var hold = await host.HoldAsync(ct).ConfigureAwait(false);
@@ -170,7 +169,7 @@ public static class OutboundEndpoints
             return Refuse(StatusCodes.Status400BadRequest, refused.Code, refused.Message);
         }
 
-        var result = await store.ChangeAsync(id, OutboundAnswers.Draft(request), ct).ConfigureAwait(false);
+        var result = await store.ChangeAsync(id, OutboundAnswers.Draft(request, held), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -193,11 +192,6 @@ public static class OutboundEndpoints
 
         var state = await host.ApplyAsync(result.Record!, ct).ConfigureAwait(false);
         await FirewallAsync(store, host, routes, ct).ConfigureAwait(false);
-        if (held is not null)
-        {
-            await resolver.FollowAsync(held.Name, result.Record!.Name, ct).ConfigureAwait(false);
-        }
-
         return Results.Ok(OutboundAnswers.Outbound(result.Record!, state, true));
     }
 
@@ -246,11 +240,10 @@ public static class OutboundEndpoints
         OutboundStore store,
         OutboundHost host,
         RouteApplier routes,
-        DnsHost resolver,
         CancellationToken ct)
     {
         using var hold = await host.HoldAsync(ct).ConfigureAwait(false);
-        var result = await store.RemoveAsync(id, resolver.Asking, ct).ConfigureAwait(false);
+        var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);

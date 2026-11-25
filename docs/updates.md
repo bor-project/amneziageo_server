@@ -5,8 +5,10 @@ or in a container.
 
 ## Where the releases come from
 
-A release is a tag `vX.Y.Z.W` on a commit of the branch `master` of `bor-project/amneziageo_server`; a tag outside
-`master` builds nothing. The workflow `.github/workflows/release.yml` builds it: the packages for x64 and arm64,
+Releases use the corresponding branch of `bor-project/amneziageo_server`: `master` for stable, `beta` for beta,
+and `test` for test builds. Tags are `vX.Y.Z.0`, `vX.Y.Z.W-beta.N`, and `vX.Y.Z.W-test.N` respectively, and name
+the current commit of that branch. A push alone does not publish a release. The workflow
+`.github/workflows/release.yml` runs for an explicit release tag or manual dispatch and builds it: the packages for x64 and arm64,
 beside each package its files packed one by one (`.pack`) and their list (`.files`), the image
 `ghcr.io/bor-project/amneziageo-server` for both, and `update.json`, which names the version, the image pinned to
 its digest, the digest of every package and of its list.
@@ -110,8 +112,9 @@ change every layer above them once.
 
 The panel pulls the image of the release by its digest, names it the way the project names the image of the
 panel, with the version as the tag, and starts a container of the new image, `amneziageo-server-update-<version>`,
-that moves the panel. It copies the database into `backup` of the data directory, writes `AMNEZIAGEO_TAG=<version>`
-into `.env` of the project, stops the panel and makes its container over onto the new image through the daemon:
+that moves the panel. It stops the panel, captures the stopped database into `backup` of the data directory,
+binds that copy to the immutable image ID, and writes `AMNEZIAGEO_TAG=<version>` into `.env` of the project.
+It then makes the container over onto the new image through the daemon:
 the new one is created with the settings of the one that ran, and the image is all that changes. The old container
 waits under its name with the version it ran until the new one comes up healthy. Where that does not happen within
 three minutes, the new container goes away, the database and `.env` go back and the old one runs again.
@@ -119,6 +122,32 @@ three minutes, the new container goes away, the database and `.env` go back and 
 The files of compose are not read, so the update goes through wherever they lie and whatever they name; `.env`
 takes the tag so that `docker compose up -d` by hand later starts the same image. The containers of the updates
 that ended are removed at the next look.
+
+## Rollback
+
+`amneziageo-server rollback` restores the preceding executable or Docker image together with its matching
+pre-upgrade database. Package snapshots are bound to the complete release/build directory identity; Docker
+snapshots are bound to the immutable image ID, including when two image tags have the same version text.
+The tool never chooses a backup merely because it is the newest one.
+
+Before stopping the running service, rollback checks that the target build has its bound database snapshot.
+If that copy is missing or belongs to another build, rollback stops with an error and keeps the running
+release. Older backups without a build binding remain available for an explicit, verified database restore;
+they are not guessed automatically.
+
+After stopping, rollback saves the current database under the current build identity before restoring the
+target database. Changes made after the upgrade therefore remain in that saved copy. If the older release
+fails to start, the tool restores the current database, executable/image, and update tag. A package can be
+switched back to its other retained release with `install.sh --rollback` and the matching saved database.
+
+Snapshots include the SQLite database and its WAL/journal files while the service is stopped. They and the
+binding files live in owner-only directories under `backup` and `rollback` beside the database. Snapshots
+bound to the retained builds are kept when older unbound backups are pruned. A Docker host and its container
+use the same relative snapshot paths, so bind mounts and named volumes can resolve the same binding.
+
+Schema changes can remove old tables, including the routing migration. Returning only the executable while
+leaving the newer database in place is not a supported downgrade. Restore a matching database instead of
+running Entity Framework `Down` migrations on live server data.
 
 ## What the panel shows
 

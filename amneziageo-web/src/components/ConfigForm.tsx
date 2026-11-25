@@ -9,7 +9,7 @@ import { useClients } from "@/api/clients"
 import type { Inbound } from "@/api/clients"
 import { useDnsCheck, useResolver } from "@/api/dns"
 import { usePortState } from "@/api/firewall"
-import { useRules } from "@/api/rules"
+import { useRoutingEntries } from "@/api/routingEntries"
 import type { Holding } from "@/api/firewall"
 import { scopes } from "@/api/scopes"
 import { AppCaption } from "@/components/AppMark"
@@ -59,7 +59,7 @@ export function ConfigForm({
   const configs = useConfigs().data ?? []
   const user = useAppSelector((s) => s.auth.user)
   const members = clientItems((useClients().data ?? []).filter((one) => one.configId === self))
-  const rules = useRules().data ?? []
+  const rules = useRoutingEntries().data ?? []
   const mayRoute = holds(user, scopes.manageRouting)
   const naming = start.name.length === 0 ? [] : rules.filter((one) => names(one, "inbounds", start.name))
   const lastOnes = naming.filter((one) => one.inbounds.length === 1).map((one) => String(one.id))

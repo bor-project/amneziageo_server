@@ -204,12 +204,10 @@ public static class OutboundRules
         return null;
     }
 
-    private static OutboundFault? CheckServers(IReadOnlyList<string> servers)
-    {
-        return servers.FirstOrDefault(server => !DnsRules.Server(server, out _)) is { } wrong
+    private static OutboundFault? CheckServers(IReadOnlyList<string> servers) =>
+        servers.FirstOrDefault(server => !DnsRules.Server(server, out _)) is { } wrong
             ? Fault("bad-dns", $"'{wrong}' is not a name server")
             : null;
-    }
 
     private static OutboundFault? CheckMtu(int mtu) =>
         mtu == 0 || mtu is >= ConfigRules.MinMtu and <= ConfigRules.MaxMtu

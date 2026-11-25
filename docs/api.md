@@ -46,9 +46,9 @@ for a token like any other route. The shapes of the answers are not in it; the p
 | one configuration, one device | [devices.md](devices.md) |
 | templates | [templates.md](templates.md) |
 | subscriptions | [subscriptions.md](subscriptions.md) |
-| channels | [outbounds.md](outbounds.md) |
+| linked servers | [outbounds.md](outbounds.md) |
 | balancers | [balancers.md](balancers.md) |
-| rules | [rules.md](rules.md) |
+| ordered rules and reusable address sets | [rules.md](rules.md) |
 | DNS | [dns.md](dns.md) |
 | geo sources | [geo.md](geo.md) |
 | services of an endpoint | [services.md](services.md) |

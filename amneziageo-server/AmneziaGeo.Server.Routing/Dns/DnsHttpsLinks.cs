@@ -4,7 +4,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
-using AmneziaGeo.Server.Routing.Outbound;
 
 namespace AmneziaGeo.Server.Routing.Dns;
 
@@ -23,14 +22,20 @@ public sealed class DnsHttpsLinks : IDisposable
 
     private readonly X509Certificate2Collection? _roots;
 
+    private readonly string? _device;
+
+    private readonly IReadOnlyList<string> _sourceAddresses;
+
     private volatile bool _closed;
 
     /// <summary>
     /// ctor
     /// </summary>
-    public DnsHttpsLinks(X509Certificate2Collection? roots = null)
+    public DnsHttpsLinks(X509Certificate2Collection? roots = null, string? device = null, IReadOnlyList<string>? sourceAddresses = null)
     {
         _roots = roots;
+        _device = device;
+        _sourceAddresses = sourceAddresses?.ToArray() ?? [];
     }
 
     /// <summary>
@@ -135,16 +140,13 @@ public sealed class DnsHttpsLinks : IDisposable
         };
     }
 
-    private static async ValueTask<Stream> DialAsync(DnsEndPoint point, uint mark, CancellationToken ct)
+    private async ValueTask<Stream> DialAsync(DnsEndPoint point, uint mark, CancellationToken ct)
     {
         var address = IPAddress.Parse(point.Host.Trim('[', ']'));
         var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
         try
         {
-            if (!OutboundMark.Put(socket, mark))
-            {
-                throw new IOException("the mark of the outbound did not take");
-            }
+            DnsSocketBinding.Apply(socket, new IPEndPoint(address, point.Port), mark, _device, _sourceAddresses);
 
             await socket.ConnectAsync(new IPEndPoint(address, point.Port), ct).ConfigureAwait(false);
 

@@ -1,222 +1,190 @@
-# The routing rules
+# Routing rules and address sets
 
-A rule says where traffic goes: it matches what the client asks for and either sends it out through an
-outbound, lets it out the way the host sends its own, or drops it. The rules are held in SQLite, in the order they are read in, and the whole set is
-turned into one nftables ruleset the host takes at once.
+The routing menu contains **Rules**, **Addresses**, **Linked servers** and **Balancers**. In Russian these are
+**Правила**, **Адреса**, **Связанные серверы** and **Балансировщики**. Rules are evaluated in table order. An address set
+contains reusable destination conditions and DNS settings; a rule selects one or more address sets and a processing
+method. Register a linked server or a balancer, create the required address sets, and select them in a rule.
 
-## Rights
+The rules, address sets and processing objects have separate settings pages. Their names in the table link to those
+pages. Saving or cancelling returns to the originating list with its filter; creating or editing an address set
+from a rule retains the unfinished rule and selects a newly created set when returning.
+
+## Rights and routes
 
 | Route | Right |
 |---|---|
-| `GET /api/rules` | `state:read` |
-| `GET /api/rules/{id}` | `state:read` |
-| `GET /api/rules/basic` | `state:read` |
-| `POST /api/rules/test` | `state:read` |
-| `GET /api/rules/draft` | `routing:write` |
-| `GET /api/rules/ruleset` | `routing:write` |
-| `POST /api/rules` | `routing:write` |
-| `PUT /api/rules/{id}` | `routing:write` |
-| `POST /api/rules/{id}/switch` | `routing:write` |
-| `POST /api/rules/{id}/move` | `routing:write` |
-| `DELETE /api/rules/{id}` | `routing:write` |
-| `POST /api/rules/apply` | `routing:write` |
-| `PUT /api/rules/basic` | `routing:write` |
+| `GET /api/traffic-rules`, `GET /api/traffic-rules/{id}` | `state:read` |
+| `GET /api/traffic-rules/dns-defaults` | `state:read` |
+| `GET /api/traffic-rules/draft` | `routing:write` |
+| `POST /api/traffic-rules`, `PUT /api/traffic-rules/{id}` | `routing:write` |
+| `POST /api/traffic-rules/defaults`, `DELETE /api/traffic-rules/{id}` | `routing:write` |
+| `GET /api/routing-entries`, `GET /api/routing-entries/table`, `GET /api/routing-entries/{id}` | `state:read` |
+| `POST /api/routing-entries/test` | `state:read` |
+| `GET /api/routing-entries/draft`, `GET /api/routing-entries/ruleset` | `routing:write` |
+| `POST /api/routing-entries`, `PUT /api/routing-entries/{id}` | `routing:write` |
+| `POST /api/routing-entries/{id}/switch`, `POST /api/routing-entries/{id}/move` | `routing:write` |
+| `POST /api/routing-entries/apply`, `DELETE /api/routing-entries/{id}` | `routing:write` |
 
-## The settings of a rule
+The API calls address sets `traffic-rules` and ordered processing rules `routing-entries`. The public panel paths are
+`/routing/rules` for ordered rules and `/routing/addresses` for address sets. Existing links to
+`/routing/rules/{id}/edit` continue to edit the same ordered rule, not an address set with a similar number.
+
+## Address sets
+
+| Setting | Holds |
+|---|---|
+| Name | the name of the address set, up to 32 characters |
+| Addresses and domains | destination networks, domains, keywords and geo keys |
+| DNS | default from the processing method, a named preset, or custom resolver addresses |
+
+`geoip:ru` selects a country and `geosite:youtube` a category. `203.0.113.0/24` and `8.8.8.8` are address ranges;
+`example.org` and `domain:example.org` are domains; `cidr:10.0.0.0/8` explicitly names a range. `keyword:ads` matches
+names containing that word. Keywords and domain categories obtain their addresses from the resolver or from names
+read from connections; they do not supply static address ranges. An address set takes up to 1024 targets.
+
+A new address set requires at least one address or domain. An empty catch-all carried over from an earlier release
+keeps its existing meaning. Editing the DNS of such a migrated set does not silently change its scope.
+
+The same set may be selected by several rules without copying its destinations or DNS policy. The settings page
+shows its use by those rules and the effective DNS for each processing method. A referenced set cannot be deleted
+until its rules stop using it. Restoring the standard address sets adds missing definitions and does not activate
+processing rules or overwrite edited definitions.
+
+## DNS of an address set
+
+**Default** is a live reference to the selected processing method:
+
+- a linked server supplies its saved DNS, including DNS imported from its client configuration;
+- a balancer supplies its own DNS when configured, otherwise the DNS of the member selected for the question;
+- direct processing uses the host DNS reported by `GET /api/traffic-rules/dns-defaults`;
+- blocking does not forward the question.
+
+Changing a linked server or balancer updates this inherited choice without copying its addresses into every set.
+Missing DNS or an unavailable processing object does not select a different public resolver or a direct path.
+Priority balancing shows the first available member. Round and sticky balancing can use different members, so the
+panel shows possible member DNS values rather than claiming that one server is always selected.
+
+Cloudflare, Google and Quad9 presets store explicit DNS addresses as `dnsMode: "custom"`; custom mode also accepts
+the supported plain DNS, DNS-over-TLS and DNS-over-HTTPS forms described in [dns.md](dns.md). The address syntax
+determines the resolver transport: a plain IP preset does not itself enable TLS or HTTPS. Choosing a preset replaces
+previous member overrides. `dnsMode: "default"` uses the processing object and ignores explicit DNS and member maps.
+
+Migrated custom policies may contain `dnsMembers`, resolver addresses for particular balancer members. These remain
+visible when custom DNS is selected. Within a rule containing overlapping address sets, the first matching set in
+the selected order supplies DNS; the arrows in the rule settings change that order.
+
+## Ordered rules
 
 | Setting | Holds |
 |---|---|
 | Name | what the rule is shown under, up to 32 characters |
-| Action | `out` to send the traffic through an outbound, `direct` to let it out the way the host sends its own, `block` to drop it |
-| Outbound | the name of the outbound or the balancer the traffic leaves through |
-| Where to | geo keys, domains and address ranges the traffic goes to |
-| Clients | the clients of the panel the traffic comes from, by name |
-| Interfaces | the interfaces of the panel the traffic comes in on |
-| Ports | single ports and ranges written as `443` or `1000-2000` |
-| Source ports | the ports the traffic comes from, written the same way |
+| Processing | a linked server, a balancer, direct access, or blocking |
+| Addresses | one or more reusable address sets, in their selected order |
+| Clients | client names; empty selects every client |
+| Interfaces | incoming interface names; empty selects every interface |
+| Destination ports | single ports and inclusive ranges such as `443` or `1000-2000` |
+| Source ports | the ports the traffic comes from, in the same form |
 | Protocol | `any`, `tcp` or `udp` |
-| On | whether the rule goes on the host |
+| Enabled | whether the rule participates in routing |
 
-A rule that is added is off unless the request says otherwise, and a change that says nothing about it keeps
-what the rule already carries, so a client written before the setting existed does not turn the rule off by
-touching it. The clients, the interfaces and the source ports are kept the same way: a change that does not name
-them leaves them as they are. A request that still carries `holdsWhenDown` is taken, and the field is passed
-over: a rule whose way out is gone always holds its traffic, see below.
+Targets from the selected sets are alternatives: matching any selected set satisfies the destination condition.
+Client, incoming-interface, protocol and port filters are additional conditions on the rule. They are not stored
+in the reusable sets. Up to 64 conditions of each filter kind are accepted. Renaming a client or interface updates
+the rules naming it. Removing the last named client or interface disables the affected rule instead of broadening
+it to everyone; removing one of several names retains the remaining filter.
 
-A client named by a rule brings its addresses into the addresses the rule matches by; the names are read
-without regard to case. The rule is laid on the host again whenever a client is
-added, changed or removed, so a new address of a named client is matched without touching the rule. A name the
-panel no longer holds is passed over; a rule none of
-whose clients the panel holds stays off the host with `unknown-client`. An interface is the name of a
-configuration; a rule naming interfaces matches only the traffic that came in on one of them, and a rule none
-of whose interfaces the panel holds stays off the host with `unknown-inbound`. Renaming a client or a
-configuration writes the new name into every rule that names it, so the rule goes on matching the same
-traffic; a client added later under a name a rule used to carry is not taken into it. An outbound or a
-balancer renamed is written into the rules the same way, see `outbounds.md` and `balancers.md`.
+Rules are evaluated from top to bottom and the first match decides. `move` with `{"up": true}` or `{"up": false}`
+swaps a rule with its neighbour. `{"to": 3}` places it third, counting from one, and renumbers the others; a position
+beyond the end places it last. Dragging is available on an unfiltered table, and arrow buttons also change priority.
+Disabled rules do not participate. Traffic matching no rule takes the host's ordinary route.
 
-The settings of a client and of an interface name the rules that name them, under `Routing`, and the rules that
-match everyone on that side; a rule is added there and taken off there as well as in the rule itself, see
-`clients.md` and `configs.md`. Neither of them narrows a rule that matches everyone (`rule-for-everyone`) or takes
-the last name off a rule (`rule-keeps-last`), since a rule without names would match everyone. Removing a client or
-an interface takes its name off the rules that name others too and turns off a rule it was the last one of, keeping
-the name in it; removing an interface does the same for each of its clients. The page that removes them names both
-kinds of rules. The clients and the interfaces of a rule are links in the list and in its settings.
-
-A rule took client addresses and ranges by hand in `sources` before; the field is gone, and a request that still
-carries addresses in it is refused with `sources-gone`, so that the rule does not quietly take every client. At
-the update the panel moves the addresses of every rule over to the clients standing at them, by name, and turns
-off a rule left without a client or covering more than 64 clients, more than a rule names; a warning in the log
-names every rule it touched. A client added after the
-update does not join such a rule by itself.
-
-A target is read as what it looks like: `geoip:ru` is a country, `geosite:youtube` a category,
-`1.2.3.0/24` and `8.8.8.8` are ranges, and anything else with a dot in it is a domain. A domain is also taken
-as `domain:ifconfig.me` and a range as `cidr:10.0.0.0/8`, the forms the console client of AmneziaGeo and the
-routing presets write their lists in, so one list carries over to the other side unchanged. `keyword:ads` matches every name the word occurs in, as in 3x-ui; a keyword
-brings no range of its own, so the addresses of a rule that carries one arrive only from the answers the
-resolver sees. Ranges come from `geoip:` and from the networks written into the targets; `geosite:` gives
-names. A rule with no targets matches every address, a rule with no client
-addresses matches every client.
-
-## The order
-
-Rules are read from the top down and the first one that matches decides. `move` with `{"up": true}` or
-`{"up": false}` swaps a rule with its neighbour; `move` with `{"to": 3}` puts it at the third place, counting
-from one, and numbers the rest anew. A place past the end puts the rule last. A rule that is off is left out
-of the ruleset entirely.
-
-## The basic lists
-
-Two lists stand ahead of every rule: `Block` drops what it matches and `Direct` lets it out the way the host
-sends its own, without a mark. Each list takes up to 1024 targets written the same way as the targets of a
-rule, and block is read before direct. An empty list takes no line at all. `GET /api/rules/basic` returns both
-lists with what the host carries for them; `PUT /api/rules/basic` takes `{"direct": [...], "block": [...]}`
-and keeps the list it does not name. The lists live in the plan under the numbers `-1` for block and `-2` for
-direct, so their sets are named `rb1v4`, `nb1v4`, `rb2v4`, `nb2v4` and so on, and the resolver fills the name
-sets of the lists the same way it fills the sets of the rules.
+DNS chooses the first rule matching the queried name, client and incoming interface. Source ports, destination
+ports and transport protocol filter application traffic, but are ignored for DNS selection: a DNS question does
+not contain the port or protocol of a future connection. The DNS question travels through the processing object
+selected by that rule. There is no independent DNS route selector on another page.
 
 ## What the host takes
 
-The rules go into the table `inet amneziageo_rt`, written whole and loaded through `nft -f -`, so the
-host swaps one ruleset for the next in a single step. The table carries:
+The compiled rules are loaded together into `inet amneziageo_rt` with `nft -f -`. Each ordered rule has IPv4 and IPv6
+interval sets `r<id>v4` and `r<id>v6`, plus timeout name sets `n<id>v4` and `n<id>v6`. The sets contain the combined
+destinations of the rule's address sets. Names and cached addresses are retained across ruleset replacement; see
+[dns.md](dns.md#the-sets-of-the-rules). Set identifiers refer to ordered rule IDs.
 
-- one interval set of ranges per rule and family, named `r<id>v4` and `r<id>v6`, filled from the geo
-  databases;
-- one timeout set per rule and family, named `n<id>v4` and `n<id>v6`, that the resolver fills with the
-  addresses the names of the rule answered with, both from the questions of the clients and from the questions
-  it asks about the names of the rule itself, and that the names read out of the connections fill as well, see
-  [dns.md](dns.md);
-- while a rule matches by name and the panel reads names out of the connections: the sets `seen4`, `seen6`,
-  `read4`, `read6`, `wait4` and `wait6`, the counter `taken`, after every rule by name the lines that note the
-  first TCP connection to an address not looked at yet or hand it over to the panel, at the head of the chain the
-  lines that take what the panel sent back and show it what a noted connection says first, and at its end the
-  lines that show it the first packets of QUIC, see [dns.md](dns.md#names-read-out-of-the-connections);
-- a `prerouting` chain at mangle priority that leaves alone anything that did not arrive on an endpoint of
-  the panel, drops a packet of a client that belongs to no connection the host tracks (`ct state invalid`),
-  restores the mark of a connection that already has one from the low 16 bits of the connection mark, and
-  hands only a new connection to the decision chain;
-- a `decide` chain that carries the basic lists and then the rules themselves.
+The prerouting chain limits routing to the panel's incoming interfaces, drops invalid connection-tracking state,
+restores connection marks and evaluates new connections. Client and incoming-interface filters become source-address
+and `iifname` matches; source and destination ports remain separate matches. The first packet chooses the processing
+method, and its connection mark keeps subsequent packets on that path. Changing a rule does not move established
+connections. A newly added blocking rule blocks new connections; already established ones retain their path.
 
-A rule naming interfaces starts each of its lines with `iifname { ... }`, a rule naming clients matches their
-addresses with `ip saddr` and `ip6 saddr`, and source ports go into
-`th sport` or `tcp sport` and `udp sport` ahead of the destination ports.
+Direct processing returns without an outbound mark. Linked servers and balancers supply the mark described in
+[outbounds.md](outbounds.md) and [balancers.md](balancers.md). Reply packets do not inherit the outbound mark and use
+the host's route back to the client. Connection logging and name inspection keep their existing nftables hooks;
+see [diagnostics.md](diagnostics.md) and [dns.md](dns.md#names-read-out-of-the-connections).
 
-The rules decide once, on the first packet of a connection. A rule that sends traffic out sets the mark of
-its outbound and the mark is kept on the connection; a connection no rule took goes on the way the host
-picked for it. Either way a connection stays on its path even after the rules change or its address reaches
-the set of a rule later. The mark itself is what the `ip rule` of the outbound looks up: the routing tables
-and the marks come from the outbounds and are described in [outbounds.md](outbounds.md). A rule that blocks
-drops a new connection; one that was open before the rule came goes on until it ends. A direct rule returns
-from the decision without a mark, so the connection takes the way out the host picks and no rule below it is
-read.
-
-The mark comes back only to what the clients send. An answer that returns through an outbound carries no
-mark, so the host finds the client in its own tables instead of sending the answer back into the outbound.
-
-Traffic that matches no rule carries no mark and takes the way out the host itself picks.
-
-While the connection log runs, every line of `decide` hands the packet it decides to log group 7317 before its
-verdict, a last line hands over what no rule took, and the chain `answer` hands over what comes back to the
-connections let out, keeping its own bits above the low 16 of the connection mark; see
-[diagnostics.md](diagnostics.md).
-
-## What stays off the host
-
-A rule goes into the ruleset only when everything it names is there. The panel shows the reason
-otherwise:
+## Unavailable processing objects
 
 | Reason | Means |
 |---|---|
-| `unknown-outbound` | the rule names an outbound the panel does not hold |
-| `outbound-off` | the outbound of the rule is turned off |
-| `outbound-down` | the outbound of the rule carries nothing: its probe does not get through |
-| `empty-target` | the geo databases carry nothing for what the rule matches by |
-| `unknown-client` | the panel holds none of the clients the rule names |
-| `unknown-inbound` | the panel holds none of the interfaces the rule names |
+| `unknown-outbound` | the selected object is absent |
+| `outbound-off`, `balancer-off` | it is disabled |
+| `outbound-down`, `no-live-member` | the linked server, or every suitable balancer member, is unavailable |
+| `empty-target` | destination expansion produces nothing usable |
+| `unknown-client`, `unknown-inbound` | none of the named clients or incoming interfaces remains available |
 
-The first three say the rule itself is good and only its way out is gone, and a balancer whose members all
-carry nothing says the same with `no-live-member`. Then the rule holds its traffic: it still goes into the
-ruleset, but it drops what it matches instead of marking it, and the panel shows `traffic held` with the reason
-behind it. The traffic of a rule through a channel never leaves through the way out of the host, under the
-address of the server itself, which is what a client behind a channel does not expect; a rule saved with the
-holding off before the setting went holds as well. `empty-target` is the rule being wrong rather than its
-channel being down, so a rule with it is never held: it simply stays off the host.
-
-Rules also need at least one endpoint: without a configuration to arrive on, nothing is marked at all.
+An otherwise valid rule whose selected exit is unavailable holds its matching traffic instead of sending it through
+the host. DNS also fails on that selected path; it does not fall back directly. Invalid destination conditions are
+reported separately. Routing requires at least one incoming interface.
 
 ## The route tester
 
-`POST /api/rules/test` takes `{"target": "youtube.com", "port": 443, "protocol": "tcp", "client": "bor",
-"sourcePort": null}` and reads the rules the host carries the way the ruleset does. The target is a name, an
-address or a link whose host is taken; a name is asked about through the way out of the resolver, or through
-the host when the resolver is off. The client is a client of the panel, whose addresses and interface the
-traffic then carries, or a bare address, whose interface is the configuration its range belongs to. The
-protocol is `tcp` or `udp`, both ports may be left out.
+`POST /api/routing-entries/test` accepts, for example,
+`{"target":"example.org","port":443,"protocol":"tcp","client":"phone","sourcePort":null}`. It evaluates the
+current compiled rules and reports the deciding rule, its position, selected exit, balancer members, resolved
+addresses and the rules examined before the verdict. The verdict is `out`, `host`, `block`, `held`, `guard` or `dns`.
+The panel opens the tester from Rules or at `/routing/test`. The resolver's interception and DNS guards remain
+ahead of ordinary forwarding rules, as described in [dns.md](dns.md).
 
-The guards of the resolver come first, while a rule on the host matches by name and no names are read out of the
-connections: a client of such a rule is refused port 853 and port 443 of a known name server; the tester does not
-know a client the guards let go. Next comes the resolver itself: while it answers, every question on port
-53 that comes in on a client interface is answered by it, and the rules are not read at all. Then each rule is
-read in order: a rule off the host is passed over with its reason, a rule whose interface, client, protocol,
-port or source port does not fit is missed, and a rule
-whose targets take the traffic matches by a range, by the name or by an address the resolver laid into its
-set. The answer carries the verdict (`out`, `host`, `block`, `held`, `guard` or `dns`), the rule that decided with
-its place, the way out with the members of a balancer and which of them carry, the addresses the name
-resolved to and every rule read before the decision. Each member of the way out says whether it is on
-(`isEnabled`), whether it carries traffic at all (`carries`, the same measure the outbound itself reports)
-and whether this rule sends traffic to it (`isPicked`).
+## Migration and existing configurations
 
-## What the panel shows
+The upgrade moves address groups into reusable address sets, and moves inline destinations into referenced sets.
+Ordered rule IDs, priority, enabled state, processing objects, client and incoming-interface filters, ports and
+protocols are retained. Previous basic direct/block lists become ordinary rules at their previous priority.
+Client keys, client configurations, subscriptions and their public identifiers are not recreated by this migration.
+Historical migrations remain available to upgrade earlier installations; obsolete active routing and independent
+DNS-policy entities are replaced by the new model.
 
-The routing section carries the rules in their order with their number, a switch that turns each one on and
-off, what each one matches and sends the traffic to, how many ranges and names it came out as, and whether it
-is on the host; a rule is moved by dragging its row while the table is neither sorted nor filtered. A balancer
-is marked as a group. The `Basic` tab edits the basic lists. The route tester stands outside the menu and
-opens at `/routing/test`. The ruleset
-as the host takes it belongs to the console: item 23 of the menu of the server, `amneziageo-server`, subitem 12
-prints the tables of the panel. The panel lays the ruleset when it starts, after every change and when the live
-outbounds change; `GET /api/rules/ruleset` returns it as it is written.
+Address-group IDs and every rule's references to those sets are retained. If a shared set previously had different
+effective DNS policies in different rules, the upgrade keeps one shared set and selects **Default** DNS from each
+rule's processing method. The resolver addresses used by those rules can change in this case. Without such a
+conflict, the previous resolver, linked-server and balancer DNS addresses remain in migrated custom policies and
+member overrides.
 
-## Taking the routing to another server
+Old Global/Outbound settings could select a different DNS exit from application traffic; DNS now follows the
+processing object of the matching rule. An old DNS balancer that differs from that object contributes its configured
+addresses as an ordered resolver list, rather than preserving a separate DNS scheduler.
 
-The routing of the panel travels to another panel in one JSON file: the rules, the basic lists, the routing
-presets and the addresses of the geo sources. The channels, the balancers and the resolver of the host stay
-behind, every panel grows its own; a rule whose channel is missing on the other panel is taken in anyway and
-stays off the host until the channel is there.
+### Upgrade and downgrade
+
+Previously independent DNS exits are replaced by the processing path of the matching rule. Migrated DNS addresses
+are retained except when a shared set has conflicting policies; that set inherits DNS from each rule's processing
+method. The Addresses usage view shows the resulting effective DNS.
+After this schema migration, downgrading the application also requires restoring the matching database backup
+created before the upgrade. An older binary must not be started against the migrated database alone.
+
+## Taking routing to another server
 
 | Route | Right |
 |---|---|
 | `GET /api/routing/export` | `state:read` |
-| `POST /api/routing/import` | `routing:write` |
-| `POST /api/routing/import/apply` | `routing:write` |
+| `POST /api/routing/import`, `POST /api/routing/import/apply` | `routing:write` |
 
-`GET /api/routing/export` answers the file, named `amneziageo-routing-<host>-<time>.json`. `POST
-/api/routing/import` takes a file in and answers the plan: what will be added, what will be replaced under the
-same name, whether the basic lists will be laid over, and which rules keep a link this panel does not hold.
-Nothing is written. `POST /api/routing/import/apply` takes the same file in, lays the plan over and answers
-what was taken in, what was replaced, what was refused and what stays off the host yet, then settles the
-ruleset. An import adds what the panel holds none under the name of, replaces the ones it does, lays the basic
-lists over and leaves everything else as it stood.
+Export format 4 contains address definitions in `rules` (`name`, `targets`, `dnsMode`, `dns`, `dnsMembers`), ordered
+processing rules in `entries` (including address-set names in `rules`, filters and processing), routing presets and
+geo-source addresses. Linked servers, balancers and DNS service listener/cache settings remain specific to each
+server. Imported rules with missing processing objects retain their references and cannot use those objects until
+they are registered.
 
-The utility of the server does the same: `amneziageo-server routing export <file>` writes the file,
-`amneziageo-server routing import <file>` prints the plan, and `--apply` lays it over.
+Import preview reports definitions and processing rules that will be added or replaced, plus unresolved references.
+Applying the same file updates matching names and leaves objects absent from the file unchanged. Earlier formats
+1–3 remain importable through conversion to the current model; they are not exported again as obsolete objects.
+The utility provides `amneziageo-server routing export <file>` and `routing import <file>`, with `--apply` to apply.

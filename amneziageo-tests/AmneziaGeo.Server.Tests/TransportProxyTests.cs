@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using AmneziaGeo.Server.Api.Clients;
 using AmneziaGeo.Server.Api.Proxies;
 using AmneziaGeo.Server.Api.Firewall;
@@ -154,6 +155,20 @@ public sealed class TransportProxyTests
         var panel = PanelDefaults.Settings;
         var response = PanelAnswers.Panel(panel, panel, new WebOptions(), true, new PanelPlace(panel.Port, panel.Prefix, false));
         Assert.True(response.Pending);
+    }
+
+    [Fact]
+    public async Task TheDatabaseAllowsNamesAcrossTransportsAndRejectsDuplicatesWithinOne()
+    {
+        using var bench = new Bench();
+        var store = new TransportProxyStore(bench.Db);
+        await store.SaveAsync(0, Draft("relay", 8443, "websocket"), default).ConfigureAwait(false);
+        var http = Draft("RELAY", 8443, "http");
+        http.Transport = "http";
+        http.ProtocolVersion = 2;
+        await store.SaveAsync(0, http, default).ConfigureAwait(false);
+        Assert.Equal(2, (await store.ListAsync(default).ConfigureAwait(false)).Count);
+        await Assert.ThrowsAsync<DbUpdateException>(() => store.SaveAsync(0, Draft("Relay", 8443, "duplicate"), default)).ConfigureAwait(false);
     }
 
     private static string Target(string header)
