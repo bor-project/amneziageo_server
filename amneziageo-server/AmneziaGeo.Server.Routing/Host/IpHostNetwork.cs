@@ -99,13 +99,13 @@ public sealed class IpHostNetwork : IHostNetwork
     /// Adds an AmneziaWG interface.
     /// </summary>
     public Task AddLinkAsync(string name, CancellationToken ct) =>
-        RunAsync([Ip, "link", "add", name, "type", LinkKind], ct);
+        RunAsync([Ip, "link", "add", "name", name, "type", LinkKind], ct);
 
     /// <summary>
     /// Takes an interface off the host.
     /// </summary>
     public Task RemoveLinkAsync(string name, CancellationToken ct) =>
-        RunAsync([Ip, "link", "del", name], ct);
+        RunAsync([Ip, "link", "del", "dev", name], ct);
 
     /// <summary>
     /// Replaces the address ranges of an interface, leaving the ones it already carries in place.

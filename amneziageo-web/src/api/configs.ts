@@ -58,6 +58,7 @@ export interface Config {
   publicKey: string
   privateKey: string | null
   presharedKey: string | null
+  hasPresharedKey?: boolean
   obfuscation: Obfuscation
   createdUtc: string
   updatedUtc: string
@@ -242,6 +243,7 @@ function useRefreshing<TArgs, TResult>(call: (args: TArgs) => Promise<TResult>) 
 export interface ConfigChangePreview {
   baseRevision: string
   clientsRevision: string
+  addressFault?: { code: string; message: string } | null
   clients: { id: number; name: string; revision: string; fields: string[]; requiresCoordination: boolean }[]
 }
 export interface PendingConfigChange {

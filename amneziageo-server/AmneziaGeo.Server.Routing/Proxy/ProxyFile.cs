@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
 using AmneziaGeo.Server.Core.Proxy;
+using AmneziaGeo.Server.Awg.Config;
 
 namespace AmneziaGeo.Server.Routing.Proxy;
 
@@ -21,15 +22,17 @@ public static class ProxyFile
 
     private const string Tail = ".env";
 
+    private static readonly UTF8Encoding Encoding = new(false, true);
+
     /// <summary>
     /// Returns the name of the file the allowed target of a front is written to.
     /// </summary>
-    public static string Rules(string name) => $"{Head}{name}.yaml";
+    public static string Rules(string name) => $"{Head}{Identity(name)}.yaml";
 
     /// <summary>
     /// Returns the name of the file the arguments of a front are written to.
     /// </summary>
-    public static string Arguments(string name) => $"{Head}{name}{Tail}";
+    public static string Arguments(string name) => $"{Head}{Identity(name)}{Tail}";
 
     /// <summary>
     /// Returns the name behind a file of arguments, or null when the file is not one.
@@ -40,9 +43,36 @@ public static class ProxyFile
 
         var bare = Path.GetFileName(file);
 
-        return bare.StartsWith(Head, StringComparison.Ordinal) && bare.EndsWith(Tail, StringComparison.Ordinal) && bare.Length > Head.Length + Tail.Length
-            ? bare[Head.Length..^Tail.Length]
-            : null;
+        if (!bare.StartsWith(Head, StringComparison.Ordinal) || !bare.EndsWith(Tail, StringComparison.Ordinal) || bare.Length <= Head.Length + Tail.Length)
+        {
+            return null;
+        }
+
+        var identity = bare[Head.Length..^Tail.Length];
+        if (!identity.StartsWith('_'))
+        {
+            return identity;
+        }
+
+        var encoded = identity[1..];
+        if (encoded.Length == 0 || encoded.Length % 2 != 0 || !encoded.All(char.IsAsciiHexDigit))
+        {
+            return null;
+        }
+
+        var name = System.Text.Encoding.UTF8.GetString(Convert.FromHexString(encoded));
+        return ConfigRules.CheckName(name) is null && Identity(name) == identity ? name : null;
+    }
+
+    /// <summary>
+    /// Returns the identifier of a proxy service and its files.
+    /// </summary>
+    public static string Identity(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        var legacy = name.Length > 0 && name[0] is >= 'a' and <= 'z'
+            && name.All(one => one is >= 'a' and <= 'z' or >= '0' and <= '9' or '_' or '-');
+        return legacy ? name : "_" + Convert.ToHexStringLower(Encoding.GetBytes(name));
     }
 
     /// <summary>

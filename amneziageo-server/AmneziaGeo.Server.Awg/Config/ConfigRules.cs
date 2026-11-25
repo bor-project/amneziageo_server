@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Device;
@@ -12,7 +13,7 @@ namespace AmneziaGeo.Server.Awg.Config;
 public static partial class ConfigRules
 {
     /// <summary>
-    /// The longest name an interface takes.
+    /// The longest interface name in UTF-8 bytes.
     /// </summary>
     public const int MaxNameLength = 15;
 
@@ -132,16 +133,16 @@ public static partial class ConfigRules
             return Fault("bad-interface-name", "the name is empty");
         }
 
-        if (name.Length > MaxNameLength)
+        if (Encoding.UTF8.GetByteCount(name) > MaxNameLength)
         {
-            return Fault("bad-interface-name", $"the name is longer than {MaxNameLength} characters");
+            return Fault("bad-interface-name", $"the name is longer than {MaxNameLength} bytes in UTF-8");
         }
 
-        return NameShape().IsMatch(name)
+        return name is not "." and not ".." && !name.Any(InterfaceNames.Forbidden)
             ? null
             : Fault(
                 "bad-interface-name",
-                "the name takes lower case letters, digits, dash and underscore, and starts with a letter");
+                "the name contains whitespace, control characters or a reserved delimiter");
     }
 
     /// <summary>
@@ -421,9 +422,6 @@ public static partial class ConfigRules
     private static ConfigFault Fault(string code, string message) => new(code, message);
 
     private static bool Outside(int size) => size is < 0 or > MaxJunk;
-
-    [GeneratedRegex("^[a-z][a-z0-9_-]*$")]
-    private static partial Regex NameShape();
 
     [GeneratedRegex("^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?([.][a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$")]
     private static partial Regex HostShape();

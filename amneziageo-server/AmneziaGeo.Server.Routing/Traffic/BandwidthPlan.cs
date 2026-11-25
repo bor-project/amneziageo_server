@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using AmneziaGeo.Server.Awg.Device;
+using AmneziaGeo.Server.Awg.Config;
 
 namespace AmneziaGeo.Server.Routing.Traffic;
 
@@ -52,9 +53,7 @@ internal sealed record BandwidthPlan(
 
     public static BandwidthPlan Create(string name, IReadOnlyList<ClientBandwidth> clients)
     {
-        if (string.IsNullOrEmpty(name) || name.Length > 15
-            || name.Any(one => !char.IsAsciiLetterOrDigit(one) && one is not '_' and not '-' and not '.')
-            || name[0] == '-')
+        if (ConfigRules.CheckName(name) is not null)
         {
             throw new ArgumentException("the interface name is invalid", nameof(name));
         }

@@ -98,14 +98,21 @@ public static partial class ConfigEndpoints
     private static IResult Preshared() =>
         Results.Ok(new KeyResponse(Convert.ToBase64String(RandomNumberGenerator.GetBytes(Curve25519.KeySize))));
 
-    private static IResult Import(ConfigImportRequest request)
+    private static async Task<IResult> Import(ConfigImportRequest request, AppDbContext db, CancellationToken ct)
     {
         var name = (request.Name ?? string.Empty).Trim();
-        var result = ConfigImport.Read(request.Text, name.Length > 0 ? name : "awg0");
-
-        return result.Config is null
-            ? Refuse(StatusCodes.Status400BadRequest, result.Fault!.Code, result.Fault.Message)
-            : Results.Ok(ConfigAnswers.Config(result.Config, true));
+        var result = ConfigImport.Read(request.Text, name);
+        if (result.Config is not { } config)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, result.Fault!.Code, result.Fault.Message);
+        }
+        if (name.Length == 0)
+        {
+            config = config with { Name = InterfaceNames.Suggest(config.Address.FirstOrDefault(), await ImportNames.ReadAsync(db, ct).ConfigureAwait(false), "awg0") };
+        }
+        return ConfigRules.CheckName(config.Name) is { } fault
+            ? Refuse(StatusCodes.Status400BadRequest, fault.Code, fault.Message)
+            : Results.Ok(ConfigAnswers.Config(config, true));
     }
 
     private static async Task<IResult> AddAsync(
@@ -214,6 +221,10 @@ public static partial class ConfigEndpoints
         }
 
         var impact = await changes.PreviewAsync(held, draft, ct).ConfigureAwait(false);
+        if (impact.AddressFault is { } addressFault)
+        {
+            return Refuse(StatusCodes.Status409Conflict, addressFault.Code, addressFault.Message);
+        }
         if (request.ExpectedClientsRevision is { } clientsRevision && clientsRevision != impact.ClientsRevision)
         {
             return Refuse(409, "config-change-stale", "the effective client configurations changed after the draft was prepared");
@@ -365,11 +376,12 @@ public static partial class ConfigEndpoints
         CancellationToken ct)
     {
         using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
-        var found = await store.FindAsync(id, ct).ConfigureAwait(false);
-        if (found is null)
+        var result = await store.SynchronizeClientsAsync(id, ct).ConfigureAwait(false);
+        if (!result.IsOk)
         {
-            return Refuse(StatusCodes.Status404NotFound, "unknown-config", $"there is no endpoint under the number {id}");
+            return Explain(result);
         }
+        var found = result.Record!;
 
         await services.PrepareUdpAsync(ct).ConfigureAwait(false);
         var sync = await keeper.RaiseAsync(found, await clients.ListAsync(id, ct).ConfigureAwait(false), ct)
@@ -390,6 +402,11 @@ public static partial class ConfigEndpoints
         CancellationToken ct)
     {
         using var hold = await keeper.HoldAsync(ct).ConfigureAwait(false);
+        var result = await store.SynchronizeClientsAsync(null, ct).ConfigureAwait(false);
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
         var found = await store.ListAsync(ct).ConfigureAwait(false);
         await services.PrepareUdpAsync(ct).ConfigureAwait(false);
         var done = await keeper.SyncAsync(found, await clients.ListAsync(ct).ConfigureAwait(false), ct)

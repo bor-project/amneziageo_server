@@ -169,7 +169,7 @@ the code into a phrase of its own language.
 
 | Code | Behind it |
 |---|---|
-| `bad-interface-name` | the name is empty, longer than 15 characters or outside `^[a-z][a-z0-9_-]*$` |
+| `bad-interface-name` | the name is empty, exceeds 15 UTF-8 bytes, is `.`/`..`, or contains whitespace, control characters, `/`, `:`, `,`, `"`, `\`, `*` or `%` |
 | `bad-host` | the host is neither an address nor a host name, or longer than 255 characters |
 | `host-needed` | an endpoint that is turned on names no host, when it is added, changed or turned on |
 | `bad-port` | the port is outside 1 to 65535 |
@@ -200,6 +200,27 @@ the code into a phrase of its own language.
 `S1 + 56 == S2` is refused because it makes an initiation and a response the same size. Nothing keeps
 two endpoints from carrying the same address range: they meet only on the host, and the ranges of one
 are its own business.
+
+## Adding IPv6 to existing clients
+
+Saving an interface with an IPv6 range assigns a missing individual IPv6 address to each existing client.
+IPv4 addresses, existing individual IPv6 addresses, keys, client identifiers and subscription URLs are retained.
+Allocation reserves the interface address and every client's address, including disabled clients. Repeating
+an unchanged allocation preserves the addresses and their update timestamps.
+
+The change preview includes the projected client addresses. Choosing `Later` keeps the active interface and
+client addresses unchanged until the pending change is applied. Applying the change saves the interface and
+its clients in one transaction; the next export, subscription and hello use the updated configurations and
+revisions. Existing custom `AllowedIPs` remain unchanged.
+
+If the range cannot accommodate all clients, the whole change is refused with `client-ipv6-unavailable`.
+Exceeding the four-address client limit is refused with `client-ipv6-address-limit`; existing duplicate or
+reserved addresses must be corrected before applying the change. No subset of clients is saved on failure.
+
+`POST /api/configs/{id}/apply` also fills missing client IPv6 addresses on an interface that already has IPv6.
+`POST /api/configs/apply` does this for every interface, checking every allocation before saving any of them.
+These actions update the stored client configurations before applying their peers to the host. New clients
+and edits of old client drafts also receive missing IPv6 addresses from the current interface ranges.
 
 ## What the host takes
 
@@ -263,3 +284,9 @@ private one on every write, so the pair in the database always belongs together.
 | `AmneziaGeo.Server.Api/Configs/ConfigEndpoints.cs` | the routes |
 | `amneziageo-web/src/pages/Configs.tsx` | the page |
 | `amneziageo-web/src/components/ConfigForm.tsx` | the form |
+
+## Names after import
+
+A new interface uses the first imported address as its suggested name. A linked server uses its imported endpoint host. IPv6 separators become hyphens; long names are shortened within 15 UTF-8 bytes with a deterministic suffix. Existing interface, linked-server and balancer names are excluded from automatic suggestions. A manually edited name, including an existing record's name, is preserved across import.
+
+Names remain Linux interface names. Uppercase, leading digits, dots and Unicode are accepted within the byte limit. Whitespace and `/`/`:` are incompatible with interface names; commas delimit stored name lists; quotes/backslashes are incompatible with existing text consumers; `*` affects nft interface matching and `%` requests kernel name allocation. Legacy proxy unit/file names and UDP firewall table names use an ASCII identity for extended names. Existing names and legacy identities remain unchanged.

@@ -1,4 +1,6 @@
+using System.Data;
 using System.Net;
+using System.Runtime.CompilerServices;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
@@ -61,7 +63,7 @@ public sealed class ClientStore
 {
     private static readonly char[] Breaks = [',', ' ', '\t', '\n', '\r'];
 
-    private static readonly SemaphoreSlim Writes = new(1, 1);
+    private static readonly ConditionalWeakTable<AppDbContext, SemaphoreSlim> Writes = new();
 
     private readonly AppDbContext _db;
 
@@ -400,21 +402,37 @@ public sealed class ClientStore
     }
 
     // Lets one write of the clients through at a time.
-    private static async Task<ClientResult> InTurnAsync(Func<Task<ClientResult>> write, CancellationToken ct)
+    private async Task<ClientResult> InTurnAsync(Func<Task<ClientResult>> write, CancellationToken ct)
     {
-        await Writes.WaitAsync(ct).ConfigureAwait(false);
+        var gate = Writes.GetValue(_db, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            return await write().ConfigureAwait(false);
+            if (_db.Database.CurrentTransaction is not null)
+            {
+                return await write().ConfigureAwait(false);
+            }
+            await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct).ConfigureAwait(false);
+            var result = await write().ConfigureAwait(false);
+            if (result.IsOk)
+            {
+                await transaction.CommitAsync(ct).ConfigureAwait(false);
+            }
+            return result;
         }
         finally
         {
-            Writes.Release();
+            gate.Release();
         }
     }
 
-    private async Task<ClientResult> AddInTurnAsync(TunnelClient draft, CancellationToken ct) =>
-        await InsertAsync(await PlacedAsync(draft, ct).ConfigureAwait(false), fit: true, ct).ConfigureAwait(false);
+    private async Task<ClientResult> AddInTurnAsync(TunnelClient draft, CancellationToken ct)
+    {
+        var placed = await PlacedAsync(draft, ct).ConfigureAwait(false);
+        var (wanted, fault) = await CompletedAsync(placed, 0, ct).ConfigureAwait(false);
+        return fault is not null ? ClientResult.No(ClientOutcome.Invalid, fault.Code, fault.Message)
+            : await InsertAsync(wanted, fit: true, ct).ConfigureAwait(false);
+    }
 
     private async Task<ClientResult> ImportInTurnAsync(TunnelClient wanted, CancellationToken ct)
     {
@@ -436,7 +454,11 @@ public sealed class ClientStore
             return Missing(id);
         }
 
-        var wanted = Whole(draft) with { ConfigId = entity.ConfigId };
+        var (wanted, fault) = await CompletedAsync(Whole(draft) with { ConfigId = entity.ConfigId }, id, ct).ConfigureAwait(false);
+        if (fault is not null)
+        {
+            return ClientResult.No(ClientOutcome.Invalid, fault.Code, fault.Message);
+        }
         if (await Refusal(wanted, id, fit: true, ct).ConfigureAwait(false) is { } refusal)
         {
             return refusal;
@@ -474,6 +496,22 @@ public sealed class ClientStore
         var taken = await AddressesAsync(draft.ConfigId, ct).ConfigureAwait(false);
 
         return draft with { Address = ClientPool.Free(own, [.. taken, .. own]) };
+    }
+
+    private async Task<(TunnelClient Client, ClientFault? Fault)> CompletedAsync(TunnelClient draft, long id, CancellationToken ct)
+    {
+        if (draft.Address.Count == 0)
+        {
+            return (draft, null);
+        }
+        var ranges = await _db.Configs.AsNoTracking().Where(one => one.Id == draft.ConfigId).Select(one => one.Address).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (ranges is null)
+        {
+            return (draft, null);
+        }
+        var held = await _db.Clients.AsNoTracking().Where(one => one.ConfigId == draft.ConfigId && one.Id != id).Select(one => one.Address).ToArrayAsync(ct).ConfigureAwait(false);
+        var pick = ClientIpv6.Complete(Parts(ranges), draft.Address, held.SelectMany(Parts));
+        return (draft with { Address = pick.Addresses }, pick.Fault);
     }
 
     private async Task<ClientResult> InsertAsync(TunnelClient wanted, bool fit, CancellationToken ct)
@@ -572,7 +610,7 @@ public sealed class ClientStore
     private static ClientResult Missing(long id) =>
         ClientResult.No(ClientOutcome.Unknown, "unknown-client", $"there is no client under the number {id}");
 
-    private static TunnelClient Read(ClientEntity entity) => new()
+    internal static TunnelClient Read(ClientEntity entity) => new()
     {
         Id = entity.Id,
         ConfigId = entity.ConfigId,

@@ -1,3 +1,4 @@
+using System.Data;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
@@ -184,7 +185,8 @@ public sealed class ConfigStore
             return ConfigResult.No(ConfigOutcome.Invalid, fault.Code, fault.Message);
         }
 
-        if (await _db.Configs.AnyAsync(config => config.Name == draft.Name, ct).ConfigureAwait(false))
+        if (await _db.Configs.AnyAsync(config => config.Name == draft.Name, ct).ConfigureAwait(false)
+            || await _db.Outbounds.AnyAsync(one => one.Name == draft.Name, ct).ConfigureAwait(false))
         {
             return ConfigResult.No(
                 ConfigOutcome.NameTaken,
@@ -226,13 +228,17 @@ public sealed class ConfigStore
     /// <summary>
     /// Withdraws the former endpoint before committing its renamed configuration.
     /// </summary>
-    public async Task<ConfigResult> ChangeAsync(long id, ServerConfig draft, Func<ServerConfig, CancellationToken, Task>? withdraw, CancellationToken ct)
+    public Task<ConfigResult> ChangeAsync(long id, ServerConfig draft, Func<ServerConfig, CancellationToken, Task>? withdraw, CancellationToken ct) =>
+        InTransactionAsync(() => ChangeCoreAsync(id, draft, withdraw, ct), ct);
+
+    private async Task<ConfigResult> ChangeCoreAsync(long id, ServerConfig draft, Func<ServerConfig, CancellationToken, Task>? withdraw, CancellationToken ct)
     {
-        var entity = await _db.Configs.FirstOrDefaultAsync(config => config.Id == id, ct).ConfigureAwait(false);
-        if (entity is null)
+        var snapshot = await _db.Configs.AsNoTracking().FirstOrDefaultAsync(config => config.Id == id, ct).ConfigureAwait(false);
+        if (snapshot is null)
         {
             return Missing(id);
         }
+        var entity = CurrentConfig(snapshot);
 
         draft = draft.WebSocketPath.Length > 0 ? draft : draft with { WebSocketPath = entity.WebSocketPath };
         if (ConfigRules.Check(draft) is { } fault)
@@ -240,7 +246,8 @@ public sealed class ConfigStore
             return ConfigResult.No(ConfigOutcome.Invalid, fault.Code, fault.Message);
         }
 
-        if (await _db.Configs.AnyAsync(config => config.Name == draft.Name && config.Id != id, ct).ConfigureAwait(false))
+        if (await _db.Configs.AnyAsync(config => config.Name == draft.Name && config.Id != id, ct).ConfigureAwait(false)
+            || entity.Name != draft.Name && await _db.Outbounds.AnyAsync(one => one.Name == draft.Name, ct).ConfigureAwait(false))
         {
             return ConfigResult.No(
                 ConfigOutcome.NameTaken,
@@ -258,6 +265,11 @@ public sealed class ConfigStore
             return busy;
         }
 
+        var (plan, members) = await ClientAddressesAsync(draft with { Id = entity.Id }, ct).ConfigureAwait(false);
+        if (plan.Fault is { } addressFault)
+        {
+            return ConfigResult.No(ConfigOutcome.Invalid, addressFault.Code, addressFault.Message);
+        }
         var old = entity.Name;
         if (withdraw is not null && !string.Equals(old, draft.Name, StringComparison.Ordinal))
         {
@@ -265,6 +277,7 @@ public sealed class ConfigStore
         }
 
         var now = _time.GetUtcNow();
+        WriteClientAddresses(plan, members, now);
         Write(entity, draft);
         if (draft.IsDefault && !entity.IsDefault)
         {
@@ -277,6 +290,115 @@ public sealed class ConfigStore
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return ConfigResult.Done(Read(entity));
+    }
+
+    /// <summary>
+    /// Adds missing IPv6 addresses to the clients of selected interfaces.
+    /// </summary>
+    public Task<ConfigResult> SynchronizeClientsAsync(long? id, CancellationToken ct) =>
+        InTransactionAsync(() => SynchronizeClientsCoreAsync(id, ct), ct);
+
+    private async Task<ConfigResult> SynchronizeClientsCoreAsync(long? id, CancellationToken ct)
+    {
+        var snapshots = await _db.Configs.AsNoTracking().Where(one => id == null || one.Id == id).OrderBy(one => one.Id).ToArrayAsync(ct).ConfigureAwait(false);
+        var endpoints = snapshots.Select(CurrentConfig).ToArray();
+        if (id is { } missing && endpoints.Length == 0)
+        {
+            return Missing(missing);
+        }
+        var plans = new List<(ConfigEntity Config, ClientIpv6Plan Plan, ClientEntity[] Members)>();
+        foreach (var endpoint in endpoints)
+        {
+            var (plan, members) = await ClientAddressesAsync(Read(endpoint), ct).ConfigureAwait(false);
+            if (plan.Fault is { } fault)
+            {
+                return ConfigResult.No(ConfigOutcome.Invalid, fault.Code, fault.Message);
+            }
+            plans.Add((endpoint, plan, members));
+        }
+        var changed = false;
+        var now = _time.GetUtcNow();
+        foreach (var (endpoint, plan, members) in plans)
+        {
+            if (WriteClientAddresses(plan, members, now))
+            {
+                endpoint.UpdatedUtc = now;
+                changed = true;
+            }
+        }
+        if (changed)
+        {
+            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+        return endpoints.Length > 0 ? ConfigResult.Done(Read(endpoints[0])) : new ConfigResult(ConfigOutcome.Ok, string.Empty, string.Empty, null);
+    }
+
+    private async Task<(ClientIpv6Plan Plan, ClientEntity[] Members)> ClientAddressesAsync(ServerConfig config, CancellationToken ct)
+    {
+        var snapshots = await _db.Clients.AsNoTracking().Where(one => one.ConfigId == config.Id).OrderBy(one => one.Id).ToArrayAsync(ct).ConfigureAwait(false);
+        var tracked = _db.ChangeTracker.Entries<ClientEntity>().ToDictionary(one => one.Entity.Id);
+        var members = new List<ClientEntity>(snapshots.Length);
+        foreach (var snapshot in snapshots)
+        {
+            if (tracked.TryGetValue(snapshot.Id, out var entry))
+            {
+                entry.CurrentValues.SetValues(snapshot);
+                entry.OriginalValues.SetValues(snapshot);
+                entry.State = EntityState.Unchanged;
+                members.Add(entry.Entity);
+            }
+            else
+            {
+                members.Add(_db.Clients.Attach(snapshot).Entity);
+            }
+        }
+        return (ClientIpv6.Plan(config, [.. members.Select(ClientStore.Read)]), [.. members]);
+    }
+
+    private ConfigEntity CurrentConfig(ConfigEntity snapshot)
+    {
+        var held = _db.Configs.Local.FirstOrDefault(one => one.Id == snapshot.Id);
+        if (held is null)
+        {
+            return _db.Configs.Attach(snapshot).Entity;
+        }
+        var entry = _db.Entry(held);
+        entry.CurrentValues.SetValues(snapshot);
+        entry.OriginalValues.SetValues(snapshot);
+        entry.State = EntityState.Unchanged;
+        return held;
+    }
+
+    private static bool WriteClientAddresses(ClientIpv6Plan plan, IReadOnlyList<ClientEntity> members, DateTimeOffset now)
+    {
+        var projected = plan.Clients.ToDictionary(one => one.Id);
+        var changed = false;
+        foreach (var member in members)
+        {
+            var addresses = projected[member.Id].Address;
+            if (!Parts(member.Address).SequenceEqual(addresses))
+            {
+                member.Address = string.Join(", ", addresses);
+                member.UpdatedUtc = now;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private async Task<ConfigResult> InTransactionAsync(Func<Task<ConfigResult>> write, CancellationToken ct)
+    {
+        if (_db.Database.CurrentTransaction is not null)
+        {
+            return await write().ConfigureAwait(false);
+        }
+        await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct).ConfigureAwait(false);
+        var result = await write().ConfigureAwait(false);
+        if (result.IsOk)
+        {
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+        }
+        return result;
     }
 
     /// <summary>

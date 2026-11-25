@@ -52,7 +52,7 @@ public static class OutboundImport
         return new OutboundImportResult(
             new OutboundConfig
             {
-                Name = name,
+                Name = name.Length > 0 ? name : InterfaceNames.Suggest(host, [], "out0"),
                 Kind = OutboundKind.Wg,
                 Host = host,
                 Port = port,

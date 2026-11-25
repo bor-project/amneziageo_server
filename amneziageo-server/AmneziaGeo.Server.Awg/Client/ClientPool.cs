@@ -105,6 +105,36 @@ public static class ClientPool
         return bounds.AsSpan().SequenceEqual(bytes);
     }
 
+    internal static IPAddress? Pick(AwgAllowedIp range, IReadOnlySet<IPAddress> held, UInt128? preferred)
+    {
+        if (preferred is { } wanted && Fits(range, wanted) && !Reserved(range, wanted))
+        {
+            var point = Nth(range, wanted);
+            if (!held.Contains(point))
+            {
+                return point;
+            }
+        }
+        var first = Width(range.Address) - range.Cidr < 2 ? 0UL : 1UL;
+        var room = Room(range);
+        for (var number = first; number < room; number++)
+        {
+            var offset = (UInt128)number;
+            var point = Nth(range, offset);
+            if (!Reserved(range, offset) && !held.Contains(point))
+            {
+                return point;
+            }
+        }
+        return null;
+    }
+
+    private static bool Fits(AwgAllowedIp range, UInt128 number)
+    {
+        var bits = Width(range.Address) - range.Cidr;
+        return bits == 128 || number < (UInt128.One << bits);
+    }
+
     private static List<AwgAllowedIp> Ranges(IEnumerable<string> ranges)
     {
         var own = new List<AwgAllowedIp>();
@@ -119,7 +149,7 @@ public static class ClientPool
         return own;
     }
 
-    private static bool Reserved(AwgAllowedIp range, UInt128 number)
+    internal static bool Reserved(AwgAllowedIp range, UInt128 number)
     {
         if (number == Number(range, range.Address))
         {
@@ -135,7 +165,7 @@ public static class ClientPool
         return number == UInt128.Zero || (!range.IsSix && number == (UInt128.One << bits) - UInt128.One);
     }
 
-    private static UInt128 Number(AwgAllowedIp range, IPAddress address) =>
+    internal static UInt128 Number(AwgAllowedIp range, IPAddress address) =>
         Value(address) - Value(range.Network().Address);
 
     private static IPAddress Nth(AwgAllowedIp range, UInt128 number) =>

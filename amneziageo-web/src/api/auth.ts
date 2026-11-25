@@ -78,6 +78,8 @@ const complaints: Record<string, TextKey> = {
   "bad-client-key": "error.badClientKey",
   "bad-client-preshared": "error.badClientPreshared",
   "bad-client-address": "error.badClientAddress",
+  "client-ipv6-unavailable": "error.clientIpv6Unavailable",
+  "client-ipv6-address-limit": "error.clientIpv6AddressLimit",
   "bad-client-note": "error.badClientNote",
   "client-name-taken": "error.clientNameTaken",
   "client-key-taken": "error.clientKeyTaken",
