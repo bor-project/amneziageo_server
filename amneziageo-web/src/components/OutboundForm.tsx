@@ -1,7 +1,10 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { complaint } from "@/api/auth"
 import type { Obfuscation } from "@/api/configs"
-import { useImportOutbound, useOutboundKeys } from "@/api/outbounds"
+import { useImportOutbound, useOutboundKeys, useOutbounds } from "@/api/outbounds"
+import { useConfigs } from "@/api/configs"
+import { useBalancers } from "@/api/balancers"
+import { interfaceNameFault, interfaceNameValue } from "@/components/interfaceNames"
 import type { OutboundDraft, OutboundKind } from "@/api/outbounds"
 import { WayUse } from "@/components/Holders"
 import { ObfuscationFields } from "@/components/Obfuscation"
@@ -36,10 +39,16 @@ export function OutboundForm({
   const t = useText()
   const keys = useOutboundKeys()
   const read = useImportOutbound()
+  const nameCustomized = useRef(self !== undefined)
+  const nameChanges = useRef(0)
+  const outbounds = useOutbounds().data ?? []
+  const configs = useConfigs().data ?? []
+  const balancers = useBalancers().data ?? []
   const [draft, setDraft] = useState(start)
   const [shown, setShown] = useState(publicKey)
   const [text, setText] = useState("")
   const edited = !same(draft, start)
+  const name = interfaceNameFault(t, draft.name, [...outbounds.filter((one) => one.name !== self).map((one) => one.name), ...balancers.map((one) => one.name), ...(self !== undefined && interfaceNameValue(draft.name) === start.name ? [] : configs.map((one) => one.name))])
 
   function put(change: Partial<OutboundDraft>) {
     setDraft({ ...draft, ...change })
@@ -60,9 +69,14 @@ export function OutboundForm({
   }
 
   async function take() {
-    const found = await read.mutateAsync({ name: draft.name, config: text })
-    setDraft({
-      ...draft,
+    const revision = nameChanges.current
+    const found = await read.mutateAsync({ name: nameCustomized.current ? draft.name : "", config: text }).catch(() => null)
+    if (found === null) {
+      return
+    }
+    setDraft((current) => ({
+      ...current,
+      name: nameChanges.current === revision ? found.name : current.name,
       kind: found.kind,
       host: found.host,
       port: found.port,
@@ -70,11 +84,11 @@ export function OutboundForm({
       peerKey: found.peerKey,
       presharedKey: found.presharedKey ?? "",
       address: found.address,
-      dns: found.dns,
+      dns: found.dns ?? [],
       mtu: found.mtu,
       keepalive: found.keepalive,
       obfuscation: found.obfuscation,
-    })
+    }))
     setShown(found.publicKey)
     setText("")
   }
@@ -96,7 +110,12 @@ export function OutboundForm({
           id="outbound-name"
           caption={t("outbounds.name")}
           value={draft.name}
-          onChange={(value) => put({ name: value })}
+          onChange={(value) => {
+            nameCustomized.current = true
+            nameChanges.current++
+            put({ name: value })
+          }}
+          fault={name}
         />
         <div>
           <label className={label} htmlFor="outbound-kind">
@@ -108,7 +127,7 @@ export function OutboundForm({
             onChange={(e) => put({ kind: e.target.value as OutboundKind })}
             className={`mt-1 ${field}`}
           >
-            <option value="local">{t("outbounds.kindLocal")}</option>
+            {draft.kind === "local" && <option value="local">{t("rules.actionDirect")}</option>}
             <option value="wg">{t("outbounds.kindWg")}</option>
             <option value="ws">{t("outbounds.kindWs")}</option>
           </select>
@@ -118,9 +137,7 @@ export function OutboundForm({
       {self !== undefined && (
         <WayUse
           name={self}
-          rules={draft.rules}
           balancers={draft.balancers}
-          onRules={(rules) => put({ rules })}
           onBalancers={(balancers) => put({ balancers })}
         />
       )}
@@ -170,12 +187,6 @@ export function OutboundForm({
             onChange={(address) => put({ address })}
             wide
           />
-          <ListLine
-            id="outbound-dns"
-            caption={t("outbounds.dns")}
-            value={draft.dns}
-            onChange={(dns) => put({ dns })}
-          />
           <Count
             id="outbound-mtu"
             caption={t("outbounds.mtu")}
@@ -196,6 +207,10 @@ export function OutboundForm({
           />
         </Part>
       )}
+
+      <Part title={t("tab.dns")}>
+        <div className="sm:col-span-2"><ListLine id="outbound-dns" caption={t("routing.serverDns")} value={draft.dns} onChange={(dns) => put({ dns })} /></div>
+      </Part>
 
       {tunnel && (
         <Part title={t("outbounds.keys")}>
@@ -284,7 +299,7 @@ export function OutboundForm({
         <button
           type="button"
           onClick={() => onSave(draft)}
-          disabled={!edited || pending || draft.name.length === 0}
+          disabled={!edited || pending || name.length > 0}
           className={primary}
         >
           {pending ? t("outbounds.busy") : t("outbounds.save")}

@@ -7,6 +7,7 @@ import {
   createBrowserRouter,
   createRoutesFromElements,
   useLocation,
+  useParams,
 } from "react-router-dom"
 import { scopes } from "@/api/scopes"
 import { Boot } from "@/components/Boot"
@@ -14,13 +15,13 @@ import { Layout } from "@/components/Layout"
 import { RequireAuth, RequireScope } from "@/components/RequireAuth"
 import { Cards, Sectioned } from "@/components/Section"
 import { clients, interfaces, settings } from "@/components/menu"
-import { RoutingLegacy, RoutingSection } from "@/components/RoutingEditor"
-import { AddressGroups } from "@/pages/AddressGroups"
+import { RoutingSection } from "@/components/RoutingEditor"
 import { Balancers } from "@/pages/Balancers"
 import { Directions } from "@/pages/Directions"
 import { About } from "@/pages/About"
 import { AboutText } from "@/pages/AboutText"
 import { Accounts } from "@/pages/Accounts"
+import { BalancerPage } from "@/pages/BalancerPage"
 import { BalancerRemove } from "@/pages/BalancerRemove"
 import { ClientExport, ClientInformation, ClientSettings, ClientStart, ClientView, NewClient } from "@/pages/ClientPage"
 import { ClientReleasePage } from "@/pages/ClientReleasePage"
@@ -41,6 +42,7 @@ import { GeoPage } from "@/pages/GeoPage"
 import { GeoRemove } from "@/pages/GeoRemove"
 import { Login } from "@/pages/Login"
 import { OwnPassword } from "@/pages/OwnPassword"
+import { OutboundPage } from "@/pages/OutboundPage"
 import { OutboundRemove } from "@/pages/OutboundRemove"
 import { Password } from "@/pages/Password"
 import { RolePage } from "@/pages/RolePage"
@@ -48,6 +50,10 @@ import { RoleRemove } from "@/pages/RoleRemove"
 import { RouteTest } from "@/pages/RouteTest"
 import { RuleRemove } from "@/pages/RuleRemove"
 import { Rules } from "@/pages/Rules"
+import { RulePage } from "@/pages/RulePage"
+import { EntryPage } from "@/pages/EntryPage"
+import { EntryRemove } from "@/pages/EntryRemove"
+import { RoutingTable } from "@/pages/RoutingTable"
 import { PresetPage } from "@/pages/PresetPage"
 import { PresetRemove } from "@/pages/PresetRemove"
 import { Presets } from "@/pages/Presets"
@@ -69,7 +75,7 @@ import { useAppearance } from "@/theme/theme"
 const moved: { from: string; to: string }[] = [
   { from: "configs", to: "/interfaces" },
   { from: "proxies", to: "/routing/proxies" },
-  { from: "rules", to: "/routing" },
+  { from: "rules", to: "/routing/rules" },
   { from: "outbounds", to: "/routing/channels" },
   { from: "balancers", to: "/routing/balancers" },
   { from: "geo", to: "/routing/geo" },
@@ -130,23 +136,33 @@ const router = createBrowserRouter(
             <Route path="connections/*" element={<Moved />} />
             <Route path="routing" element={<RoutingSection />}>
               <Route index element={<Navigate to="rules" replace />} />
-              <Route path="rules" element={<Rules />} />
+              <Route path="rules" element={<RoutingTable />} />
+              <Route path="addresses" element={<Rules />} />
               <Route element={<RequireScope scope={scopes.manageRouting} />}>
-                <Route path="rules/new" element={<RoutingLegacy to="/routing/rules" />} />
-                <Route path="rules/:ruleId/edit" element={<RoutingLegacy to="/routing/rules" />} />
-                <Route path="rules/:ruleId/delete" element={<RuleRemove />} />
+                <Route path="addresses/new" element={<RulePage />} />
+                <Route path="rules/new" element={<EntryPage />} />
+                <Route path="rules/:entryId/edit" element={<EntryPage />} />
+                <Route path="rules/:entryId/delete" element={<EntryRemove />} />
+                <Route path="addresses/:ruleId/edit" element={<RulePage />} />
+                <Route path="addresses/:ruleId/delete" element={<RuleRemove />} />
               </Route>
               <Route path="basic" element={<Navigate to="/routing/rules" replace />} />
               <Route path="test" element={<RouteTest />} />
               <Route path="channels" element={<Directions />} />
               <Route path="balancers" element={<Balancers />} />
-              <Route path="address-groups" element={<AddressGroups />} />
+              <Route path="address-groups" element={<RoutingAlias addresses />} />
+              <Route path="table" element={<RoutingAlias />} />
+              <Route path="table/new" element={<RoutingAlias fresh />} />
+              <Route path="table/:entryId/:operation" element={<RoutingAlias />} />
               <Route element={<RequireScope scope={scopes.manageRouting} />}>
-                <Route path="channels/new" element={<RoutingLegacy to="/routing/channels" />} />
-                <Route path="channels/groups/new" element={<RoutingLegacy to="/routing/balancers" />} />
-                <Route path="channels/groups/:balancerId/edit" element={<RoutingLegacy to="/routing/balancers" />} />
-                <Route path="channels/groups/:balancerId/delete" element={<BalancerRemove />} />
-                <Route path="channels/:outboundId/edit" element={<RoutingLegacy to="/routing/channels" />} />
+                <Route path="channels/new" element={<OutboundPage />} />
+                <Route path="channels/groups/new" element={<Navigate to="/routing/balancers/new" replace />} />
+                <Route path="channels/groups/:balancerId/edit" element={<BalancerLegacy />} />
+                <Route path="channels/groups/:balancerId/delete" element={<BalancerLegacy remove />} />
+                <Route path="balancers/new" element={<BalancerPage />} />
+                <Route path="balancers/:balancerId/edit" element={<BalancerPage />} />
+                <Route path="balancers/:balancerId/delete" element={<BalancerRemove />} />
+                <Route path="channels/:outboundId/edit" element={<OutboundPage />} />
                 <Route path="channels/:outboundId/delete" element={<OutboundRemove />} />
               </Route>
               <Route path="geo" element={<Geo />} />
@@ -245,4 +261,23 @@ function movedTo(path: string): string {
   }
 
   return rest.startsWith("/interfaces") ? rest : "/clients"
+}
+
+function BalancerLegacy({ remove = false }: { remove?: boolean }) {
+  const { balancerId } = useParams()
+  const { search, hash } = useLocation()
+
+  return <Navigate to={`/routing/balancers/${balancerId}/${remove ? "delete" : "edit"}${search}${hash}`} replace />
+}
+
+function RoutingAlias({ addresses = false, fresh = false }: { addresses?: boolean; fresh?: boolean }) {
+  const { entryId, operation } = useParams()
+  const { search, hash } = useLocation()
+  const params = new URLSearchParams(search)
+  const edit = params.get("edit")
+  params.delete("edit")
+  const id = entryId ?? edit
+  const suffix = fresh || id === "new" ? "/new" : id && /^\d+$/.test(id) ? `/${id}/${operation === "delete" ? "delete" : "edit"}` : ""
+  const query = params.size ? `?${params.toString()}` : ""
+  return <Navigate to={`/routing/${addresses ? "addresses" : "rules"}${suffix}${query}${hash}`} replace />
 }

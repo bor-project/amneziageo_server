@@ -73,7 +73,6 @@ export interface OutboundDraft {
   closePrivate: boolean
   obfuscation: Obfuscation
   balancers?: number[]
-  rules?: number[]
 }
 
 export function useOutbounds() {
@@ -148,7 +147,7 @@ export function draftOf(outbound: Outbound): OutboundDraft {
     peerKey: outbound.peerKey,
     presharedKey: outbound.presharedKey ?? "",
     address: outbound.address,
-    dns: outbound.dns,
+    dns: outbound.dns ?? [],
     mtu: outbound.mtu,
     keepalive: outbound.keepalive,
     probe: outbound.probe,
@@ -166,7 +165,7 @@ function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["outbounds"] })
       await queryClient.invalidateQueries({ queryKey: ["balancers"] })
-      await queryClient.invalidateQueries({ queryKey: ["rules"] })
+      await queryClient.invalidateQueries({ queryKey: ["routing-entries"] })
     },
   })
 }

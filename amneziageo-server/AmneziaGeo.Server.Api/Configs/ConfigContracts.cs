@@ -64,7 +64,8 @@ public sealed record ConfigResponse(
     DateTimeOffset UpdatedUtc,
     bool IsDefault = false,
     bool RequireUpdate = false,
-    bool UdpPrivate = false);
+    bool UdpPrivate = false,
+    bool HasPresharedKey = false);
 
 /// <summary>
 /// An endpoint as the interface sends it; keep leaves a port the panel held open and holds no longer open in the
@@ -167,7 +168,8 @@ public static class ConfigAnswers
         config.UpdatedUtc,
         config.IsDefault,
         config.RequireUpdate,
-        config.UdpPrivate);
+        config.UdpPrivate,
+        config.PresharedKey.Length > 0);
 
     /// <summary>
     /// Describes the obfuscation of an endpoint as the interface reads it.

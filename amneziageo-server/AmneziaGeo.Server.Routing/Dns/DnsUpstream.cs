@@ -4,7 +4,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
-using AmneziaGeo.Server.Routing.Outbound;
 
 namespace AmneziaGeo.Server.Routing.Dns;
 
@@ -47,6 +46,10 @@ public sealed class DnsUpstream : IDnsUpstream, IDisposable
 
     private readonly TimeProvider _time;
 
+    private readonly string _device;
+
+    private readonly IReadOnlyList<string> _sourceAddresses;
+
     private readonly DnsTlsLinks _tls;
 
     private readonly DnsHttpsLinks _https;
@@ -65,7 +68,9 @@ public sealed class DnsUpstream : IDnsUpstream, IDisposable
         TimeSpan wait,
         Func<uint?>? way = null,
         X509Certificate2Collection? roots = null,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        string? device = null,
+        IReadOnlyList<string>? sourceAddresses = null)
     {
         ArgumentNullException.ThrowIfNull(servers);
 
@@ -73,8 +78,10 @@ public sealed class DnsUpstream : IDnsUpstream, IDisposable
         _wait = wait;
         _way = way ?? (() => 0u);
         _time = time ?? TimeProvider.System;
-        _tls = new DnsTlsLinks(roots, _time);
-        _https = new DnsHttpsLinks(roots);
+        _device = device ?? string.Empty;
+        _sourceAddresses = sourceAddresses?.ToArray() ?? [];
+        _tls = new DnsTlsLinks(roots, _time, _device, _sourceAddresses);
+        _https = new DnsHttpsLinks(roots, _device, _sourceAddresses);
     }
 
     /// <summary>
@@ -183,7 +190,7 @@ public sealed class DnsUpstream : IDnsUpstream, IDisposable
         {
             DnsTransport.Tls => _tls.AskAsync(server.Point, question, mark, ct),
             DnsTransport.Https => _https.AskAsync(server, question, mark, ct),
-            _ => stream ? StreamAsync(server.Point, question, mark, ct) : PacketAsync(server.Point, question, mark, ct),
+            _ => stream ? StreamAsync(server.Point, question, mark, ct, _device, _sourceAddresses) : PacketAsync(server.Point, question, mark, ct, _device, _sourceAddresses),
         };
 
     // Keeps whether a name server answered, and what it said when it did not.
@@ -213,13 +220,11 @@ public sealed class DnsUpstream : IDnsUpstream, IDisposable
     }
 
     internal static async Task<byte[]?> PacketAsync(
-        IPEndPoint server, ReadOnlyMemory<byte> question, uint mark, CancellationToken ct)
+        IPEndPoint server, ReadOnlyMemory<byte> question, uint mark, CancellationToken ct,
+        string? device = null, IReadOnlyList<string>? sourceAddresses = null)
     {
         using var socket = new Socket(server.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-        if (!OutboundMark.Put(socket, mark))
-        {
-            return null;
-        }
+        DnsSocketBinding.Apply(socket, server, mark, device, sourceAddresses ?? []);
 
         await socket.ConnectAsync(server, ct).ConfigureAwait(false);
         await socket.SendAsync(question, SocketFlags.None, ct).ConfigureAwait(false);
@@ -230,13 +235,11 @@ public sealed class DnsUpstream : IDnsUpstream, IDisposable
     }
 
     internal static async Task<byte[]?> StreamAsync(
-        IPEndPoint server, ReadOnlyMemory<byte> question, uint mark, CancellationToken ct)
+        IPEndPoint server, ReadOnlyMemory<byte> question, uint mark, CancellationToken ct,
+        string? device = null, IReadOnlyList<string>? sourceAddresses = null)
     {
         using var socket = new Socket(server.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-        if (!OutboundMark.Put(socket, mark))
-        {
-            return null;
-        }
+        DnsSocketBinding.Apply(socket, server, mark, device, sourceAddresses ?? []);
 
         await socket.ConnectAsync(server, ct).ConfigureAwait(false);
         var head = new byte[2];

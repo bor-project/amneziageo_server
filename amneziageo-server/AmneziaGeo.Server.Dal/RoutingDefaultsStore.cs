@@ -1,5 +1,6 @@
 using System.Globalization;
 using AmneziaGeo.Server.Routing.Template;
+using AmneziaGeo.Server.Routing.Route;
 using Microsoft.EntityFrameworkCore;
 
 namespace AmneziaGeo.Server.Dal;
@@ -7,7 +8,7 @@ namespace AmneziaGeo.Server.Dal;
 /// <summary>
 /// Counts the restored routing records.
 /// </summary>
-public sealed record RoutingDefaultsResult(int Groups, int Presets);
+public sealed record RoutingDefaultsResult(int Rules, int Presets);
 
 /// <summary>
 /// Restores missing bundled routing records.
@@ -28,9 +29,9 @@ public sealed class RoutingDefaultsStore
     }
 
     /// <summary>
-    /// Restores the bundled address groups.
+    /// Restores the bundled traffic rules.
     /// </summary>
-    public Task<RoutingDefaultsResult> RestoreGroupsAsync(CancellationToken ct) => RestoreAsync(true, false, ct);
+    public Task<RoutingDefaultsResult> RestoreRulesAsync(CancellationToken ct) => RestoreAsync(true, false, ct);
 
     /// <summary>
     /// Restores the bundled client presets.
@@ -45,7 +46,7 @@ public sealed class RoutingDefaultsStore
     private Task<RoutingDefaultsResult> RestoreAsync(bool groups, bool presets, CancellationToken ct) =>
         _db.AloneAsync(async () =>
         {
-            var heldGroups = groups ? await _db.AddressGroups.ToListAsync(ct).ConfigureAwait(false) : [];
+            var heldGroups = groups ? await _db.TrafficRules.ToListAsync(ct).ConfigureAwait(false) : [];
             var heldPresets = presets ? await _db.RoutingPresets.ToListAsync(ct).ConfigureAwait(false) : [];
             var groupKeys = heldGroups.Select(record => record.DefaultKey).ToHashSet(StringComparer.Ordinal);
             var presetKeys = heldPresets.Select(record => record.DefaultKey).ToHashSet(StringComparer.Ordinal);
@@ -58,11 +59,12 @@ public sealed class RoutingDefaultsStore
             {
                 if (groups && groupKeys.Add(list.Key))
                 {
-                    _db.AddressGroups.Add(new AddressGroupEntity
+                    _db.TrafficRules.Add(new TrafficRuleEntity
                     {
                         DefaultKey = list.Key,
                         Name = FreeName(list.Name, groupNames),
                         Targets = string.Join(", ", list.Targets),
+                        DnsMode = TrafficDnsMode.Default,
                         CreatedUtc = now,
                         UpdatedUtc = now,
                     });

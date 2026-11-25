@@ -101,8 +101,6 @@ public class ConfigTests
 
     [Theory]
     [InlineData("", "the name is empty")]
-    [InlineData("Awg1", "lower case")]
-    [InlineData("1awg", "lower case")]
     [InlineData("awg1234567890123", "longer than")]
     public void ANameOutsideTheShapeIsRefused(string name, string part)
     {

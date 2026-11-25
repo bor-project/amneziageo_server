@@ -14,6 +14,7 @@ import { HeadActions } from "@/components/Section"
 import { secondary } from "@/components/styles"
 import { useTail } from "@/components/crumbs"
 import { useText } from "@/i18n"
+import { useRelatedReturn } from "@/components/routingReturn"
 import { useSpot } from "@/store/spots"
 
 export function OutboundPage() {
@@ -24,8 +25,8 @@ export function OutboundPage() {
 
 function NewOutbound() {
   const t = useText()
-  const navigate = useNavigate()
   const back = useSpot("/routing/channels")
+  const close = useRelatedReturn(back)
   const outbounds = useOutbounds()
   const fresh = useFreshOutbound(outbounds.data !== undefined, nextName(outbounds.data), "wg")
   const add = useAddOutbound()
@@ -42,8 +43,8 @@ function NewOutbound() {
       publicKey={fresh.data.publicKey}
       pending={add.isPending}
       error={add.error}
-      onSave={(draft) => void add.mutateAsync(draft).then(() => navigate(back))}
-      onClose={() => navigate(back)}
+      onSave={(draft) => void add.mutateAsync(draft).then(() => close()).catch(() => undefined)}
+      onClose={() => close()}
     />
   )
 }
@@ -52,6 +53,7 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
   const t = useText()
   const navigate = useNavigate()
   const back = useSpot("/routing/channels")
+  const close = useRelatedReturn(back)
   const outbounds = useOutbounds()
   const change = useChangeOutbound()
   const apply = useApplyOutbound()
@@ -74,7 +76,7 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
       <HeadActions>
         <button
           type="button"
-          onClick={() => void probe.mutateAsync(held.id)}
+          onClick={() => void probe.mutateAsync(held.id).catch(() => undefined)}
           disabled={probe.isPending}
           className={`flex h-10 items-center ${secondary}`}
         >
@@ -82,7 +84,7 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
         </button>
         <button
           type="button"
-          onClick={() => void apply.mutateAsync(held.id)}
+          onClick={() => void apply.mutateAsync(held.id).catch(() => undefined)}
           disabled={apply.isPending}
           className={`flex h-10 items-center ${secondary}`}
         >
@@ -96,8 +98,8 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
         self={held.name}
         pending={change.isPending}
         error={change.error}
-        onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}
-        onClose={() => navigate(back)}
+        onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => close({ outbound: draft.name.trim() })).catch(() => undefined)}
+        onClose={() => close()}
         onRemove={() => navigate(`/routing/channels/${held.id}/delete`)}
       />
     </div>

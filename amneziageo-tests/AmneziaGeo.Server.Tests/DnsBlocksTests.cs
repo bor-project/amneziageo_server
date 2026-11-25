@@ -30,14 +30,14 @@ public sealed class DnsBlocksTests : IDisposable
             await db.Database.MigrateAsync();
 
             var switches = await db.Database
-                .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Resolver') WHERE name IN ('Intercept', 'BlockDot', 'BlockDoh')")
+                .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Resolver') WHERE name IN ('Intercept', 'BlockDot', 'BlockDoh', 'Upstreams', 'Outbound', 'Selection')")
                 .ToListAsync();
             var held = await new DnsStore(db).ReadAsync(CancellationToken.None);
             Assert.Equal([0], switches);
             Assert.True(held.IsEnabled);
             Assert.Equal(5300, held.Port);
-            Assert.Equal(["https://9.9.9.9/dns-query", "1.1.1.1"], held.Upstreams);
-            Assert.Equal("bor", held.Outbound);
+            var rules = await new TrafficRuleStore(db).ListAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.Contains(rules, rule => rule.Targets.Count == 0 && rule.Dns.SequenceEqual(new[] { "https://9.9.9.9/dns-query", "1.1.1.1" }));
             Assert.Equal(["10.8.0.1"], held.Listen);
             Assert.Equal((30, 128, 30, 600), (held.NameMinutes, held.CacheSize, held.MinTtl, held.MaxTtl));
         }
@@ -60,7 +60,8 @@ public sealed class DnsBlocksTests : IDisposable
             var held = await new DnsStore(db).ReadAsync(CancellationToken.None);
             Assert.True(held.IsEnabled);
             Assert.Equal(5300, held.Port);
-            Assert.Equal("bor", held.Outbound);
+            var rules = await new TrafficRuleStore(db).ListAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.Contains(rules, rule => rule.Targets.Count == 0 && rule.Dns.SequenceEqual(new[] { "https://9.9.9.9/dns-query", "1.1.1.1" }));
         }
     }
 }

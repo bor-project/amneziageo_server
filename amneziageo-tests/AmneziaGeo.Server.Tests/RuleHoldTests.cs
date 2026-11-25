@@ -32,11 +32,14 @@ public sealed class RuleHoldTests : IDisposable
             await db.Database.MigrateAsync();
 
             var hold = await db.Database
-                .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Rules') WHERE name = 'HoldsWhenDown'")
+                .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('RoutingEntries') WHERE name = 'HoldsWhenDown'")
                 .ToListAsync();
-            var rule = Assert.Single(await new RouteStore(db).ListAsync(CancellationToken.None));
-            var plan = RoutePlan.Build([rule], [], GeoIndex.Load([], new MemoryGeoFiles()), ["awg1"]);
-            var leg = Assert.Single(plan.Legs);
+            var rules = await new RouteStore(db).ListAsync(CancellationToken.None).ConfigureAwait(false);
+            var rule = Assert.Single(rules, one => one.Name == "abroad");
+            var fallback = Assert.Single(rules, one => one.Action == RouteAction.Direct);
+            Assert.True(fallback.Position > rule.Position);
+            var plan = RoutePlan.Build(rules, [], GeoIndex.Load([], new MemoryGeoFiles()), ["awg1"]);
+            var leg = Assert.Single(plan.Legs, one => one.Rule.Id == rule.Id);
             Assert.Equal([0], hold);
             Assert.Equal("unknown-outbound", leg.Fault?.Code);
             Assert.True(leg.IsHeld);

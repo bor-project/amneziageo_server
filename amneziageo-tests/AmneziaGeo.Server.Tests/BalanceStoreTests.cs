@@ -88,7 +88,7 @@ public class BalanceStoreTests
             RouteDefaults.Fresh("ru") with { Outbound = "home", Targets = ["geoip:ru"] },
             CancellationToken.None);
 
-        var gone = await bench.Balancers.RemoveAsync(added.Record!.Id, string.Empty, CancellationToken.None);
+        var gone = await bench.Balancers.RemoveAsync(added.Record!.Id, CancellationToken.None);
 
         Assert.Equal("balancer-in-use", gone.Code);
         Assert.Single(await bench.Balancers.ListAsync(CancellationToken.None));
@@ -100,7 +100,7 @@ public class BalanceStoreTests
         using var bench = new Bench();
         var added = await bench.Balancers.AddAsync(Group("home"), CancellationToken.None);
 
-        var gone = await bench.Balancers.RemoveAsync(added.Record!.Id, string.Empty, CancellationToken.None);
+        var gone = await bench.Balancers.RemoveAsync(added.Record!.Id, CancellationToken.None);
 
         Assert.True(gone.IsOk, gone.Message);
         Assert.Empty(await bench.Balancers.ListAsync(CancellationToken.None));
@@ -118,51 +118,33 @@ public class BalanceStoreTests
     }
 
     [Fact]
-    public async Task ARenamedBalancerCarriesItsNameIntoTheRulesAndTheResolver()
+    public async Task ARenamedBalancerCarriesItsNameIntoTheEntriesAndKeepsTheirDns()
     {
         using var bench = new Bench();
         var added = await bench.Balancers.AddAsync(Group("home"), CancellationToken.None);
         var rule = await bench.Rules.AddAsync(
             RouteDefaults.Fresh("home") with { Outbound = "home", Targets = ["geoip:ru"] },
             CancellationToken.None);
-        await bench.Resolver.SaveAsync(DnsDefaults.Settings with { Outbound = "home" }, CancellationToken.None);
+        var criteria = new TrafficRuleStore(bench.Db);
+        var criterion = Assert.Single(rule.Record!.Criteria);
+        await criteria.ChangeAsync(criterion.Id, criterion with { Dns = ["1.1.1.1"] }, default).ConfigureAwait(false);
 
         var changed = await bench.Balancers.ChangeAsync(added.Record!.Id, Group("abroad"), CancellationToken.None);
-        var removed = await bench.Balancers.RemoveAsync(added.Record.Id, string.Empty, CancellationToken.None);
+        var removed = await bench.Balancers.RemoveAsync(added.Record.Id, CancellationToken.None);
 
         Assert.True(changed.IsOk, changed.Message);
         Assert.Equal("abroad", (await bench.Rules.FindAsync(rule.Record!.Id, CancellationToken.None))?.Outbound);
-        Assert.Equal("abroad", (await bench.Resolver.ReadAsync(CancellationToken.None)).Outbound);
+        Assert.Equal(["1.1.1.1"], (await criteria.FindAsync(criterion.Id, default).ConfigureAwait(false))!.Dns);
         Assert.Equal("balancer-in-use", removed.Code);
     }
 
     [Fact]
-    public async Task ABalancerTheRunningResolverAsksThroughIsNotRemoved()
+    public async Task AnUnusedBalancerIsNotHeldByResolverSettings()
     {
         using var bench = new Bench();
-        var added = await bench.Balancers.AddAsync(Group("home"), CancellationToken.None);
-        await bench.Resolver.SaveAsync(DnsDefaults.Settings with { Outbound = "abroad" }, CancellationToken.None);
-
-        var held = await bench.Balancers.RemoveAsync(added.Record!.Id, "home", CancellationToken.None);
-        var free = await bench.Balancers.RemoveAsync(added.Record.Id, "abroad", CancellationToken.None);
-
-        Assert.Equal("balancer-in-use", held.Code);
-        Assert.Contains("until it is restarted", held.Message, StringComparison.Ordinal);
-        Assert.True(free.IsOk, free.Message);
-    }
-
-    [Fact]
-    public async Task ABalancerTheResolverAsksThroughIsNotRemoved()
-    {
-        using var bench = new Bench();
-        var added = await bench.Balancers.AddAsync(Group("home"), CancellationToken.None);
-        await bench.Resolver.SaveAsync(DnsDefaults.Settings with { Outbound = "home" }, CancellationToken.None);
-
-        var removed = await bench.Balancers.RemoveAsync(added.Record!.Id, string.Empty, CancellationToken.None);
-
-        Assert.Equal("balancer-in-use", removed.Code);
-        Assert.Contains("the resolver", removed.Message, StringComparison.Ordinal);
-        Assert.NotNull(await bench.Balancers.FindAsync(added.Record.Id, CancellationToken.None));
+        var added = await bench.Balancers.AddAsync(Group("home"), default).ConfigureAwait(false);
+        await bench.Resolver.SaveAsync(DnsDefaults.Settings with { IsEnabled = true }, default).ConfigureAwait(false);
+        Assert.True((await bench.Balancers.RemoveAsync(added.Record!.Id, default).ConfigureAwait(false)).IsOk);
     }
 
     private static Balancer Group(string name) => BalanceDefaults.Fresh(name) with { Members = ["direct"] };

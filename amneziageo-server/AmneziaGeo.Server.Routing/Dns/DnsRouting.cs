@@ -2,6 +2,7 @@ using System.Net;
 using AmneziaGeo.Server.Geo;
 using AmneziaGeo.Server.Routing.Balance;
 using AmneziaGeo.Server.Routing.Route;
+using AmneziaGeo.Server.Routing.Outbound;
 
 namespace AmneziaGeo.Server.Routing.Dns;
 
@@ -10,7 +11,11 @@ namespace AmneziaGeo.Server.Routing.Dns;
 /// </summary>
 public sealed record DnsResolution(IReadOnlyList<string> Servers, DnsWay Way)
 {
-    public string Key => $"{Way.Mark}:{Way.Outbound}\n{string.Join('\n', Servers)}";
+    public string Device { get; init; } = string.Empty;
+
+    public IReadOnlyList<string> SourceAddresses { get; init; } = [];
+
+    public string Key => $"{Way.Mark}:{Way.Outbound}:{Device}\n{string.Join('\n', SourceAddresses)}\n{string.Join('\n', Servers)}";
 }
 
 /// <summary>
@@ -24,7 +29,6 @@ public sealed record DnsOrigin(IPNetwork Network, string Inbound);
 public static class DnsRouting
 {
     public static DnsResolution Select(
-        DnsSettings settings,
         RoutePlan? plan,
         string name,
         IPAddress? client = null,
@@ -32,77 +36,70 @@ public static class DnsRouting
         long turn = 0,
         long? rule = null)
     {
-        var ways = plan?.Ways ?? RouteWays.None;
-        if (settings.Selection == DnsSelection.Outbound)
-        {
-            return Through(settings.Outbound, [], settings, ways, client, turn, true);
-        }
-
-        if (settings.Selection != DnsSelection.Routing || plan is null)
-        {
-            return Global(settings, ways, turn);
-        }
-
         var leg = rule is { } id
-            ? plan.Legs.FirstOrDefault(one => one.Rule.Id == id && one.IsOnHost)
-            : plan.Legs.FirstOrDefault(one => Matches(one, name, client, inbound));
+            ? plan?.Legs.FirstOrDefault(one => one.Rule.Id == id && one.IsOnHost)
+            : plan?.Legs.FirstOrDefault(one => Matches(one, name, client, inbound));
         if (leg is null)
         {
-            return Global(settings, ways, turn);
+            return Closed("no-dns-rule", "no routing entry selects a name server");
         }
 
-        var servers = leg.Rule.Groups
-            .Select(id => plan.Groups.FirstOrDefault(group => group.Id == id))
-            .OfType<AddressGroup>()
-            .FirstOrDefault(group => group.Dns.Count > 0 && GroupMatches(group, name, plan))?.Dns ?? [];
-        if (leg.Rule.Action != RouteAction.Out)
+        if (leg.IsBlock)
         {
-            return leg.IsDirect
-                ? new DnsResolution(servers.Count > 0 ? servers : settings.Upstreams, DnsWay.Host)
-                : Global(settings, ways, turn);
+            return Closed("dns-blocked", "the routing entry blocks the name");
         }
 
-        return Through(leg.Rule.Outbound, servers, settings, ways, client, turn, false);
-    }
+        var criterion = leg.Rule.Criteria.FirstOrDefault(one =>
+            one.Targets.Count == 0 || leg.DnsCriteria.TryGetValue(one.Id, out var matcher) && matcher.Matches(name));
+        var inherited = criterion?.DnsMode == TrafficDnsMode.Default;
+        var servers = criterion?.Dns ?? leg.Rule.Dns;
+        var members = criterion?.DnsMembers ?? leg.Rule.DnsMembers;
+        if (leg.IsDirect)
+        {
+            return Resolve(inherited ? plan!.HostDns : servers, DnsWay.Host, inherited);
+        }
 
-    private static DnsResolution Global(DnsSettings settings, RouteWays ways, long turn) =>
-        new(settings.Upstreams, DnsExit.Way(settings, ways, turn));
-
-    private static DnsResolution Through(
-        string name,
-        IReadOnlyList<string> servers,
-        DnsSettings settings,
-        RouteWays ways,
-        IPAddress? client,
-        long turn,
-        bool required)
-    {
-        var balancer = ways.Balancer(name);
+        var ways = plan!.Ways;
+        var balancer = ways.Balancer(leg.Rule.Outbound);
         var picked = balancer is { Strategy: BalanceStrategy.Sticky } && client is not null
             ? DnsSticky.Way(balancer, ways, client)
-            : DnsExit.Way(settings with { Outbound = name }, ways, turn);
+            : DnsExit.Way(leg.Rule.Outbound, ways, turn);
         if (picked.Fault is not null || picked.Mark is null)
         {
             return new DnsResolution([], picked);
         }
 
-        var chosen = servers.Count > 0 ? servers
-            : balancer is { Dns.Count: > 0 } ? balancer.Dns
-            : ways.Outbound(picked.Outbound)?.Dns ?? [];
-        if (chosen.Count > 0)
+        var selected = ways.Outbound(picked.Outbound);
+        if (inherited)
         {
-            return new DnsResolution(chosen, picked);
+            var defaults = balancer is { Dns.Count: > 0 } ? balancer.Dns
+                : selected is { Dns.Count: > 0 } ? selected.Dns
+                : selected?.Kind == OutboundKind.Local ? plan.HostDns
+                : [];
+
+            return Through(Resolve(defaults, picked, true), selected);
         }
 
-        return required
-            ? new DnsResolution([], DnsWay.Closed("no-outbound-dns", $"'{name}' has no name server"))
-            : new DnsResolution(settings.Upstreams, picked);
+        return Through(Resolve(members.TryGetValue(picked.Outbound, out var specific) ? specific : servers, picked, false), selected);
     }
+
+    private static DnsResolution Through(DnsResolution resolution, OutboundConfig? outbound) =>
+        outbound is not null && OutboundKind.HasLink(outbound.Kind)
+            ? resolution with { Device = outbound.Name, SourceAddresses = outbound.Address }
+            : resolution;
+
+    private static DnsResolution Resolve(IReadOnlyList<string> servers, DnsWay way, bool inherited) =>
+        servers.Count == 0
+            ? Closed(inherited ? "no-default-dns" : "no-rule-dns", "the selected DNS source has no name server")
+            : new DnsResolution(servers, way);
+
+    private static DnsResolution Closed(string code, string message) =>
+        new([], DnsWay.Closed(code, message));
 
     private static bool Matches(RouteLeg leg, string name, IPAddress? client, string? inbound)
     {
         var rule = leg.Rule;
-        if (!leg.IsOnHost || rule.Ports.Count > 0 || rule.SourcePorts.Count > 0 || rule.Protocol != RouteProtocol.Any)
+        if (!leg.IsOnHost)
         {
             return false;
         }
@@ -119,8 +116,4 @@ public static class DnsRouting
 
         return !rule.HasTargets || (leg.DnsMatcher ?? new DomainMatcher(leg.Domains)).Matches(name);
     }
-
-    private static bool GroupMatches(AddressGroup group, string name, RoutePlan plan) =>
-        plan.DnsGroups.TryGetValue(group.Id, out var matcher) && matcher.Matches(name);
-
 }

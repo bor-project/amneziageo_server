@@ -5,6 +5,7 @@ using AmneziaGeo.Server.Awg.Device;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Routing.Firewall;
 using AmneziaGeo.Server.Routing.Host;
+using AmneziaGeo.Server.Dal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -48,12 +49,10 @@ public class UdpPrivacyTests
         using var bench = new Bench();
         var added = await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg0"), default).ConfigureAwait(false);
         var held = added.Record!;
-        bench.Db.ChangeTracker.Clear();
-        var migrator = bench.Db.GetService<IMigrator>();
-        await migrator.MigrateAsync("20261104190933_ProxySourceIdentity").ConfigureAwait(false);
-        await migrator.MigrateAsync().ConfigureAwait(false);
+        await using var legacy = await LegacyDatabase.FromAsync(bench.Db, "20261104190933_ProxySourceIdentity").ConfigureAwait(false);
+        await legacy.MigrateAsync().ConfigureAwait(false);
 
-        var restored = (await bench.Configs.FindAsync(held.Id, default).ConfigureAwait(false))!;
+        var restored = (await new ConfigStore(legacy.Db).FindAsync(held.Id, default).ConfigureAwait(false))!;
 
         Assert.False(restored.UdpPrivate);
         Assert.Equal(held.PrivateKey, restored.PrivateKey);

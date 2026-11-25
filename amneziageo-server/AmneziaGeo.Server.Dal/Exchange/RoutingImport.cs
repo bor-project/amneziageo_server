@@ -12,7 +12,6 @@ namespace AmneziaGeo.Server.Dal.Exchange;
 /// <param name="Doc">The file the plan was taken from.</param>
 /// <param name="NewRules">The rules the server holds none under the name of.</param>
 /// <param name="ReplacedRules">The rules the server holds under the same name.</param>
-/// <param name="ReplacesBasic">Whether the file carries basic lists to lay over the ones the server holds.</param>
 /// <param name="NewPresets">The presets the server holds none under the name of.</param>
 /// <param name="ReplacedPresets">The presets the server holds under the same name.</param>
 /// <param name="NewSources">The geo sources the server holds none under the name of.</param>
@@ -24,7 +23,6 @@ public sealed record RoutingPlan(
     RoutingDoc Doc,
     IReadOnlyList<string> NewRules,
     IReadOnlyList<string> ReplacedRules,
-    bool ReplacesBasic,
     IReadOnlyList<string> NewPresets,
     IReadOnlyList<string> ReplacedPresets,
     IReadOnlyList<string> NewSources,
@@ -33,9 +31,9 @@ public sealed record RoutingPlan(
     IReadOnlyList<string> MissingClients,
     IReadOnlyList<string> Detached)
 {
-    public IReadOnlyList<string> NewGroups { get; init; } = [];
+    public IReadOnlyList<string> NewEntries { get; init; } = [];
 
-    public IReadOnlyList<string> ReplacedGroups { get; init; } = [];
+    public IReadOnlyList<string> ReplacedEntries { get; init; } = [];
 }
 
 /// <summary>
@@ -43,13 +41,11 @@ public sealed record RoutingPlan(
 /// </summary>
 /// <param name="Added">One line per rule, preset and source the server took in.</param>
 /// <param name="Replaced">One line per rule, preset and source the server laid the file over.</param>
-/// <param name="BasicReplaced">Whether the basic lists were laid over.</param>
 /// <param name="Refused">One line per rule, preset or source the server refused, with the reason.</param>
 /// <param name="Detached">One line per rule that keeps a link this server does not hold yet.</param>
 public sealed record RoutingAnswer(
     IReadOnlyList<string> Added,
     IReadOnlyList<string> Replaced,
-    bool BasicReplaced,
     IReadOnlyList<string> Refused,
     IReadOnlyList<string> Detached);
 
@@ -78,96 +74,65 @@ public static class RoutingImport
         var added = new List<string>();
         var replaced = new List<string>();
         var refused = new List<string>();
-        var heldGroups = (await rules.GroupsAsync(ct).ConfigureAwait(false)).ToDictionary(group => group.Name, StringComparer.Ordinal);
-        var existingGroups = heldGroups.Keys.ToHashSet(StringComparer.Ordinal);
-        var failedGroups = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var group in plan.Doc.AddressGroups ?? [])
+        var heldCriteria = (await rules.ListCriteriaAsync(ct).ConfigureAwait(false)).ToDictionary(one => one.Name, StringComparer.Ordinal);
+        var failed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var one in plan.Doc.Rules)
         {
-            var result = await rules.ImportGroupAsync(new AddressGroup { Name = group.Name, Targets = group.Targets ?? [], Dns = group.Dns ?? (heldGroups.TryGetValue(group.Name, out var heldGroup) ? heldGroup.Dns : []) }, ct).ConfigureAwait(false);
-            Keep(result.Fault is null, existingGroups.Contains(group.Name) ? replaced : added, refused, $"address group '{group.Name}'", result.Fault?.Message ?? string.Empty);
-            if (result.Fault is not null)
+            var result = await rules.ImportCriterionAsync(new TrafficRule
             {
-                failedGroups.Add(group.Name);
+                Name = one.Name,
+                Targets = one.Targets ?? [],
+                Dns = one.Dns ?? [],
+                DnsMode = one.DnsMode,
+                DnsMembers = one.DnsMembers ?? new Dictionary<string, IReadOnlyList<string>>(),
+            }, ct).ConfigureAwait(false);
+            Keep(result.IsOk, heldCriteria.ContainsKey(one.Name) ? replaced : added, refused, $"traffic rule '{one.Name}'", result.Message);
+            if (!result.IsOk)
+            {
+                failed.Add(one.Name);
             }
         }
 
-        var groupIds = (await rules.GroupsAsync(ct).ConfigureAwait(false)).ToDictionary(group => group.Name, group => group.Id, StringComparer.Ordinal);
+        var known = (await rules.ListCriteriaAsync(ct).ConfigureAwait(false)).ToDictionary(one => one.Name, one => one.Id, StringComparer.Ordinal);
+        var held = await rules.TableAsync(ct).ConfigureAwait(false);
+        var byName = held.ToDictionary(one => one.Name, StringComparer.Ordinal);
         var ordered = new List<long>();
-
-        var held = await rules.ListAsync(ct).ConfigureAwait(false);
-        var byName = held.GroupBy(rule => rule.Name, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        foreach (var one in plan.Doc.Rules.OrderBy(rule => rule.Position))
+        foreach (var one in plan.Doc.Entries.OrderBy(one => one.Position))
         {
-            if ((one.Groups ?? []).Any(name => !groupIds.ContainsKey(name) || failedGroups.Contains(name)))
+            if (one.Rules is not { Count: > 0 } || one.Rules.Any(name => !known.ContainsKey(name) || failed.Contains(name)))
             {
-                refused.Add($"rule '{one.Name}': an address group is missing");
+                refused.Add($"routing entry '{one.Name}': a traffic rule is missing");
                 continue;
             }
 
-            var draft = ToRule(one) with { Groups = [.. (one.Groups ?? []).Select(name => groupIds[name])] };
-            if (one.LegacyId is { } legacy)
+            var draft = new RouteRule
             {
-                var result = await rules.ImportExceptionAsync(draft with { Id = legacy }, ct).ConfigureAwait(false);
-                Keep(result.IsOk, replaced, refused, $"rule '{one.Name}'", result.Message);
-                if (result.IsOk)
-                {
-                    ordered.Add(result.Record!.Id);
-                }
-
-                continue;
-            }
-
-            if (byName.TryGetValue(one.Name, out var found))
+                Name = one.Name,
+                IsEnabled = one.IsEnabled,
+                Action = one.Action,
+                Outbound = one.Outbound,
+                RuleIds = [.. one.Rules.Select(name => known[name])],
+                Clients = one.Clients ?? [],
+                Inbounds = one.Inbounds ?? [],
+                Ports = one.Ports ?? [],
+                SourcePorts = one.SourcePorts ?? [],
+                Protocol = one.Protocol,
+            };
+            var existing = byName.GetValueOrDefault(one.Name);
+            var result = one.LegacyId is { } legacy && RouteBasic.Holds(legacy)
+                ? await rules.ImportExceptionAsync(draft with { Id = legacy }, ct).ConfigureAwait(false)
+                : existing is not null ? await rules.ChangeAsync(existing.Id, draft, ct).ConfigureAwait(false)
+                : await rules.AddAsync(draft, ct).ConfigureAwait(false);
+            Keep(result.IsOk, existing is not null ? replaced : added, refused, $"routing entry '{one.Name}'", result.Message);
+            if (result.IsOk)
             {
-                var result = await rules.ChangeAsync(found.Id, draft, ct).ConfigureAwait(false);
-                Keep(result.IsOk, replaced, refused, $"rule '{one.Name}'", result.Message);
-                if (result.IsOk)
-                {
-                    ordered.Add(result.Record!.Id);
-                }
-                continue;
-            }
-
-            var took = await rules.AddAsync(draft, ct).ConfigureAwait(false);
-            Keep(took.IsOk, added, refused, $"rule '{one.Name}'", took.Message);
-            if (took.IsOk)
-            {
-                ordered.Add(took.Record!.Id);
+                ordered.Add(result.Record!.Id);
             }
         }
 
-        if (plan.Doc.Unified)
+        for (var at = 0; at < ordered.Count; at++)
         {
-            foreach (var id in new[] { RouteBasic.BlockId, RouteBasic.DirectId }.Where(id => !plan.Doc.Rules.Any(rule => rule.LegacyId == id)))
-            {
-                await rules.RemoveAsync(id, ct).ConfigureAwait(false);
-            }
-
-            for (var at = 0; at < ordered.Count; at++)
-            {
-                await rules.PlaceAsync(ordered[at], at + 1, ct, table: true).ConfigureAwait(false);
-            }
-        }
-
-        var basicReplaced = false;
-        if (plan.ReplacesBasic && !plan.Doc.Unified)
-        {
-            var fault = await rules.SaveBasicAsync(
-                new RouteBasic { Direct = plan.Doc.Basic.Direct, Block = plan.Doc.Basic.Block },
-                ct).ConfigureAwait(false);
-            if (fault is null)
-            {
-                basicReplaced = true;
-            }
-            else
-            {
-                refused.Add($"basic lists: {fault.Message}");
-            }
-        }
-        else if (plan.Doc.Unified)
-        {
-            basicReplaced = true;
+            await rules.PlaceAsync(ordered[at], at + 1, ct, table: true).ConfigureAwait(false);
         }
 
         var heldPresets = await presets.ListAsync(ct).ConfigureAwait(false);
@@ -204,7 +169,7 @@ public static class RoutingImport
             Keep(took.IsOk, added, refused, $"source '{one.Name}'", took.Message);
         }
 
-        return new RoutingAnswer(added, replaced, basicReplaced, refused, plan.Detached);
+        return new RoutingAnswer(added, replaced, refused, plan.Detached);
     }
 
     /// <summary>
@@ -219,7 +184,8 @@ public static class RoutingImport
         GeoStore sources,
         OutboundStore outbounds,
         ClientStore clients,
-        CancellationToken ct)
+        CancellationToken ct,
+        BalanceStore? balancers = null)
     {
         ArgumentNullException.ThrowIfNull(doc);
         ArgumentNullException.ThrowIfNull(rules);
@@ -229,8 +195,8 @@ public static class RoutingImport
         ArgumentNullException.ThrowIfNull(clients);
 
         var held = await rules.TableAsync(ct).ConfigureAwait(false);
-        var heldNames = held.Select(rule => rule.Name).ToHashSet(StringComparer.Ordinal);
-        var heldGroups = (await rules.GroupsAsync(ct).ConfigureAwait(false)).Select(group => group.Name).ToHashSet(StringComparer.Ordinal);
+        var heldNames = (await rules.ListCriteriaAsync(ct).ConfigureAwait(false)).Select(one => one.Name).ToHashSet(StringComparer.Ordinal);
+        var entryNames = held.Select(one => one.Name).ToHashSet(StringComparer.Ordinal);
         var heldPresets = (await presets.ListAsync(ct).ConfigureAwait(false))
             .Select(one => one.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var heldSources = (await sources.ListAsync(ct).ConfigureAwait(false))
@@ -245,13 +211,17 @@ public static class RoutingImport
 
         var ways = (await outbounds.ListAsync(ct).ConfigureAwait(false))
             .Select(one => one.Name).ToHashSet(StringComparer.Ordinal);
+        if (balancers is not null)
+        {
+            ways.UnionWith((await balancers.ListAsync(ct).ConfigureAwait(false)).Select(one => one.Name));
+        }
         var known = (await clients.ListAsync(ct).ConfigureAwait(false))
             .Select(one => one.Name).ToHashSet(StringComparer.Ordinal);
 
         var missingOutbounds = new SortedSet<string>(StringComparer.Ordinal);
         var missingClients = new SortedSet<string>(StringComparer.Ordinal);
         var detached = new List<string>();
-        foreach (var rule in doc.Rules.OrderBy(rule => rule.Position))
+        foreach (var rule in doc.Entries.OrderBy(rule => rule.Position))
         {
             var outbound = rule.Outbound.Trim();
             var goneOutbound = outbound.Length > 0 && !ways.Contains(outbound);
@@ -278,7 +248,6 @@ public static class RoutingImport
             doc,
             newRules,
             replacedRules,
-            doc.Unified || doc.Basic.Direct.Count > 0 || doc.Basic.Block.Count > 0,
             newPresets,
             replacedPresets,
             newSources,
@@ -287,8 +256,8 @@ public static class RoutingImport
             [.. missingClients],
             detached)
         {
-            NewGroups = [.. (doc.AddressGroups ?? []).Where(group => !heldGroups.Contains(group.Name)).Select(group => group.Name)],
-            ReplacedGroups = [.. (doc.AddressGroups ?? []).Where(group => heldGroups.Contains(group.Name)).Select(group => group.Name)],
+            NewEntries = [.. doc.Entries.Where(one => !entryNames.Contains(one.Name)).Select(one => one.Name)],
+            ReplacedEntries = [.. doc.Entries.Where(one => entryNames.Contains(one.Name)).Select(one => one.Name)],
         };
     }
 
@@ -317,21 +286,6 @@ public static class RoutingImport
 
     private static string Named(IReadOnlyCollection<string> names) =>
         string.Join(", ", names.Select(name => $"'{name}'"));
-
-    private static RouteRule ToRule(RuleBlock one) => new()
-    {
-        Name = one.Name,
-        Position = one.Position,
-        IsEnabled = one.IsEnabled,
-        Action = one.Action,
-        Outbound = one.Outbound,
-        Targets = one.Targets,
-        Clients = one.Clients,
-        Inbounds = one.Inbounds,
-        Ports = one.Ports,
-        SourcePorts = one.SourcePorts,
-        Protocol = one.Protocol,
-    };
 
     private static RoutingPreset ToPreset(PresetBlock one) => new()
     {

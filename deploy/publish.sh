@@ -112,7 +112,7 @@ fi
 fingerprint > "$out/server"
 
 npm --prefix "$root/amneziageo-web" run build
-cp "$root/deploy/install.sh" "$out/"
+cp "$root/deploy/install.sh" "$root/deploy/database-handover.sh" "$out/"
 chmod +x "$out/install.sh"
 
 if [ "$kind" = ui ]; then

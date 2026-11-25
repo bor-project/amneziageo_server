@@ -1,20 +1,16 @@
 import { useState } from "react"
-import { Link } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { draftOf, findingsOf, useDnsCheck, useDnsConflicts, useResolver, useSaveResolver } from "@/api/dns"
 import type { DnsDraft, DnsFinding, DnsReport, DnsState, DnsSubject, Resolver as ResolverSettings } from "@/api/dns"
-import { useBalancers } from "@/api/balancers"
 import { useConfigs } from "@/api/configs"
 import { useFailure } from "@/api/failure"
-import { useOutbounds } from "@/api/outbounds"
-import { useRules } from "@/api/rules"
+import { useRoutingEntries } from "@/api/routingEntries"
 import { scopes } from "@/api/scopes"
 import { AppCaption } from "@/components/AppMark"
 import { DnsOutcome, DnsPick, DnsServers } from "@/components/DnsField"
 import { DnsMark } from "@/components/DnsMark"
 import { clientsOfWords, clientWords, counted, fewNames, lacksServers, levelOf, ruleWords, templateWords } from "@/components/dnsWords"
 import { Box, Count, ListLine, Part, Pick, Shown } from "@/components/fields"
-import { wayTo } from "@/components/members"
 import { ResolverTrouble } from "@/components/ResolverTrouble"
 import { troubleOf } from "@/components/trouble"
 import { footer, primary, secondary } from "@/components/styles"
@@ -94,15 +90,9 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
   const dispatch = useAppDispatch()
   const kept = useAppSelector((s) => s.drafts.dns)
   const [fault, setFault] = useState<TextKey | null>(null)
-  const [way, setWay] = useState<"direct" | "out" | null>(null)
-  const outbounds = useOutbounds()
-  const balancers = useBalancers()
   const save = useSaveResolver()
   const saved = draftOf(settings)
   const draft = kept ?? saved
-  const ways = [...(outbounds.data ?? []), ...(balancers.data ?? [])].map((one) => one.name)
-  const via = way ?? (draft.outbound === "" ? "direct" : "out")
-  const unpicked = (via === "out" || draft.selection === "outbound") && draft.outbound === ""
   const trouble = troubleOf(settings)
   const report = useDnsConflicts()
   const check = useDnsCheck(kept === null ? null : { dns: draft })
@@ -123,7 +113,6 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
     try {
       await save.mutateAsync(draft)
       dispatch(dnsDrafted(null))
-      setWay(null)
     } catch (error) {
       setFault(complaint(error))
     }
@@ -132,7 +121,6 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
   function drop() {
     setFault(null)
     dispatch(dnsDrafted(null))
-    setWay(null)
   }
 
   return (
@@ -176,84 +164,6 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
           onChange={(listen) => set({ listen })}
           wide
         />
-        <Pick id="dns-selection" caption={t("dns.selection")} value={draft.selection} onChange={(value) => {
-          const selection = value === "outbound" || value === "routing" ? value : "global"
-          set({ selection })
-          if (selection === "outbound") {
-            setWay("out")
-          }
-        }}>
-          <option value="global">{t("dns.selectionGlobal")}</option>
-          <option value="outbound">{t("dns.selectionOutbound")}</option>
-          <option value="routing">{t("dns.selectionRouting")}</option>
-        </Pick>
-        {draft.selection !== "outbound" && <ListLine
-          id="dns-upstreams"
-          caption={t(draft.selection === "routing" ? "dns.defaultServers" : "dns.upstreams")}
-          value={draft.upstreams}
-          onChange={(upstreams) => set({ upstreams })}
-          wide
-        />}
-        {draft.selection !== "outbound" && <Pick
-          id="dns-way"
-          caption={t(draft.selection === "routing" ? "dns.defaultWay" : "dns.outbound")}
-          value={via}
-          onChange={(v) => {
-            setWay(v === "out" ? "out" : null)
-            if (v !== "out") {
-              set({ outbound: "" })
-            }
-          }}
-        >
-          <option value="direct">{t("rules.actionDirect")}</option>
-          <option value="out" disabled={ways.length === 0}>
-            {t("rules.actionOut")}
-          </option>
-        </Pick>}
-        {(via === "out" || draft.selection === "outbound") && (
-          <div>
-            <Pick
-              id="dns-outbound"
-              caption={t("rules.outbound")}
-              value={draft.outbound}
-              onChange={(v) => {
-                setWay("out")
-                set({ outbound: v })
-              }}
-            >
-              <option value="">{t("rules.pick")}</option>
-              {draft.outbound !== "" && !ways.includes(draft.outbound) && (
-                <option value={draft.outbound}>{draft.outbound}</option>
-              )}
-              <optgroup label={t("rules.outbounds")}>
-                {(outbounds.data ?? []).map((one) => (
-                  <option key={one.id} value={one.name}>
-                    {one.name}
-                  </option>
-                ))}
-              </optgroup>
-              {(balancers.data ?? []).length > 0 && (
-                <optgroup label={t("rules.balancers")}>
-                  {(balancers.data ?? []).map((one) => (
-                    <option key={one.id} value={one.name}>
-                      {one.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </Pick>
-            {wayTo(draft.outbound, outbounds.data ?? [], balancers.data ?? []) !== undefined && (
-              <div className="mt-1 flex justify-end">
-                <Link
-                  to={wayTo(draft.outbound, outbounds.data ?? [], balancers.data ?? []) ?? ""}
-                  className="text-sm text-brand-ink hover:text-brand-lit"
-                >
-                  {t("action.goTo")}
-                </Link>
-              </div>
-            )}
-          </div>
-        )}
       </Part>
 
       <Part title={t("dns.files")}>
@@ -290,7 +200,7 @@ function Editor({ settings, may }: { settings: ResolverSettings; may: boolean })
           <button
             type="button"
             onClick={() => void keep()}
-            disabled={kept === null || unpicked || lacksServers(draft.filesMode, draft.filesDns) || save.isPending}
+            disabled={kept === null || lacksServers(draft.filesMode, draft.filesDns) || save.isPending}
             className={primary}
           >
             {t("dns.save")}
@@ -320,7 +230,7 @@ function Need({
 }) {
   const t = useText()
   const language = useLanguage()
-  const rules = useRules().data ?? []
+  const rules = useRoutingEntries().data ?? []
   const level = levelOf(findings)
 
   function everyone(subject: DnsSubject): boolean {

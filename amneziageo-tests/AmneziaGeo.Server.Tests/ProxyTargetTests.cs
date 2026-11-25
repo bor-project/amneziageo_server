@@ -238,10 +238,9 @@ public sealed class ProxyTargetTests
         var store = new TransportProxyStore(bench.Db);
         var proxy = await store.SaveAsync(0, new TransportProxyEntity { Name = "old", Host = "vpn.example", Port = 443, Path = "old" }, default).ConfigureAwait(false);
         var secret = proxy.Secret;
-        await bench.Db.GetService<IMigrator>().MigrateAsync("PrivateEndpointUdp").ConfigureAwait(false);
-        bench.Db.ChangeTracker.Clear();
-        await bench.Db.Database.MigrateAsync().ConfigureAwait(false);
-        var restored = await store.FindAsync(proxy.Id, default).ConfigureAwait(false);
+        await using var legacy = await LegacyDatabase.FromAsync(bench.Db, "PrivateEndpointUdp").ConfigureAwait(false);
+        await legacy.MigrateAsync().ConfigureAwait(false);
+        var restored = await new TransportProxyStore(legacy.Db).FindAsync(proxy.Id, default).ConfigureAwait(false);
         Assert.Equal(secret, restored!.Secret);
         Assert.Equal("vpn.example", restored.Host);
         Assert.Null(ProxyTargetRules.Read(restored.TargetsJson));

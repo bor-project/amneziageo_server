@@ -1,8 +1,10 @@
 using AmneziaGeo.Server.Api.Auth;
+using AmneziaGeo.Server.Api.Proxies;
 using AmneziaGeo.Server.Api.Configs;
 using AmneziaGeo.Server.Api.Dns;
 using AmneziaGeo.Server.Api.Rules;
 using AmneziaGeo.Server.Auth;
+using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Crypto;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Host;
@@ -30,8 +32,8 @@ public static class OutboundEndpoints
         writing.MapGet("/draft", Draft);
         writing.MapPost("/keys", Keys);
         writing.MapPost("/import", Import);
-        writing.MapPost("/", AddAsync);
-        writing.MapPut("/{id:long}", ChangeAsync);
+        writing.MapPost("/", AddAsync).AddEndpointFilter<UdpChangesFilter>();
+        writing.MapPut("/{id:long}", ChangeAsync).AddEndpointFilter<UdpChangesFilter>();
         writing.MapPost("/{id:long}/switch", SwitchAsync);
         writing.MapPost("/{id:long}/move", MoveAsync);
         writing.MapPost("/{id:long}/apply", ApplyAsync);
@@ -86,14 +88,21 @@ public static class OutboundEndpoints
         return Results.Ok(new KeyPairResponse(pair.PrivateKey, pair.PublicKey));
     }
 
-    private static IResult Import(OutboundImportRequest request)
+    private static async Task<IResult> Import(OutboundImportRequest request, AppDbContext db, CancellationToken ct)
     {
         var name = (request.Name ?? string.Empty).Trim();
-        var result = OutboundImport.Read(request.Config, name.Length > 0 ? name : "out0");
-
-        return result.Outbound is null
-            ? Refuse(StatusCodes.Status400BadRequest, result.Fault!.Code, result.Fault.Message)
-            : Results.Ok(OutboundAnswers.Outbound(result.Outbound, null, true));
+        var result = OutboundImport.Read(request.Config, name);
+        if (result.Outbound is not { } outbound)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, result.Fault!.Code, result.Fault.Message);
+        }
+        if (name.Length == 0)
+        {
+            outbound = outbound with { Name = InterfaceNames.Suggest(outbound.Host, await ImportNames.ReadAsync(db, ct).ConfigureAwait(false), "out0") };
+        }
+        return OutboundRules.CheckName(outbound.Name) is { } fault
+            ? Refuse(StatusCodes.Status400BadRequest, fault.Code, fault.Message)
+            : Results.Ok(OutboundAnswers.Outbound(outbound, null, true) with { SuggestedDns = result.SuggestedDns });
     }
 
     private static async Task<IResult> AddAsync(
@@ -151,7 +160,6 @@ public static class OutboundEndpoints
         RouteStore rules,
         OutboundHost host,
         RouteApplier routes,
-        DnsHost resolver,
         CancellationToken ct)
     {
         using var hold = await host.HoldAsync(ct).ConfigureAwait(false);
@@ -170,7 +178,7 @@ public static class OutboundEndpoints
             return Refuse(StatusCodes.Status400BadRequest, refused.Code, refused.Message);
         }
 
-        var result = await store.ChangeAsync(id, OutboundAnswers.Draft(request), ct).ConfigureAwait(false);
+        var result = await store.ChangeAsync(id, OutboundAnswers.Draft(request, held), ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -193,11 +201,6 @@ public static class OutboundEndpoints
 
         var state = await host.ApplyAsync(result.Record!, ct).ConfigureAwait(false);
         await FirewallAsync(store, host, routes, ct).ConfigureAwait(false);
-        if (held is not null)
-        {
-            await resolver.FollowAsync(held.Name, result.Record!.Name, ct).ConfigureAwait(false);
-        }
-
         return Results.Ok(OutboundAnswers.Outbound(result.Record!, state, true));
     }
 
@@ -246,11 +249,10 @@ public static class OutboundEndpoints
         OutboundStore store,
         OutboundHost host,
         RouteApplier routes,
-        DnsHost resolver,
         CancellationToken ct)
     {
         using var hold = await host.HoldAsync(ct).ConfigureAwait(false);
-        var result = await store.RemoveAsync(id, resolver.Asking, ct).ConfigureAwait(false);
+        var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);

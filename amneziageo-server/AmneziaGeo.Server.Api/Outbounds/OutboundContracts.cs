@@ -50,7 +50,6 @@ public sealed record OutboundResponse(
     string? PrivateKey,
     string? PresharedKey,
     string[] Address,
-    string[] Dns,
     int Mtu,
     int Keepalive,
     string Probe,
@@ -61,7 +60,12 @@ public sealed record OutboundResponse(
     ObfuscationBody Obfuscation,
     OutboundStateBody? State,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc)
+{
+    public IReadOnlyList<string>? SuggestedDns { get; init; }
+
+    public IReadOnlyList<string> Dns { get; init; } = [];
+}
 
 /// <summary>
 /// An outbound as the interface sends it.
@@ -77,7 +81,6 @@ public sealed record OutboundRequest(
     string? PeerKey,
     string? PresharedKey,
     string[]? Address,
-    string[]? Dns,
     int Mtu,
     int Keepalive,
     string? Probe,
@@ -85,7 +88,8 @@ public sealed record OutboundRequest(
     bool? ClosePrivate,
     ObfuscationBody? Obfuscation,
     IReadOnlyList<long>? Balancers = null,
-    IReadOnlyList<long>? Rules = null);
+    IReadOnlyList<long>? Rules = null,
+    IReadOnlyList<string>? Dns = null);
 
 /// <summary>
 /// A client configuration the interface sends to be read into an outbound.
@@ -128,7 +132,6 @@ public static class OutboundAnswers
             secrets ? outbound.PrivateKey : null,
             secrets ? outbound.PresharedKey : null,
             [.. outbound.Address],
-            [.. outbound.Dns],
             outbound.Mtu,
             outbound.Keepalive,
             outbound.Probe,
@@ -139,7 +142,7 @@ public static class OutboundAnswers
             ConfigAnswers.Obfuscation(outbound.Obfuscation, secrets),
             state is null ? null : State(state),
             outbound.CreatedUtc,
-            outbound.UpdatedUtc);
+            outbound.UpdatedUtc) { Dns = outbound.Dns };
     }
 
     /// <summary>
@@ -176,7 +179,7 @@ public static class OutboundAnswers
     /// <summary>
     /// Reads the outbound an interface sends.
     /// </summary>
-    public static OutboundConfig Draft(OutboundRequest request)
+    public static OutboundConfig Draft(OutboundRequest request, OutboundConfig? held = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -192,7 +195,7 @@ public static class OutboundAnswers
             PeerKey = (request.PeerKey ?? string.Empty).Trim(),
             PresharedKey = (request.PresharedKey ?? string.Empty).Trim(),
             Address = request.Address ?? [],
-            Dns = request.Dns ?? [],
+            Dns = request.Dns ?? held?.Dns ?? [],
             Mtu = request.Mtu,
             Keepalive = request.Keepalive,
             Probe = (request.Probe ?? string.Empty).Trim(),

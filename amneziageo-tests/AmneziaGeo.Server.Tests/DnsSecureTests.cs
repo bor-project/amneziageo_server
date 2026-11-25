@@ -72,11 +72,11 @@ public class DnsSecureTests
     [InlineData("https://9.9.9.9:5053/dns-query")]
     [InlineData("https://1.1.1.1")]
     public void ANameServerAskedOverTlsOrHttpsPassesTheRules(string text) =>
-        Assert.Null(DnsRules.Check(DnsDefaults.Settings with { Upstreams = [text] }));
+        Assert.Null(DnsRules.Servers([text]));
 
     [Fact]
     public void ANameServerNamedByNameIsRefusedByTheRules() =>
-        Assert.Equal("bad-upstream", DnsRules.Check(DnsDefaults.Settings with { Upstreams = ["https://dns.google/dns-query"] })?.Code);
+        Assert.Equal("bad-dns", DnsRules.Servers(["https://dns.google/dns-query"])?.Code);
 
     [Fact]
     public void TheNameServersAPanelStartsWithAreAskedEncrypted() =>
@@ -370,6 +370,44 @@ public class DnsSecureTests
         Assert.Equal(question.Length, packet.Length);
         Assert.Equal(0x02, packet[2] & 0x02);
         Assert.Equal(40, DnsMessage.Read(stream)?.Answers.Count);
+    }
+
+    [Theory]
+    [InlineData("udp", false)]
+    [InlineData("tcp", false)]
+    [InlineData("tls", false)]
+    [InlineData("https", false)]
+    [InlineData("udp", true)]
+    [InlineData("tcp", true)]
+    [InlineData("tls", true)]
+    [InlineData("https", true)]
+    public async Task ASelectedDnsInterfaceFailureNeverUsesTheDirectSocket(string transport, bool six)
+    {
+        var address = six ? IPAddress.IPv6Loopback : IPAddress.Loopback;
+        using var tcp = new TcpListener(address, 0);
+        tcp.Start();
+        var port = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        using var udp = new UdpClient(new IPEndPoint(address, port));
+        var endpoint = new IPEndPoint(address, port).ToString();
+        var server = transport switch
+        {
+            "tls" => "tls://" + endpoint,
+            "https" => "https://" + endpoint + "/dns-query",
+            _ => endpoint,
+        };
+        foreach (var missing in new[] { "device", "family" })
+        {
+            using var upstream = new DnsUpstream([server], Short, device: missing == "device" ? "ag855-missing" : "lo",
+                sourceAddresses: [missing == "device" ? address + (six ? "/128" : "/32") : six ? "127.0.0.1/32" : "::1/128"]);
+            for (var attempt = 0; attempt < DnsUpstream.Misses; attempt++)
+            {
+                Assert.Null(await upstream.AskAsync(DnsBuilder.Question(12, "must-not-leak.test"), transport == "tcp", CancellationToken.None).ConfigureAwait(false));
+            }
+
+            Assert.False(tcp.Pending());
+            Assert.Equal(0, udp.Available);
+            Assert.NotNull(upstream.Fault);
+        }
     }
 
     private static DnsUpstream Upstream(string server) => new([server], Wait, null, Trusted.Roots);

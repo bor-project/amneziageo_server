@@ -97,6 +97,7 @@ COPY --from=server /out/deps/ /opt/amneziageo-server/
 COPY --from=server /out/own/ /opt/amneziageo-server/
 COPY --from=web /src/amneziageo-server/AmneziaGeo.Server.Api/wwwroot/ /opt/amneziageo-server/wwwroot/
 COPY --chmod=755 deploy/amneziageo-server /usr/local/share/amneziageo-server/amneziageo-server
+COPY --chmod=755 deploy/database-handover.sh /usr/local/share/amneziageo-server/database-handover.sh
 RUN ln -s /opt/amneziageo-server/wstunnel /usr/local/bin/wstunnel \
  && /usr/local/bin/wstunnel --version \
  && /opt/amneziageo-server/wstunnel-get get-server --help > /dev/null \

@@ -45,6 +45,7 @@ public class OutboundTests
         Assert.Equal(51821, outbound.Port);
         Assert.Equal(["10.8.1.5/32", "fd00::5/128"], outbound.Address);
         Assert.Equal(["1.1.1.1", "8.8.8.8"], outbound.Dns);
+        Assert.Equal(outbound.Dns, read.SuggestedDns);
         Assert.Equal(1380, outbound.Mtu);
         Assert.Equal(25, outbound.Keepalive);
         Assert.Equal(4, outbound.Obfuscation.Jc);
@@ -283,7 +284,6 @@ public class OutboundTests
         PeerKey: null,
         PresharedKey: null,
         Address: ["10.8.1.5/32"],
-        Dns: [],
         Mtu: 1380,
         Keepalive: 25,
         Probe: null,

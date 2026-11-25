@@ -30,7 +30,8 @@ public class DnsStreamTests
         await using var book = new Book(_ => [0x12, 0x34, 0x81, 0x80, 0x00]);
         using var upstream = new DnsUpstream([$"127.0.0.1:{book.Port}"], Wait);
 
-        Assert.Null(await upstream.AskAsync(DnsBuilder.Question(8, "short.example"), true, CancellationToken.None));
+        Assert.Null(await upstream.AskAsync(DnsBuilder.Question(8, "short.example"), true, CancellationToken.None).ConfigureAwait(false));
+        Assert.Equal(1, book.Questions);
     }
 
     private static byte[] Answer(byte[] question)
@@ -47,6 +48,10 @@ public class DnsStreamTests
 
         private readonly Func<byte[], byte[]> _reply;
 
+        private readonly CancellationTokenSource _stop = new();
+
+        private int _questions;
+
         private readonly Task _serving;
 
         /// <summary>
@@ -61,19 +66,29 @@ public class DnsStreamTests
 
         public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
 
+        public int Questions => Volatile.Read(ref _questions);
+
         public async ValueTask DisposeAsync()
         {
+            _stop.Cancel();
             _listener.Stop();
-            await _serving;
+            try
+            {
+                await _serving.ConfigureAwait(false);
+            }
+            finally
+            {
+                _stop.Dispose();
+            }
         }
 
         private async Task ServeAsync()
         {
-            while (await AcceptAsync() is { } client)
+            while (!_stop.IsCancellationRequested && await AcceptAsync().ConfigureAwait(false) is { } client)
             {
                 using (client)
                 {
-                    await TalkAsync(client.GetStream());
+                    await TalkAsync(client.GetStream()).ConfigureAwait(false);
                 }
             }
         }
@@ -82,9 +97,9 @@ public class DnsStreamTests
         {
             try
             {
-                return await _listener.AcceptTcpClientAsync();
+                return await _listener.AcceptTcpClientAsync(_stop.Token).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
+            catch (Exception ex) when (_stop.IsCancellationRequested && (ex is SocketException or ObjectDisposedException or InvalidOperationException or OperationCanceledException))
             {
                 return null;
             }
@@ -96,15 +111,19 @@ public class DnsStreamTests
             try
             {
                 var head = new byte[2];
-                await stream.ReadExactlyAsync(head);
+                await stream.ReadExactlyAsync(head, _stop.Token).ConfigureAwait(false);
                 var question = new byte[BinaryPrimitives.ReadUInt16BigEndian(head)];
-                await stream.ReadExactlyAsync(question);
+                await stream.ReadExactlyAsync(question, _stop.Token).ConfigureAwait(false);
+                Interlocked.Increment(ref _questions);
                 var answer = _reply(question);
                 BinaryPrimitives.WriteUInt16BigEndian(head, (ushort)answer.Length);
-                await stream.WriteAsync(head);
-                await stream.WriteAsync(answer);
+                await stream.WriteAsync(head, _stop.Token).ConfigureAwait(false);
+                await stream.WriteAsync(answer, _stop.Token).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is IOException or SocketException)
+            {
+            }
+            catch (OperationCanceledException) when (_stop.IsCancellationRequested)
             {
             }
         }

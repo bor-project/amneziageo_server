@@ -81,7 +81,7 @@ class ProxyHandoverTests(unittest.TestCase):
   self.root=Path(self.temp.name)
   self.pkg=self.root/'package';self.pkg.mkdir()
   self.bin=self.root/'bin';self.bin.mkdir()
-  for f in ['install.sh','proxy-install.sh','proxy-handover.sh']:
+  for f in ['install.sh','proxy-install.sh','proxy-handover.sh','database-handover.sh']:
    text=(DEPLOY/f).read_text()
    for base in ['/opt/','/etc/','/var/lib/','/usr/local/','/run/']:
     text=text.replace(base,str(self.root)+base)

@@ -3,7 +3,6 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import type { ClientDraft } from "./clients"
 import { client } from "./client"
 import type { ConfigDraft } from "./configs"
-import type { RuleDraft } from "./rules"
 import { scopes } from "./scopes"
 import type { TemplateDraft } from "./templates"
 import { holds } from "@/store/authSlice"
@@ -75,7 +74,6 @@ export interface DnsCheckRequest {
   client?: ClientDraft
   template?: TemplateDraft
   config?: ConfigDraft
-  rule?: RuleDraft
   dns?: DnsDraft
 }
 
@@ -96,14 +94,9 @@ export interface DnsState {
   picked: number
 }
 
-export type DnsSelection = "global" | "outbound" | "routing"
-
 export interface DnsDraft {
-  selection: DnsSelection
   isEnabled: boolean
   port: number
-  upstreams: string[]
-  outbound: string
   listen: string[]
   nameMinutes: number
   cacheSize: number
@@ -190,10 +183,7 @@ function useSettled<T>(value: T): T {
 export function draftOf(resolver: Resolver): DnsDraft {
   return {
     isEnabled: resolver.isEnabled,
-    selection: resolver.selection ?? "global",
     port: resolver.port,
-    upstreams: resolver.upstreams,
-    outbound: resolver.outbound,
     listen: resolver.listen,
     nameMinutes: resolver.nameMinutes,
     cacheSize: resolver.cacheSize,
@@ -211,7 +201,7 @@ function useRefreshing<TArgs>(call: (args: TArgs) => Promise<unknown>) {
     mutationFn: call,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["dns"] })
-      await queryClient.invalidateQueries({ queryKey: ["rules"] })
+      await queryClient.invalidateQueries({ queryKey: ["routing-entries"] })
       await queryClient.invalidateQueries({ queryKey: ["dns-conflicts"] })
     },
   })

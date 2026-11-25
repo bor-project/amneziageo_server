@@ -133,7 +133,6 @@ public sealed class RouteApplier
     public async Task<RoutePlan> BuildAsync(CancellationToken ct)
     {
         var rules = await _rules.TableAsync(ct).ConfigureAwait(false);
-        var groups = await _rules.GroupsAsync(ct).ConfigureAwait(false);
         var outbounds = await _outbounds.ListAsync(ct).ConfigureAwait(false);
         var balancers = await _balancers.ListAsync(ct).ConfigureAwait(false);
         var configs = await _configs.ListAsync(ct).ConfigureAwait(false);
@@ -152,9 +151,9 @@ public sealed class RouteApplier
             balancers,
             _live.Alive,
             clients,
-            basic,
-            groups) with
+            basic) with
         {
+            HostDns = SystemDns.Servers(configs.SelectMany(config => config.Address).Concat(resolver.Listen), resolver.Port, _logger),
             DnsOrigins = clients.Where(client => client.IsEnabled)
                 .Join(configs, client => client.ConfigId, config => config.Id, (client, config) => (Client: client, config.Name))
                 .SelectMany(one => one.Client.Address.Select(address => Origin(address, one.Name)))

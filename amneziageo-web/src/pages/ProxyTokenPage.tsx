@@ -7,13 +7,14 @@ import type { MintedProxyToken } from "@/api/proxyTokens"
 import { TokenSecret } from "@/components/TokenSecret"
 import { Line, Part } from "@/components/fields"
 import { useTail } from "@/components/crumbs"
-import { danger, footer, primary, secondary } from "@/components/styles"
+import { danger, footer, note, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 
 export function ProxyTokens({ id, disabled }: { id: number; disabled: boolean }) {
   const t = useText()
   const tokens = useProxyTokens(id)
   return <Part title={t("proxies.tokens")}>
+    <div className={`sm:col-span-2 ${note}`}>{t("proxies.help.tokens")}</div>
     {tokens.data?.length === 0 && <div className="text-sm text-muted sm:col-span-2">{t("proxies.tokensEmpty")}</div>}
     {tokens.data?.map((token) => <div key={token.id} className="flex items-center justify-between gap-3 sm:col-span-2">
       <span className="min-w-0 truncate text-sm">{token.name}</span>
@@ -38,7 +39,7 @@ export function ProxyTokenPage() {
   useTail([{ label: held?.name ?? "", to: back }, { label: t("proxies.newToken") }])
   if (minted !== null) { return <TokenSecret name={minted.token.name} secret={minted.secret} back={back} /> }
   return <div className="mt-4 flex flex-col gap-4">
-    <Part title={t("proxies.tokens")}><Line id="proxy-token-name" caption={t("apiTokens.name")} value={name} onChange={setName} /></Part>
+    <Part title={t("proxies.tokens")}><Line preview={t("proxies.help.tokenName")} id="proxy-token-name" caption={t("apiTokens.name")} value={name} onChange={setName} /></Part>
     {mint.error !== null && <div className="text-sm text-alarm">{t(complaint(mint.error))}</div>}
     <div className={footer}>
       <Link className={secondary} to={back}>{t("geo.cancel")}</Link>

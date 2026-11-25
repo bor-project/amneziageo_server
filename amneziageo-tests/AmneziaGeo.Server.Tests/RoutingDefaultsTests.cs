@@ -17,7 +17,7 @@ public sealed class RoutingDefaultsTests
         Assert.Equal(7, RoutingBundle.Lists.Select(list => list.Key).Distinct().Count());
         foreach (var list in RoutingBundle.Lists)
         {
-            Assert.Null(RouteRules.CheckGroup(new AddressGroup { Name = list.Name, Targets = list.Targets }));
+            Assert.Null(RouteRules.Check(new TrafficRule { Name = list.Name, Targets = list.Targets }));
             Assert.Null(PresetRules.Check(new RoutingPreset { Name = list.Name, Proxy = [.. list.Targets, .. list.Applications] }));
             Assert.All(list.Targets, target => Assert.StartsWith("domain:", target));
         }
@@ -29,7 +29,7 @@ public sealed class RoutingDefaultsTests
         using var bench = new Bench();
         await ServerDatabase.PrepareAsync(bench.Services).ConfigureAwait(false);
 
-        Assert.Empty(await bench.Db.AddressGroups.ToListAsync().ConfigureAwait(false));
+        Assert.Empty(await bench.Db.TrafficRules.ToListAsync().ConfigureAwait(false));
         Assert.Empty(await bench.Presets.ListAsync(default).ConfigureAwait(false));
     }
 
@@ -38,13 +38,16 @@ public sealed class RoutingDefaultsTests
     {
         using var bench = new Bench();
         var result = await Store(bench).RestoreAllAsync(default).ConfigureAwait(false);
-        var groups = await new AddressGroupStore(bench.Db).ListAsync(default).ConfigureAwait(false);
+        var groups = await new TrafficRuleStore(bench.Db).ListAsync(default).ConfigureAwait(false);
         var presets = await bench.Presets.ListAsync(default).ConfigureAwait(false);
 
         Assert.Equal(new RoutingDefaultsResult(7, 7), result);
         foreach (var list in RoutingBundle.Lists)
         {
-            Assert.Equal(list.Targets, Assert.Single(groups, group => group.Name == list.Name).Targets);
+            var criterion = Assert.Single(groups, group => group.Name == list.Name);
+            Assert.Equal(list.Targets, criterion.Targets);
+            Assert.Equal(TrafficDnsMode.Default, criterion.DnsMode);
+            Assert.Empty(criterion.Dns);
             var preset = Assert.Single(presets, preset => preset.Name == list.Name);
             Assert.Equal(list.Targets.Concat(list.Applications), preset.Proxy);
             Assert.Empty(preset.Direct);
@@ -63,14 +66,14 @@ public sealed class RoutingDefaultsTests
         var store = Store(bench);
         await store.RestoreAllAsync(default).ConfigureAwait(false);
         var before = await bench.Presets.ListAsync(default).ConfigureAwait(false);
-        var groupIds = await bench.Db.AddressGroups.Select(group => group.Id).ToListAsync().ConfigureAwait(false);
+        var groupIds = await bench.Db.TrafficRules.Select(group => group.Id).ToListAsync().ConfigureAwait(false);
         bench.Clock.Pass(TimeSpan.FromDays(1));
 
         Assert.Equal(new RoutingDefaultsResult(0, 0), await store.RestoreAllAsync(default).ConfigureAwait(false));
         var after = await bench.Presets.ListAsync(default).ConfigureAwait(false);
         Assert.Equal(before.Select(preset => (preset.Id, preset.Uid, preset.CreatedUtc, preset.UpdatedUtc)),
             after.Select(preset => (preset.Id, preset.Uid, preset.CreatedUtc, preset.UpdatedUtc)));
-        Assert.Equal(groupIds, await bench.Db.AddressGroups.Select(group => group.Id).ToListAsync().ConfigureAwait(false));
+        Assert.Equal(groupIds, await bench.Db.TrafficRules.Select(group => group.Id).ToListAsync().ConfigureAwait(false));
     }
 
     [Theory]
@@ -81,11 +84,11 @@ public sealed class RoutingDefaultsTests
         using var bench = new Bench();
         var store = Store(bench);
 
-        var result = groups ? await store.RestoreGroupsAsync(default).ConfigureAwait(false)
+        var result = groups ? await store.RestoreRulesAsync(default).ConfigureAwait(false)
             : await store.RestorePresetsAsync(default).ConfigureAwait(false);
 
         Assert.Equal(groups ? new RoutingDefaultsResult(7, 0) : new RoutingDefaultsResult(0, 7), result);
-        Assert.Equal(groups ? 7 : 0, await bench.Db.AddressGroups.CountAsync().ConfigureAwait(false));
+        Assert.Equal(groups ? 7 : 0, await bench.Db.TrafficRules.CountAsync().ConfigureAwait(false));
         Assert.Equal(groups ? 0 : 7, await bench.Db.RoutingPresets.CountAsync().ConfigureAwait(false));
     }
 
@@ -95,14 +98,14 @@ public sealed class RoutingDefaultsTests
         using var bench = new Bench();
         var store = Store(bench);
         await store.RestoreAllAsync(default).ConfigureAwait(false);
-        var group = await bench.Db.AddressGroups.FirstAsync(record => record.DefaultKey == "youtube").ConfigureAwait(false);
+        var group = await bench.Db.TrafficRules.FirstAsync(record => record.DefaultKey == "youtube").ConfigureAwait(false);
         var preset = await bench.Db.RoutingPresets.FirstAsync(record => record.DefaultKey == "discord").ConfigureAwait(false);
         bench.Db.Remove(group);
         bench.Db.Remove(preset);
         await bench.Db.SaveChangesAsync().ConfigureAwait(false);
 
         Assert.Equal(new RoutingDefaultsResult(1, 1), await store.RestoreAllAsync(default).ConfigureAwait(false));
-        Assert.Equal(7, await bench.Db.AddressGroups.CountAsync().ConfigureAwait(false));
+        Assert.Equal(7, await bench.Db.TrafficRules.CountAsync().ConfigureAwait(false));
         Assert.Equal(7, await bench.Db.RoutingPresets.CountAsync().ConfigureAwait(false));
     }
 
@@ -112,12 +115,12 @@ public sealed class RoutingDefaultsTests
         using var bench = new Bench();
         var store = Store(bench);
         await store.RestoreAllAsync(default).ConfigureAwait(false);
-        var groups = new AddressGroupStore(bench.Db);
+        var groups = new TrafficRuleStore(bench.Db);
         var group = (await groups.ListAsync(default).ConfigureAwait(false)).First();
         await groups.ChangeAsync(group.Id, group with { Name = "My list", Targets = ["domain:example.test"], Dns = ["1.1.1.1"] }, default).ConfigureAwait(false);
         var preset = (await bench.Presets.ListAsync(default).ConfigureAwait(false)).First();
         var changed = await bench.Presets.ChangeAsync(preset.Id, preset with { Name = "My preset", Proxy = ["domain:example.test"], IsDefault = false, ReadOnly = true }, default).ConfigureAwait(false);
-        var rule = await bench.Rules.AddAsync(RouteDefaults.Fresh("kept") with { Action = RouteAction.Block, Groups = [group.Id] }, default).ConfigureAwait(false);
+        var rule = await bench.Rules.AddAsync(RouteDefaults.Fresh("kept") with { Action = RouteAction.Block, RuleIds = [group.Id] }, default).ConfigureAwait(false);
         Assert.True(rule.IsOk, rule.Message);
         var template = (await bench.Templates.AddAsync(new AmneziaGeo.Server.Awg.Client.ClientTemplate { Name = "custom" }, default).ConfigureAwait(false)).Record!;
         var assigned = await bench.Templates.ChangeAsync(template.Id, template with { Presets = [preset.Id] }, default).ConfigureAwait(false);
@@ -131,7 +134,7 @@ public sealed class RoutingDefaultsTests
         Assert.True(changed.IsOk, changed.Message);
         Assert.Equal(System.Text.Json.JsonSerializer.Serialize(changed.Record),
             System.Text.Json.JsonSerializer.Serialize(await bench.Presets.FindAsync(preset.Id, default).ConfigureAwait(false)));
-        Assert.Equal([group.Id], (await bench.Rules.TableAsync(default).ConfigureAwait(false)).Single().Groups);
+        Assert.Equal([group.Id], (await bench.Rules.TableAsync(default).ConfigureAwait(false)).Single().RuleIds);
         Assert.Equal([preset.Id], (await bench.Templates.FindAsync(template.Id, default).ConfigureAwait(false))!.Presets);
     }
 
@@ -139,15 +142,15 @@ public sealed class RoutingDefaultsTests
     public async Task SameNamedUserRecordsAreNeitherClaimedNorOverwritten()
     {
         using var bench = new Bench();
-        var groups = new AddressGroupStore(bench.Db);
-        await groups.AddAsync(new AddressGroup { Name = "YouTube", Targets = ["domain:example.test"] }, default).ConfigureAwait(false);
-        await groups.AddAsync(new AddressGroup { Name = "YouTube (AmneziaGeo)", Targets = ["domain:example.test"] }, default).ConfigureAwait(false);
+        var groups = new TrafficRuleStore(bench.Db);
+        await groups.AddAsync(new TrafficRule { Name = "YouTube", Targets = ["domain:example.test"] }, default).ConfigureAwait(false);
+        await groups.AddAsync(new TrafficRule { Name = "YouTube (AmneziaGeo)", Targets = ["domain:example.test"] }, default).ConfigureAwait(false);
         var user = await bench.Presets.AddAsync(new RoutingPreset { Name = "YouTube", Direct = ["domain:example.test"] }, default).ConfigureAwait(false);
 
         Assert.Equal(new RoutingDefaultsResult(7, 7), await Store(bench).RestoreAllAsync(default).ConfigureAwait(false));
-        var held = await bench.Db.AddressGroups.SingleAsync(group => group.DefaultKey == "youtube").ConfigureAwait(false);
+        var held = await bench.Db.TrafficRules.SingleAsync(group => group.DefaultKey == "youtube").ConfigureAwait(false);
         Assert.Equal("YouTube (AmneziaGeo 2)", held.Name);
-        Assert.Null((await bench.Db.AddressGroups.SingleAsync(group => group.Name == "YouTube").ConfigureAwait(false)).DefaultKey);
+        Assert.Null((await bench.Db.TrafficRules.SingleAsync(group => group.Name == "YouTube").ConfigureAwait(false)).DefaultKey);
         Assert.Equal(System.Text.Json.JsonSerializer.Serialize(user.Record),
             System.Text.Json.JsonSerializer.Serialize(await bench.Presets.FindAsync(user.Record!.Id, default).ConfigureAwait(false)));
         Assert.Equal(new RoutingDefaultsResult(0, 0), await Store(bench).RestoreAllAsync(default).ConfigureAwait(false));
@@ -178,28 +181,10 @@ public sealed class RoutingDefaultsTests
             return await scope.ServiceProvider.GetRequiredService<RoutingDefaultsStore>().RestoreAllAsync(default).ConfigureAwait(false);
         }))).ConfigureAwait(false);
 
-        Assert.Equal(7, results.Sum(result => result.Groups));
+        Assert.Equal(7, results.Sum(result => result.Rules));
         Assert.Equal(7, results.Sum(result => result.Presets));
-        Assert.Equal(7, await bench.Db.AddressGroups.CountAsync().ConfigureAwait(false));
+        Assert.Equal(7, await bench.Db.TrafficRules.CountAsync().ConfigureAwait(false));
         Assert.Equal(7, await bench.Db.RoutingPresets.CountAsync().ConfigureAwait(false));
-    }
-
-    [Fact]
-    public async Task UpgradingThePreviousSchemaPreservesUserDataAndDoesNotSeed()
-    {
-        using var bench = new Bench();
-        var migrator = bench.Db.GetService<IMigrator>();
-        await migrator.MigrateAsync("20261114144010_ProxyAccessTokens").ConfigureAwait(false);
-        await bench.Db.Database.ExecuteSqlRawAsync("INSERT INTO AddressGroups (Name, Targets, Dns, CreatedUtc, UpdatedUtc) VALUES ('YouTube', 'domain:example.test', '1.1.1.1', '2026-11-14 00:00:00+00:00', '2026-11-14 00:00:00+00:00')").ConfigureAwait(false);
-
-        await bench.Db.Database.MigrateAsync().ConfigureAwait(false);
-
-        var group = Assert.Single(await bench.Db.AddressGroups.AsNoTracking().ToListAsync().ConfigureAwait(false));
-        Assert.Null(group.DefaultKey);
-        Assert.Equal("YouTube", group.Name);
-        Assert.Equal("domain:example.test", group.Targets);
-        Assert.Equal("1.1.1.1", group.Dns);
-        Assert.Empty(await bench.Presets.ListAsync(default).ConfigureAwait(false));
     }
 
     private static RoutingDefaultsStore Store(Bench bench) => new(bench.Db, bench.Clock);

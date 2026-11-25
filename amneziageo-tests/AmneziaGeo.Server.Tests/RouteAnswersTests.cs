@@ -31,7 +31,7 @@ public class RouteAnswersTests
         Assert.Equal("rule", draft.Name);
         Assert.Equal(RouteAction.Out, draft.Action);
         Assert.Equal("direct", draft.Outbound);
-        Assert.Equal(["ifconfig.me", "ipinfo.io"], draft.Targets);
+        Assert.Equal([1L, 2L], draft.RuleIds);
         Assert.True(draft.IsEnabled);
     }
 
@@ -80,7 +80,7 @@ public class RouteAnswersTests
     }
 
     private static RouteRequest Request() =>
-        new("rule", true, RouteAction.Out, "direct", ["ifconfig.me ipinfo.io"], [], RouteProtocol.Any);
+        new("rule", true, RouteAction.Out, "direct", [1L, 2L], [], RouteProtocol.Any);
 
     private static RouteRule Held() => RouteDefaults.Fresh("rule") with { Id = 1, Outbound = "direct" };
 }

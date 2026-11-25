@@ -100,7 +100,6 @@ public static class BalanceEndpoints
         RouteStore rules,
         OutboundHost host,
         RouteApplier applier,
-        DnsHost resolver,
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -123,11 +122,6 @@ public static class BalanceEndpoints
         }
 
         var body = await AnswerAsync(result.Record!, outbounds, host, applier, ct).ConfigureAwait(false);
-        if (held is not null)
-        {
-            await resolver.FollowAsync(held.Name, result.Record!.Name, ct).ConfigureAwait(false);
-        }
-
         return Results.Ok(body);
     }
 
@@ -158,10 +152,9 @@ public static class BalanceEndpoints
         long id,
         BalanceStore store,
         RouteApplier applier,
-        DnsHost resolver,
         CancellationToken ct)
     {
-        var result = await store.RemoveAsync(id, resolver.Asking, ct).ConfigureAwait(false);
+        var result = await store.RemoveAsync(id, ct).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);

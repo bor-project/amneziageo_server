@@ -2,11 +2,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { client } from "./client"
 
 export interface ExchangePlan {
-  newGroups?: string[]
-  replacedGroups?: string[]
+  newEntries: string[]
+  replacedEntries: string[]
   newRules: string[]
   replacedRules: string[]
-  replacesBasic: boolean
   newPresets: string[]
   replacedPresets: string[]
   newSources: string[]
@@ -16,17 +15,15 @@ export interface ExchangePlan {
   detached: string[]
   doc: {
     rules: { name: string }[]
-    basic: { direct: string[]; block: string[] }
+    entries: { name: string }[]
     presets: { name: string }[]
     sources: { name: string }[]
-    addressGroups?: { name: string }[]
   }
 }
 
 export interface ExchangeAnswer {
   added: string[]
   replaced: string[]
-  basicReplaced: boolean
   refused: string[]
   detached: string[]
 }
@@ -75,8 +72,8 @@ export function useRoutingApply() {
       return answer.data
     },
     onSuccess: async () => {
-      await keep.invalidateQueries({ queryKey: ["rules"] })
-      await keep.invalidateQueries({ queryKey: ["address-groups"] })
+      await keep.invalidateQueries({ queryKey: ["traffic-rules"] })
+      await keep.invalidateQueries({ queryKey: ["routing-entries"] })
       await keep.invalidateQueries({ queryKey: ["presets"] })
       await keep.invalidateQueries({ queryKey: ["geo"] })
     },

@@ -58,6 +58,7 @@ public static class DnsChecks
     /// </summary>
     public static async Task<IResult> ConflictsAsync(
         DnsStore store,
+        TrafficRuleStore trafficRules,
         ConfigStore configs,
         TemplateStore templates,
         ClientStore clients,
@@ -65,7 +66,7 @@ public static class DnsChecks
         ResolverDoors doors,
         CancellationToken ct)
     {
-        var world = await WorldAsync(store, configs, templates, clients, plans, doors, ct).ConfigureAwait(false);
+        var world = await WorldAsync(store, trafficRules, configs, templates, clients, plans, doors, ct).ConfigureAwait(false);
 
         return Results.Ok(DnsConflicts.Of(world));
     }
@@ -76,6 +77,7 @@ public static class DnsChecks
     public static async Task<IResult> CheckAsync(
         DnsCheckRequest request,
         DnsStore store,
+        TrafficRuleStore trafficRules,
         ConfigStore configs,
         TemplateStore templates,
         ClientStore clients,
@@ -94,7 +96,7 @@ public static class DnsChecks
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var world = await WorldAsync(store, configs, templates, clients, plans, doors, ct).ConfigureAwait(false);
+        var world = await WorldAsync(store, trafficRules, configs, templates, clients, plans, doors, ct).ConfigureAwait(false);
         var ranges = await RangesAsync(world, request, refresher, ct).ConfigureAwait(false);
 
         return Results.Ok(Check(world, request, ranges));
@@ -197,8 +199,9 @@ public static class DnsChecks
         if (request.Rule is { } rule)
         {
             var draft = RouteAnswers.Draft(rule, world.Rules.FirstOrDefault(one => one.Id == id)) with { Id = id };
+            draft = draft with { Criteria = [.. draft.RuleIds.Select(key => world.TrafficRules.FirstOrDefault(one => one.Id == key)).OfType<TrafficRule>()] };
             var rules = world.Rules.Where(one => one.Id != id).ToList();
-            if (draft.IsEnabled && ByName(draft, world.Groups))
+            if (draft.IsEnabled && ByName(draft))
             {
                 rules.Add(draft);
             }
@@ -268,6 +271,7 @@ public static class DnsChecks
     // Reads what the panel holds that decides the name servers of the clients.
     private static async Task<DnsWorld> WorldAsync(
         DnsStore store,
+        TrafficRuleStore trafficRules,
         ConfigStore configs,
         TemplateStore templates,
         ClientStore clients,
@@ -286,7 +290,7 @@ public static class DnsChecks
             Templates = await templates.EffectiveListAsync(ct).ConfigureAwait(false),
             Clients = await clients.ListAsync(ct).ConfigureAwait(false),
             Holders = await clients.ResolverHeldAsync(ct).ConfigureAwait(false),
-            Groups = plans.Held?.Groups ?? [],
+            TrafficRules = await trafficRules.ListAsync(ct).ConfigureAwait(false),
             Rules = plans.Held is { } plan
                 ? [.. plan.Legs.Where(leg => leg.IsOnHost && leg.Domains.Count > 0).Select(leg => leg.Rule)]
                 : [],
@@ -335,7 +339,7 @@ public static class DnsChecks
     private static bool Names(DnsFinding finding, string kind, long id) =>
         finding.Subjects.Any(subject => subject.Kind == kind && subject.Id == id);
 
-    private static bool ByName(RouteRule rule, IReadOnlyList<AddressGroup> groups) =>
-        rule.Targets.Concat(groups.Where(group => rule.Groups.Contains(group.Id)).SelectMany(group => group.Targets))
+    private static bool ByName(RouteRule rule) =>
+        rule.Targets.Concat(rule.Criteria.SelectMany(one => one.Targets))
             .Select(RouteRules.Target).Any(target => target?.Kind is GeoRuleKind.Domain or GeoRuleKind.GeoSite);
 }

@@ -25,8 +25,10 @@ public sealed record BalanceResponse(
     IReadOnlyList<string> Members,
     BalanceStateBody State,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset UpdatedUtc,
-    IReadOnlyList<string>? Dns = null);
+    DateTimeOffset UpdatedUtc)
+{
+    public IReadOnlyList<string> Dns { get; init; } = [];
+}
 
 /// <summary>
 /// The settings a balancer is added or changed with.
@@ -74,8 +76,7 @@ public static class BalanceAnswers
             balancer.Members,
             new BalanceStateBody(balancer.IsEnabled && members.Any(member => member.IsAlive), members),
             balancer.CreatedUtc,
-            balancer.UpdatedUtc,
-            balancer.Dns);
+            balancer.UpdatedUtc) { Dns = balancer.Dns };
     }
 
     /// <summary>

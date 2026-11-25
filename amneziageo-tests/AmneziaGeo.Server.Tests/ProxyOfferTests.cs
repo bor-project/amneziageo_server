@@ -175,17 +175,16 @@ public sealed class ProxyOfferTests
         {
             Address = ["10.77.0.2/32"],
         }, default).ConfigureAwait(false)).Record!;
-        await bench.Db.GetService<IMigrator>().MigrateAsync("ConfigRequireUpdate").ConfigureAwait(false);
-        bench.Db.ChangeTracker.Clear();
-        await bench.Db.Database.MigrateAsync().ConfigureAwait(false);
-        var readEndpoint = await bench.Configs.FindAsync(endpoint.Id, default).ConfigureAwait(false);
-        var readClient = await bench.Clients.FindAsync(client.Id, default).ConfigureAwait(false);
+        await using var legacy = await LegacyDatabase.FromAsync(bench.Db, "ConfigRequireUpdate").ConfigureAwait(false);
+        await legacy.MigrateAsync().ConfigureAwait(false);
+        var readEndpoint = await new ConfigStore(legacy.Db).FindAsync(endpoint.Id, default).ConfigureAwait(false);
+        var readClient = await new ClientStore(legacy.Db).FindAsync(client.Id, default).ConfigureAwait(false);
         Assert.True(readEndpoint!.WebSocket);
         Assert.Equal(endpoint.ServicesPort, readEndpoint.ServicesPort);
         Assert.Equal(endpoint.WebSocketPath, readEndpoint.WebSocketPath);
         Assert.Equal(endpoint.PrivateKey, readEndpoint.PrivateKey);
         Assert.Equal(client.PrivateKey, readClient!.PrivateKey);
-        Assert.Empty(await bench.Db.TransportProxies.ToListAsync().ConfigureAwait(false));
+        Assert.Empty(await legacy.Db.TransportProxies.ToListAsync().ConfigureAwait(false));
     }
 
     private static TransportProxyEntity Proxy(string name, string transport) => new()

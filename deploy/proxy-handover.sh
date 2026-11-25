@@ -197,7 +197,7 @@ proxy_profile() {
 proxy_keep_installer() {
   local target=$data/proxy-handover/installer file
   install -d -m 700 "$target"
-  for file in install.sh proxy-handover.sh release; do
+  for file in install.sh proxy-handover.sh database-handover.sh release; do
     if ! cmp -s "$here/$file" "$target/$file"; then
       install -m 700 "$here/$file" "$target/$file"
     fi

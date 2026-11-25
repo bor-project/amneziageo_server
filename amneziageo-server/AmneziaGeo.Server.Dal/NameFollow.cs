@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 namespace AmneziaGeo.Server.Dal;
@@ -8,12 +9,10 @@ namespace AmneziaGeo.Server.Dal;
 /// </summary>
 internal static class NameFollow
 {
-    private const long ResolverRow = 1;
-
     private static readonly char[] Breaks = [',', ' ', '\t', '\n', '\r'];
 
     /// <summary>
-    /// Carries a new name of an outbound or a balancer into the rules, the balancers and the resolver.
+    /// Updates processing object references.
     /// </summary>
     public static async Task WayAsync(
         AppDbContext db,
@@ -41,11 +40,15 @@ internal static class NameFollow
             balancer.UpdatedUtc = now;
         }
 
-        var resolver = await db.Resolver.FirstOrDefaultAsync(row => row.Id == ResolverRow, ct).ConfigureAwait(false);
-        if (resolver is not null && resolver.Outbound == old)
+        foreach (var criterion in await db.TrafficRules.ToListAsync(ct).ConfigureAwait(false))
         {
-            resolver.Outbound = anew;
-            resolver.UpdatedUtc = now;
+            var members = JsonSerializer.Deserialize<Dictionary<string, IReadOnlyList<string>>>(criterion.DnsMembers) ?? [];
+            if (members.Remove(old, out var servers))
+            {
+                members[anew] = servers;
+                criterion.DnsMembers = JsonSerializer.Serialize(members);
+                criterion.UpdatedUtc = now;
+            }
         }
     }
 
@@ -94,12 +97,6 @@ internal static class NameFollow
             rule.UpdatedUtc = now;
         }
     }
-
-    /// <summary>
-    /// Tells whether the resolver asks through the outbound or the balancer under a name.
-    /// </summary>
-    public static Task<bool> AsksThroughAsync(AppDbContext db, string name, CancellationToken ct) =>
-        db.Resolver.AnyAsync(row => row.Id == ResolverRow && row.Outbound == name, ct);
 
     /// <summary>
     /// Tells whether a list the database holds carries a name.

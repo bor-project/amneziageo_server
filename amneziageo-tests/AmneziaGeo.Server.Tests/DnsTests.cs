@@ -134,12 +134,12 @@ public class DnsTests
         Assert.Equal(code, DnsRules.Check(DnsDefaults.Settings with { Port = port })?.Code);
 
     [Fact]
-    public void SettingsWithoutAnUpstreamAreRefused() =>
-        Assert.Equal("no-upstream", DnsRules.Check(DnsDefaults.Settings with { Upstreams = [] })?.Code);
+    public void ResolverSettingsDoNotRequireASeparateDnsPolicy() =>
+        Assert.Null(DnsRules.Check(DnsDefaults.Settings));
 
     [Fact]
     public void AnUpstreamThatIsNotAnAddressIsRefused() =>
-        Assert.Equal("bad-upstream", DnsRules.Check(DnsDefaults.Settings with { Upstreams = ["resolver"] })?.Code);
+        Assert.Equal("bad-dns", DnsRules.Servers(["resolver"])?.Code);
 
     [Fact]
     public void AnAddressToListenOnThatIsNotOneIsRefused() =>

@@ -6,17 +6,17 @@ import { RowActions } from "@/components/RowActions"
 import { HeadActions } from "@/components/Section"
 import { useText } from "@/i18n"
 
-export function RestoreRoutingDefaults({ part, head = false }: { part: "groups" | "presets"; head?: boolean }) {
+export function RestoreRoutingDefaults({ part, head = false }: { part: "rules" | "presets"; head?: boolean }) {
   const t = useText()
   const queries = useQueryClient()
   const [count, setCount] = useState<number | null>(null)
   const restore = useMutation({
-    mutationFn: async () => (await client.post<{ groups: number; presets: number }>(
-      part === "groups" ? "/address-groups/defaults" : "/templates/routing/defaults",
+    mutationFn: async () => (await client.post<{ rules?: number; presets: number }>(
+      part === "rules" ? "/traffic-rules/defaults" : "/templates/routing/defaults",
     )).data,
     onSuccess: async (answer) => {
-      setCount(answer.groups + answer.presets)
-      await queries.invalidateQueries({ queryKey: [part === "groups" ? "address-groups" : "presets"] })
+      setCount((answer.rules ?? 0) + answer.presets)
+      await queries.invalidateQueries({ queryKey: [part === "rules" ? "traffic-rules" : "presets"] })
     },
   })
   const menu = <fieldset disabled={restore.isPending}>

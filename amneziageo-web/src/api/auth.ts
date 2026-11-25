@@ -22,6 +22,12 @@ export interface Session {
 }
 
 const complaints: Record<string, TextKey> = {
+  "empty-rule-list": "error.noEntryAddresses",
+  "bad-rule-dns": "error.badRuleDns",
+  "traffic-rule-in-use": "error.trafficRuleInUse",
+  "unknown-traffic-rule": "error.unknownTrafficRule",
+  "invalid-addresses": "error.invalidAddresses",
+  "empty-addresses": "error.emptyAddresses",
   "bad-proxy-listen-port": "error.badPort",
   "bad-proxy-server-name": "error.proxyHost",
   "bad-proxy-pin": "error.proxyPin",
@@ -40,9 +46,6 @@ const complaints: Record<string, TextKey> = {
   "proxy-certificate-name": "error.proxyCertificateName",
   "proxy-certificate-pin": "error.proxyCertificatePin",
   "proxy-certificate-untrusted": "error.proxyCertificateUntrusted",
-  "unknown-address-group": "routing.unknownGroup",
-  "empty-address-group": "routing.emptyGroup",
-  "address-group-in-use": "routing.groupInUse",
   "bad-proxy-targets": "error.proxyTargets", "bad-proxy-host": "error.proxyHost", "bad-proxy-transport": "error.proxyTransport",
   "bad-proxy-port": "error.badPort", "bad-proxy-path": "error.badWebSocketPath",
   "proxy-path-taken": "error.pathTaken", "bad-proxy-name": "error.proxyName",
@@ -78,6 +81,8 @@ const complaints: Record<string, TextKey> = {
   "bad-client-key": "error.badClientKey",
   "bad-client-preshared": "error.badClientPreshared",
   "bad-client-address": "error.badClientAddress",
+  "client-ipv6-unavailable": "error.clientIpv6Unavailable",
+  "client-ipv6-address-limit": "error.clientIpv6AddressLimit",
   "bad-client-note": "error.badClientNote",
   "client-name-taken": "error.clientNameTaken",
   "client-key-taken": "error.clientKeyTaken",

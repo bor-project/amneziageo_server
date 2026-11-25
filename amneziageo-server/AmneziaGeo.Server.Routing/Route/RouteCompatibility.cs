@@ -16,13 +16,16 @@ public static class RouteCompatibility
     private static string Shape(RouteRule rule) => JsonSerializer.Serialize(new
     {
         rule.Id,
+        rule.RuleIds,
+        rule.Criteria,
         Name = rule.Id > 0 ? rule.Name : string.Empty,
         rule.Position,
         rule.IsEnabled,
         rule.Action,
         rule.Outbound,
         rule.Targets,
-        rule.Groups,
+        rule.Dns,
+        DnsMembers = rule.DnsMembers.OrderBy(pair => pair.Key, StringComparer.Ordinal),
         rule.Clients,
         rule.Inbounds,
         rule.Ports,

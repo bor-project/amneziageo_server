@@ -287,7 +287,7 @@ public sealed partial class TransportProxyStore
             && !markers.Contains("proxy-legacy-" + config.Id.ToString(CultureInfo.InvariantCulture))))
         {
             var name = "WebSocket " + config.Name;
-            for (var suffix = 2; proxies.Any(proxy => proxy.Name == name); suffix++)
+            for (var suffix = 2; proxies.Any(proxy => proxy.Transport == "websocket" && string.Equals(proxy.Name, name, StringComparison.OrdinalIgnoreCase)); suffix++)
             {
                 name = "WebSocket " + config.Name + " " + suffix.ToString(CultureInfo.InvariantCulture);
             }

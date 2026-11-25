@@ -137,16 +137,15 @@ public sealed class TrafficTotalTests
         var store = new TrafficStore(bench.Db);
         var day = DateOnly.FromDateTime(Noon.UtcDateTime);
         await store.SaveAsync([new(client.Id, day, new(100, 200), new(100, 200))], default).ConfigureAwait(false);
-        var migrator = bench.Db.GetService<IMigrator>();
-        await migrator.MigrateAsync("20261119120000_TrafficLimits").ConfigureAwait(false);
-        await migrator.MigrateAsync().ConfigureAwait(false);
-        await migrator.MigrateAsync().ConfigureAwait(false);
-        bench.Db.ChangeTracker.Clear();
-        var total = Assert.Single(await store.HistoryAsync(default).ConfigureAwait(false));
+        await using var legacy = await LegacyDatabase.FromAsync(bench.Db, "20261119120000_TrafficLimits").ConfigureAwait(false);
+        await legacy.MigrateAsync().ConfigureAwait(false);
+        await legacy.MigrateAsync().ConfigureAwait(false);
+        var upgraded = new TrafficStore(legacy.Db);
+        var total = Assert.Single(await upgraded.HistoryAsync(default).ConfigureAwait(false));
         Assert.Equal(300UL, total.Total().TotalBytes);
         Assert.Null(total.ResetUtc);
         Assert.Equal(default, total.Reset);
-        Assert.Single(await store.DaysAsync(client.Id, day, day, default).ConfigureAwait(false));
+        Assert.Single(await upgraded.DaysAsync(client.Id, day, day, default).ConfigureAwait(false));
     }
 
     [Fact]

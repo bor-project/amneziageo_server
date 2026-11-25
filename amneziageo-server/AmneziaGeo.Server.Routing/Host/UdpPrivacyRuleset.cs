@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using AmneziaGeo.Server.Awg.Config;
 
 namespace AmneziaGeo.Server.Routing.Host;
@@ -18,7 +19,10 @@ public static class UdpPrivacyRuleset
             throw new ArgumentException("the endpoint name is invalid", nameof(name));
         }
 
-        return "amneziageo_udp_" + name;
+        var legacy = name.Length > 0 && name[0] is >= 'a' and <= 'z'
+            && name.All(one => one is >= 'a' and <= 'z' or >= '0' and <= '9' or '_' or '-');
+        var identity = legacy ? name : "_" + Convert.ToHexStringLower(Encoding.UTF8.GetBytes(name));
+        return "amneziageo_udp_" + identity;
     }
 
     /// <summary>

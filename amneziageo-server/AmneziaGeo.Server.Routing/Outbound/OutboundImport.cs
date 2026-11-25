@@ -9,7 +9,10 @@ namespace AmneziaGeo.Server.Routing.Outbound;
 /// </summary>
 /// <param name="Outbound">The outbound the text carried.</param>
 /// <param name="Fault">The reason the text was refused.</param>
-public sealed record OutboundImportResult(OutboundConfig? Outbound, OutboundFault? Fault);
+public sealed record OutboundImportResult(OutboundConfig? Outbound, OutboundFault? Fault)
+{
+    public IReadOnlyList<string> SuggestedDns => Outbound?.Dns ?? [];
+}
 
 /// <summary>
 /// Reads the client configuration of an AmneziaWG server into an outbound.
@@ -52,7 +55,7 @@ public static class OutboundImport
         return new OutboundImportResult(
             new OutboundConfig
             {
-                Name = name,
+                Name = name.Length > 0 ? name : InterfaceNames.Suggest(host, [], "out0"),
                 Kind = OutboundKind.Wg,
                 Host = host,
                 Port = port,

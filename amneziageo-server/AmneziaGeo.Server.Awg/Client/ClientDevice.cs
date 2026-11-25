@@ -1,5 +1,6 @@
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Awg.Device;
+using AmneziaGeo.Server.Awg.Uapi;
 
 namespace AmneziaGeo.Server.Awg.Client;
 
@@ -8,6 +9,8 @@ namespace AmneziaGeo.Server.Awg.Client;
 /// </summary>
 public static class ClientDevice
 {
+    private static readonly string EmptyPresharedKey = Convert.ToBase64String(new byte[WgUapi.KeyLength]);
+
     /// <summary>
     /// Returns the change that puts the clients of an endpoint on its interface.
     /// </summary>
@@ -51,7 +54,7 @@ public static class ClientDevice
         return new AwgPeerUpdate
         {
             PublicKey = client.PublicKey,
-            PresharedKey = preshared.Length > 0 ? preshared : null,
+            PresharedKey = preshared.Length > 0 ? preshared : EmptyPresharedKey,
             ReplaceAllowedIps = true,
             AllowedIps = [.. client.Address.Select(Range).OfType<AwgAllowedIp>()],
         };

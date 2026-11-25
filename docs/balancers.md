@@ -1,9 +1,8 @@
 # The balancers
 
-A balancer is a group of outbounds under one name. A rule names it the way it names an outbound, and the
-traffic leaves through one of the members: the first one that answers, the next one in turn, or the one
-the address of the client falls on. The names of the outbounds and of the balancers live in one list, so
-a balancer cannot take a name an outbound already carries.
+A balancer selects from registered linked servers under one name. An ordered routing rule chooses it as its
+processing method, then the connection uses a member according to its strategy. Linked-server and balancer names
+share a namespace. The settings open on a separate page under **Routing → Balancers**.
 
 ## Rights
 
@@ -23,15 +22,19 @@ a balancer cannot take a name an outbound already carries.
 |---|---|
 | Name | what the rules call the balancer by, up to 32 characters |
 | Strategy | `priority`, `round` or `sticky` |
-| Outbounds | up to 16 outbounds, in the order they are taken |
+| Linked servers | up to 16 registered connections, in the order they are taken |
+| DNS | optional default resolvers; empty uses the DNS of the selected linked server |
 | On | whether the rules that name the balancer go on the host |
 
-Renaming a balancer writes the new name into the rules that name it and into the settings of the resolver, the
-saved and the running ones alike. A balancer that a rule or the resolver leaves through is not removed: the
-panel answers `balancer-in-use`, and the one the resolver asks through until it is restarted is held the same
-way as the one its saved settings name. The page that removes a balancer names what holds it. The settings name the
-outbounds of a balancer as links and, under `Use`, the rules that leave through it, which `PUT /api/balancers/{id}`
-takes in `rules` the way an outbound does, see [outbounds.md](outbounds.md).
+Renaming a balancer updates its processing rules. A referenced balancer is not removed until those rules stop
+using it; the response is `balancer-in-use`. Its settings show the referencing rules as links. Members can be added,
+removed and reordered, and existing local paths remain available to preserve earlier configurations.
+
+An address set in Default DNS mode uses this balancer's DNS when the field is populated, otherwise the DNS of its
+selected member. A custom address-set policy uses its own resolvers and any migrated member overrides instead.
+Questions travel through the selected member in either case. Priority preview can name the first available member;
+round and sticky previews show the possible live member DNS values, since selection can vary by question or client.
+Missing member DNS or an unavailable balancer does not switch to an unrelated resolver or direct access.
 
 ## The strategies
 
@@ -82,6 +85,10 @@ say the way out is gone rather than the rule is wrong, so the rule drops what it
 carries again; see the reasons in `rules.md`.
 
 ## What the panel shows
+
+Members, strategy and DNS are edited on a separate page. The DNS preview follows the current draft and available
+member metadata. Save and Cancel return to the originating list with its filter; a balancer opened from an
+unfinished rule returns to that retained rule.
 
 The section names the balancer, its strategy, the outbounds it picks from with the live ones marked, and
 whether it is on the host. A balancer a rule leaves through is not removed until the rule is changed.

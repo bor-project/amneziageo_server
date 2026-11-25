@@ -20,7 +20,7 @@ export function BalancerRemove() {
   useTail(
     held === undefined
       ? []
-      : [{ label: held.name, to: `/routing/channels/groups/${held.id}/edit` }, { label: t("balancers.remove") }],
+      : [{ label: held.name, to: `/routing/balancers/${held.id}/edit` }, { label: t("balancers.remove") }],
   )
 
   if (held === undefined) {

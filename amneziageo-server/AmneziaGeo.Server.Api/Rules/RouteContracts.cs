@@ -24,7 +24,7 @@ public sealed record RouteResponse(
     bool IsEnabled,
     string Action,
     string Outbound,
-    IReadOnlyList<string> Targets,
+    IReadOnlyList<long> RuleIds,
     IReadOnlyList<string> Clients,
     IReadOnlyList<string> Inbounds,
     IReadOnlyList<string> Ports,
@@ -32,10 +32,7 @@ public sealed record RouteResponse(
     string Protocol,
     RouteStateBody State,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset UpdatedUtc)
-{
-    public IReadOnlyList<long> Groups { get; init; } = [];
-}
+    DateTimeOffset UpdatedUtc);
 
 /// <summary>
 /// The settings a rule is added or changed with, and the client addresses an older client still sends.
@@ -45,14 +42,13 @@ public sealed record RouteRequest(
     bool? IsEnabled,
     string? Action,
     string? Outbound,
-    IReadOnlyList<string>? Targets,
+    IReadOnlyList<long>? RuleIds,
     IReadOnlyList<string>? Ports,
     string? Protocol,
     IReadOnlyList<string>? Clients = null,
     IReadOnlyList<string>? Inbounds = null,
     IReadOnlyList<string>? SourcePorts = null,
-    IReadOnlyList<string>? Sources = null,
-    IReadOnlyList<long>? Groups = null);
+    IReadOnlyList<string>? Sources = null);
 
 /// <summary>
 /// Which way a rule moves in the list, or the place it goes to, counting from one.
@@ -139,7 +135,7 @@ public static class RouteAnswers
             rule.IsEnabled,
             rule.Action,
             rule.Outbound,
-            rule.Targets,
+            rule.RuleIds,
             rule.Clients,
             rule.Inbounds,
             rule.Ports,
@@ -147,7 +143,7 @@ public static class RouteAnswers
             rule.Protocol,
             State(leg),
             rule.CreatedUtc,
-            rule.UpdatedUtc) { Groups = rule.Groups };
+            rule.UpdatedUtc);
     }
 
     /// <summary>
@@ -163,8 +159,7 @@ public static class RouteAnswers
             IsEnabled = request.IsEnabled ?? held?.IsEnabled ?? false,
             Action = (request.Action ?? RouteAction.Out).Trim(),
             Outbound = (request.Outbound ?? string.Empty).Trim(),
-            Targets = Clean(request.Targets),
-            Groups = request.Groups ?? held?.Groups ?? [],
+            RuleIds = request.RuleIds ?? held?.RuleIds ?? [],
             Clients = request.Clients is null ? held?.Clients ?? [] : Clean(request.Clients),
             Inbounds = request.Inbounds is null ? held?.Inbounds ?? [] : Clean(request.Inbounds),
             Ports = Clean(request.Ports),

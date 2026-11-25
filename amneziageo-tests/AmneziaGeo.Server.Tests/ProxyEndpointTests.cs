@@ -63,12 +63,35 @@ public sealed class ProxyEndpointTests
             using var api = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{panel.Port}/api/proxies/") };
             var fresh = await api.GetFromJsonAsync<ProxyResponse>("draft").ConfigureAwait(false);
             Assert.True(fresh!.Targets!.Local);
+            Assert.Equal("proxy", fresh.Name);
             var request = new ProxyRequest("relay", "websocket", "proxy.example", 443, "relay", true, Hosted: false);
             using var created = await api.PostAsJsonAsync("", request).ConfigureAwait(false);
             created.EnsureSuccessStatusCode();
             var proxy = (await created.Content.ReadFromJsonAsync<ProxyResponse>().ConfigureAwait(false))!;
             Assert.True(proxy.Targets!.Local);
             var id = proxy.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            foreach (var empty in new[] { "", "   " })
+            {
+                using var refused = await api.PostAsJsonAsync("", request with { Name = empty, Path = "empty" }).ConfigureAwait(false);
+                Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+                Assert.Contains("bad-proxy-name", await refused.Content.ReadAsStringAsync().ConfigureAwait(false));
+            }
+            var http = request with { Name = "RELAY", Transport = "http", ProtocolVersion = 2, Path = "other" };
+            using var added = await api.PostAsJsonAsync("", http).ConfigureAwait(false);
+            added.EnsureSuccessStatusCode();
+            var other = (await added.Content.ReadFromJsonAsync<ProxyResponse>().ConfigureAwait(false))!;
+            foreach (var duplicate in new[] { http with { Name = " relay ", Path = "duplicate", HttpMethod = "POST" },
+                http with { Name = "relay", Path = "legacy", Transport = "xhttp" } })
+            {
+                using var refused = await api.PostAsJsonAsync("", duplicate).ConfigureAwait(false);
+                Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+                Assert.Contains("name-taken", await refused.Content.ReadAsStringAsync().ConfigureAwait(false));
+            }
+            using var converted = await api.PutAsJsonAsync(id, request with { Transport = "http", ProtocolVersion = 2 }).ConfigureAwait(false);
+            Assert.Equal(HttpStatusCode.Conflict, converted.StatusCode);
+            using var removedOther = await api.DeleteAsync(other.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)).ConfigureAwait(false);
+            removedOther.EnsureSuccessStatusCode();
 
             using var selected = await api.PutAsJsonAsync(id, request with
             {

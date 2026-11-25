@@ -57,15 +57,14 @@ public sealed class XHttpCatalogTests
             Name = "legacy", Host = "proxy.example.net", Port = 8443, Path = "relay", Opened = true,
         }, default).ConfigureAwait(false);
         var secret = proxy.Secret;
-        await bench.Db.GetService<IMigrator>().MigrateAsync("TransportProxyOpening").ConfigureAwait(false);
-        bench.Db.ChangeTracker.Clear();
-        Assert.True(PanelStore.ServesOn(bench.DatabasePath, 8443));
-        await bench.Db.Database.MigrateAsync().ConfigureAwait(false);
-        var read = await store.FindAsync(proxy.Id, default).ConfigureAwait(false);
+        await using var legacy = await LegacyDatabase.FromAsync(bench.Db, "TransportProxyOpening").ConfigureAwait(false);
+        Assert.True(PanelStore.ServesOn(legacy.DatabasePath, 8443));
+        await legacy.MigrateAsync().ConfigureAwait(false);
+        var read = await new TransportProxyStore(legacy.Db).FindAsync(proxy.Id, default).ConfigureAwait(false);
         Assert.Equal(secret, read!.Secret);
         Assert.Equal(0, read.ListenPort);
         Assert.False(read.OriginHttp);
         Assert.True(new ProxyRequest(read.Name, read.Transport, read.Host, read.Port, read.Path, true).Draft(read).Opened);
-        Assert.True(PanelStore.ServesOn(bench.DatabasePath, 8443));
+        Assert.True(PanelStore.ServesOn(legacy.DatabasePath, 8443));
     }
 }

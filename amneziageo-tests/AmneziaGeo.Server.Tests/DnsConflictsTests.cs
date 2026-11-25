@@ -181,9 +181,9 @@ public class DnsConflictsTests
             world,
             new DnsCheckRequest(Client: new ClientRequest(1, "anna", null, null, null, ["10.8.0.3/32"], null, null, DnsMode: "panel")));
         var rule = DnsChecks.Check(
-            world with { Settings = On },
-            new DnsCheckRequest(Rule: new RouteRequest("yt", true, "out", "finland", ["youtube.com"], null, null)));
-        var dns = DnsChecks.Check(world with { Holders = [1] }, new DnsCheckRequest(Dns: new DnsRequest(false, 53, null, null, null, 60, 1000, 60, 3600)));
+            world with { Settings = On, TrafficRules = [new TrafficRule { Id = 1, Name = "youtube", Targets = ["youtube.com"] }] },
+            new DnsCheckRequest(Rule: new RouteRequest("yt", true, "out", "finland", [1], null, null)));
+        var dns = DnsChecks.Check(world with { Holders = [1] }, new DnsCheckRequest(Dns: new DnsRequest(false, 53, null, 60, 1000, 60, 3600)));
 
         Assert.Equal(
             "1.1.1.1,1.0.0.1 client panel False awg1",
@@ -342,7 +342,7 @@ public class DnsConflictsTests
     }
 
     private static DnsCheckRequest Resolver(string? mode, string[]? servers) =>
-        new(Dns: new DnsRequest(true, 53, ["https://1.1.1.1/dns-query"], string.Empty, [], 60, 1000, 0, 3600, mode, servers));
+        new(Dns: new DnsRequest(true, 53, [], 60, 1000, 0, 3600, mode, servers));
 
     private static IReadOnlyList<string> Said(DnsReport report) => Said(report.Findings);
 

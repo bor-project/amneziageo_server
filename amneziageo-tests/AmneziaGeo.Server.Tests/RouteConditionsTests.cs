@@ -116,7 +116,7 @@ public class RouteConditionsTests
 
     [Theory]
     [InlineData("bad name", "", "", "bad-rule-client")]
-    [InlineData("", "Awg1", "", "bad-rule-inbound")]
+    [InlineData("", "awg:1", "", "bad-rule-inbound")]
     [InlineData("", "", "0", "bad-source-port")]
     public void ABrokenConditionIsRefusedByCode(string client, string inbound, string port, string code)
     {
@@ -128,6 +128,15 @@ public class RouteConditionsTests
         };
 
         Assert.Equal(code, RouteRules.Check(rule)?.Code);
+    }
+
+    [Theory]
+    [InlineData("Awg1")]
+    [InlineData("bor.sytes.net")]
+    [InlineData("Москва")]
+    public void ExtendedInterfaceNamesCanBeSelectedByRoutingRules(string name)
+    {
+        Assert.Null(RouteRules.Check(Out() with { Inbounds = [name] }));
     }
 
     [Fact]
@@ -174,12 +183,17 @@ public class RouteConditionsTests
     }
 
     [Fact]
-    public void ABasicListTakesMoreTargetsThanARule()
+    public void AddressSetsAndLegacyImportsShareTheTargetLimit()
     {
-        var many = Enumerable.Range(1, 200).Select(at => $"10.{at}.0.0/16").ToArray();
+        var many = Enumerable.Range(0, RouteRules.MaxBasic).Select(at => $"10.{at / 256}.{at % 256}.0/24").ToArray();
+        var overflow = many.Append("192.0.2.0/24").ToArray();
 
+        Assert.Null(RouteRules.Check(new TrafficRule { Name = "addresses", Targets = many }));
         Assert.Null(RouteRules.CheckBasic(new RouteBasic { Block = many }));
-        Assert.Equal("too-many", RouteRules.Check(Out() with { Targets = many })?.Code);
+        Assert.Null(RouteRules.Check(Out() with { Targets = many }));
+        Assert.Equal("too-many", RouteRules.Check(new TrafficRule { Name = "addresses", Targets = overflow })?.Code);
+        Assert.Equal("too-many", RouteRules.Check(Out() with { Targets = overflow })?.Code);
+        Assert.Equal("too-many", RouteRules.CheckBasic(new RouteBasic { Direct = overflow })?.Code);
         Assert.Equal("bad-target", RouteRules.CheckBasic(new RouteBasic { Direct = ["what is this"] })?.Code);
     }
 

@@ -12,12 +12,11 @@ public static class DnsExit
     /// <summary>
     /// Returns the way out a question takes, handing the live members of a round balancer out by the turn.
     /// </summary>
-    public static DnsWay Way(DnsSettings settings, RouteWays ways, long turn = 0)
+    public static DnsWay Way(string name, RouteWays ways, long turn = 0)
     {
-        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(ways);
 
-        var name = settings.Outbound;
         if (name.Length == 0)
         {
             return DnsWay.Host;

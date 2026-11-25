@@ -234,21 +234,19 @@ public class TrafficLimitsContractTests
     {
         using var bench = new Bench();
         var client = await AddClientAsync(bench).ConfigureAwait(false);
-        var migrator = bench.Db.GetService<IMigrator>();
-        await migrator.MigrateAsync("RoutingDefaults").ConfigureAwait(false);
-        await migrator.MigrateAsync("TrafficLimits").ConfigureAwait(false);
-        await migrator.MigrateAsync().ConfigureAwait(false);
-        bench.Db.ChangeTracker.Clear();
+        await using var legacy = await LegacyDatabase.FromAsync(bench.Db, "RoutingDefaults").ConfigureAwait(false);
+        await legacy.MigrateAsync("TrafficLimits").ConfigureAwait(false);
+        await legacy.MigrateAsync().ConfigureAwait(false);
 
-        var saved = await bench.Clients.FindAsync(client.Id, CancellationToken.None).ConfigureAwait(false);
-        var templates = await bench.Templates.ListAsync(CancellationToken.None).ConfigureAwait(false);
+        var saved = await new ClientStore(legacy.Db).FindAsync(client.Id, CancellationToken.None).ConfigureAwait(false);
+        var templates = await new TemplateStore(legacy.Db).ListAsync(CancellationToken.None).ConfigureAwait(false);
 
         Assert.Equal(123, saved!.DailyLimit);
         Assert.Null(saved.Limits);
         Assert.False(saved.OverrideLimits);
         Assert.All(templates, template => Assert.Null(template.Limits));
-        Assert.Empty(await bench.Db.TrafficPeriods.ToListAsync().ConfigureAwait(false));
-        Assert.False(bench.Db.Database.HasPendingModelChanges());
+        Assert.Empty(await legacy.Db.TrafficPeriods.ToListAsync().ConfigureAwait(false));
+        Assert.False(legacy.Db.Database.HasPendingModelChanges());
     }
 
     [Fact]

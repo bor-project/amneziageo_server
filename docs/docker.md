@@ -195,8 +195,11 @@ AMNEZIAGEO_TAG=<earlier version> docker compose up -d
 ```
 
 The database stays as the newer panel left it. The copy from before the update goes back into the volume with
-`docker compose cp`, while the container is stopped. `amneziageo-server rollback` starts the container on the
-newest image of the same name the host keeps below the one it runs, and offers to put a copy of the database back.
+`docker compose cp`, while the container is stopped. This manual compose procedure does not select a matching
+database automatically. `amneziageo-server rollback` instead requires the snapshot bound to the target immutable
+image ID, saves the current database, and restores the matching database before starting the older image. It
+refuses before stopping if that binding is missing, and restores the current image and database if startup fails.
+See [updates.md](updates.md#rollback).
 
 ## How it differs from the package
 

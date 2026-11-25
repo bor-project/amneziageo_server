@@ -1,10 +1,12 @@
-# The ways out
+# Linked servers
 
-An outbound is a way traffic leaves the host: through the uplink of the host itself, through an
-AmneziaWG tunnel the host holds as a client of another server, or through such a tunnel carried inside a
-websocket to a wstunnel proxy. Every outbound carries a mark of its own;
-a packet marked with it is routed out through that outbound. The panel keeps the outbounds in SQLite and
-puts them on the host through the `ip` and `nft` tools.
+Linked servers are the registered connections used by routing rules and balancers. A connection can use an
+AmneziaWG tunnel, or carry that tunnel through a WebSocket proxy. The API retains the technical name `outbounds`.
+Each connection has its own mark and routing table; packets marked for it use that path.
+
+The panel opens a separate settings page from **Routing → Linked servers**. DNS saved here is the default source
+for address sets whose DNS mode is **Default**. The ordered rule chooses the server; no additional direction or
+channel object is required between them.
 
 ## Rights
 
@@ -35,7 +37,9 @@ caller without a fresh login is refused. Keys are answered only to a caller that
 | `wg` | an AmneziaWG interface the host raises as a client of another server |
 | `ws` | the same interface, with its UDP carried inside a websocket to a wstunnel proxy |
 
-A fresh database is seeded with one `local` outbound named `direct`.
+Direct access is selected in a routing rule rather than created as a linked server. Existing `local` paths remain
+internally available for old balancer memberships and marks. They are not listed or offered as new linked servers;
+a legacy selection remains distinguishable as direct access under its saved name.
 
 ## Through a websocket
 
@@ -66,7 +70,7 @@ without a path it comes under `v1`, the path of the endpoints of the releases be
 | Name | the name of the interface, up to 15 characters |
 | Address, Port | where the server is reached |
 | Interface address | the ranges the interface carries, as the server handed them out |
-| Name servers | the servers reachable through the tunnel |
+| Server DNS | the default resolvers reachable through this connection, including those read from an imported configuration |
 | MTU, Keepalive | the packet size and how often the path is held open |
 | Close private networks | whether a client is kept out of the private ranges behind the tunnel, on for a new tunnel |
 | Private key | the key of the interface; the public one is derived from it |
@@ -98,7 +102,7 @@ outbound. The panel does the same under `Probe now` in the row menu.
 ## Reading a client configuration
 
 `POST /api/outbounds/import` takes the `.conf` an AmneziaWG server hands its clients and answers with the
-outbound it carries: keys, address, obfuscation and endpoint. Nothing is stored: the answer is a draft the
+outbound it carries: keys, interface address, DNS, obfuscation and endpoint. Nothing is stored: the answer is a draft the
 panel fills the form with. In the panel the same thing is the field at the bottom of the form.
 
 ## The mark, the table and the rule
@@ -157,19 +161,11 @@ address of the tunnel.
 ## Putting it on the host
 
 Adding, changing, turning on and off, and removing an outbound each put it on the host straight away.
-Renaming an outbound writes the new name into the rules and the balancers that name it and into the settings of
-the resolver, the saved and the running ones alike, so nothing that left through the outbound loses it. An
-outbound that a rule, a balancer or the resolver leaves through is not removed: the panel answers
-`outbound-in-use` and names what holds it, and the page that removes it names every rule, balancer and the
-resolver at once. The part `Use` of the settings names the rules that leave through the outbound and the balancers
-it is in, each a link: a rule leaving through another way is moved onto the outbound there, a rule is not taken
-off it (another way is picked in the rule, `way-keeps-rules`), and only a rule that leaves through a way can be
-moved (`rule-not-out`); a balancer added there takes the outbound last, one taken off drops it, and the last
-outbound of a balancer stays (`no-members`). `PUT /api/outbounds/{id}` takes them in `rules` and `balancers`, the
-numbers of every rule and balancer that holds the outbound after the request; a request without a field leaves
-that side as it is. The resolver holds both the outbound its settings name and the one
-it asks through right now: while the two differ, that is while `pending` stands, neither of them is removed,
-and the refusal of the running one ends with `until it is restarted`.
+Renaming a linked server updates processing rules, balancer memberships and migrated member-DNS overrides that
+reference it. A referenced connection is not removed: the response is `outbound-in-use`. The settings and deletion
+page link to its rules and balancers. Rules select their processing object on their own page; the Use section here
+shows those references without independently retargeting them. Balancer memberships may still be edited here.
+DNS inheritance reads this connection's current saved DNS rather than an independent resolver-exit policy.
 `POST /api/outbounds/apply` goes over every outbound, rewrites the firewall table and lays the rules again;
 the panel does the same when it starts, so the outbounds and the rules come back after a reboot. An interface
 that already carries the server of its outbound and no other peer keeps it, with the handshake and the
@@ -193,6 +189,10 @@ runs without it answers with the outbound and the reason on it instead of failin
 `Routing:Sudo` to true runs `ip` and `nft` through `sudo -n`.
 
 ## What the panel shows
+
+The linked-server list links to separate editors and shows its saved DNS with its address and state. The settings
+page retains configuration import, keys, obfuscation, probes and availability controls. Save and Cancel return to
+the originating list; opening this page from an unfinished rule retains that rule for the return.
 
 The table names the kind, the server, the mark and the table, the last handshake and the traffic each way.
 A `ws` outbound names the server behind the proxy, and the proxy itself stands in the form.
