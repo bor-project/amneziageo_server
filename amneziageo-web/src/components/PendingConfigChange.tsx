@@ -1,3 +1,4 @@
+import { reason } from "@/api/auth"
 import { useState } from "react"
 import { useApplyPendingConfig, useCancelPendingConfig, usePendingConfig, failure } from "@/api/configs"
 import { Dialog } from "@/components/Dialog"
@@ -22,7 +23,7 @@ export function PendingConfigChange({ id }: { id: number }) {
         <button className={primary} disabled={busy || change.stale} onClick={() => setAsking(true)}>{t("configs.applyNow")}</button>
       </div>
     </div>
-    {change.stale && <p role="alert" className="mt-2 text-alarm">{t("error.configChangeStale")}</p>}
+    {change.preview.addressFault ? <p role="alert" className="mt-2 text-alarm">{t(reason(change.preview.addressFault.code))}</p> : change.stale && <p role="alert" className="mt-2 text-alarm">{t("error.configChangeStale")}</p>}
     {(apply.error || cancel.error) && <p role="alert" className="mt-2 text-alarm">{failure(t, apply.error || cancel.error)}</p>}
     {asking && <Dialog title={t("configs.applyChangeTitle")} onClose={() => { if (!busy) setAsking(false) }} actions={<>
       <button className={secondary} disabled={busy} onClick={() => setAsking(false)}>{t("configs.cancel")}</button>

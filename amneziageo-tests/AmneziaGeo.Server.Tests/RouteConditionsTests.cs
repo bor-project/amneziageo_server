@@ -116,7 +116,7 @@ public class RouteConditionsTests
 
     [Theory]
     [InlineData("bad name", "", "", "bad-rule-client")]
-    [InlineData("", "Awg1", "", "bad-rule-inbound")]
+    [InlineData("", "awg:1", "", "bad-rule-inbound")]
     [InlineData("", "", "0", "bad-source-port")]
     public void ABrokenConditionIsRefusedByCode(string client, string inbound, string port, string code)
     {
@@ -128,6 +128,15 @@ public class RouteConditionsTests
         };
 
         Assert.Equal(code, RouteRules.Check(rule)?.Code);
+    }
+
+    [Theory]
+    [InlineData("Awg1")]
+    [InlineData("bor.sytes.net")]
+    [InlineData("Москва")]
+    public void ExtendedInterfaceNamesCanBeSelectedByRoutingRules(string name)
+    {
+        Assert.Null(RouteRules.Check(Out() with { Inbounds = [name] }));
     }
 
     [Fact]

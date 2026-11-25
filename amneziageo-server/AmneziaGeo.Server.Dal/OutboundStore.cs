@@ -281,7 +281,12 @@ public sealed class OutboundStore
             return true;
         }
 
-        return await _db.Balancers.AnyAsync(one => one.Name == body, ct).ConfigureAwait(false);
+        if (await _db.Balancers.AnyAsync(one => one.Name == body, ct).ConfigureAwait(false))
+        {
+            return true;
+        }
+        var unchanged = id > 0 && await _db.Outbounds.AnyAsync(one => one.Id == id && one.Name == body, ct).ConfigureAwait(false);
+        return !unchanged && await _db.Configs.AnyAsync(one => one.Name == body, ct).ConfigureAwait(false);
     }
 
     private async Task<uint> FreeMarkAsync(CancellationToken ct)

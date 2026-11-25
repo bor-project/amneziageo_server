@@ -74,7 +74,7 @@ public sealed class SystemdProxies : IProxyRunner
     /// </summary>
     public async Task<ProxyState> StopAsync(string name, CancellationToken ct)
     {
-        await _commands.RunAsync(Tool, ["disable", "--now", $"{ProxyDefaults.RelayService}@{name}"], null, ct).ConfigureAwait(false);
+        await _commands.RunAsync(Tool, ["disable", "--now", $"{ProxyDefaults.RelayService}@{ProxyFile.Identity(name)}"], null, ct).ConfigureAwait(false);
 
         return await RunAsync(["disable", "--now", ProxyHost.Unit(name)], ProxyState.Down, ct).ConfigureAwait(false);
     }

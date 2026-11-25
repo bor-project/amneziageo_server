@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { span } from "@/address"
 import { complaint } from "@/api/auth"
@@ -6,6 +6,8 @@ import { isPlainObfuscation, plainObfuscation } from "@/api/plainWireGuard"
 import { downedOf, failure, useConfigs, useFreshConfig, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
 import type { ConfigDraft, Obfuscation } from "@/api/configs"
 import { useClients } from "@/api/clients"
+import { useOutbounds } from "@/api/outbounds"
+import { interfaceNameFault, interfaceNameValue } from "@/components/interfaceNames"
 import type { Inbound } from "@/api/clients"
 import { useDnsCheck, useResolver } from "@/api/dns"
 import { usePortState } from "@/api/firewall"
@@ -57,6 +59,9 @@ export function ConfigForm({
   const keys = useKeyPair()
   const shared = usePresharedKey()
   const configs = useConfigs().data ?? []
+  const outbounds = useOutbounds().data ?? []
+  const nameCustomized = useRef(self !== undefined)
+  const nameChanges = useRef(0)
   const user = useAppSelector((s) => s.auth.user)
   const members = clientItems((useClients().data ?? []).filter((one) => one.configId === self))
   const rules = useRoutingEntries().data ?? []
@@ -109,7 +114,7 @@ export function ConfigForm({
         ]
       : []
   const socket = pathFault(t, draft.webSocketPath, draft.webSocket ? servicesAt : null, claimed)
-  const name = nameFault(t, draft.name, others.map((one) => one.name))
+  const name = interfaceNameFault(t, draft.name, [...others.map((one) => one.name), ...(self !== undefined && interfaceNameValue(draft.name) === start.name ? [] : outbounds.map((one) => one.name))])
   const address = addressFault(t, draft.address)
   const host = hostFault(t, draft)
   const edited = !same(applied, start) || opening
@@ -175,9 +180,14 @@ export function ConfigForm({
   }
 
   async function take() {
-    const found = await read.mutateAsync({ name: draft.name, text })
-    setDraft({
-      ...draft,
+    const revision = nameChanges.current
+    const found = await read.mutateAsync({ name: nameCustomized.current ? draft.name : "", text }).catch(() => null)
+    if (found === null) {
+      return
+    }
+    setDraft((current) => ({
+      ...current,
+      name: nameChanges.current === revision ? found.name : current.name,
       listenPort: found.listenPort,
       address: found.address,
       dns: found.dns,
@@ -186,7 +196,7 @@ export function ConfigForm({
       keepalive: found.keepalive,
       privateKey: found.privateKey ?? "",
       obfuscation: found.obfuscation,
-    })
+    }))
     setAmnezia(!isPlainObfuscation(found.obfuscation))
     setShown(found.publicKey)
   }
@@ -214,7 +224,11 @@ export function ConfigForm({
           id="config-name"
           caption={t("configs.name")}
           value={draft.name}
-          onChange={(value) => put({ name: value })}
+          onChange={(value) => {
+            nameCustomized.current = true
+            nameChanges.current++
+            put({ name: value })
+          }}
           fault={name}
         />
         <Line
@@ -493,18 +507,6 @@ export function ConfigForm({
       )}
     </div>
   )
-}
-
-function nameFault(t: Text, name: string, taken: string[]): string {
-  if (name.length === 0) {
-    return ""
-  }
-
-  if (name.length > 15 || !/^[a-z][a-z0-9_-]*$/.test(name)) {
-    return t("error.badInterfaceName")
-  }
-
-  return taken.includes(name) ? t("error.nameTaken") : ""
 }
 
 function hostFault(t: Text, draft: ConfigDraft): string {

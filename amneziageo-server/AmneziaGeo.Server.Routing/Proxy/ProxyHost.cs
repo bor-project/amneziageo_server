@@ -36,7 +36,7 @@ public sealed partial class ProxyHost
     /// <summary>
     /// Returns the service the front of an interface runs as.
     /// </summary>
-    public static string Unit(string name) => $"{ProxyDefaults.Service}@{name}";
+    public static string Unit(string name) => $"{ProxyDefaults.Service}@{ProxyFile.Identity(name)}";
 
     /// <summary>
     /// Returns the file the allowed target of a front is written to.

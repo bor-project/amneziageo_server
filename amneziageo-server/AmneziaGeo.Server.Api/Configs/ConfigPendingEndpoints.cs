@@ -23,7 +23,8 @@ public static partial class ConfigEndpoints
         {
             return Refuse(400, invalid.Code, invalid.Message);
         }
-        return Results.Ok(await changes.PreviewAsync(held, draft, ct).ConfigureAwait(false));
+        var preview = await changes.PreviewAsync(held, draft, ct).ConfigureAwait(false);
+        return preview.AddressFault is { } fault ? Refuse(409, fault.Code, fault.Message) : Results.Ok(preview);
     }
 
     private static async Task<IResult> PendingAsync(long id, ConfigStore store, ConfigDraftStore drafts, ConfigChangeReader changes, CancellationToken ct)
@@ -37,7 +38,7 @@ public static partial class ConfigEndpoints
         var request = JsonSerializer.Deserialize<ConfigRequest>(pending.Payload) ?? throw new InvalidDataException("the pending interface change is empty");
         var impact = await changes.PreviewAsync(held, ConfigAnswers.Draft(request, held), ct).ConfigureAwait(false);
         return Results.Ok(new PendingConfigBody(id, held.Name, pending.CreatedUtc,
-            ConfigDraftStore.Revision(held) != pending.BaseRevision || request.ExpectedClientsRevision != impact.ClientsRevision,
+            ConfigDraftStore.Revision(held) != pending.BaseRevision || request.ExpectedClientsRevision != impact.ClientsRevision || impact.AddressFault is not null,
             impact, ConfigDraftStore.PayloadRevision(pending.Payload)));
     }
 

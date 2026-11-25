@@ -87,7 +87,8 @@ export function ClientForm({
   const user = useAppSelector((s) => s.auth.user)
   const rules = useRoutingEntries().data ?? []
   const mayRoute = holds(user, scopes.manageRouting)
-  const endpoint = configs.find((one) => one.id === draft.configId)?.name ?? ""
+  const config = configs.find((one) => one.id === draft.configId)
+  const endpoint = config?.name ?? ""
   const naming = start.name.length === 0 ? [] : rules.filter((one) => names(one, "clients", start.name))
   const picked = draft.rules ?? naming.map((one) => one.id)
   const lastOnes = naming.filter((one) => one.clients.length === 1).map((one) => String(one.id))
@@ -182,6 +183,7 @@ export function ClientForm({
           id="client-preshared"
           caption={t("clients.preshared")}
           value={draft.presharedKey}
+          placeholder={config?.hasPresharedKey || config?.presharedKey ? t("clients.interfacePreshared") : ""}
           onChange={(presharedKey) => put({ presharedKey })}
           after={<Regenerate title={t("clients.generate")} onClick={() => put({ presharedKey: randomKey() })} />}
         />
@@ -280,7 +282,7 @@ export function ClientForm({
         )}
       </Part>
 
-      <Part title={t("trafficLimits.title")}>
+      <Part title={t("clients.partLimitsAccess")}>
         <TrafficLimitsFields
           id="client-limits"
           input={limits.input}
@@ -289,9 +291,6 @@ export function ClientForm({
           readOnly={limitsLoading}
         />
         {draft.templateId === null && defaults.error !== null && <div className="text-sm text-alarm sm:col-span-2">{t(complaint(defaults.error))}</div>}
-      </Part>
-
-      <Part title={t("clients.partAccess")}>
         {!limitsOn && (
           <Line
             id="client-limit"

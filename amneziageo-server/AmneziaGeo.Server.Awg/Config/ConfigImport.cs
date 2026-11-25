@@ -34,7 +34,7 @@ public static class ConfigImport
         return new ConfigImportResult(
             new ServerConfig
             {
-                Name = name,
+                Name = name.Length > 0 ? name : InterfaceNames.Suggest(ConfigLines.Parts(ConfigLines.Value(self, "Address")).FirstOrDefault(), [], "awg0"),
                 ListenPort = ConfigLines.Number(self, "ListenPort", ConfigDefaults.ListenPort),
                 Address = ConfigLines.Parts(ConfigLines.Value(self, "Address")),
                 Dns = [.. ConfigDefaults.Dns],
