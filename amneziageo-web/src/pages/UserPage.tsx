@@ -3,7 +3,6 @@ import { Link, Navigate, useNavigate, useParams } from "react-router-dom"
 import { complaint } from "@/api/auth"
 import { useRoles } from "@/api/roles"
 import { fresh, useAddUser, useChangeUser, useUsers } from "@/api/users"
-import { HeadActions } from "@/components/Section"
 import { useTail } from "@/components/crumbs"
 import { Flag, Line, Part, Pick, Regenerate, Switch } from "@/components/fields"
 import { danger, field, footer, label, primary, secondary } from "@/components/styles"
@@ -158,16 +157,6 @@ function HeldUser({ name }: { name: string }) {
 
   return (
     <div className="mt-4 flex flex-col gap-4">
-      <HeadActions>
-        <button
-          type="button"
-          onClick={() => navigate(`/settings/users/${name}/password`)}
-          className={`flex h-10 items-center ${secondary}`}
-        >
-          {t("users.password")}
-        </button>
-      </HeadActions>
-
       <Part title={t("users.partMain")}>
         <div className="sm:col-span-2">
           <Switch id="edit-enabled" caption={t("users.on")} value={on} onChange={setEnabled} />
@@ -191,6 +180,16 @@ function HeldUser({ name }: { name: string }) {
         ) : (
           <div />
         )}
+
+        <div className="sm:col-span-2">
+          <button
+            type="button"
+            onClick={() => navigate(`/settings/users/${name}/password`)}
+            className={secondary}
+          >
+            {t("users.changePassword")}
+          </button>
+        </div>
 
         {held.hostUser.length > 0 && (
           <div className="sm:col-span-2">

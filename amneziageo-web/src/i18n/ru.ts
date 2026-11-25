@@ -1088,6 +1088,7 @@ export const ru: Dictionary = {
   "users.password": "Пароль",
   "users.remove": "Удалить",
   "users.newTitle": "Новая учётная запись",
+  "users.changePassword": "Изменить пароль",
   "users.passwordTitle": "Пароль {name}",
   "users.removeTitle": "Удалить {name}?",
   "users.mustChange": "Потребовать смену пароля",

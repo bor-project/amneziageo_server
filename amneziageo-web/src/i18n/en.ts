@@ -1089,6 +1089,7 @@ export const en = {
   "users.password": "Password",
   "users.remove": "Remove",
   "users.newTitle": "New account",
+  "users.changePassword": "Change password",
   "users.passwordTitle": "Password of {name}",
   "users.removeTitle": "Remove {name}?",
   "users.mustChange": "Require a password change",
