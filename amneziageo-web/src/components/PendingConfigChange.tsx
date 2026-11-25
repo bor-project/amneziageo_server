@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useApplyPendingConfig, useCancelPendingConfig, usePendingConfig, failure } from "@/api/configs"
 import { Dialog } from "@/components/Dialog"
+import { configChangeField } from "@/components/configChangeFields"
 import { card, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 
@@ -27,9 +28,10 @@ export function PendingConfigChange({ id }: { id: number }) {
       <button className={secondary} disabled={busy} onClick={() => setAsking(false)}>{t("configs.cancel")}</button>
       <button className={primary} disabled={busy} onClick={() => apply.mutate(id, { onSuccess: () => setAsking(false) })}>{t("configs.applyNow")}</button>
     </>}>
+      <div>{t("configs.interfaceChange", { name: change.name })}</div>
       <div>{t("configs.affectedClients", { count: change.preview.clients.length })}</div>
       {change.preview.clients.some(one => one.requiresCoordination) && <div className="mt-2 text-alarm">{t("configs.connectionChangeWarning")}</div>}
-      <div className="mt-2 max-h-56 overflow-auto">{change.preview.clients.map(one => <div key={one.id} className="break-words">{one.name}: {one.fields.join(", ")}</div>)}</div>
+      <div className="mt-2 max-h-56 overflow-auto">{change.preview.clients.map(one => <div key={one.id} className="break-words">{one.name}: {one.fields.map(field => configChangeField(t, field)).join(", ")}</div>)}</div>
       {apply.error && <div role="alert" className="text-alarm">{failure(t, apply.error)}</div>}
     </Dialog>}
   </section>

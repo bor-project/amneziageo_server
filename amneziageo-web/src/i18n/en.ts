@@ -1,4 +1,7 @@
 export const en = {
+  "configs.interfaceChange": "Interface: {name}",
+  "configs.replacePendingChange": "Replace the existing pending change?",
+  "error.configChangePending": "This interface has a pending change. Confirm its replacement or discard it first.",
   "configs.connectionChangeWarning": "Connections may be interrupted until client configurations are updated.",
   "configs.pendingChange": "Pending interface change",
   "configs.discardChange": "Discard",

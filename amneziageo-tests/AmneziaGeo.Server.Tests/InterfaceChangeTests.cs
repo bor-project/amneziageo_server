@@ -7,6 +7,7 @@ using AmneziaGeo.Server.Routing.Dns;
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Dal;
+using AmneziaGeo.Server.Core.Crypto;
 using Microsoft.EntityFrameworkCore;
 
 #pragma warning disable xUnit1030
@@ -102,7 +103,7 @@ public sealed class InterfaceChangeTests
         var held = (await created.Content.ReadFromJsonAsync<ConfigResponse>().ConfigureAwait(false))!;
         using var saved = await api.PutAsJsonAsync($"/api/configs/{held.Id}", Request(endpoint with { Mtu = 1300 }) with { Defer = true }).ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
-        await bench.Configs.SwitchAsync(held.Id, false, default).ConfigureAwait(false);
+        await bench.Configs.OpenedAsync(held.Id, true, default).ConfigureAwait(false);
         using var stale = await api.PostAsync($"/api/configs/{held.Id}/pending/apply", null).ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
         Assert.Equal(held.Mtu, (await api.GetFromJsonAsync<ConfigResponse>($"/api/configs/{held.Id}").ConfigureAwait(false))!.Mtu);
@@ -138,6 +139,112 @@ public sealed class InterfaceChangeTests
         Assert.True(ConfigurationRevision.RequiresCoordination(["[interface].H1", "[interface].HeaderProtectionKey"]));
         Assert.True(ConfigurationRevision.RequiresCoordination(["[interface].FutureField"]));
         Assert.False(ConfigurationRevision.RequiresCoordination(["[interface].Jc", "[interface].I1", "[interface].RekeyTimeout"]));
+    }
+
+    [Fact]
+    public async Task ApiPreviewUsesThePublicKeyAndOnlyReportsEffectiveClientChanges()
+    {
+        using var bench = new Bench();
+        await using var app = await PlainWireGuardApiTests.CreateAsync(bench).ConfigureAwait(false);
+        using var api = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
+        var endpoint = ConfigDefaults.Fresh("preview838") with { IsEnabled = false, Host = "vpn.example" };
+        using var created = await api.PostAsJsonAsync("/api/configs", Request(endpoint)).ConfigureAwait(false);
+        var held = (await created.Content.ReadFromJsonAsync<ConfigResponse>().ConfigureAwait(false))!;
+        var template = (await bench.Templates.AddAsync(new ClientTemplate { Name = "mtu", Mtu = 1280 }, default).ConfigureAwait(false)).Record!;
+        await bench.Clients.AddAsync(ClientDefaults.Fresh(held.Id, "inherited"), default).ConfigureAwait(false);
+        await bench.Clients.AddAsync(ClientDefaults.Fresh(held.Id, "overridden") with { TemplateId = template.Id }, default).ConfigureAwait(false);
+        foreach (var one in new[] { endpoint, endpoint with { Nat = !endpoint.Nat }, endpoint with { OfflineAfter = endpoint.OfflineAfter + 1 }, endpoint with { Opened = !endpoint.Opened } })
+        {
+            using var preview = await api.PostAsJsonAsync($"/api/configs/{held.Id}/preview", Request(one)).ConfigureAwait(false);
+            Assert.Equal(HttpStatusCode.OK, preview.StatusCode);
+            Assert.Empty((await preview.Content.ReadFromJsonAsync<ConfigChangePreview>().ConfigureAwait(false))!.Clients);
+        }
+        using var mtu = await api.PostAsJsonAsync($"/api/configs/{held.Id}/preview", Request(endpoint with { Mtu = 1300 })).ConfigureAwait(false);
+        var affected = Assert.Single((await mtu.Content.ReadFromJsonAsync<ConfigChangePreview>().ConfigureAwait(false))!.Clients);
+        Assert.Equal("inherited", affected.Name);
+        Assert.Equal(["[interface].mtu"], affected.Fields);
+        Assert.False(affected.RequiresCoordination);
+        var key = Curve25519.Create().PrivateKey;
+        using var changed = await api.PostAsJsonAsync($"/api/configs/{held.Id}/preview", Request(endpoint with { PrivateKey = key })).ConfigureAwait(false);
+        var impact = (await changed.Content.ReadFromJsonAsync<ConfigChangePreview>().ConfigureAwait(false))!;
+        Assert.Equal(2, impact.Clients.Count);
+        Assert.All(impact.Clients, one => Assert.Equal(["[peer]1.publickey"], one.Fields));
+        using var applied = await api.PutAsJsonAsync($"/api/configs/{held.Id}", Request(endpoint with { PrivateKey = key })).ConfigureAwait(false);
+        Assert.Equal(HttpStatusCode.OK, applied.StatusCode);
+        var actual = (await bench.Configs.FindAsync(held.Id, default).ConfigureAwait(false))!;
+        foreach (var client in await bench.Clients.ListAsync(held.Id, default).ConfigureAwait(false))
+        {
+            var effective = await bench.Templates.EffectiveAsync(client.TemplateId, default).ConfigureAwait(false);
+            Assert.Equal(impact.Clients.Single(one => one.Id == client.Id).Revision, ConfigurationRevision.Of(ClientText.Text(actual, client, effective)));
+        }
+    }
+
+    [Fact]
+    public async Task NoOpActionsDoNotInvalidateThePendingChange()
+    {
+        using var bench = new Bench();
+        await using var app = await PlainWireGuardApiTests.CreateAsync(bench).ConfigureAwait(false);
+        using var api = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
+        var endpoint = ConfigDefaults.Fresh("noop838") with { IsEnabled = false, Host = "vpn.example" };
+        using var created = await api.PostAsJsonAsync("/api/configs", Request(endpoint)).ConfigureAwait(false);
+        var held = (await created.Content.ReadFromJsonAsync<ConfigResponse>().ConfigureAwait(false))!;
+        using var saved = await api.PutAsJsonAsync($"/api/configs/{held.Id}", Request(endpoint with { Mtu = 1300 }) with { Defer = true }).ConfigureAwait(false);
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var before = (await bench.Configs.FindAsync(held.Id, default).ConfigureAwait(false))!;
+        Assert.Equal(ConfigDraftStore.Revision(before), ConfigDraftStore.Revision(before with { UpdatedUtc = before.UpdatedUtc.AddMinutes(1) }));
+        await bench.Configs.SwitchAsync(held.Id, false, default).ConfigureAwait(false);
+        await bench.Configs.OpenedAsync(held.Id, before.Opened, default).ConfigureAwait(false);
+        await bench.Configs.DefaultAsync(held.Id, default).ConfigureAwait(false);
+        Assert.False((await api.GetFromJsonAsync<PendingConfigBody>($"/api/configs/{held.Id}/pending").ConfigureAwait(false))!.Stale);
+        using var applied = await api.PostAsync($"/api/configs/{held.Id}/pending/apply", null).ConfigureAwait(false);
+        Assert.Equal(HttpStatusCode.OK, applied.StatusCode);
+    }
+
+    [Fact]
+    public async Task PendingChangesRequireExplicitReplacementAndRejectConcurrentReplacement()
+    {
+        using var bench = new Bench();
+        await using var app = await PlainWireGuardApiTests.CreateAsync(bench).ConfigureAwait(false);
+        using var api = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
+        var endpoint = ConfigDefaults.Fresh("replace838") with { IsEnabled = false, Host = "vpn.example" };
+        using var created = await api.PostAsJsonAsync("/api/configs", Request(endpoint)).ConfigureAwait(false);
+        var held = (await created.Content.ReadFromJsonAsync<ConfigResponse>().ConfigureAwait(false))!;
+        using var saved = await api.PutAsJsonAsync($"/api/configs/{held.Id}", Request(endpoint with { Mtu = 1300 }) with { Defer = true }).ConfigureAwait(false);
+        var pending = (await api.GetFromJsonAsync<PendingConfigBody>($"/api/configs/{held.Id}/pending").ConfigureAwait(false))!;
+        Assert.NotEmpty(pending.DraftRevision);
+        foreach (var defer in new[] { false, true })
+        {
+            using var blocked = await api.PutAsJsonAsync($"/api/configs/{held.Id}", Request(endpoint with { Mtu = 1250 }) with { Defer = defer }).ConfigureAwait(false);
+            Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+            Assert.Contains("config-change-pending", await blocked.Content.ReadAsStringAsync().ConfigureAwait(false));
+        }
+        using var replaced = await api.PutAsJsonAsync($"/api/configs/{held.Id}", Request(endpoint with { Mtu = 1250 }) with { Defer = true, ExpectedDraftRevision = pending.DraftRevision }).ConfigureAwait(false);
+        Assert.Equal(HttpStatusCode.OK, replaced.StatusCode);
+        using var stale = await api.PutAsJsonAsync($"/api/configs/{held.Id}", Request(endpoint with { Mtu = 1200 }) with { ExpectedDraftRevision = pending.DraftRevision }).ConfigureAwait(false);
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        Assert.Equal(held.Mtu, (await bench.Configs.FindAsync(held.Id, default).ConfigureAwait(false))!.Mtu);
+        using var applied = await api.PostAsync($"/api/configs/{held.Id}/pending/apply", null).ConfigureAwait(false);
+        Assert.Equal(HttpStatusCode.OK, applied.StatusCode);
+        Assert.Equal(1250, (await bench.Configs.FindAsync(held.Id, default).ConfigureAwait(false))!.Mtu);
+    }
+
+    [Fact]
+    public async Task LegacyPendingChangesRemainVisibleAndRequirePreparationAgain()
+    {
+        using var bench = new Bench();
+        await using var app = await PlainWireGuardApiTests.CreateAsync(bench).ConfigureAwait(false);
+        using var api = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
+        var endpoint = ConfigDefaults.Fresh("legacy838") with { IsEnabled = false, Host = "vpn.example" };
+        using var created = await api.PostAsJsonAsync("/api/configs", Request(endpoint)).ConfigureAwait(false);
+        var held = (await created.Content.ReadFromJsonAsync<ConfigResponse>().ConfigureAwait(false))!;
+        using var saved = await api.PutAsJsonAsync($"/api/configs/{held.Id}", Request(endpoint with { Mtu = 1300 }) with { Defer = true }).ConfigureAwait(false);
+        bench.Db.ChangeTracker.Clear();
+        await bench.Db.Database.ExecuteSqlInterpolatedAsync($"UPDATE ConfigDrafts SET BaseRevision = {new string('a', 64)} WHERE ConfigId = {held.Id}").ConfigureAwait(false);
+        Assert.True((await api.GetFromJsonAsync<PendingConfigBody>($"/api/configs/{held.Id}/pending").ConfigureAwait(false))!.Stale);
+        using var refused = await api.PostAsync($"/api/configs/{held.Id}/pending/apply", null).ConfigureAwait(false);
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        using var discarded = await api.DeleteAsync($"/api/configs/{held.Id}/pending").ConfigureAwait(false);
+        Assert.Equal(HttpStatusCode.NoContent, discarded.StatusCode);
     }
 
     private static ConfigRequest Request(ServerConfig config) => new(config.Name, config.Host, config.ListenPort,

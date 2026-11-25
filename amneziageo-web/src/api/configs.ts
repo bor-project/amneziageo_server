@@ -87,6 +87,7 @@ export interface ConfigDraft {
   obfuscation: Obfuscation
   defer?: boolean
   expectedRevision?: string
+  expectedDraftRevision?: string
   expectedClientsRevision?: string
   rules?: number[]
 }
@@ -181,6 +182,7 @@ export function downedOf(error: unknown): Downed | null {
 }
 
 export function failure(t: Text, error: unknown): string {
+  if (axios.isAxiosError(error) && error.response?.data?.error === "config-change-pending") return t("error.configChangePending")
   if (axios.isAxiosError(error) && error.response?.data?.error === "config-change-stale") return t("error.configChangeStale")
   const downed = downedOf(error)
   if (downed?.error === "raise-failed") {
@@ -247,14 +249,15 @@ export interface PendingConfigChange {
   name: string
   createdUtc: string
   stale: boolean
+  draftRevision: string
   preview: ConfigChangePreview
 }
 export function useConfigPreview() {
   return useMutation({ mutationFn: async ({ id, draft }: { id: number; draft: ConfigDraft & Holding }) =>
     (await client.post<ConfigChangePreview>(`/configs/${id}/preview`, draft)).data })
 }
-export function usePendingConfig(id: number) {
-  return useQuery({ queryKey: ["configs", id, "pending"], queryFn: async () => {
+export function usePendingConfig(id: number, enabled = true) {
+  return useQuery({ queryKey: ["configs", id, "pending"], enabled, queryFn: async () => {
     const reply = await client.get<PendingConfigChange>(`/configs/${id}/pending`)
     return reply.status === 204 ? null : reply.data
   } })

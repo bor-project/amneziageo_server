@@ -37,7 +37,8 @@ public static partial class ConfigEndpoints
         var request = JsonSerializer.Deserialize<ConfigRequest>(pending.Payload) ?? throw new InvalidDataException("the pending interface change is empty");
         var impact = await changes.PreviewAsync(held, ConfigAnswers.Draft(request, held), ct).ConfigureAwait(false);
         return Results.Ok(new PendingConfigBody(id, held.Name, pending.CreatedUtc,
-            ConfigDraftStore.Revision(held) != pending.BaseRevision || request.ExpectedClientsRevision != impact.ClientsRevision, impact));
+            ConfigDraftStore.Revision(held) != pending.BaseRevision || request.ExpectedClientsRevision != impact.ClientsRevision,
+            impact, ConfigDraftStore.PayloadRevision(pending.Payload)));
     }
 
     private static async Task<IResult> CancelPendingAsync(long id, ConfigDraftStore drafts, EndpointKeeper keeper, CancellationToken ct)

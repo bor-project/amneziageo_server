@@ -8,7 +8,7 @@ namespace AmneziaGeo.Server.Api.Configs;
 
 public sealed record ClientConfigChange(long Id, string Name, string Revision, IReadOnlyList<string> Fields, bool RequiresCoordination);
 public sealed record ConfigChangePreview(string BaseRevision, IReadOnlyList<ClientConfigChange> Clients, string ClientsRevision);
-public sealed record PendingConfigBody(long ConfigId, string Name, DateTimeOffset CreatedUtc, bool Stale, ConfigChangePreview Preview);
+public sealed record PendingConfigBody(long ConfigId, string Name, DateTimeOffset CreatedUtc, bool Stale, ConfigChangePreview Preview, string DraftRevision = "");
 
 public sealed class ConfigChangeReader(ClientStore clients, TemplateStore templates, DnsStore dns, DnsState resolver)
 {

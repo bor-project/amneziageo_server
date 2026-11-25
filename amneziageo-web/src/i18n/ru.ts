@@ -1,6 +1,9 @@
 import type { Dictionary } from "./en"
 
 export const ru: Dictionary = {
+  "configs.interfaceChange": "Интерфейс: {name}",
+  "configs.replacePendingChange": "Заменить существующее отложенное изменение?",
+  "error.configChangePending": "У интерфейса есть отложенное изменение. Подтвердите его замену или сначала отмените его.",
   "configs.connectionChangeWarning": "Подключения могут прерваться до обновления конфигураций клиентов.",
   "configs.pendingChange": "Отложенное изменение интерфейса",
   "configs.discardChange": "Отменить изменение",

@@ -25,7 +25,8 @@ public sealed class ConfigDraftStore(AppDbContext db, TimeProvider time)
     /// <summary>
     /// Returns the interface revision.
     /// </summary>
-    public static string Revision(ServerConfig config) => Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(config)));
+    public static string Revision(ServerConfig config) => "v2:" + Convert.ToHexStringLower(SHA256.HashData(
+        JsonSerializer.SerializeToUtf8Bytes(config with { CreatedUtc = default, UpdatedUtc = default })));
 
     public static string PayloadRevision(string payload) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
 

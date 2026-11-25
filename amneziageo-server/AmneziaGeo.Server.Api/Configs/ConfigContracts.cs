@@ -1,5 +1,6 @@
 using AmneziaGeo.Server.Awg.Client;
 using AmneziaGeo.Server.Awg.Config;
+using AmneziaGeo.Server.Core.Crypto;
 
 namespace AmneziaGeo.Server.Api.Configs;
 
@@ -203,6 +204,9 @@ public static class ConfigAnswers
     /// </summary>
     public static ServerConfig Draft(ConfigRequest request, ServerConfig? held = null) => new()
     {
+        Id = held?.Id ?? 0,
+        CreatedUtc = held?.CreatedUtc ?? default,
+        UpdatedUtc = held?.UpdatedUtc ?? default,
         Name = (request.Name ?? string.Empty).Trim(),
         Host = (request.Host ?? string.Empty).Trim(),
         ListenPort = request.ListenPort,
@@ -224,6 +228,8 @@ public static class ConfigAnswers
         WebSocketPath = (request.WebSocketPath ?? held?.WebSocketPath ?? string.Empty).Trim().Trim('/'),
         Blocked = request.Blocked ?? [],
         PrivateKey = (request.PrivateKey ?? string.Empty).Trim(),
+        PublicKey = Curve25519.IsKey(request.PrivateKey?.Trim())
+            ? Curve25519.PublicOf(request.PrivateKey!.Trim()) : held?.PublicKey ?? string.Empty,
         PresharedKey = (request.PresharedKey ?? string.Empty).Trim(),
         Obfuscation = Settings(request.Obfuscation),
     };

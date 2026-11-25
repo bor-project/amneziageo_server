@@ -190,13 +190,17 @@ public static partial class ConfigEndpoints
         {
             return Refuse(409, "config-change-stale", "the interface changed after the draft was prepared");
         }
+        var pending = await drafts.FindAsync(id, ct).ConfigureAwait(false);
         if (request.ExpectedDraftRevision is { } draftRevision)
         {
-            var pending = await drafts.FindAsync(id, ct).ConfigureAwait(false);
             if (pending is null || ConfigDraftStore.PayloadRevision(pending.Payload) != draftRevision)
             {
                 return Refuse(409, "config-change-stale", "the pending interface change was replaced or cancelled");
             }
+        }
+        else if (pending is not null)
+        {
+            return Refuse(409, "config-change-pending", "confirm replacement of the pending interface change");
         }
         var draft = ConfigAnswers.Draft(request, held);
         if (ConfigRules.CheckReach(draft) is { } unreached)

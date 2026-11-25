@@ -1,9 +1,10 @@
 import { useState } from "react"
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
-import { downedOf, draftOf, failure, useAddConfig, useChangeConfig, useConfigPreview, useConfigs, useFreshConfig } from "@/api/configs"
+import { downedOf, draftOf, failure, useAddConfig, useChangeConfig, useConfigPreview, useConfigs, useFreshConfig, usePendingConfig } from "@/api/configs"
 import type { ConfigChangePreview, ConfigDraft } from "@/api/configs"
 import type { Holding } from "@/api/firewall"
 import { Dialog } from "@/components/Dialog"
+import { configChangeField } from "@/components/configChangeFields"
 import { PendingConfigChange } from "@/components/PendingConfigChange"
 import { primary, secondary } from "@/components/styles"
 import type { Config } from "@/api/configs"
@@ -68,9 +69,10 @@ function HeldConfig({ configId }: { configId: number }) {
   const configs = useConfigs()
   const change = useChangeConfig()
   const preview = useConfigPreview()
-  const [proposed, setProposed] = useState<{ draft: ConfigDraft & Holding; preview: ConfigChangePreview } | null>(null)
-  const [round, setRound] = useState(0)
   const may = holds(user, scopes.manageInterfaces)
+  const pending = usePendingConfig(configId, may)
+  const [proposed, setProposed] = useState<{ draft: ConfigDraft & Holding; preview: ConfigChangePreview; draftRevision?: string } | null>(null)
+  const [round, setRound] = useState(0)
   const arrived = (state as { fault?: string } | null)?.fault ?? ""
   const arrivedOf = (state as { of?: string } | null)?.of ?? ""
   const all = configs.data ?? []
@@ -87,8 +89,8 @@ function HeldConfig({ configId }: { configId: number }) {
     )
   }
 
-  function save(draft: ConfigDraft & Holding, impact?: ConfigChangePreview, defer = false) {
-    void change.mutateAsync({ id: configId, draft: { ...draft, defer, expectedRevision: impact?.baseRevision, expectedClientsRevision: impact?.clientsRevision } }).then(
+  function save(draft: ConfigDraft & Holding, impact?: ConfigChangePreview, defer = false, draftRevision?: string) {
+    void change.mutateAsync({ id: configId, draft: { ...draft, defer, expectedRevision: impact?.baseRevision, expectedClientsRevision: impact?.clientsRevision, expectedDraftRevision: draftRevision } }).then(
       () => navigate(back),
       (error: unknown) => { setProposed(null); if (downedOf(error) !== null) setRound(one => one + 1) },
     )
@@ -109,7 +111,7 @@ function HeldConfig({ configId }: { configId: number }) {
       onSave={(draft, holding) => {
         const submitted = { ...draft, ...holding }
         void preview.mutateAsync({ id: held.id, draft: submitted }).then(impact => {
-          if (impact.clients.length > 0) setProposed({ draft: submitted, preview: impact })
+          if (impact.clients.length > 0 || pending.data) setProposed({ draft: submitted, preview: impact, draftRevision: pending.data?.draftRevision })
           else save(submitted, impact)
         }, () => {})
       }}
@@ -118,12 +120,14 @@ function HeldConfig({ configId }: { configId: number }) {
     />
     {proposed && <Dialog title={t("configs.applyChangeTitle")} onClose={() => { if (!change.isPending) setProposed(null) }} actions={<>
       <button className={secondary} disabled={change.isPending} onClick={() => setProposed(null)}>{t("configs.cancel")}</button>
-      <button className={secondary} disabled={change.isPending} onClick={() => save(proposed.draft, proposed.preview, true)}>{t("configs.applyLater")}</button>
-      <button className={primary} disabled={change.isPending} onClick={() => save(proposed.draft, proposed.preview)}>{t("configs.applyNow")}</button>
+      <button className={secondary} disabled={change.isPending} onClick={() => save(proposed.draft, proposed.preview, true, proposed.draftRevision)}>{t("configs.applyLater")}</button>
+      <button className={primary} disabled={change.isPending} onClick={() => save(proposed.draft, proposed.preview, false, proposed.draftRevision)}>{t("configs.applyNow")}</button>
     </>}>
+      <div>{t("configs.interfaceChange", { name: held.name })}</div>
+      {proposed.draftRevision && <div className="mt-2">{t("configs.replacePendingChange")}</div>}
       <div>{t("configs.affectedClients", { count: proposed.preview.clients.length })}</div>
       {proposed.preview.clients.some(one => one.requiresCoordination) && <div className="mt-2 text-alarm">{t("configs.connectionChangeWarning")}</div>}
-      <div className="mt-2 max-h-56 overflow-auto">{proposed.preview.clients.map(one => <div key={one.id} className="break-words">{one.name}: {one.fields.join(", ")}</div>)}</div>
+      <div className="mt-2 max-h-56 overflow-auto">{proposed.preview.clients.map(one => <div key={one.id} className="break-words">{one.name}: {one.fields.map(field => configChangeField(t, field)).join(", ")}</div>)}</div>
     </Dialog>}
   </>)
 }
