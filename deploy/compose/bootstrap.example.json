@@ -1,0 +1,36 @@
+{
+  "user": "admin",
+  "passwordFile": "/run/secrets/admin_password",
+  "changePassword": true,
+  "panel": {
+    "listen": [
+      "127.0.0.1"
+    ],
+    "domains": [],
+    "port": 8443,
+    "path": "",
+    "opened": false,
+    "certificate": "",
+    "certificateKey": "",
+    "language": "auto",
+    "prereleases": false
+  },
+  "routingDefaults": true,
+  "validation": {
+    "expectedAddresses": {},
+    "trustedCertificates": []
+  },
+  "endpoints": [],
+  "subscriptions": {
+    "isEnabled": false
+  },
+  "clientUpdates": {
+    "isEnabled": false,
+    "path": "updates"
+  },
+  "dns": {
+    "isEnabled": false,
+    "port": 53,
+    "listen": []
+  }
+}

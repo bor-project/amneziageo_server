@@ -25,6 +25,10 @@ mkdir -p "$(dirname "$AMNEZIAGEO_DB")" "$(dirname "$AMNEZIAGEO_SIGNING_KEY")" "$
 rm -rf "$run"
 mkdir -p "$run"
 
+if [ -n "${AMNEZIAGEO_BOOTSTRAP:-}" ]; then
+  /opt/amneziageo-server/AmneziaGeo.Server.Cli bootstrap --file "$AMNEZIAGEO_BOOTSTRAP"
+fi
+
 if [ ! -d /sys/module/amneziawg ]; then
   say "the host carries no amneziawg module, the interfaces of the endpoints do not come up"
 fi

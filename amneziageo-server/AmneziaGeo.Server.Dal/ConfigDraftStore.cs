@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Text;
 using System.Data;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -20,13 +21,31 @@ public sealed record PendingConfigDraft(long ConfigId, string BaseRevision, stri
 
 public sealed class ConfigDraftStore(AppDbContext db, TimeProvider time)
 {
+    private static readonly JsonSerializerOptions RevisionJson = RevisionOptions();
+
+    private static JsonSerializerOptions RevisionOptions()
+    {
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(info =>
+        {
+            if (info.Type == typeof(ServerConfig))
+            {
+                foreach (var property in info.Properties.Where(one => one.Name == nameof(ServerConfig.Ipv6AutoAddress)))
+                {
+                    property.ShouldSerialize = (_, value) => value is string { Length: > 0 };
+                }
+            }
+        });
+        return new JsonSerializerOptions { TypeInfoResolver = resolver };
+    }
+
     public Task<IDbContextTransaction> BeginAsync(CancellationToken ct) => db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
 
     /// <summary>
     /// Returns the interface revision.
     /// </summary>
     public static string Revision(ServerConfig config) => "v2:" + Convert.ToHexStringLower(SHA256.HashData(
-        JsonSerializer.SerializeToUtf8Bytes(config with { CreatedUtc = default, UpdatedUtc = default })));
+        JsonSerializer.SerializeToUtf8Bytes(config with { CreatedUtc = default, UpdatedUtc = default }, RevisionJson)));
 
     public static string PayloadRevision(string payload) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
 

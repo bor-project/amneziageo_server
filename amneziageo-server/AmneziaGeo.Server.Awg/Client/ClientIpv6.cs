@@ -30,11 +30,17 @@ public static class ClientIpv6
     /// <summary>
     /// Plans IPv6 addresses for the clients of an interface.
     /// </summary>
-    public static ClientIpv6Plan Plan(ServerConfig config, IReadOnlyList<TunnelClient> clients)
+    public static ClientIpv6Plan Plan(ServerConfig config, IReadOnlyList<TunnelClient> clients, string previousAutomatic = "")
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(clients);
 
+        var original = clients;
+        clients = Retire(config, clients, previousAutomatic);
+        if (clients.Any(one => one.ConfigId == config.Id && one.Address.Count == 0))
+        {
+            return new(original, new ClientFault("bad-client-address", "a client would carry no address after removing the automatic IPv6 subnet"));
+        }
         var own = Ranges(config.Address);
         if (!own.Any(one => one.IsSix))
         {
@@ -49,7 +55,7 @@ public static class ClientIpv6
             Take(point);
         }
         var projected = clients.ToArray();
-        var changed = false;
+        var changed = !ReferenceEquals(clients, original);
         foreach (var member in members)
         {
             foreach (var point in Points(member.Client.Address))
@@ -68,7 +74,7 @@ public static class ClientIpv6
             var picked = Complete(own, member.Client.Address, held);
             if (picked.Fault is not null)
             {
-                return new(clients, picked.Fault);
+                return new(original, picked.Fault);
             }
             if (!ReferenceEquals(picked.Addresses, member.Client.Address))
             {
@@ -80,13 +86,39 @@ public static class ClientIpv6
                 Take(point);
             }
         }
-        return new(changed ? projected : clients, null);
+        return new(changed ? projected : original, null);
 
         void Take(IPAddress point)
         {
             counts[point] = counts.GetValueOrDefault(point) + 1;
             held.Add(point);
         }
+    }
+
+    private static IReadOnlyList<TunnelClient> Retire(ServerConfig config, IReadOnlyList<TunnelClient> clients, string previousAutomatic)
+    {
+        if (!AwgAllowedIp.TryParse(previousAutomatic, out var previous) || !previous.IsSix
+            || Ranges(config.Address).Any(one => one.IsSix && one.Cidr <= previous.Cidr && ClientPool.Inside(one, previous.Address)))
+        {
+            return clients;
+        }
+        var changed = false;
+        var result = clients.Select(client =>
+        {
+            if (client.ConfigId != config.Id)
+            {
+                return client;
+            }
+            var addresses = client.Address.Where(text => !AwgAllowedIp.TryParse(text, out var range)
+                || !range.IsSix || !ClientPool.Inside(previous, range.Address)).ToArray();
+            if (addresses.Length == client.Address.Count)
+            {
+                return client;
+            }
+            changed = true;
+            return client with { Address = addresses };
+        }).ToArray();
+        return changed ? result : clients;
     }
 
     private static ClientAddressPick Complete(IReadOnlyList<AwgAllowedIp> own, IReadOnlyList<string> addresses, HashSet<IPAddress> occupied)

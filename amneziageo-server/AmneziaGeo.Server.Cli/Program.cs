@@ -24,6 +24,11 @@ if (arguments.At(0) == "device")
     return DeviceCommands.Run(arguments);
 }
 
+if (arguments.At(0) == "bootstrap")
+{
+    return await BootstrapCommand.RunAsync(arguments, ct).ConfigureAwait(false);
+}
+
 using var context = Context.Open(arguments.Value("db"));
 
 return arguments.At(0) switch
@@ -53,6 +58,7 @@ static int Usage()
     Terminal.Fail("""
         usage:
           amneziageo-server init [--user <login>]      make the first administrator
+          amneziageo-server bootstrap --file <json>   initialize a fresh container
           amneziageo-server login [--user <login>]     sign in and print the tokens
           amneziageo-server refresh <token>            trade a refresh token for a pair
           amneziageo-server whoami                     what the panel makes of this host account

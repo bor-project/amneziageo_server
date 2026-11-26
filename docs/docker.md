@@ -1,5 +1,8 @@
 # The panel in a container
 
+For a declarative installation from an image without the host installer, use [Docker Compose installation](compose.md)
+or the [Russian guide](ru/compose.md). The existing source-build workflow below remains supported.
+
 The panel goes on a server in one of two ways: as a package the host keeps under `/opt/amneziageo-server`, see
 [install.md](install.md), or as a container. Both do the same job. The container runs in the network of the
 host, so the interfaces of the endpoints, the rules of the firewall and the ports the panel opens are those of

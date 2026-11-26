@@ -110,18 +110,20 @@ public sealed class Context : IDisposable
 
     public GeoStore Geo { get; }
 
+    internal AppDbContext Database => _scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
     /// <summary>
     /// Opens the database, brings its schema up to date and reads the signing key.
     /// </summary>
     public static Context Open(string? databasePath = null)
     {
         var options = new AuthOptions();
-        if (Environment.GetEnvironmentVariable(KeyVariable) is { Length: > 0 } key)
+        if ((Environment.GetEnvironmentVariable(KeyVariable) ?? Environment.GetEnvironmentVariable("Auth__SigningKeyPath")) is { Length: > 0 } key)
         {
             options.SigningKeyPath = key;
         }
 
-        if (int.TryParse(Environment.GetEnvironmentVariable(PasswordLengthVariable), out var length) && length > 0)
+        if (int.TryParse(Environment.GetEnvironmentVariable("Auth__MinimumPasswordLength") ?? Environment.GetEnvironmentVariable(PasswordLengthVariable), out var length) && length > 0)
         {
             options.MinimumPasswordLength = length;
         }
@@ -136,7 +138,7 @@ public sealed class Context : IDisposable
             options.HostUsers = hostUsers;
         }
 
-        var path = databasePath ?? ServerDatabase.DefaultPath();
+        var path = databasePath ?? Environment.GetEnvironmentVariable("Database__Path") ?? ServerDatabase.DefaultPath();
         var issuer = TokenIssuer.Open(options);
         var services = new ServiceCollection();
 

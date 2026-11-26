@@ -76,7 +76,7 @@ public sealed class PlainWireGuardApiTests
         Assert.Contains("PresharedKey =", withKey.Text, StringComparison.Ordinal);
     }
 
-    public static async Task<WebApplication> CreateAsync(Bench bench, int port = 0, Action<WebApplication>? configure = null)
+    public static async Task<WebApplication> CreateAsync(Bench bench, int port = 0, Action<WebApplication>? configure = null, Action<IServiceCollection>? services = null)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
@@ -106,6 +106,7 @@ public sealed class PlainWireGuardApiTests
         builder.Services.AddSingleton<IHostCommands>(new Tools());
         builder.Services.AddSingleton<IAwgDevices>(new Kernel());
         builder.Services.RemoveAll<IHostedService>();
+        services?.Invoke(builder.Services);
         var app = builder.Build();
         app.Use(async (context, next) =>
         {

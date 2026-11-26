@@ -1,10 +1,10 @@
-import { useRef, useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { span } from "@/address"
 import { complaint } from "@/api/auth"
 import { isPlainObfuscation, plainObfuscation } from "@/api/plainWireGuard"
-import { downedOf, failure, useConfigs, useFreshConfig, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
-import type { ConfigDraft, Obfuscation } from "@/api/configs"
+import { downedOf, failure, useConfigIpv6, useConfigs, useFreshConfig, useImportConfig, useKeyPair, usePresharedKey } from "@/api/configs"
+import type { ConfigDraft, ConfigIpv6, Obfuscation } from "@/api/configs"
 import { useClients } from "@/api/clients"
 import { useOutbounds } from "@/api/outbounds"
 import { interfaceNameFault, interfaceNameValue } from "@/components/interfaceNames"
@@ -88,6 +88,17 @@ export function ConfigForm({
   const [shown, setShown] = useState(publicKey)
   const [submitted, setSubmitted] = useState<ConfigDraft | null>(null)
   const read = useImportConfig()
+  const ipv6 = useConfigIpv6()
+  const ipv6Requests = useRef(0)
+  const addressChanges = useRef(0)
+  const identity = useRef({ id: self, active: true })
+  const [ipv6Result, setIpv6Result] = useState<ConfigIpv6 | null>(null)
+  const [ipv6Error, setIpv6Error] = useState<unknown>(null)
+  useLayoutEffect(() => {
+    const held = { id: self, active: true }
+    identity.current = held
+    return () => { held.active = false }
+  }, [self])
   const [text, setText] = useState("")
   const failed = error !== null && error !== undefined
   const said = failed ? failure(t, error) : fault
@@ -123,13 +134,47 @@ export function ConfigForm({
   const ready =
     edited &&
     !pending &&
+    !ipv6.isPending &&
     (!amnezia || !isPlainObfuscation(draft.obfuscation)) &&
     draft.name.length > 0 &&
     [port, services, socket, name, address, host].every((one) => one.length === 0)
   const twisted = JSON.stringify(applied.obfuscation) !== JSON.stringify(start.obfuscation)
 
   function put(change: Partial<ConfigDraft>) {
-    setDraft({ ...draft, ...change })
+    if (change.address !== undefined) {
+      addressChanges.current++
+      setIpv6Result(null)
+      setIpv6Error(null)
+    }
+    setDraft((current) => {
+      const next = { ...current, ...change }
+      if (change.address !== undefined && !change.address.includes(next.ipv6AutoAddress ?? "")) {
+        next.ipv6AutoAddress = ""
+      }
+      return next
+    })
+  }
+
+  async function refreshIpv6() {
+    const request = ++ipv6Requests.current
+    const revision = addressChanges.current
+    const id = self
+    const owner = identity.current
+    const current = () => owner.active && owner === identity.current && request === ipv6Requests.current && revision === addressChanges.current
+    setIpv6Result(null)
+    setIpv6Error(null)
+    try {
+      const found = await ipv6.mutateAsync({ id, address: [...draft.address], ipv6AutoAddress: draft.ipv6AutoAddress ?? "" })
+      if (!current()) {
+        return
+      }
+      setDraft((held) => current() ? { ...held, address: found.address, ipv6AutoAddress: found.ipv6AutoAddress } : held)
+      setIpv6Result(found)
+    } catch (error) {
+      if (current()) {
+        setIpv6Error(error)
+      }
+    }
   }
 
   // Saves, asking first whether the ports the panel held open before they moved are closed.
@@ -170,7 +215,7 @@ export function ConfigForm({
 
   async function pair() {
     const made = await keys.mutateAsync()
-    setDraft({ ...draft, privateKey: made.privateKey })
+    setDraft((current) => ({ ...current, privateKey: made.privateKey }))
     setShown(made.publicKey)
   }
 
@@ -180,6 +225,10 @@ export function ConfigForm({
   }
 
   async function take() {
+    addressChanges.current++
+    ipv6Requests.current++
+    setIpv6Result(null)
+    setIpv6Error(null)
     const revision = nameChanges.current
     const found = await read.mutateAsync({ name: nameCustomized.current ? draft.name : "", text }).catch(() => null)
     if (found === null) {
@@ -190,6 +239,7 @@ export function ConfigForm({
       name: nameChanges.current === revision ? found.name : current.name,
       listenPort: found.listenPort,
       address: found.address,
+      ipv6AutoAddress: "",
       dns: found.dns,
       allowedIps: found.allowedIps,
       mtu: found.mtu,
@@ -270,7 +320,18 @@ export function ConfigForm({
           caption={t("configs.address")}
           value={draft.address}
           onChange={(address) => put({ address })}
-          fault={address}
+          fault={address || (ipv6Error !== null ? failure(t, ipv6Error) : "")}
+          after={
+            <button
+              type="button"
+              onClick={() => void refreshIpv6()}
+              disabled={pending || ipv6.isPending || read.isPending}
+              title={ipv6Result === null ? t("configs.refreshIpv6") : ipv6Reason(t, ipv6Result.reason)}
+              className={`shrink-0 whitespace-nowrap ${secondary}`}
+            >
+              {t(ipv6.isPending ? "configs.ipv6Checking" : "configs.refreshIpv6")}
+            </button>
+          }
           wide
         />
         <Flag
@@ -523,4 +584,17 @@ function addressFault(t: Text, address: string[]): string {
   }
 
   return ""
+}
+
+function ipv6Reason(t: Text, reason: string): string {
+  const keys: Record<string, TextKey> = {
+    available: "configs.ipv6Available",
+    "no-route": "configs.ipv6NoRoute",
+    "no-source": "configs.ipv6NoSource",
+    unreachable: "configs.ipv6Unreachable",
+    "uplink-mismatch": "configs.ipv6UplinkMismatch",
+    "probe-failed": "configs.ipv6ProbeFailed",
+    unsupported: "configs.ipv6Unsupported",
+  }
+  return t(keys[reason] ?? "configs.ipv6ProbeFailed")
 }

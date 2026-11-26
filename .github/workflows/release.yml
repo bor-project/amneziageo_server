@@ -34,7 +34,9 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
       - name: Check release policy
-        run: python3 -m unittest discover -s .github/tests -p test_release_policy.py
+        run: |
+          python3 -m unittest discover -s .github/tests -p test_release_policy.py
+          python3 -m unittest discover -s .github/tests -p test_package_compose.py
       - name: Validate release source
         id: policy
         env:
@@ -323,6 +325,10 @@ jobs:
           ref: ${{ needs.version.outputs.source_commit }}
           sparse-checkout: |
             deploy/amneziageo-server
+            deploy/compose
+            docs/compose.md
+            docs/ru/compose.md
+            .github/scripts/package_compose.py
             .github/scripts/release_policy.py
           sparse-checkout-cone-mode: false
       - name: Verify the release tag still matches
@@ -334,6 +340,11 @@ jobs:
           pattern: package-*
           path: release
           merge-multiple: true
+      - name: Package Compose installation
+        shell: bash
+        run: |
+          python3 .github/scripts/package_compose.py --tag "$RELEASE_TAG" --image "$IMAGE" \
+            --commit "$SOURCE_COMMIT" --output-dir release > release/compose-asset.json
       - name: Signed manifest
         shell: bash
         working-directory: release
@@ -390,8 +401,9 @@ jobs:
             --argjson packages "$packages" \
             --arg updatesImage "$UPDATES_IMAGE@$UPDATES_DIGEST" \
             --argjson updates "$updates" \
+            --slurpfile compose compose-asset.json \
             '{version: $version, channel: $channel, published: $published, commit: $commit, image: $image, packages: $packages,
-              updates: {image: $updatesImage, packages: $updates}}' \
+              updates: {image: $updatesImage, packages: $updates}, compose: $compose[0]}' \
             > update.json
 
           key=$RUNNER_TEMP/update-signing.pem
@@ -416,4 +428,5 @@ jobs:
 
           cp ../deploy/amneziageo-server amneziageo-server
           gh release create "$RELEASE_TAG" "${flags[@]}" amneziageo-server-*.tar.gz amneziageo-server-*.pack \
-            amneziageo-server-*.files amneziageo-updates-*.tar.gz update.json update.json.sig amneziageo-server
+            amneziageo-server-*.files amneziageo-updates-*.tar.gz amneziageo-server-compose-*.zip \
+            update.json update.json.sig amneziageo-server

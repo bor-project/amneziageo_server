@@ -16,6 +16,7 @@ public enum ConfigOutcome
     NameTaken = 2,
     Unknown = 3,
     PortTaken = 4,
+    AddressTaken = 5,
 }
 
 /// <summary>
@@ -177,7 +178,10 @@ public sealed class ConfigStore
     /// <summary>
     /// Adds an endpoint with the settings it carries.
     /// </summary>
-    public async Task<ConfigResult> AddAsync(ServerConfig draft, CancellationToken ct)
+    public Task<ConfigResult> AddAsync(ServerConfig draft, CancellationToken ct) =>
+        InTransactionAsync(() => AddCoreAsync(draft, ct), ct);
+
+    private async Task<ConfigResult> AddCoreAsync(ServerConfig draft, CancellationToken ct)
     {
         draft = draft.WebSocketPath.Length > 0 ? draft : draft with { WebSocketPath = ConfigDefaults.WebSocketPath() };
         if (ConfigRules.Check(draft) is { } fault)
@@ -192,6 +196,11 @@ public sealed class ConfigStore
                 ConfigOutcome.NameTaken,
                 "name-taken",
                 $"the panel already carries an endpoint called '{draft.Name}'");
+        }
+
+        if (await Ipv6TakenAsync(draft, 0, ct).ConfigureAwait(false) is { } addressTaken)
+        {
+            return addressTaken;
         }
 
         if (await IdentityTakenAsync(draft, 0, ct).ConfigureAwait(false) is { } identity)
@@ -255,6 +264,11 @@ public sealed class ConfigStore
                 $"the panel already carries an endpoint called '{draft.Name}'");
         }
 
+        if (await Ipv6TakenAsync(draft, id, ct).ConfigureAwait(false) is { } addressTaken)
+        {
+            return addressTaken;
+        }
+
         if (await IdentityTakenAsync(draft, id, ct).ConfigureAwait(false) is { } identity)
         {
             return identity;
@@ -265,7 +279,7 @@ public sealed class ConfigStore
             return busy;
         }
 
-        var (plan, members) = await ClientAddressesAsync(draft with { Id = entity.Id }, ct).ConfigureAwait(false);
+        var (plan, members) = await ClientAddressesAsync(draft with { Id = entity.Id }, ct, ConfigIpv6.Automatic(Parts(entity.Address), entity.Ipv6AutoAddress)).ConfigureAwait(false);
         if (plan.Fault is { } addressFault)
         {
             return ConfigResult.No(ConfigOutcome.Invalid, addressFault.Code, addressFault.Message);
@@ -333,7 +347,7 @@ public sealed class ConfigStore
         return endpoints.Length > 0 ? ConfigResult.Done(Read(endpoints[0])) : new ConfigResult(ConfigOutcome.Ok, string.Empty, string.Empty, null);
     }
 
-    private async Task<(ClientIpv6Plan Plan, ClientEntity[] Members)> ClientAddressesAsync(ServerConfig config, CancellationToken ct)
+    private async Task<(ClientIpv6Plan Plan, ClientEntity[] Members)> ClientAddressesAsync(ServerConfig config, CancellationToken ct, string previousAutomatic = "")
     {
         var snapshots = await _db.Clients.AsNoTracking().Where(one => one.ConfigId == config.Id).OrderBy(one => one.Id).ToArrayAsync(ct).ConfigureAwait(false);
         var tracked = _db.ChangeTracker.Entries<ClientEntity>().ToDictionary(one => one.Entity.Id);
@@ -352,7 +366,7 @@ public sealed class ConfigStore
                 members.Add(_db.Clients.Attach(snapshot).Entity);
             }
         }
-        return (ClientIpv6.Plan(config, [.. members.Select(ClientStore.Read)]), [.. members]);
+        return (ClientIpv6.Plan(config, [.. members.Select(ClientStore.Read)], previousAutomatic), [.. members]);
     }
 
     private ConfigEntity CurrentConfig(ConfigEntity snapshot)
@@ -602,6 +616,20 @@ public sealed class ConfigStore
             ? ConfigResult.No(ConfigOutcome.PortTaken, "udp-identity-taken", "VPN interfaces on one UDP port require distinct server keys") : null;
     }
 
+    private async Task<ConfigResult?> Ipv6TakenAsync(ServerConfig config, long self, CancellationToken ct)
+    {
+        var automatic = ConfigIpv6.Automatic(config.Address, config.Ipv6AutoAddress);
+        if (automatic.Length == 0)
+        {
+            return null;
+        }
+        var own = AmneziaGeo.Server.Awg.Device.AwgAllowedIp.Parse(automatic);
+        var occupied = await _db.Configs.AsNoTracking().Where(one => one.Id != self).Select(one => one.Address).ToListAsync(ct).ConfigureAwait(false);
+        return occupied.SelectMany(Parts).Any(text => AmneziaGeo.Server.Awg.Device.AwgAllowedIp.TryParse(text, out var range) && range.IsSix && ConfigIpv6.Overlap(own, range))
+            ? ConfigResult.No(ConfigOutcome.AddressTaken, "ipv6-auto-address-taken", "another interface carries the automatic IPv6 subnet")
+            : null;
+    }
+
     private static ServerConfig Read(ConfigEntity entity) => new()
     {
         Id = entity.Id,
@@ -610,6 +638,7 @@ public sealed class ConfigStore
         ListenPort = entity.ListenPort,
         UdpPrivate = entity.UdpPrivate,
         Address = Parts(entity.Address),
+        Ipv6AutoAddress = entity.Ipv6AutoAddress,
         Dns = Parts(entity.Dns),
         AllowedIps = Parts(entity.AllowedIps),
         Mtu = entity.Mtu,
@@ -640,6 +669,7 @@ public sealed class ConfigStore
         entity.ListenPort = config.ListenPort;
         entity.UdpPrivate = config.UdpPrivate;
         entity.Address = string.Join(", ", config.Address);
+        entity.Ipv6AutoAddress = ConfigIpv6.Automatic(config.Address, config.Ipv6AutoAddress);
         entity.Dns = string.Join(", ", config.Dns);
         entity.AllowedIps = string.Join(", ", config.AllowedIps);
         entity.Mtu = config.Mtu;

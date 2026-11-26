@@ -65,7 +65,8 @@ public sealed record ConfigResponse(
     bool IsDefault = false,
     bool RequireUpdate = false,
     bool UdpPrivate = false,
-    bool HasPresharedKey = false);
+    bool HasPresharedKey = false,
+    string Ipv6AutoAddress = "");
 
 /// <summary>
 /// An endpoint as the interface sends it; keep leaves a port the panel held open and holds no longer open in the
@@ -100,7 +101,8 @@ public sealed record ConfigRequest(
     bool Defer = false,
     string? ExpectedRevision = null,
     string? ExpectedDraftRevision = null,
-    string? ExpectedClientsRevision = null);
+    string? ExpectedClientsRevision = null,
+    string? Ipv6AutoAddress = null);
 
 /// <summary>
 /// What a request to turn an endpoint on or off carries.
@@ -169,7 +171,8 @@ public static class ConfigAnswers
         config.IsDefault,
         config.RequireUpdate,
         config.UdpPrivate,
-        config.PresharedKey.Length > 0);
+        config.PresharedKey.Length > 0,
+        config.Ipv6AutoAddress);
 
     /// <summary>
     /// Describes the obfuscation of an endpoint as the interface reads it.
@@ -214,6 +217,7 @@ public static class ConfigAnswers
         ListenPort = request.ListenPort,
         UdpPrivate = request.UdpPrivate ?? held?.UdpPrivate ?? false,
         Address = request.Address ?? [],
+        Ipv6AutoAddress = ConfigIpv6.Automatic(request.Address ?? [], request.Ipv6AutoAddress ?? held?.Ipv6AutoAddress ?? string.Empty),
         Dns = request.Dns ?? [],
         AllowedIps = request.AllowedIps ?? [],
         Mtu = request.Mtu,
