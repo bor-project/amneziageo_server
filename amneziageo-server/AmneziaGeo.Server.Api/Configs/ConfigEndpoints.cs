@@ -31,6 +31,7 @@ public static partial class ConfigEndpoints
         var writing = routes.MapGroup("/api/configs").RequireScope(Scopes.ManageInterfaces);
         writing.AddEndpointFilter<UdpChangesFilter>();
         writing.MapGet("/draft", DraftAsync);
+        writing.MapPost("/ipv6", Ipv6Async);
         writing.MapPost("/keys", Keys);
         writing.MapPost("/preshared", Preshared);
         writing.MapPost("/import", Import);
@@ -73,6 +74,7 @@ public static partial class ConfigEndpoints
         ConfigStore store,
         PanelStore panels,
         WebOptions options,
+        IIpv6Probe ipv6,
         CancellationToken ct)
     {
         var wanted = string.IsNullOrWhiteSpace(name) ? "awg0" : name.Trim();
@@ -85,7 +87,10 @@ public static partial class ConfigEndpoints
             context.Request.Host.Host,
             PanelChoices.Addresses());
 
-        return Results.Ok(ConfigAnswers.Config(fresh with { ListenPort = port, Host = host }, true));
+        var reach = await ipv6.CheckAsync(ct).ConfigureAwait(false);
+        var plan = ConfigIpv6.Refresh(fresh.Address, string.Empty, reach.Available,
+            await Ipv6ReservedAsync(store, null, ct).ConfigureAwait(false));
+        return Results.Ok(ConfigAnswers.Config(fresh with { ListenPort = port, Host = host, Address = plan.Address, Ipv6AutoAddress = plan.AutomaticAddress }, true));
     }
 
     private static IResult Keys()
@@ -491,7 +496,7 @@ public static partial class ConfigEndpoints
     private static int Status(ConfigOutcome outcome) => outcome switch
     {
         ConfigOutcome.Unknown => StatusCodes.Status404NotFound,
-        ConfigOutcome.NameTaken or ConfigOutcome.PortTaken => StatusCodes.Status409Conflict,
+        ConfigOutcome.NameTaken or ConfigOutcome.PortTaken or ConfigOutcome.AddressTaken => StatusCodes.Status409Conflict,
         _ => StatusCodes.Status400BadRequest,
     };
 

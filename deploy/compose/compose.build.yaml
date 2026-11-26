@@ -1,0 +1,7 @@
+services:
+  panel:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      args:
+        VERSION: ${AMNEZIAGEO_BUILD_VERSION:-0.0.3.22}

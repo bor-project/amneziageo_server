@@ -41,6 +41,7 @@ export interface Config {
   listenPort: number
   udpPrivate: boolean
   address: string[]
+  ipv6AutoAddress?: string
   dns: string[]
   allowedIps: string[]
   mtu: number
@@ -70,6 +71,7 @@ export interface ConfigDraft {
   listenPort: number
   udpPrivate: boolean
   address: string[]
+  ipv6AutoAddress?: string
   dns: string[]
   allowedIps: string[]
   mtu: number
@@ -122,6 +124,25 @@ export function useFreshConfig(enabled: boolean, name: string) {
     enabled,
     gcTime: 0,
     staleTime: 0,
+  })
+}
+
+export interface ConfigIpv6Request {
+  id?: number
+  address: string[]
+  ipv6AutoAddress: string
+}
+
+export interface ConfigIpv6 {
+  available: boolean
+  reason: string
+  address: string[]
+  ipv6AutoAddress: string
+}
+
+export function useConfigIpv6() {
+  return useMutation({
+    mutationFn: async (draft: ConfigIpv6Request) => (await client.post<ConfigIpv6>("/configs/ipv6", draft)).data,
   })
 }
 
@@ -183,6 +204,9 @@ export function downedOf(error: unknown): Downed | null {
 }
 
 export function failure(t: Text, error: unknown): string {
+  if (axios.isAxiosError(error) && error.response?.data?.error === "ipv6-check-failed") return t("error.ipv6CheckFailed")
+  if (axios.isAxiosError(error) && error.response?.data?.error === "ipv6-address-unavailable") return t("error.ipv6AddressUnavailable")
+  if (axios.isAxiosError(error) && error.response?.data?.error === "ipv6-auto-address-taken") return t("error.ipv6AutoAddressTaken")
   if (axios.isAxiosError(error) && error.response?.data?.error === "config-change-pending") return t("error.configChangePending")
   if (axios.isAxiosError(error) && error.response?.data?.error === "config-change-stale") return t("error.configChangeStale")
   const downed = downedOf(error)
@@ -204,6 +228,7 @@ export function draftOf(config: Config): ConfigDraft {
     listenPort: config.listenPort,
     udpPrivate: config.udpPrivate ?? false,
     address: config.address,
+    ipv6AutoAddress: config.ipv6AutoAddress ?? "",
     dns: config.dns,
     allowedIps: config.allowedIps,
     mtu: config.mtu,

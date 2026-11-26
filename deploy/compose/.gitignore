@@ -1,0 +1,7 @@
+.env
+server.env
+bootstrap.json
+data/
+settings/
+endpoints/
+certificates/

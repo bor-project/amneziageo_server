@@ -168,6 +168,8 @@ public sealed record ServerConfig
     /// </summary>
     public IReadOnlyList<string> Address { get; init; } = [];
 
+    public string Ipv6AutoAddress { get; init; } = string.Empty;
+
     /// <summary>
     /// The name servers given to clients.
     /// </summary>

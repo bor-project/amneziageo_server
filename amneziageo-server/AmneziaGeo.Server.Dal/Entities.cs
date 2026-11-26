@@ -243,6 +243,8 @@ public sealed class ConfigEntity : IObfuscated
 
     public string Address { get; set; } = string.Empty;
 
+    public string Ipv6AutoAddress { get; set; } = string.Empty;
+
     public string Dns { get; set; } = string.Empty;
 
     public string AllowedIps { get; set; } = string.Empty;

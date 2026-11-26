@@ -17,6 +17,7 @@ public static class ConfigServices
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddScoped<ConfigChangeReader>();
+        services.AddSingleton<IIpv6Probe, Ipv6Probe>();
         services.AddSingleton<UdpPorts>();
         services.AddSingleton(provider => new SharedUdpHost(provider.GetRequiredService<UdpPorts>(),
             provider.GetRequiredService<IHostNetwork>(), provider.GetRequiredService<AmneziaGeo.Server.Awg.Device.IAwgDevices>(),

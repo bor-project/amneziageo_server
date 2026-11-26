@@ -607,6 +607,12 @@ namespace AmneziaGeo.Server.Dal.Migrations
                     b.Property<int>("Inbound")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Ipv6AutoAddress")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<bool>("IsDefault")
                         .HasColumnType("INTEGER");
 

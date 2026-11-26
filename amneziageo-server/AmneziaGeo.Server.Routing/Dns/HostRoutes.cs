@@ -33,8 +33,13 @@ public static class HostRoutes
     /// <summary>
     /// Returns the routes of the host, none where the host shows none.
     /// </summary>
-    public static IReadOnlyList<HostRoute> Read() =>
-        [.. Four(Text("/proc/net/route")), .. Six(Text("/proc/net/ipv6_route"))];
+    public static IReadOnlyList<HostRoute> Read() => Read(null);
+
+    /// <summary>
+    /// Reads routes outside the selected interface.
+    /// </summary>
+    public static IReadOnlyList<HostRoute> Read(string? excludingDevice) =>
+        [.. Four(Text("/proc/net/route")), .. Six(Text("/proc/net/ipv6_route"), excludingDevice)];
 
     /// <summary>
     /// Tells whether the host reaches an address by a route of its own rather than by its default route.
@@ -80,7 +85,7 @@ public static class HostRoutes
     /// <summary>
     /// Reads the IPv6 routes that are up out of the text of /proc/net/ipv6_route.
     /// </summary>
-    public static IReadOnlyList<HostRoute> Six(string text)
+    public static IReadOnlyList<HostRoute> Six(string text, string? excludingDevice = null)
     {
         ArgumentNullException.ThrowIfNull(text);
 
@@ -89,6 +94,7 @@ public static class HostRoutes
         {
             var parts = line.Split(Breaks, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 9
+                || excludingDevice is not null && parts.Length > 9 && parts[9] == excludingDevice
                 || parts[0].Length != 32
                 || !int.TryParse(parts[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var prefix)
                 || !uint.TryParse(parts[8], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var flags)

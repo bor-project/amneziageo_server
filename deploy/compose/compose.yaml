@@ -1,0 +1,52 @@
+name: ${COMPOSE_PROJECT_NAME:-amneziageo-server}
+
+services:
+  panel:
+    image: ${AMNEZIAGEO_IMAGE:-ghcr.io/bor-project/amneziageo-server}:${AMNEZIAGEO_TAG:?Set AMNEZIAGEO_TAG to the image version}
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    env_file:
+      - path: ${AMNEZIAGEO_RUNTIME_ENV:-./server.env}
+        required: true
+        format: raw
+    environment:
+      AMNEZIAGEO_BOOTSTRAP: /run/secrets/bootstrap.json
+      TZ: ${TZ:-Etc/UTC}
+    secrets:
+      - source: bootstrap
+        target: bootstrap.json
+      - source: admin_password
+        target: admin_password
+    volumes:
+      - type: bind
+        source: ${AMNEZIAGEO_DATA_DIR:-./data}
+        target: /var/lib/amneziageo-server
+      - type: bind
+        source: ${AMNEZIAGEO_SETTINGS_DIR:-./settings}
+        target: /etc/amneziageo-server
+      - type: bind
+        source: ${AMNEZIAGEO_ENDPOINTS_DIR:-./endpoints}
+        target: /etc/amnezia/amneziawg
+      - type: bind
+        source: ${AMNEZIAGEO_CERTIFICATES_DIR:-./certificates}
+        target: /etc/letsencrypt
+        read_only: true
+      - type: bind
+        source: ${AMNEZIAGEO_DOCKER_SOCKET:-/var/run/docker.sock}
+        target: /var/run/docker.sock
+        bind:
+          create_host_path: false
+    logging:
+      driver: json-file
+      options:
+        max-size: ${AMNEZIAGEO_LOG_SIZE:-10m}
+        max-file: "${AMNEZIAGEO_LOG_FILES:-3}"
+    stop_grace_period: 30s
+    restart: ${AMNEZIAGEO_RESTART:-unless-stopped}
+
+secrets:
+  bootstrap:
+    file: ${AMNEZIAGEO_BOOTSTRAP_FILE:-./bootstrap.json}
+  admin_password:
+    file: ${AMNEZIAGEO_PASSWORD_FILE:-./secrets/admin_password}

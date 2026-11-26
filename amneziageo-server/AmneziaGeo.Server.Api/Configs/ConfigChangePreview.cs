@@ -24,7 +24,7 @@ public sealed class ConfigChangeReader(ClientStore clients, TemplateStore templa
         var handing = resolver.Handing ?? settings with { IsEnabled = false };
         var offering = resolver.Chosen ?? settings;
         var members = await clients.ListAsync(before.Id, ct).ConfigureAwait(false);
-        var plan = ClientIpv6.Plan(after with { Id = before.Id }, members);
+        var plan = ClientIpv6.Plan(after with { Id = before.Id }, members, ConfigIpv6.Automatic(before.Address, before.Ipv6AutoAddress));
         var projected = plan.Clients.ToDictionary(one => one.Id);
         foreach (var member in members.OrderBy(one => one.Id))
         {

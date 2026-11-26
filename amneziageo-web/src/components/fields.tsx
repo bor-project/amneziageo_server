@@ -101,6 +101,7 @@ export function ListLine({
   wide = false,
   placeholder = "",
   fault = "",
+  after,
 }: {
   id: string
   caption: ReactNode
@@ -109,6 +110,7 @@ export function ListLine({
   wide?: boolean
   placeholder?: string
   fault?: string
+  after?: ReactNode
 }) {
   const [text, setText] = useListed(value, ", ")
 
@@ -125,6 +127,7 @@ export function ListLine({
       wide={wide}
       placeholder={placeholder}
       fault={fault}
+      after={after}
     />
   )
 }

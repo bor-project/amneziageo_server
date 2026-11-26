@@ -135,11 +135,12 @@ public sealed class DefaultTemplateTests
     {
         using var bench = new Bench();
         var migrator = bench.Db.GetService<IMigrator>();
-        await migrator.MigrateAsync("20261122135207_ProxyNameTemplate").ConfigureAwait(false);
         var custom = (await bench.Templates.AddAsync(new ClientTemplate { Name = "default", Mtu = 1300 }, default).ConfigureAwait(false)).Record!;
         var endpoint = (await bench.Configs.AddAsync(ConfigDefaults.Fresh("awg1"), default).ConfigureAwait(false)).Record!;
         var client = (await bench.Clients.AddAsync(ClientDefaults.Fresh(endpoint.Id, "phone"), default).ConfigureAwait(false)).Record!;
         var before = ClientText.Text(endpoint, client);
+        await migrator.MigrateAsync("20261122135207_ProxyNameTemplate").ConfigureAwait(false);
+        bench.Db.ChangeTracker.Clear();
         await migrator.MigrateAsync().ConfigureAwait(false);
         await bench.Templates.SeedAsync(default).ConfigureAwait(false);
         Assert.Equivalent(custom, await bench.Templates.FindAsync(custom.Id, default).ConfigureAwait(false));
