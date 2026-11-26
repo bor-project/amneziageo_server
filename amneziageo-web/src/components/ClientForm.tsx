@@ -59,12 +59,14 @@ export function ClientForm({
   const [limit, setLimit] = useState(gigabytes(start.dailyLimit))
   const spans = spansOf(configs, draft.configId)
   const taken = holders(others, draft.configId)
-  const legacy = start.address.length > 0 && carried(spans, start.address) === null
+  const moving = self !== undefined && draft.configId !== start.configId
+  const automatic = moving && number === null
+  const legacy = !moving && start.address.length > 0 && carried(spans, start.address) === null
   const base = start.address.length > 0 ? (carried(spans, start.address) ?? "") : first(spans, taken)
-  const shown = number ?? base
+  const shown = number ?? (moving ? "" : base)
   const listed = text ?? start.address.join(", ")
   const whole = /^\d+$/.test(shown)
-  const problem = legacy ? "" : fault(t, spans, taken, shown)
+  const problem = legacy || automatic ? "" : fault(t, spans, taken, shown)
   const head = spans[0]
   const prefix =
     head !== undefined && !head.six && head.bits >= 24 && head.network % 256n === 0n
@@ -75,7 +77,7 @@ export function ClientForm({
   const clash = others.some((one) => one.name.toLowerCase() === draft.name.trim().toLowerCase())
   const misnamed = !/^[A-Za-z0-9_-]{0,64}$/.test(draft.subscriptionId)
   const allowed = limit === gigabytes(start.dailyLimit) ? start.dailyLimit : allowanceOf(limit)
-  const check = useDnsCheck(draft.configId > 0 ? { id: self, client: draft } : null)
+  const check = useDnsCheck(draft.configId > 0 ? { id: self, client: moving ? { ...draft, address: [] } : draft } : null)
   const files = useResolver(false).data?.filesMode ?? "routing"
   const limitsOn = limits.input.enabled
   const above =
@@ -116,7 +118,8 @@ export function ClientForm({
     limits.valid &&
     draft.configId > 0 &&
     !lacksServers(draft.dnsMode, draft.dns) &&
-    (legacy ? parts(listed).length > 0 : whole && spans.length > 0 && problem.length === 0)
+    (!moving || !draft.isEnabled || config?.isEnabled === true) &&
+    (legacy ? parts(listed).length > 0 : spans.length > 0 && (automatic || whole && problem.length === 0))
 
   function put(change: Partial<ClientDraft>) {
     setDraft({ ...draft, ...change })
@@ -124,10 +127,15 @@ export function ClientForm({
 
   function pick(configId: number) {
     setDraft({ ...draft, configId })
-    setNumber(first(spansOf(configs, configId), holders(others, configId)))
+    setNumber(self === undefined ? first(spansOf(configs, configId), holders(others, configId)) : null)
+    setText(null)
   }
 
   function addresses(): string[] {
+    if (automatic) {
+      return []
+    }
+
     if (legacy) {
       return parts(listed)
     }
@@ -152,11 +160,11 @@ export function ClientForm({
             caption={t("clients.endpointName")}
             value={draft.configId === 0 ? "" : String(draft.configId)}
             onChange={(value) => pick(Number(value))}
-            disabled={self !== undefined}
+            disabled={pending}
           >
             <option value="">{t("clients.noConfig")}</option>
             {configs.map((one) => (
-              <option key={one.id} value={one.id}>
+              <option key={one.id} value={one.id} disabled={self !== undefined && one.id !== start.configId && draft.isEnabled && !one.isEnabled}>
                 {one.name}
               </option>
             ))}
@@ -203,7 +211,11 @@ export function ClientForm({
                   inputMode="numeric"
                   value={shown}
                   disabled={draft.configId === 0}
-                  onChange={(e) => setNumber(e.target.value.trim())}
+                  placeholder={moving ? t("clients.addressAuto") : undefined}
+                  onChange={(e) => {
+                    const value = e.target.value.trim()
+                    setNumber(moving && value === "" ? null : value)
+                  }}
                   className={field}
                 />
               </div>

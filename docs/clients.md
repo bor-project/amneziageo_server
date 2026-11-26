@@ -4,6 +4,18 @@ A client is one peer of an endpoint. The panel holds its keys, the addresses it 
 and whether the endpoint takes it. The interface of the endpoint carries the same clients as peers, and the
 interface file the host boots from carries them too.
 
+## Moving a client
+
+Open the existing client's settings, select the destination VPN interface and save.
+Leave **Address** on **Auto** to keep compatible free addresses and allocate replacements in the
+destination networks. An explicitly entered address must fit the destination and be available.
+
+The client ID, keys, template, custom settings and subscription ID stay with the client. The subscription
+returns the new endpoint and interface settings at the next update, including the new server key and
+obfuscation. Existing subscription and configuration links keep working while their original HTTPS
+listener is available. A connection to the old interface ends when its peer is removed. Explicit
+interface filters in shared routing rules continue to apply to the interfaces named in those rules.
+
 ## Rights
 
 | Route | Right |

@@ -105,6 +105,52 @@ public static class ClientPool
         return bounds.AsSpan().SequenceEqual(bytes);
     }
 
+    public static ClientAddressPick Relocate(IReadOnlyList<string> ranges, IReadOnlyList<string> addresses, IEnumerable<string> taken)
+    {
+        var own = Ranges(ranges);
+        if (own.Count == 0 || own.Count > ClientRules.MaxAddresses)
+        {
+            return Unavailable();
+        }
+
+        var previous = Ranges(addresses);
+        var occupied = Held(taken);
+        occupied.UnionWith(own.Select(range => range.Address));
+        var selected = new IPAddress?[own.Count];
+        for (var at = 0; at < own.Count; at++)
+        {
+            var range = own[at];
+            var point = previous.FirstOrDefault(old => old.Cidr == Width(old.Address) && Inside(range, old.Address)
+                && !Reserved(range, Number(range, old.Address)) && !occupied.Contains(old.Address))?.Address;
+            if (point is not null)
+            {
+                selected[at] = point;
+                occupied.Add(point);
+            }
+        }
+
+        for (var at = 0; at < own.Count; at++)
+        {
+            if (selected[at] is not null)
+            {
+                continue;
+            }
+
+            var point = Pick(own[at], occupied, preferred: null);
+            if (point is null)
+            {
+                return Unavailable();
+            }
+
+            selected[at] = point;
+            occupied.Add(point);
+        }
+
+        return new([.. selected.OfType<IPAddress>().Select(point => $"{point}/{Width(point)}")], null);
+
+        static ClientAddressPick Unavailable() => new([], new ClientFault("client-address-unavailable", "the target interface has no free client address"));
+    }
+
     internal static IPAddress? Pick(AwgAllowedIp range, IReadOnlySet<IPAddress> held, UInt128? preferred)
     {
         if (preferred is { } wanted && Fits(range, wanted) && !Reserved(range, wanted))
