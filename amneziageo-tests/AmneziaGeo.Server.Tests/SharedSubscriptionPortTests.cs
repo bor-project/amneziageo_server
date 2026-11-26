@@ -77,6 +77,37 @@ public partial class ServiceTests
     }
 
     [Fact]
+    public async Task TheOldServicePortServesTheMovedClientsConfiguration()
+    {
+        await using var fixture = await SharedPortFixture.CreateAsync().ConfigureAwait(false);
+        var (source, client) = await fixture.EndpointAsync().ConfigureAwait(false);
+        var targetPort = Free();
+        var target = (await fixture.Bench.Configs.AddAsync(ConfigDefaults.Fresh("awg2") with
+        {
+            Host = "localhost",
+            ListenPort = targetPort,
+            ServicesPort = targetPort,
+            Address = ["10.72.0.1/24"],
+        }, default).ConfigureAwait(false)).Record!;
+        Assert.Empty(await fixture.Services.SettleAsync(default).ConfigureAwait(false));
+        await fixture.SaveSubscriptionsAsync(source.ServicesPort, "sub", HttpStatusCode.OK).ConfigureAwait(false);
+
+        var url = $"https://localhost:{source.ServicesPort}/sub/{client.SubscriptionId}/{client.Id}";
+        var before = await fixture.Tls.GetStringAsync(url).ConfigureAwait(false);
+        var moved = await fixture.Bench.Clients.ChangeAsync(client.Id, client with { ConfigId = target.Id, Address = [] }, default)
+            .ConfigureAwait(false);
+
+        Assert.True(moved.IsOk, moved.Message);
+        Assert.Equal(client.SubscriptionId, moved.Record!.SubscriptionId);
+        Assert.Equal(["10.72.0.2/32"], moved.Record.Address);
+        await fixture.SubscriptionAsync(source.ServicesPort, "sub", client.SubscriptionId).ConfigureAwait(false);
+        var after = await fixture.Tls.GetStringAsync(url).ConfigureAwait(false);
+        Assert.StartsWith("vpn://", after);
+        Assert.NotEqual(before, after);
+        await fixture.HelloAsync(targetPort, target, moved.Record).ConfigureAwait(false);
+    }
+
+    [Fact]
     public async Task SharedSubscriptionPortSurvivesPathPortAndHostedServiceRestart()
     {
         await using var fixture = await SharedPortFixture.CreateAsync().ConfigureAwait(false);

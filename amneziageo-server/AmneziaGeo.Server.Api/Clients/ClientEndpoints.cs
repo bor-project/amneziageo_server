@@ -366,6 +366,7 @@ public static partial class ClientEndpoints
         TrafficLedger ledger,
         RouteApplier routes,
         ClientSignals signals,
+        ClientMeter meter,
         CancellationToken ct)
     {
         var held = await store.FindAsync(id, ct).ConfigureAwait(false);
@@ -379,34 +380,97 @@ public static partial class ClientEndpoints
             return refused;
         }
 
-        if (held.IsEnabled && request.IsEnabled is false)
+        var draft = ClientAnswers.Draft(request, held);
+        if (draft.ConfigId != held.ConfigId)
+        {
+            await meter.MeasureAsync(ct).ConfigureAwait(false);
+        }
+
+        if (held.IsEnabled && request.IsEnabled is false && draft.ConfigId == held.ConfigId)
         {
             await signals.SendAsync([held], await configs.ListAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
         }
 
-        var result = await store.ChangeAsync(id, ClientAnswers.Draft(request, held), ct).ConfigureAwait(false);
+        var result = await store.ChangeAsync(id, draft, ct, expectedConfigId: held.ConfigId).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
         }
 
-        if (result.Record!.IsEnabled)
+        var saved = result.Record!;
+        if (saved.IsEnabled)
         {
             signals.Forget(id);
         }
 
-        var gone = string.Equals(held.PublicKey, result.Record!.PublicKey, StringComparison.Ordinal)
-            ? Array.Empty<string>()
-            : [held.PublicKey];
-        var endpoint = await SettleAsync(result.Record.ConfigId, gone, configs, store, host, endpoints, ct)
-            .ConfigureAwait(false);
+        if (saved.ConfigId != held.ConfigId)
+        {
+            ct = CancellationToken.None;
+        }
+
+        var (endpoint, fault) = saved.ConfigId == held.ConfigId
+            ? (await SettleAsync(saved.ConfigId, saved.PublicKey == held.PublicKey ? [] : [held.PublicKey],
+                configs, store, host, endpoints, ct).ConfigureAwait(false), (IResult?)null)
+            : await MoveAsync(held, saved, configs, store, host, endpoints, ct).ConfigureAwait(false);
+        if (fault is not null)
+        {
+            await routes.FollowClientsAsync(ct).ConfigureAwait(false);
+            return fault;
+        }
 
         await FollowAsync(
-            await RuleNaming.NameAsync(rules, RuleSide.Clients, result.Record.Name, request.Rules, ct).ConfigureAwait(false),
+            await RuleNaming.NameAsync(rules, RuleSide.Clients, saved.Name, request.Rules, ct).ConfigureAwait(false),
             routes,
             ct).ConfigureAwait(false);
 
-        return Results.Ok(Told(Answer(result.Record, endpoint, host, guard, ledger, true), signals));
+        return Results.Ok(Told(Answer(saved, endpoint, host, guard, ledger, true), signals));
+    }
+
+    private static async Task<(ServerConfig? Config, IResult? Fault)> MoveAsync(
+        TunnelClient before,
+        TunnelClient moved,
+        ConfigStore configs,
+        ClientStore store,
+        ClientHost host,
+        EndpointHost endpoints,
+        CancellationToken ct)
+    {
+        var from = await configs.FindAsync(before.ConfigId, ct).ConfigureAwait(false);
+        var to = await configs.FindAsync(moved.ConfigId, ct).ConfigureAwait(false);
+        var taken = await PutAsync(from, before.PublicKey).ConfigureAwait(false);
+        var laid = taken.IsDone ? await PutAsync(to, moved.PublicKey).ConfigureAwait(false) : taken;
+        var message = laid.Message;
+        if (laid.IsDone)
+        {
+            var firewall = await FirewallAsync(configs, store, endpoints, ct).ConfigureAwait(false);
+            if (firewall.IsDone)
+            {
+                return (to, null);
+            }
+
+            message = firewall.Message;
+        }
+
+        var restored = await store.RestoreMoveAsync(before, moved, ct).ConfigureAwait(false);
+        var target = await PutAsync(to, moved.PublicKey).ConfigureAwait(false);
+        var source = await PutAsync(from, before.PublicKey).ConfigureAwait(false);
+        var guard = await FirewallAsync(configs, store, endpoints, ct).ConfigureAwait(false);
+        var recovered = restored.IsOk && target.IsDone && source.IsDone && guard.IsDone;
+        var detail = string.Join(" ", new[] { message, restored.Message, target.Message, source.Message, guard.Message }
+            .Where(text => text.Length > 0).Distinct(StringComparer.Ordinal));
+        return (null, Refuse(StatusCodes.Status409Conflict, recovered ? "client-move-refused" : "client-move-recovery", detail));
+
+        async Task<ClientSync> PutAsync(ServerConfig? config, string key)
+        {
+            if (config is null)
+            {
+                return new ClientSync(false, "an interface used by the transfer no longer exists");
+            }
+
+            var clients = await store.ListAsync(config.Id, ct).ConfigureAwait(false);
+            var gone = clients.Any(client => client.PublicKey == key) ? Array.Empty<string>() : [key];
+            return await host.SyncAsync(config, clients, gone, ct, allowDisabled: true).ConfigureAwait(false);
+        }
     }
 
     private static async Task<IResult> SwitchAsync(
@@ -677,17 +741,16 @@ public static partial class ClientEndpoints
         return unsynced;
     }
 
-    private static async Task FirewallAsync(
+    private static async Task<EndpointSync> FirewallAsync(
         ConfigStore configs,
         ClientStore store,
         EndpointHost endpoints,
         CancellationToken ct)
     {
-        await endpoints.FirewallAsync(
-                await configs.ListAsync(ct).ConfigureAwait(false),
-                await store.ListAsync(ct).ConfigureAwait(false),
-                ct)
-            .ConfigureAwait(false);
+        return await endpoints.FirewallAsync(
+            await configs.ListAsync(ct).ConfigureAwait(false),
+            await store.ListAsync(ct).ConfigureAwait(false),
+            ct).ConfigureAwait(false);
     }
 
     private static ClientResponse Answer(
@@ -748,7 +811,7 @@ public static partial class ClientEndpoints
     private static int Status(ClientOutcome outcome) => outcome switch
     {
         ClientOutcome.Unknown or ClientOutcome.UnknownConfig => StatusCodes.Status404NotFound,
-        ClientOutcome.NameTaken or ClientOutcome.KeyTaken or ClientOutcome.AddressTaken => StatusCodes.Status409Conflict,
+        ClientOutcome.NameTaken or ClientOutcome.KeyTaken or ClientOutcome.AddressTaken or ClientOutcome.Changed => StatusCodes.Status409Conflict,
         _ => StatusCodes.Status400BadRequest,
     };
 

@@ -230,14 +230,14 @@ public static class ClientAnswers
 
         return new TunnelClient
         {
-            ConfigId = request.ConfigId,
-            Name = (request.Name ?? string.Empty).Trim(),
-            PrivateKey = (request.PrivateKey ?? string.Empty).Trim(),
-            PublicKey = (request.PublicKey ?? string.Empty).Trim(),
-            PresharedKey = (request.PresharedKey ?? string.Empty).Trim(),
-            Address = Clean(request.Address),
+            ConfigId = request.ConfigId > 0 ? request.ConfigId : held?.ConfigId ?? request.ConfigId,
+            Name = (request.Name ?? held?.Name ?? string.Empty).Trim(),
+            PrivateKey = (request.PrivateKey ?? held?.PrivateKey ?? string.Empty).Trim(),
+            PublicKey = (request.PublicKey ?? held?.PublicKey ?? string.Empty).Trim(),
+            PresharedKey = (request.PresharedKey ?? held?.PresharedKey ?? string.Empty).Trim(),
+            Address = request.Address is null ? held?.Address ?? [] : Clean(request.Address),
             IsEnabled = request.IsEnabled ?? held?.IsEnabled ?? true,
-            Note = (request.Note ?? string.Empty).Trim(),
+            Note = (request.Note ?? held?.Note ?? string.Empty).Trim(),
             TemplateId = request.TemplateIdSpecified ? request.TemplateId : held?.TemplateId,
             DnsMode = DnsChoiceName.Read(request.DnsMode, held?.DnsMode ?? DnsChoice.Auto),
             Dns = request.Dns is null ? held?.Dns ?? [] : Clean(request.Dns),

@@ -69,12 +69,13 @@ public sealed class ClientHost
         ServerConfig config,
         IReadOnlyList<TunnelClient> clients,
         IReadOnlyList<string> gone,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool allowDisabled = false)
     {
         await _operations.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            return await SyncCoreAsync(config, clients, gone, ct).ConfigureAwait(false);
+            return await SyncCoreAsync(config, clients, gone, ct, allowDisabled).ConfigureAwait(false);
         }
         finally
         {
@@ -86,7 +87,8 @@ public sealed class ClientHost
         ServerConfig config,
         IReadOnlyList<TunnelClient> clients,
         IReadOnlyList<string> gone,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool allowDisabled)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(clients);
@@ -100,7 +102,8 @@ public sealed class ClientHost
             if (!_network.HasLink(config.Name))
             {
                 await _file.WriteAsync(config, laid, ct).ConfigureAwait(false);
-                return new ClientSync(false, $"the host carries no interface called '{config.Name}'");
+                return allowDisabled && !config.IsEnabled
+                    ? ClientSync.Done : new ClientSync(false, $"the host carries no interface called '{config.Name}'");
             }
 
             var counterGate = _ledger?.CounterGate ?? _counterSync;

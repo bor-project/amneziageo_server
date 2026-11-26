@@ -22,6 +22,7 @@ public enum ClientOutcome
     AddressTaken = 5,
     UnknownConfig = 6,
     UnknownTemplate = 7,
+    Changed = 8,
 }
 
 /// <summary>
@@ -253,11 +254,11 @@ public sealed class ClientStore
     /// <summary>
     /// Replaces the settings of a client, carrying its new name into the rules.
     /// </summary>
-    public async Task<ClientResult> ChangeAsync(long id, TunnelClient draft, CancellationToken ct)
+    public async Task<ClientResult> ChangeAsync(long id, TunnelClient draft, CancellationToken ct, long? expectedConfigId = null)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
-        return await InTurnAsync(() => ChangeInTurnAsync(id, draft, ct), ct).ConfigureAwait(false);
+        return await InTurnAsync(() => ChangeInTurnAsync(id, draft, expectedConfigId, ct), ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -446,7 +447,31 @@ public sealed class ClientStore
         return await InsertAsync(wanted with { Name = free }, fit: false, ct).ConfigureAwait(false);
     }
 
-    private async Task<ClientResult> ChangeInTurnAsync(long id, TunnelClient draft, CancellationToken ct)
+    public Task<ClientResult> RestoreMoveAsync(TunnelClient before, TunnelClient moved, CancellationToken ct) =>
+        InTurnAsync(async () =>
+        {
+            var entity = await _db.Clients.FirstOrDefaultAsync(client => client.Id == before.Id
+                && client.ConfigId == moved.ConfigId && client.UpdatedUtc == moved.UpdatedUtc, ct).ConfigureAwait(false);
+            if (entity is null)
+            {
+                return Changed();
+            }
+
+            if (await Refusal(before, before.Id, fit: false, ct).ConfigureAwait(false) is { } refusal)
+            {
+                return refusal;
+            }
+
+            var name = entity.Name;
+            Write(entity, before);
+            entity.ConfigId = before.ConfigId;
+            entity.UpdatedUtc = _time.GetUtcNow();
+            await NameFollow.ClientAsync(_db, name, before.Name, entity.UpdatedUtc, ct).ConfigureAwait(false);
+            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+            return ClientResult.Done(Read(entity));
+        }, ct);
+
+    private async Task<ClientResult> ChangeInTurnAsync(long id, TunnelClient draft, long? expectedConfigId, CancellationToken ct)
     {
         var entity = await _db.Clients.FirstOrDefaultAsync(client => client.Id == id, ct).ConfigureAwait(false);
         if (entity is null)
@@ -454,7 +479,24 @@ public sealed class ClientStore
             return Missing(id);
         }
 
-        var (wanted, fault) = await CompletedAsync(Whole(draft) with { ConfigId = entity.ConfigId }, id, ct).ConfigureAwait(false);
+        if (expectedConfigId is { } expected && expected != entity.ConfigId)
+        {
+            return Changed();
+        }
+
+        var selected = Whole(draft) with { ConfigId = draft.ConfigId > 0 ? draft.ConfigId : entity.ConfigId };
+        var moving = selected.ConfigId != entity.ConfigId;
+        if (moving && selected.IsEnabled && await _db.Configs.AnyAsync(
+                config => config.Id == selected.ConfigId && !config.IsEnabled, ct).ConfigureAwait(false))
+        {
+            return ClientResult.No(ClientOutcome.Invalid, "client-target-disabled", "the target interface is disabled");
+        }
+
+        var previous = Parts(entity.Address);
+        var automatic = moving && (selected.Address.Count == 0 || selected.Address.SequenceEqual(previous));
+        var (wanted, fault) = automatic
+            ? await RelocatedAsync(selected, previous, ct).ConfigureAwait(false)
+            : await CompletedAsync(selected, id, ct).ConfigureAwait(false);
         if (fault is not null)
         {
             return ClientResult.No(ClientOutcome.Invalid, fault.Code, fault.Message);
@@ -467,6 +509,7 @@ public sealed class ClientStore
         var old = entity.Name;
         var now = _time.GetUtcNow();
         Write(entity, wanted);
+        entity.ConfigId = wanted.ConfigId;
         entity.UpdatedUtc = now;
         await NameFollow.ClientAsync(_db, old, entity.Name, now, ct).ConfigureAwait(false);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -496,6 +539,20 @@ public sealed class ClientStore
         var taken = await AddressesAsync(draft.ConfigId, ct).ConfigureAwait(false);
 
         return draft with { Address = ClientPool.Free(own, [.. taken, .. own]) };
+    }
+
+    private async Task<(TunnelClient Client, ClientFault? Fault)> RelocatedAsync(TunnelClient draft, IReadOnlyList<string> previous, CancellationToken ct)
+    {
+        var ranges = await _db.Configs.AsNoTracking().Where(one => one.Id == draft.ConfigId)
+            .Select(one => one.Address).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (ranges is null)
+        {
+            return (draft, null);
+        }
+
+        var taken = await AddressesAsync(draft.ConfigId, ct).ConfigureAwait(false);
+        var pick = ClientPool.Relocate(Parts(ranges), previous, taken);
+        return (draft with { Address = pick.Addresses }, pick.Fault);
     }
 
     private async Task<(TunnelClient Client, ClientFault? Fault)> CompletedAsync(TunnelClient draft, long id, CancellationToken ct)
@@ -606,6 +663,9 @@ public sealed class ClientStore
 
     private static ClientResult KeyTaken() =>
         ClientResult.No(ClientOutcome.KeyTaken, "client-key-taken", "another client already carries this public key");
+
+    private static ClientResult Changed() =>
+        ClientResult.No(ClientOutcome.Changed, "client-changed", "the client changed while the request was in progress");
 
     private static ClientResult Missing(long id) =>
         ClientResult.No(ClientOutcome.Unknown, "unknown-client", $"there is no client under the number {id}");

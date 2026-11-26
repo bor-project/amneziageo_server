@@ -113,7 +113,7 @@ export function ClientSettings() {
       self={held.id}
       pending={change.isPending}
       error={change.error}
-      onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back))}
+      onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back)).catch(() => undefined)}
       onClose={() => navigate(back)}
       onRemove={() => navigate(`/clients/${held.id}/delete`)}
     />
