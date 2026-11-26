@@ -17,7 +17,8 @@ public static class RoutingExport
         var lists = await presets.ListAsync(ct).ConfigureAwait(false);
         var geo = await sources.ListAsync(ct).ConfigureAwait(false);
         return new RoutingDoc(RoutingFile.FormatTag, RoutingFile.CurrentVersion,
-            [.. criteria.Select(one => new TrafficRuleBlock(one.Name, one.Targets, one.Dns, one.DnsMembers, one.DnsMode))],
+            [.. criteria.Select(one => new TrafficRuleBlock(one.Name, one.Targets, one.Dns, one.DnsMembers, one.DnsMode,
+                one.DefaultKey == RouteDefaults.InternetOnly ? one.DefaultKey : null))],
             [.. entries.Select(one => new EntryBlock(one.Name, one.Position, one.IsEnabled, one.Action, one.Outbound,
                 [.. one.RuleIds.Select(id => names.TryGetValue(id, out var name) ? name : "#" + id)],
                 one.Clients, one.Inbounds, one.Ports, one.SourcePorts, one.Protocol, RouteBasic.Holds(one.Id) ? one.Id : null))],

@@ -23,12 +23,27 @@ public sealed class RoutingModelMigrationTests
     [Theory]
     [InlineData(Stable, "global")]
     [InlineData(Beta, "global")]
+    [InlineData(Stable, "outbound")]
     [InlineData(Beta, "outbound")]
+    [InlineData(Beta, "outbound", true)]
     [InlineData(Beta, "routing")]
-    public async Task ReleasedDatabasesPreserveClientsAndRoutingWhileMovingDnsIntoRules(string version, string mode)
+    public async Task ReleasedDatabasesPreserveClientsAndRoutingWhileMovingDnsIntoRules(string version, string mode, bool emptyChannelDns = false)
     {
         using var fixture = new PriorDatabase();
         await fixture.SeedAsync(version, mode).ConfigureAwait(false);
+        var upstreams = new[] { "tls://1.0.0.1", "https://1.1.1.1/dns-query" };
+        await fixture.SqlAsync("UPDATE Resolver SET Upstreams = 'tls://1.0.0.1, https://1.1.1.1/dns-query'").ConfigureAwait(false);
+        if (emptyChannelDns)
+        {
+            await fixture.SqlAsync("UPDATE Outbounds SET Dns = '' WHERE Name = 'second'").ConfigureAwait(false);
+        }
+
+        if (mode == "outbound" && version == Beta)
+        {
+            await fixture.SqlAsync("UPDATE AddressGroups SET Dns = '' WHERE Id = 12").ConfigureAwait(false);
+            await fixture.SqlAsync("UPDATE Rules SET Groups = '12,11' WHERE Id = 41").ConfigureAwait(false);
+        }
+
         var before = await fixture.ProtectedAsync().ConfigureAwait(false);
 
         await fixture.Db.Database.MigrateAsync().ConfigureAwait(false);
@@ -64,17 +79,26 @@ public sealed class RoutingModelMigrationTests
         Assert.Equal(["domain:legacy-block.example"], Assert.Single(rows, one => one.Id == -1).Targets);
         if (version == Beta)
         {
-            var group = await new TrafficRuleStore(fixture.Db).FindAsync(11, default).ConfigureAwait(false);
+            var groups = new TrafficRuleStore(fixture.Db);
+            var group = await groups.FindAsync(11, default).ConfigureAwait(false);
             Assert.Equal("video", group!.Name);
             Assert.Equal(["domain:video.example", "domain:shared.example"], group.Targets);
-            Assert.Equal(mode == "routing" ? ["1.1.1.1"] : mode == "outbound" ? ["8.8.8.8"] : new[] { "tls://1.0.0.1" }, group.Dns);
+            Assert.Equal(["1.1.1.1"], group.Dns);
+            var ads = await groups.FindAsync(12, default).ConfigureAwait(false);
+            Assert.Equal(mode == "outbound" ? upstreams : ["8.8.4.4"], ads!.Dns);
         }
 
         var ways = await new OutboundStore(fixture.Db).ListAsync(default).ConfigureAwait(false);
         Assert.Equal(["9.9.9.9"], ways.Single(way => way.Name == "edge").Dns);
-        Assert.Equal(["8.8.8.8"], ways.Single(way => way.Name == "second").Dns);
+        Assert.Equal(emptyChannelDns ? [] : new[] { "8.8.8.8" }, ways.Single(way => way.Name == "second").Dns);
         var balancers = await new BalanceStore(fixture.Db).ListAsync(default).ConfigureAwait(false);
         var clients = new[] { new TunnelClient { Id = 9002, ConfigId = 9001, Name = "canary", Address = ["10.7.0.2/32", "fd77::2/128"] } };
+        var fallback = Assert.Single(rows, one => one.Criteria.Any(criterion => criterion.DefaultKey == "resolver-default"));
+        var defaultRule = Assert.Single(fallback.Criteria);
+        Assert.Equal(TrafficDnsMode.Custom, defaultRule.DnsMode);
+        Assert.Equal(upstreams, defaultRule.Dns);
+        Assert.Empty(defaultRule.DnsMembers);
+
         var plan = RoutePlan.Build(rows, ways, GeoIndex.Load([], new MemoryGeoFiles()), ["wg-canary"], balancers: balancers, clients: clients);
         foreach (var pair in new[] { ("192.0.2.7", "10.7.0.2"), ("2001:db8::7", "fd77::2") })
         {
@@ -91,10 +115,10 @@ public sealed class RoutingModelMigrationTests
         var picked = DnsRouting.Select(plan, "shared.example");
         Assert.Null(picked.Way.Fault);
         Assert.Equal("edge", picked.Way.Outbound);
-        Assert.Equal(mode == "routing" ? ["1.1.1.1"] : mode == "outbound" ? ["8.8.8.8"] : new[] { "tls://1.0.0.1" }, picked.Servers);
+        Assert.Equal(version == Beta ? ["1.1.1.1"] : upstreams, picked.Servers);
         var general = DnsRouting.Select(plan, "base.example");
         Assert.Null(general.Way.Fault);
-        Assert.Equal(mode == "routing" ? ["9.9.9.9"] : mode == "outbound" ? ["8.8.8.8"] : new[] { "tls://1.0.0.1" }, general.Servers);
+        Assert.Equal(mode == "routing" ? ["9.9.9.9"] : upstreams, general.Servers);
         Assert.Equal("dns-blocked", DnsRouting.Select(plan, "blocked.example").Way.Fault?.Code);
         var held = RoutePlan.Build(rows, ways, GeoIndex.Load([], new MemoryGeoFiles()), ["wg-canary"], balancers: balancers, alive: new HashSet<string>());
         Assert.NotNull(DnsRouting.Select(held, "base.example").Way.Fault);

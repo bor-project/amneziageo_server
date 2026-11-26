@@ -77,8 +77,20 @@ public sealed class TrafficRuleStore
         {
             return Missing();
         }
+        if (draft.DefaultKey == RouteDefaults.InternetOnly
+            && ((held?.DefaultKey is { } key && key != draft.DefaultKey)
+                || await _db.TrafficRules.AnyAsync(rule => rule.DefaultKey == draft.DefaultKey && rule.Id != id, ct).ConfigureAwait(false)))
+        {
+            return new TrafficRuleResult(null, new RouteFault("routing-profile-exists", "the routing profile already has an address set"));
+        }
+
         var now = _time.GetUtcNow();
         var entity = held ?? new TrafficRuleEntity { CreatedUtc = now };
+        if (draft.DefaultKey == RouteDefaults.InternetOnly)
+        {
+            entity.DefaultKey = draft.DefaultKey;
+        }
+
         entity.Name = name;
         entity.Targets = string.Join(", ", draft.Targets);
         entity.DnsMode = draft.DnsMode;

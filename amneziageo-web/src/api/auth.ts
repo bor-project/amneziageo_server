@@ -227,6 +227,7 @@ const complaints: Record<string, TextKey> = {
   "bad-cache": "error.badCache",
   "bad-ttl": "error.badTtl",
   "bad-rule-name": "error.badRuleName",
+  "profile-inbounds": "error.profileInbounds",
   "bad-action": "error.badAction",
   "bad-target": "error.badTarget",
   "bad-rule-client": "error.badRuleClient",

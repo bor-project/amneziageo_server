@@ -192,6 +192,98 @@ public sealed class RouteStore
     public Task<RouteResult> AddAsync(RouteRule draft, CancellationToken ct) =>
         _db.AloneAsync(() => AddCoreAsync(draft, ct), ct);
 
+    public Task<RouteResult?> AddInternetOnlyAsync(IReadOnlyList<long> interfaceIds, string name, string addressesName, CancellationToken ct) =>
+        _db.AloneAsync(async () =>
+        {
+            var ids = interfaceIds.Distinct().ToArray();
+            if (ids.Length is 0 or > RouteRules.MaxConditions)
+            {
+                return RouteResult.No(RouteOutcome.Invalid, "profile-inbounds", "select between one and 64 VPN interfaces");
+            }
+
+            var inbounds = await _db.Configs.AsNoTracking().Where(config => ids.Contains(config.Id))
+                .OrderBy(config => config.Name).Select(config => config.Name).ToListAsync(ct).ConfigureAwait(false);
+            if (inbounds.Count != ids.Length)
+            {
+                return RouteResult.No(RouteOutcome.Invalid, "profile-inbounds", "one or more VPN interfaces no longer exist");
+            }
+
+            var rows = await TableAsync(ct).ConfigureAwait(false);
+            var now = _time.GetUtcNow();
+            var addresses = await _db.TrafficRules.FirstOrDefaultAsync(
+                rule => rule.DefaultKey == RouteDefaults.InternetOnly, ct).ConfigureAwait(false);
+            if (addresses is null)
+            {
+                var names = await _db.TrafficRules.Select(rule => rule.Name).ToListAsync(ct).ConfigureAwait(false);
+                addresses = new TrafficRuleEntity
+                {
+                    DefaultKey = RouteDefaults.InternetOnly,
+                    Name = ProfileName(addressesName, names),
+                    Targets = string.Join(", ", RouteDefaults.PrivateNetworks),
+                    DnsMode = TrafficDnsMode.Default,
+                    CreatedUtc = now,
+                    UpdatedUtc = now,
+                };
+            }
+
+            var covered = rows.Where(row => row.Action == RouteAction.Block && row.Protocol == RouteProtocol.Any
+                && row.Criteria.Count == 1 && row.Criteria[0].Id == addresses.Id && row.Inbounds.Count > 0
+                && row.Clients.Count == 0 && row.Ports.Count == 0 && row.SourcePorts.Count == 0)
+                .SelectMany(row => row.Inbounds).ToHashSet(StringComparer.Ordinal);
+            var selected = inbounds.Where(inbound => !covered.Contains(inbound)).ToArray();
+            if (selected.Length == 0)
+            {
+                return null;
+            }
+
+            var criterion = TrafficRuleStore.Read(addresses);
+            var draft = RouteDefaults.Fresh(ProfileName(name, rows.Select(row => row.Name))) with
+            {
+                Action = RouteAction.Block,
+                Inbounds = selected,
+                Targets = criterion.Targets,
+                Criteria = [criterion],
+            };
+            if (criterion.Targets.Count == 0)
+            {
+                return RouteResult.No(RouteOutcome.Invalid, "empty-addresses", "the private networks set is empty");
+            }
+
+            if (RouteRules.Check(draft) is { } fault)
+            {
+                return RouteResult.No(RouteOutcome.Invalid, fault.Code, fault.Message);
+            }
+
+            var entity = new RoutingEntryEntity
+            {
+                Name = draft.Name,
+                Position = await NextPositionAsync(ct).ConfigureAwait(false),
+                IsEnabled = draft.IsEnabled,
+                Action = draft.Action,
+                Protocol = draft.Protocol,
+                Inbounds = string.Join(", ", draft.Inbounds),
+                CreatedUtc = now,
+                UpdatedUtc = now,
+                Matches = [new RoutingEntryRuleEntity { Rule = addresses }],
+            };
+            _db.Rules.Add(entity);
+            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+            return RouteResult.Done(Read(entity));
+        }, ct);
+
+    private static string ProfileName(string name, IEnumerable<string> existing)
+    {
+        var names = existing.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var candidate = name;
+        for (var number = 2; names.Contains(candidate); number++)
+        {
+            var suffix = $" ({number.ToString(System.Globalization.CultureInfo.InvariantCulture)})";
+            candidate = name[..Math.Min(name.Length, RouteRules.MaxNameLength - suffix.Length)] + suffix;
+        }
+
+        return candidate;
+    }
+
     private async Task<RouteResult> AddCoreAsync(RouteRule draft, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(draft);

@@ -20,7 +20,6 @@ public partial class RoutingModel : Migration
 
             CREATE TEMP TABLE _RoutingDns AS
             SELECT COALESCE((SELECT Selection FROM Resolver WHERE Id = 1), 'global') AS Selection,
-                   COALESCE((SELECT Outbound FROM Resolver WHERE Id = 1), '') AS Outbound,
                    COALESCE((SELECT Upstreams FROM Resolver WHERE Id = 1), 'https://1.1.1.1/dns-query,https://8.8.4.4/dns-query') AS Upstreams,
                    CASE WHEN NOT EXISTS (SELECT 1 FROM Resolver)
                          AND NOT EXISTS (SELECT 1 FROM Outbounds)
@@ -93,32 +92,25 @@ public partial class RoutingModel : Migration
                       WHERE NOT EXISTS (SELECT 1 FROM TrafficRules WHERE Name = Candidate COLLATE NOCASE)
                         AND NOT EXISTS (SELECT 1 FROM _RoutingEntries other WHERE other.Id <> r.Id AND other.Name = Candidate COLLATE NOCASE) LIMIT 1),
                    r.Targets,
-                   CASE d.Selection
-                       WHEN 'outbound' THEN COALESCE(NULLIF(bd.Dns, ''), NULLIF(od.Dns, ''),
-                           (SELECT group_concat(value, ',') FROM (SELECT DISTINCT j.value FROM _RoutingMembers m JOIN _RoutingOutboundDns md ON md.Name = m.Member, json_each(md.Servers) j WHERE m.Balancer = d.Outbound ORDER BY m.Position, j.key)), '')
-                       WHEN 'routing' THEN CASE WHEN r.Action = 'out' THEN COALESCE(NULLIF(br.Dns, ''), NULLIF(ort.Dns, ''), d.Upstreams) ELSE d.Upstreams END
-                       ELSE d.Upstreams
-                   END,
+                   CASE WHEN d.Selection = 'routing' AND r.Action = 'out'
+                        THEN COALESCE(NULLIF(br.Dns, ''), NULLIF(ort.Dns, ''), d.Upstreams)
+                        ELSE d.Upstreams END,
                    CASE WHEN d.Selection = 'routing' AND r.Action = 'out' AND br.Name IS NOT NULL AND trim(br.Dns) = '' THEN
                        COALESCE((SELECT json_group_object(m.Member, json(CASE WHEN trim(md.Dns) <> '' THEN md.Servers ELSE
                            '["' || replace(replace(replace(replace(replace(d.Upstreams, char(9), ','), char(10), ','), char(13), ','), ' ', ''), ',', '","') || '"]' END))
                            FROM _RoutingMembers m JOIN _RoutingOutboundDns md ON md.Name = m.Member WHERE m.Balancer = r.Outbound), '{}')
-                       WHEN d.Selection = 'outbound' AND bd.Name IS NOT NULL AND trim(bd.Dns) = '' THEN
-                       COALESCE((SELECT json_group_object(m.Member, json(md.Servers)) FROM _RoutingMembers m JOIN _RoutingOutboundDns md ON md.Name = m.Member WHERE m.Balancer = d.Outbound), '{}')
                        ELSE '{}'
                    END,
                    r.CreatedUtc, r.UpdatedUtc
             FROM _RoutingFallbacks r CROSS JOIN _RoutingDns d
-            LEFT JOIN Balancers bd ON bd.Name = d.Outbound
-            LEFT JOIN _RoutingOutboundDns od ON od.Name = d.Outbound
             LEFT JOIN Balancers br ON br.Name = r.Outbound
             LEFT JOIN _RoutingOutboundDns ort ON ort.Name = r.Outbound;
 
             CREATE TEMP TABLE _RoutingGroupUses AS
             SELECT r.Id AS EntryId, CAST(j.value AS INTEGER) AS GroupId, MIN(CAST(j.key AS INTEGER)) AS Position,
-                   CASE WHEN d.Selection = 'routing' AND trim(g.Dns) <> '' THEN 1 ELSE 0 END AS IsExplicit,
+                   CASE WHEN trim(g.Dns, ' ,' || char(9) || char(10) || char(13)) <> '' THEN 1 ELSE 0 END AS IsExplicit,
                    r.CriterionId
-            FROM _RoutingFallbacks r CROSS JOIN _RoutingDns d, json_each('[' || r.Groups || ']') j
+            FROM _RoutingFallbacks r, json_each('[' || r.Groups || ']') j
             JOIN AddressGroups g ON g.Id = CAST(j.value AS INTEGER)
             GROUP BY r.Id, CAST(j.value AS INTEGER);
             CREATE INDEX _RoutingGroupUses_GroupId ON _RoutingGroupUses(GroupId);
@@ -139,7 +131,7 @@ public partial class RoutingModel : Migration
             CREATE UNIQUE INDEX _RoutingPolicies_Id ON _RoutingPolicies(Id);
 
             CREATE TEMP TABLE _RoutingGroupPolicies AS
-            SELECT g.Id, COUNT(u.EntryId) AS Uses,
+            SELECT g.Id,
                    COUNT(DISTINCT p.Servers || char(31) || p.Members) AS Policies,
                    MIN(p.Dns) AS Dns, MIN(p.Members) AS Members
             FROM AddressGroups g LEFT JOIN _RoutingGroupUses u ON u.GroupId = g.Id
@@ -147,15 +139,14 @@ public partial class RoutingModel : Migration
             GROUP BY g.Id;
 
             CREATE TEMP TABLE _RoutingGroupDns AS
+            WITH groups AS (
+                SELECT Id, Dns, trim(Dns, ' ,' || char(9) || char(10) || char(13)) <> '' AS IsExplicit FROM AddressGroups
+            )
             SELECT g.Id,
-                   CASE WHEN d.Selection = 'routing' AND trim(g.Dns) <> '' THEN 'custom'
-                        WHEN p.Uses = 0 THEN CASE WHEN trim(g.Dns) = '' THEN 'default' ELSE 'custom' END
-                        WHEN p.Policies = 1 THEN 'custom' ELSE 'default' END AS DnsMode,
-                   CASE WHEN d.Selection = 'routing' AND trim(g.Dns) <> '' OR p.Uses = 0 THEN g.Dns
-                        WHEN p.Policies = 1 THEN p.Dns ELSE '' END AS Dns,
-                   CASE WHEN d.Selection = 'routing' AND trim(g.Dns) <> '' OR p.Uses = 0 THEN '{}'
-                        WHEN p.Policies = 1 THEN p.Members ELSE '{}' END AS Members
-            FROM AddressGroups g CROSS JOIN _RoutingDns d JOIN _RoutingGroupPolicies p ON p.Id = g.Id;
+                   CASE WHEN g.IsExplicit OR p.Policies = 1 THEN 'custom' ELSE 'default' END AS DnsMode,
+                   CASE WHEN g.IsExplicit THEN g.Dns WHEN p.Policies = 1 THEN p.Dns ELSE '' END AS Dns,
+                   CASE WHEN NOT g.IsExplicit AND p.Policies = 1 THEN p.Members ELSE '{}' END AS Members
+            FROM groups g JOIN _RoutingGroupPolicies p ON p.Id = g.Id;
 
             UPDATE TrafficRules SET
                 DnsMode = (SELECT DnsMode FROM _RoutingGroupDns WHERE Id = TrafficRules.Id),
@@ -198,11 +189,9 @@ public partial class RoutingModel : Migration
                         WHERE EXISTS (SELECT 1 FROM TrafficRules WHERE Name = Candidate COLLATE NOCASE)
                     ) SELECT Candidate FROM names WHERE NOT EXISTS (SELECT 1 FROM TrafficRules WHERE Name = Candidate COLLATE NOCASE) LIMIT 1), '',
                    CASE WHEN d.IsFresh = 1 THEN 'default' ELSE 'custom' END,
-                   CASE WHEN d.IsFresh = 1 THEN '' WHEN d.Selection = 'outbound' THEN COALESCE(NULLIF(b.Dns, ''), NULLIF(o.Dns, ''),
-                       (SELECT group_concat(value, ',') FROM (SELECT DISTINCT j.value FROM _RoutingMembers m JOIN _RoutingOutboundDns md ON md.Name = m.Member, json_each(md.Servers) j WHERE m.Balancer = d.Outbound ORDER BY m.Position, j.key)), '')
-                       ELSE d.Upstreams END,
+                   CASE WHEN d.IsFresh = 1 THEN '' ELSE d.Upstreams END,
                    '{}', '2026-11-25 00:00:00+00:00', '2026-11-25 00:00:00+00:00'
-            FROM _RoutingDns d LEFT JOIN Balancers b ON b.Name = d.Outbound LEFT JOIN _RoutingOutboundDns o ON o.Name = d.Outbound;
+            FROM _RoutingDns d;
             INSERT INTO RoutingEntries (Name, Position, IsEnabled, Action, Outbound, Clients, Inbounds, Ports, SourcePorts, Protocol, CreatedUtc, UpdatedUtc)
             SELECT (WITH RECURSIVE names(N, Candidate) AS (
                         SELECT 0, 'Default DNS'

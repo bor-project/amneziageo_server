@@ -28,6 +28,9 @@ public sealed class RoutingEndpointTests
     public async Task RulesAndEntriesUseSeparateApisAndPreserveReferences()
     {
         using var bench = new Bench();
+        var inbound = new ConfigEntity { Name = "awg0" };
+        bench.Db.Configs.Add(inbound);
+        await bench.Db.SaveChangesAsync().ConfigureAwait(false);
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
@@ -53,7 +56,10 @@ public sealed class RoutingEndpointTests
         await using var app = builder.Build();
         app.Use(async (context, next) =>
         {
-            context.Items["amneziageo.caller"] = new Principal(1, "tester", AuthScheme.Password, 1, Scopes.All.ToHashSet(), "admin");
+            var scopes = context.Request.Headers.ContainsKey("X-Test-Readonly")
+                ? new[] { Scopes.ReadState }.ToHashSet()
+                : Scopes.All.ToHashSet();
+            context.Items["amneziageo.caller"] = new Principal(1, "tester", AuthScheme.Password, 1, scopes, "admin");
             await next(context).ConfigureAwait(false);
         });
         app.MapRules();
@@ -61,6 +67,22 @@ public sealed class RoutingEndpointTests
         {
             await app.StartAsync().ConfigureAwait(false);
             using var api = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}/api/") };
+            const string profile = "routing-entries/profiles/internet-only";
+            using var missingInbound = await api.PostAsJsonAsync(profile, new { InterfaceIds = new[] { long.MaxValue } }).ConfigureAwait(false);
+            Assert.Equal(HttpStatusCode.BadRequest, missingInbound.StatusCode);
+            api.DefaultRequestHeaders.Add("X-Test-Readonly", "1");
+            using var readonlyProfile = await api.PostAsJsonAsync(profile, new { InterfaceIds = new[] { inbound.Id } }).ConfigureAwait(false);
+            Assert.Equal(HttpStatusCode.Forbidden, readonlyProfile.StatusCode);
+            api.DefaultRequestHeaders.Remove("X-Test-Readonly");
+            var original = await api.GetFromJsonAsync<TrafficRule[]>("traffic-rules").ConfigureAwait(false);
+            Assert.Empty(original!);
+            using var addedProfile = await api.PostAsJsonAsync(profile, new { InterfaceIds = new[] { inbound.Id } }).ConfigureAwait(false);
+            addedProfile.EnsureSuccessStatusCode();
+            Assert.True((await addedProfile.Content.ReadFromJsonAsync<JsonElement>().ConfigureAwait(false)).GetProperty("added").GetBoolean());
+            using var repeatedProfile = await api.PostAsJsonAsync(profile, new { InterfaceIds = new[] { inbound.Id } }).ConfigureAwait(false);
+            repeatedProfile.EnsureSuccessStatusCode();
+            Assert.False((await repeatedProfile.Content.ReadFromJsonAsync<JsonElement>().ConfigureAwait(false)).GetProperty("added").GetBoolean());
+
             var defaults = await api.GetFromJsonAsync<System.Text.Json.JsonElement>("traffic-rules/dns-defaults").ConfigureAwait(false);
             Assert.Equal(System.Text.Json.JsonValueKind.Array, defaults.GetProperty("servers").ValueKind);
             var fresh = await api.GetFromJsonAsync<TrafficRule>("traffic-rules/draft").ConfigureAwait(false);

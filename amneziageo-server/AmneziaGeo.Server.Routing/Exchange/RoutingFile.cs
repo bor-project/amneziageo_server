@@ -66,8 +66,10 @@ public static class RoutingFile
             && one.Targets is not null && one.Targets.All(value => value is not null)
             && one.Dns is not null && one.Dns.All(value => value is not null)
             && TrafficDnsMode.Known(one.DnsMode)
+            && (one.Profile is null || one.Profile == RouteDefaults.InternetOnly && HasTargets(one.Targets))
             && (one.DnsMembers is null || one.DnsMembers.All(pair => !string.IsNullOrWhiteSpace(pair.Key)
                 && pair.Value is not null && pair.Value.All(value => value is not null))))
+        && doc.Rules.Count(one => one.Profile is not null) <= 1
         && doc.Rules.Select(one => one.Name).Distinct(StringComparer.Ordinal).Count() == doc.Rules.Count
         && doc.Entries.All(one => one is not null && RouteRules.CheckName(one.Name) is null
             && one.Action is not null && one.Outbound is not null && one.Protocol is not null
@@ -177,7 +179,7 @@ public sealed record RoutingDoc(string Format, int Version, IReadOnlyList<Traffi
 
 public sealed record TrafficRuleBlock(string Name, IReadOnlyList<string> Targets, IReadOnlyList<string> Dns,
     IReadOnlyDictionary<string, IReadOnlyList<string>>? DnsMembers = null,
-    string DnsMode = TrafficDnsMode.Custom);
+    string DnsMode = TrafficDnsMode.Custom, string? Profile = null);
 
 public sealed record EntryBlock(string Name, int Position, bool IsEnabled, string Action, string Outbound,
     IReadOnlyList<string> Rules, IReadOnlyList<string> Clients, IReadOnlyList<string> Inbounds,

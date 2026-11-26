@@ -79,6 +79,11 @@ export function useRoutingEntries() {
   return useQuery({ queryKey: ["routing-entries"], queryFn: async () => (await client.get<RoutingEntry[]>("/routing-entries/table")).data })
 }
 
+export function useInternetOnlyProfile() {
+  return useRefreshing((request: { interfaceIds: number[]; name: string; addressesName: string }) =>
+    client.post<{ added: boolean }>("/routing-entries/profiles/internet-only", request).then(({ data }) => data))
+}
+
 export function useAddEntry() {
   return useRefreshing((draft: EntryDraft) => client.post("/routing-entries", draft))
 }
@@ -117,7 +122,7 @@ export const freshEntry: EntryDraft = {
   name: "", isEnabled: true, action: "direct", outbound: "", ruleIds: [], clients: [], inbounds: [], ports: [], sourcePorts: [], protocol: "any",
 }
 
-function useRefreshing<T>(call: (args: T) => Promise<unknown>) {
+function useRefreshing<T, TResult>(call: (args: T) => Promise<TResult>) {
   const queries = useQueryClient()
 
   return useMutation({ mutationFn: call, onSuccess: async () => {
