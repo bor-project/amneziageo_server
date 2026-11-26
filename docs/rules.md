@@ -9,6 +9,22 @@ The rules, address sets and processing objects have separate settings pages. The
 pages. Saving or cancelling returns to the originating list with its filter; creating or editing an address set
 from a rule retains the unfinished rule and selects a newly created set when returning.
 
+## Internet only
+
+In **Routing → Rules → Presets**, choose **Internet only**, select the VPN interfaces, and apply.
+The panel adds the editable **Private networks** address set and a Block rule for the selected interfaces.
+The set covers private, shared and link-local IPv4 ranges, IPv6 local ranges and loopback addresses.
+Existing rules keep their order and take precedence by default. To allow a particular internal service or
+resolver, place a narrower rule before the Block rule.
+
+The panel resolver still receives TCP and UDP DNS on port 53 on interfaces where DNS redirection is enabled.
+The preset preserves DNS settings on the address sets and the existing **Default DNS** rule.
+On interfaces with DNS redirection disabled, an internal resolver needs an explicit permit rule.
+
+Applying the preset again adds only interfaces without a corresponding rule. The address set can be edited,
+and the rules can be moved, disabled or deleted like other routing rules. Installs and updates do not
+activate the preset automatically.
+
 ## Rights and routes
 
 | Route | Right |
@@ -24,6 +40,7 @@ from a rule retains the unfinished rule and selects a newly created set when ret
 | `POST /api/routing-entries`, `PUT /api/routing-entries/{id}` | `routing:write` |
 | `POST /api/routing-entries/{id}/switch`, `POST /api/routing-entries/{id}/move` | `routing:write` |
 | `POST /api/routing-entries/apply`, `DELETE /api/routing-entries/{id}` | `routing:write` |
+| `POST /api/routing-entries/profiles/internet-only` | `routing:write` |
 
 The API calls address sets `traffic-rules` and ordered processing rules `routing-entries`. The public panel paths are
 `/routing/rules` for ordered rules and `/routing/addresses` for address sets. Existing links to

@@ -15,6 +15,7 @@ import { DnsMark } from "@/components/DnsMark"
 import { Find, Knob, Pick } from "@/components/fields"
 import { clientTo, configTo, wayTo } from "@/components/members"
 import { Move } from "@/components/Move"
+import { InternetOnlyProfile } from "@/components/InternetOnlyProfile"
 import { RoutingExchange } from "@/components/RoutingExchange"
 import { RoutingSettings, RoutingToolbar } from "@/components/RoutingEditor"
 import { Rows } from "@/components/Rows"
@@ -60,7 +61,8 @@ export function RoutingTable() {
   }
 
   return <>
-    <RoutingToolbar onAdd={may && entries.isSuccess ? () => navigate("/routing/rules/new") : undefined}>
+    <RoutingToolbar onAdd={may && entries.isSuccess ? () => navigate("/routing/rules/new") : undefined}
+      actions={may && entries.isSuccess ? <InternetOnlyProfile configs={configs} /> : undefined}>
       <Pick id="table-client" caption={t("routing.client")} value={client} onChange={(value) => filter("client", value)}>
         <option value="">{t("routing.all")}</option>{clients.map((one) => <option key={one.id} value={one.name}>{one.name}</option>)}
       </Pick>

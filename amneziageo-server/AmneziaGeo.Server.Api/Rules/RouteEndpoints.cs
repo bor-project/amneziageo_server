@@ -33,6 +33,7 @@ public static class RouteEndpoints
         writing.MapPost("/{id:long}/move", MoveAsync);
         writing.MapPost("/table/{id:long}/move", MoveTableAsync);
         writing.MapPost("/apply", ApplyAsync);
+        writing.MapPost("/profiles/internet-only", AddInternetOnlyAsync);
         writing.MapDelete("/{id:long}", RemoveAsync);
 
         return routes.MapTrafficRules();
@@ -123,6 +124,36 @@ public static class RouteEndpoints
 
         return Results.Ok(new RulesetResponse(RouteRuleset.Text(plan) + RouteRuleset.Guarding(plan)));
     }
+
+    private static async Task<IResult> AddInternetOnlyAsync(
+        InternetOnlyRequest request,
+        RouteStore store,
+        RouteApplier applier,
+        CancellationToken ct)
+    {
+        var name = request.Name?.Trim() ?? "Internet only";
+        var addresses = request.AddressesName?.Trim() ?? "Private networks";
+        if ((RouteRules.CheckName(name) ?? RouteRules.CheckName(addresses)) is { } fault)
+        {
+            return Refuse(StatusCodes.Status400BadRequest, fault.Code, fault.Message);
+        }
+
+        var result = await store.AddInternetOnlyAsync(request.InterfaceIds ?? [], name, addresses, ct).ConfigureAwait(false);
+        if (result is null)
+        {
+            return Results.Ok(new { Added = false });
+        }
+
+        if (!result.IsOk)
+        {
+            return Explain(result);
+        }
+
+        await applier.SettleAsync(ct).ConfigureAwait(false);
+        return Results.Ok(new { Added = true });
+    }
+
+    private sealed record InternetOnlyRequest(IReadOnlyList<long>? InterfaceIds, string? Name, string? AddressesName);
 
     private static async Task<IResult> AddAsync(
         RouteRequest request,

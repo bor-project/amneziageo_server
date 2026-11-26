@@ -302,7 +302,7 @@ public static class RouteRuleset
             }
 
             var tail = Ports(leg.Rule) + Verdict(leg, six, journal);
-            var head = Inbound(leg.Rule)
+            var head = Inbound(leg.Rule.Inbounds)
                 + (sources.Count > 0 ? $"{family} saddr {{ {string.Join(", ", sources)} }} " : string.Empty);
             foreach (var set in Sets(leg, six))
             {
@@ -392,7 +392,7 @@ public static class RouteRuleset
     }
 
     // Returns what a line of a rule starts with in one family, or null when the rule names clients of the other only.
-    private static string? Head(RouteLeg leg, bool six)
+    private static string? Head(RouteLeg leg, bool six, IReadOnlyList<string>? inbounds = null)
     {
         var sources = six ? leg.Sources6 : leg.Sources4;
         if (leg.IsBySource && sources.Count == 0)
@@ -400,7 +400,7 @@ public static class RouteRuleset
             return null;
         }
 
-        return Inbound(leg.Rule)
+        return Inbound(inbounds ?? leg.Rule.Inbounds)
             + (sources.Count > 0 ? $"{(six ? "ip6" : "ip")} saddr {{ {string.Join(", ", sources)} }} " : string.Empty);
     }
 
@@ -412,6 +412,11 @@ public static class RouteRuleset
         var handed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var leg in live)
         {
+            foreach (var line in ProfileDns(leg, plan))
+            {
+                yield return line;
+            }
+
             foreach (var line in Lines(leg, plan.Journal))
             {
                 yield return line;
@@ -423,6 +428,36 @@ public static class RouteRuleset
                 {
                     yield return line;
                 }
+            }
+        }
+    }
+
+    private static IEnumerable<string> ProfileDns(RouteLeg leg, RoutePlan plan)
+    {
+        if (!plan.Dns.IsEnabled || !leg.IsBlock || leg.Rule.Criteria is not [{ DefaultKey: RouteDefaults.InternetOnly }])
+        {
+            yield break;
+        }
+
+        var answered = leg.Rule.Inbounds.Intersect(plan.Answered, StringComparer.Ordinal).ToArray();
+        if (answered.Length == 0)
+        {
+            yield break;
+        }
+
+        foreach (var six in new[] { false, true })
+        {
+            if (Head(leg, six, answered) is not { } head)
+            {
+                continue;
+            }
+
+            var family = six ? "ip6" : "ip";
+            foreach (var set in Sets(leg, six))
+            {
+                yield return $"{head}{family} daddr @{set} "
+                    + Ports(leg.Rule)
+                    + "meta l4proto { tcp, udp } th dport 53 return";
             }
         }
     }
@@ -556,7 +591,7 @@ public static class RouteRuleset
 
     private static IReadOnlyList<string> Plain(RouteLeg leg, ushort? journal)
     {
-        var head = Inbound(leg.Rule);
+        var head = Inbound(leg.Rule.Inbounds);
         if (!Sticky(leg))
         {
             return [head + Ports(leg.Rule) + Verdict(leg, false, journal)];
@@ -734,8 +769,8 @@ public static class RouteRuleset
         text.Append("\t}\n\n");
     }
 
-    private static string Inbound(RouteRule rule) =>
-        rule.Inbounds.Count == 0 ? string.Empty : $"iifname {{ {Quoted(rule.Inbounds)} }} ";
+    private static string Inbound(IReadOnlyList<string> inbounds) =>
+        inbounds.Count == 0 ? string.Empty : $"iifname {{ {Quoted(inbounds)} }} ";
 
     private static string Ports(RouteRule rule)
     {

@@ -81,6 +81,7 @@ public static class RoutingImport
             var result = await rules.ImportCriterionAsync(new TrafficRule
             {
                 Name = one.Name,
+                DefaultKey = one.Profile,
                 Targets = one.Targets ?? [],
                 Dns = one.Dns ?? [],
                 DnsMode = one.DnsMode,

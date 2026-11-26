@@ -5,6 +5,13 @@ namespace AmneziaGeo.Server.Routing.Route;
 /// </summary>
 public static class RouteDefaults
 {
+    public const string InternetOnly = "internet-only";
+
+    public static IReadOnlyList<string> PrivateNetworks { get; } =
+    [
+        .. Host.OutboundRuleset.Private4, "127.0.0.0/8",
+        .. Host.OutboundRuleset.Private6, "::1/128",
+    ];
     /// <summary>
     /// Returns an empty rule under a name.
     /// </summary>
