@@ -35,6 +35,9 @@ export const en = {
   "error.defaultTemplateNameFixed": "The default configuration name cannot be changed",
   "templates.reset": "Reset to defaults",
   "templates.resetConfirm": "Reset the default configuration?",
+  "editor.unsaved": "Discard unsaved changes?",
+  "editor.stay": "Stay",
+  "editor.discard": "Leave without saving",
   "app.name": "AmneziaGeo",
   "app.subtitle": "Server management",
 

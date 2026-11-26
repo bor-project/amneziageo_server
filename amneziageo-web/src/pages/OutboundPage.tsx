@@ -43,7 +43,8 @@ function NewOutbound() {
       publicKey={fresh.data.publicKey}
       pending={add.isPending}
       error={add.error}
-      onSave={(draft) => void add.mutateAsync(draft).then(() => close()).catch(() => undefined)}
+      onSave={(draft) => add.mutateAsync(draft)}
+      onSaved={(draft) => close({ outbound: draft.name.trim() })}
       onClose={() => close()}
     />
   )
@@ -93,12 +94,14 @@ function HeldOutbound({ outboundId }: { outboundId: number }) {
       </HeadActions>
 
       <OutboundForm
+        key={held.id}
         start={draftOf(held)}
         publicKey={held.publicKey}
         self={held.name}
         pending={change.isPending}
         error={change.error}
-        onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => close({ outbound: draft.name.trim() })).catch(() => undefined)}
+        onSave={(draft) => change.mutateAsync({ id: held.id, draft })}
+        onSaved={(draft) => close({ outbound: draft.name.trim() })}
         onClose={() => close()}
         onRemove={() => navigate(`/routing/channels/${held.id}/delete`)}
       />

@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
+import { useEditorExit } from "@/components/EditorExit"
 import { complaint } from "@/api/auth"
 import type { BalanceStrategy, BalancerDraft } from "@/api/balancers"
 import { useDnsDefaults } from "@/api/trafficRules"
@@ -9,7 +10,7 @@ import { useOutbounds } from "@/api/outbounds"
 import { Line, ListLine, Part, Switch } from "@/components/fields"
 import { WayUse } from "@/components/Holders"
 import { wayTo } from "@/components/members"
-import { danger, field, footer, footerUnder, label, primary, quiet, secondary } from "@/components/styles"
+import { danger, field, footer, label, primary, quiet, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { same } from "@/store/draftSlice"
@@ -20,18 +21,18 @@ export function BalancerForm({
   pending,
   error,
   onSave,
+  onSaved,
   onClose,
   onRemove,
-  embedded = false,
 }: {
   start: BalancerDraft
   self?: string
   pending: boolean
   error: unknown
-  onSave: (draft: BalancerDraft) => void
+  onSave: (draft: BalancerDraft) => Promise<unknown>
+  onSaved: (draft: BalancerDraft) => void
   onClose: () => void
   onRemove?: () => void
-  embedded?: boolean
 }) {
   const t = useText()
   const outbounds = useOutbounds()
@@ -39,6 +40,7 @@ export function BalancerForm({
   const [draft, setDraft] = useState(start)
   const rest = (outbounds.data ?? []).filter((one) => !draft.members.includes(one.name))
   const edited = !same(draft, start)
+  const { leave, prompt } = useEditorExit(edited, pending)
   const previewName = draft.name || self || "balance"
   const preview = { ...draft, id: 0, position: 0, name: previewName, createdUtc: "", updatedUtc: "", state: {
     isLive: true,
@@ -171,7 +173,7 @@ export function BalancerForm({
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
 
-      <div className={embedded ? footerUnder + " routing-form-footer" : footer}>
+      <div className={footer}>
         {onRemove !== undefined && (
           <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
             {t("balancers.remove")}
@@ -182,13 +184,14 @@ export function BalancerForm({
         </button>
         <button
           type="button"
-          onClick={() => onSave(draft)}
+          onClick={() => void onSave(draft).then(() => leave(() => onSaved(draft))).catch(() => undefined)}
           disabled={!edited || pending || draft.name.length === 0 || draft.members.length === 0}
           className={primary}
         >
           {pending ? t("balancers.busy") : t("balancers.save")}
         </button>
       </div>
+      {prompt}
     </div>
   )
 }
