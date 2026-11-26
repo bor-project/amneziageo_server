@@ -37,6 +37,9 @@ export const ru: Dictionary = {
   "error.defaultTemplateNameFixed": "Имя конфигурации по умолчанию нельзя изменить",
   "templates.reset": "Сбросить по умолчанию",
   "templates.resetConfirm": "Сбросить настройки конфигурации по умолчанию?",
+  "editor.unsaved": "Не сохранять изменения?",
+  "editor.stay": "Остаться",
+  "editor.discard": "Выйти без сохранения",
   "app.name": "AmneziaGeo",
   "app.subtitle": "Управление сервером",
 

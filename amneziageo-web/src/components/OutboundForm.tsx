@@ -1,4 +1,5 @@
 import { useRef, useState } from "react"
+import { useEditorExit } from "@/components/EditorExit"
 import { complaint } from "@/api/auth"
 import type { Obfuscation } from "@/api/configs"
 import { useImportOutbound, useOutboundKeys, useOutbounds } from "@/api/outbounds"
@@ -10,7 +11,7 @@ import { WayUse } from "@/components/Holders"
 import { ObfuscationFields } from "@/components/Obfuscation"
 import { headerProtectionMtu } from "@/components/headerProtection"
 import { Count, Flag, Line, ListLine, Part, Switch } from "@/components/fields"
-import { danger, field, footer, footerUnder, label, primary, secondary } from "@/components/styles"
+import { danger, field, footer, label, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
 import { same } from "@/store/draftSlice"
@@ -22,19 +23,19 @@ export function OutboundForm({
   pending,
   error,
   onSave,
+  onSaved,
   onClose,
   onRemove,
-  embedded = false,
 }: {
   start: OutboundDraft
   publicKey: string
   self?: string
   pending: boolean
   error: unknown
-  onSave: (draft: OutboundDraft) => void
+  onSave: (draft: OutboundDraft) => Promise<unknown>
+  onSaved: (draft: OutboundDraft) => void
   onClose: () => void
   onRemove?: () => void
-  embedded?: boolean
 }) {
   const t = useText()
   const keys = useOutboundKeys()
@@ -48,6 +49,7 @@ export function OutboundForm({
   const [shown, setShown] = useState(publicKey)
   const [text, setText] = useState("")
   const edited = !same(draft, start)
+  const { leave, prompt } = useEditorExit(edited || text.length > 0, pending)
   const name = interfaceNameFault(t, draft.name, [...outbounds.filter((one) => one.name !== self).map((one) => one.name), ...balancers.map((one) => one.name), ...(self !== undefined && interfaceNameValue(draft.name) === start.name ? [] : configs.map((one) => one.name))])
 
   function put(change: Partial<OutboundDraft>) {
@@ -287,7 +289,7 @@ export function OutboundForm({
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
       )}
 
-      <div className={embedded ? footerUnder + " routing-form-footer" : footer}>
+      <div className={footer}>
         {onRemove !== undefined && (
           <button type="button" onClick={onRemove} className={`mr-auto ${danger}`}>
             {t("outbounds.remove")}
@@ -298,13 +300,14 @@ export function OutboundForm({
         </button>
         <button
           type="button"
-          onClick={() => onSave(draft)}
+          onClick={() => void onSave(draft).then(() => leave(() => onSaved(draft))).catch(() => undefined)}
           disabled={!edited || pending || name.length > 0}
           className={primary}
         >
           {pending ? t("outbounds.busy") : t("outbounds.save")}
         </button>
       </div>
+      {prompt}
     </div>
   )
 }

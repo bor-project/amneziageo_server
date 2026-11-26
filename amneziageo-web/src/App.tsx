@@ -233,7 +233,8 @@ function Root() {
       <Boot>
         <Outlet />
       </Boot>
-      <ScrollRestoration />
+      <ScrollRestoration getKey={({ pathname, search, key }) =>
+        pathname === "/routing/channels" || pathname === "/routing/balancers" ? pathname + search : key} />
     </>
   )
 }
