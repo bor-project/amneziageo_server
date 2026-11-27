@@ -192,12 +192,15 @@ public static class RouteAnswers
         }
 
         var previous = held is { Criteria: [var one] } ? one : null;
-        var mode = row.DnsMode ?? previous?.DnsMode ?? TrafficDnsMode.Default;
+        var defaultMode = held is null && draft.Action == RouteAction.Block
+            && (draft.Protocol != RouteProtocol.Any || draft.Ports.Count > 0 || draft.SourcePorts.Count > 0)
+                ? TrafficDnsMode.Skip
+                : TrafficDnsMode.Default;
         return new TrafficRule
         {
             Name = draft.Name,
             Targets = row.Targets is null ? previous?.Targets ?? [] : Clean(row.Targets),
-            DnsMode = mode,
+            DnsMode = row.DnsMode ?? previous?.DnsMode ?? defaultMode,
             Dns = row.Dns is null ? previous?.Dns ?? [] : Clean(row.Dns),
             DnsMembers = row.DnsMembers ?? previous?.DnsMembers ?? new Dictionary<string, IReadOnlyList<string>>(),
         };
