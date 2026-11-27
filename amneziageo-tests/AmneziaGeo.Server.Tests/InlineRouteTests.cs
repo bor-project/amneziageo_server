@@ -106,15 +106,44 @@ public sealed class InlineRouteTests
         Assert.Equal("bad-criterion", RouteAnswers.Dropped(request)?.Code);
     }
 
+    [Theory]
+    [InlineData(RouteAction.Block, RouteProtocol.Tcp, null, null, TrafficDnsMode.Skip)]
+    [InlineData(RouteAction.Block, RouteProtocol.Any, "443", null, TrafficDnsMode.Skip)]
+    [InlineData(RouteAction.Block, RouteProtocol.Any, null, "443", TrafficDnsMode.Skip)]
+    [InlineData(RouteAction.Block, RouteProtocol.Any, null, null, TrafficDnsMode.Default)]
+    [InlineData(RouteAction.Direct, RouteProtocol.Udp, "443", null, TrafficDnsMode.Default)]
+    public void NewInlineRulesChooseTheDnsDefaultFromTheirTransport(string action, string protocol, string? port, string? sourcePort, string expected)
+    {
+        var request = new RouteRequest("rule", true, action, "", null, port is null ? [] : [port], protocol,
+            SourcePorts: sourcePort is null ? [] : [sourcePort], Criterion: new RouteCriterionRequest(["example.com"], null, []));
+        Assert.Equal(expected, RouteAnswers.Criterion(request, RouteAnswers.Draft(request))?.DnsMode);
+    }
+
+    [Fact]
+    public void ScopedBlocksKeepExplicitAndExistingDnsModes()
+    {
+        var criterion = new RouteCriterionRequest(["example.com"], TrafficDnsMode.Default, []);
+        var request = new RouteRequest("legacy block", true, RouteAction.Block, "", [1], ["443"], RouteProtocol.Udp, Criterion: criterion);
+        var draft = RouteAnswers.Draft(request);
+        var saved = RouteAnswers.Criterion(request, draft);
+        Assert.NotNull(saved);
+        Assert.Equal(TrafficDnsMode.Default, saved.DnsMode);
+        var held = draft with { Criteria = [saved] };
+        var edit = request with { Criterion = criterion with { DnsMode = null } };
+        Assert.Equal(TrafficDnsMode.Default, RouteAnswers.Criterion(edit, RouteAnswers.Draft(edit, held), held)?.DnsMode);
+        Assert.Null(RouteAnswers.Criterion(request with { Criterion = null }, draft));
+    }
+
     [Fact]
     public void PortSpecificBlockCanYieldDnsWithoutYieldingTraffic()
     {
-        var blocked = new RouteRule
-        {
-            Id = 1, Name = "udp block", Position = 1, Action = RouteAction.Block,
-            Protocol = RouteProtocol.Udp, Ports = ["443"],
-            Criteria = [new TrafficRule { Id = 1, Name = "block", DnsMode = TrafficDnsMode.Skip }],
-        };
+        var request = new RouteRequest("udp block", true, RouteAction.Block, "", null, ["443"], RouteProtocol.Udp,
+            Criterion: new RouteCriterionRequest([], null, []));
+        var draft = RouteAnswers.Draft(request);
+        var criterion = RouteAnswers.Criterion(request, draft);
+        Assert.NotNull(criterion);
+        Assert.Equal(TrafficDnsMode.Skip, criterion.DnsMode);
+        var blocked = draft with { Id = 1, Position = 1, Criteria = [criterion with { Id = 1 }] };
         var fallback = new RouteRule
         {
             Id = 2, Name = "fallback", Position = int.MaxValue, Action = RouteAction.Direct,
