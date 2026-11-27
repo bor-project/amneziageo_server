@@ -161,7 +161,7 @@ public static class RouteEndpoints
         RouteApplier applier,
         CancellationToken ct)
     {
-        if (request.RuleIds is not { Count: > 0 })
+        if (request.Criterion is null && request.RuleIds is not { Count: > 0 })
         {
             return Refuse(StatusCodes.Status400BadRequest, "no-traffic-rule", "select at least one traffic rule");
         }
@@ -171,7 +171,8 @@ public static class RouteEndpoints
             return Refuse(StatusCodes.Status400BadRequest, dropped.Code, dropped.Message);
         }
 
-        var result = await store.AddAsync(RouteAnswers.Draft(request), ct).ConfigureAwait(false);
+        var draft = RouteAnswers.Draft(request);
+        var result = await store.AddAsync(draft, ct, RouteAnswers.Criterion(request, draft)).ConfigureAwait(false);
         if (!result.IsOk)
         {
             return Explain(result);
@@ -191,7 +192,7 @@ public static class RouteEndpoints
         RouteApplier applier,
         CancellationToken ct)
     {
-        if (request.RuleIds is not { Count: > 0 })
+        if (request.Criterion is null && request.RuleIds is not { Count: > 0 })
         {
             return Refuse(StatusCodes.Status400BadRequest, "no-traffic-rule", "select at least one traffic rule");
         }
@@ -207,7 +208,8 @@ public static class RouteEndpoints
             return Missing(id);
         }
 
-        var result = await store.ChangeAsync(id, RouteAnswers.Draft(request, held), ct).ConfigureAwait(false);
+        var draft = RouteAnswers.Draft(request, held);
+        var result = await store.ChangeAsync(id, draft, ct, RouteAnswers.Criterion(request, draft, held)).ConfigureAwait(false);
 
         return await AnswerAsync(result, applier, ct).ConfigureAwait(false);
     }

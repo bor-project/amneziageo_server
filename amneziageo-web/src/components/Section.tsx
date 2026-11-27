@@ -48,6 +48,7 @@ export function Sectioned({
   const tabs = shown(open)
   const now = here(open, pathname)
   const listed = now !== undefined && pathname === now.to
+  const tabList = tabbed && listed && now.unlisted !== true
   const add =
     now !== undefined && listed && now.add !== undefined && holds(user, now.add.scope) ? now.add.to : null
   const crumbs: Crumb[] = [{ label: t(title), to }]
@@ -64,7 +65,7 @@ export function Sectioned({
   useCrumbs(crumbs)
 
   const named = listed || now === undefined ? null : (tail[0]?.label ?? null)
-  const heading = named ?? (now === undefined || tabbed ? t(title) : t(now.label))
+  const heading = named ?? (now === undefined || tabList ? t(title) : t(now.label))
 
   return (
     <div>
@@ -73,7 +74,7 @@ export function Sectioned({
           <h1 className="min-w-0 truncate text-2xl leading-10 font-semibold tracking-[-0.02em]" title={heading}>
             {heading}
           </h1>
-          {listed && !tabbed && now.only !== undefined && <AppMark what={now.only} large />}
+          {listed && !tabList && now.only !== undefined && <AppMark what={now.only} large />}
         </div>
         <div ref={setSlot} className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {add !== null && (
@@ -84,12 +85,12 @@ export function Sectioned({
         </div>
       </div>
 
-      {tabbed && listed && tabs.length > 1 && (
+      {tabList && tabs.length > 1 && (
         <Tabs
           wrap={wrapTabs}
           items={tabs.map((one) => ({
             to: spotIn(spots, one.to),
-            label: t(one.label),
+            label: t(one.tabLabel ?? one.label),
             end: one.to === to,
             mark: one.only === undefined ? undefined : <AppMark what={one.only} />,
           }))}

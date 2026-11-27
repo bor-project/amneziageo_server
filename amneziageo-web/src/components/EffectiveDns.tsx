@@ -1,27 +1,30 @@
 import { useBalancers } from "@/api/balancers"
 import { useOutbounds } from "@/api/outbounds"
-import type { EntryDraft } from "@/api/routingEntries"
+import type { EntryCriterion, EntryDraft } from "@/api/routingEntries"
 import { useDnsDefaults } from "@/api/trafficRules"
-import type { TrafficRuleDraft } from "@/api/trafficRules"
 import type { DnsPolicy } from "@/components/dnsPolicy"
 import { dnsChoice, dnsPolicy, dnsPresets } from "@/components/dnsPolicy"
 import { useText } from "@/i18n"
 
-export function DnsChoiceLabel({ rule }: { rule: TrafficRuleDraft }) {
+type DnsFields = Pick<EntryCriterion, "dnsMode" | "dns" | "dnsMembers">
+
+export function DnsChoiceLabel({ rule }: { rule: DnsFields }) {
   const t = useText()
-  const choice = dnsChoice(rule)
+  if (rule.dnsMode === "skip") { return <>{t("routing.dnsSkip")}</> }
+  const choice = dnsChoice({ ...rule, dnsMode: rule.dnsMode })
   return <>{dnsPresets.find((one) => one.key === choice)?.name ?? t(choice === "default" ? "routing.dnsDefault" : "routing.dnsCustom")}</>
 }
 
-export function EffectiveDns({ rule, entry }: { rule: TrafficRuleDraft; entry: Pick<EntryDraft, "action" | "outbound"> }) {
+export function EffectiveDns({ rule, entry }: { rule: DnsFields; entry: Pick<EntryDraft, "action" | "outbound"> }) {
   const t = useText()
   const outbounds = useOutbounds()
   const balancers = useBalancers()
   const defaults = useDnsDefaults()
+  if (rule.dnsMode === "skip") { return null }
   if (outbounds.data === undefined || balancers.data === undefined || defaults.data === undefined) {
     return <span className="text-muted">{t(outbounds.error || balancers.error || defaults.error ? "error.failed" : "page.loading")}</span>
   }
-  const policy = dnsPolicy(rule, entry, outbounds.data, balancers.data, defaults.data.servers)
+  const policy = dnsPolicy({ ...rule, dnsMode: rule.dnsMode }, entry, outbounds.data, balancers.data, defaults.data.servers)
   return <DnsPolicyView policy={policy} />
 }
 

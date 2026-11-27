@@ -4,9 +4,10 @@ Linked servers are the registered connections used by routing rules and balancer
 AmneziaWG tunnel, or carry that tunnel through a WebSocket proxy. The API retains the technical name `outbounds`.
 Each connection has its own mark and routing table; packets marked for it use that path.
 
-The panel opens a separate settings page from **Routing → Linked servers**. DNS saved here is the default source
-for address sets whose DNS mode is **Default**. The ordered rule chooses the server; no additional direction or
-channel object is required between them.
+The panel opens a separate settings page from **Routing → Linked servers**. DNS saved here is the source for rules
+that inherit it from this linked server. Use the configuration section to paste an AmneziaWG or WireGuard client
+configuration or choose a file. Import fills the endpoint, interface addresses, DNS, keys, MTU, Keepalive and
+supported AmneziaWG settings. Review or edit the populated fields before saving.
 
 ## Rights
 

@@ -6,6 +6,7 @@ using AmneziaGeo.Server.Awg.Config;
 using AmneziaGeo.Server.Core.Panel;
 using AmneziaGeo.Server.Dal;
 using AmneziaGeo.Server.Routing.Dns;
+using Microsoft.Data.Sqlite;
 
 namespace AmneziaGeo.Server.Tests;
 
@@ -150,10 +151,14 @@ public sealed class BootstrapTests : IDisposable
         var setup = Setup() with { Dns = new DnsSettings { IsEnabled = true, Port = 1053, Listen = ["127.0.0.1"] }, RoutingDefaults = true };
         using (var context = Context.Open(Database))
         {
-            foreach (var entry in await context.Rules.TableAsync(CancellationToken.None).ConfigureAwait(false))
-            {
-                Assert.True((await context.Rules.RemoveAsync(entry.Id, CancellationToken.None).ConfigureAwait(false)).IsOk);
-            }
+            Assert.Single(await context.Rules.TableAsync(CancellationToken.None).ConfigureAwait(false));
+        }
+        using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Database, ForeignKeys = true }.ToString()))
+        {
+            await connection.OpenAsync().ConfigureAwait(false);
+            using var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM RoutingEntries";
+            Assert.Equal(1, await command.ExecuteNonQueryAsync().ConfigureAwait(false));
         }
         Assert.Equal(78, await Run(setup).ConfigureAwait(false));
         Assert.Null(PanelStore.Held(Database));

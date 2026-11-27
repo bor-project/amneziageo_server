@@ -14,6 +14,8 @@ public sealed record RouteRule
 
     public IReadOnlyList<TrafficRule> Criteria { get; init; } = [];
 
+    public bool IsDefault => Criteria is [{ DefaultKey: RouteDefaults.FallbackKey }];
+
     /// <summary>
     /// The name the rule is shown under.
     /// </summary>

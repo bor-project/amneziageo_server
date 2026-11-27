@@ -5,6 +5,8 @@ namespace AmneziaGeo.Server.Routing.Route;
 /// </summary>
 public static class RouteDefaults
 {
+    public const string FallbackKey = "route-fallback";
+
     public const string InternetOnly = "internet-only";
 
     public static IReadOnlyList<string> PrivateNetworks { get; } =

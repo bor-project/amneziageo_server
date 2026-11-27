@@ -234,7 +234,7 @@ public static class BootstrapCommand
         if (entry is not { IsEnabled: true, Action: RouteAction.Direct, Outbound.Length: 0 }
             || entry.Clients.Count != 0 || entry.Inbounds.Count != 0 || entry.Ports.Count != 0 || entry.SourcePorts.Count != 0
             || entry.Protocol != RouteProtocol.Any
-            || criterion is not { DefaultKey: "resolver-default", DnsMode: TrafficDnsMode.Default }
+            || criterion is not { DefaultKey: RouteDefaults.FallbackKey or "resolver-default", DnsMode: TrafficDnsMode.Default }
             || criterion.Targets.Count != 0 || criterion.Dns.Count != 0 || criterion.DnsMembers.Count != 0)
         {
             throw new BootstrapFault("dns.routing", "initial DNS requires the fresh system-default direct routing entry; restore the initial routing policy or configure DNS after installation");

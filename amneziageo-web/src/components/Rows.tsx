@@ -23,6 +23,7 @@ export interface Column<T> {
 export interface Drag<T> {
   title: string
   onMove: (item: T, to: T) => void
+  canMove?: (item: T) => boolean
 }
 
 export interface Choice {
@@ -116,7 +117,7 @@ export function Rows<T>({
   }
 
   function drop(to: T) {
-    if (drag !== undefined && held !== null && held !== to) {
+    if (drag !== undefined && held !== null && held !== to && drag.canMove?.(to) !== false) {
       drag.onMove(held, to)
     }
 
@@ -324,7 +325,7 @@ export function Rows<T>({
                     e.dataTransfer.setData("text/plain", String(keyOf(place.item)))
                   }}
                   onDragOver={(e) => {
-                    if (moving && held !== null) {
+                    if (moving && held !== null && drag.canMove?.(place.item) !== false) {
                       e.preventDefault()
                       setOver(place.item)
                     }
@@ -342,7 +343,7 @@ export function Rows<T>({
                   {choice && <td className="py-3.25 pr-0 pl-4">{tick(place.item)}</td>}
                   {moving && (
                     <td className="py-3.25 pr-0 pl-3">
-                      <button
+                      {drag.canMove?.(place.item) !== false && <button
                         type="button"
                         title={drag.title}
                         aria-label={drag.title}
@@ -351,7 +352,7 @@ export function Rows<T>({
                         className="cursor-grab text-faint hover:text-ink active:cursor-grabbing"
                       >
                         <Grip />
-                      </button>
+                      </button>}
                     </td>
                   )}
                   {columns.map((column) => (

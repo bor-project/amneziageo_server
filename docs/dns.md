@@ -1,13 +1,13 @@
 # The resolver
 
 The panel answers DNS questions from tunnel clients and places resolved destination addresses into the sets used
-by routing rules. Address sets in **Routing → Addresses** define the resolver policy. Ordered **Rules** select
-the processing method and additional client/interface/port filters; see [rules.md](rules.md).
+by routing rules. In the **Routing** tab each ordered row defines its destinations, processing path, filters and DNS.
+See [rules.md](rules.md).
 
 DNS selects the first rule matching the name, client and incoming interface. Application protocol and port filters
-are ignored for DNS selection, while application traffic still uses every filter. Within that rule the first
-matching address set supplies DNS. Questions travel through the rule's linked server, selected balancer member or
-direct path. Blocking does not forward them. There is no independent Global/Outbound/Routing DNS-exit selector.
+are ignored for DNS selection, while application traffic still uses every filter. Questions travel through the rule's
+linked server, selected balancer member or direct path. **Next rule** skips the row only for DNS. The last **Default**
+row supplies DNS when earlier rows do not match.
 
 The resolver runs automatically while domain routing, stand-in addresses, clients choosing it or previously
 exported client configurations require it. Its service page retains listener, port, cache and client-file settings.
@@ -41,7 +41,7 @@ resolver answers on the rest.
 
 ## How the name servers are asked
 
-A custom DNS entry of an address set names a resolver by address and determines its transport:
+A custom DNS entry of a routing rule names a resolver by address and determines its transport:
 
 | Entry | Asked |
 |---|---|
@@ -49,7 +49,7 @@ A custom DNS entry of an address set names a resolver by address and determines 
 | `tls://1.1.1.1`, `tls://1.1.1.1:853` | DNS over TLS, port 853 unless another is written |
 | `1.1.1.1`, `8.8.8.8:5300`, `[2606:4700:4700::1111]:53` | in the open: UDP, and TCP for a client that came over TCP, port 53 unless another is written |
 
-A new address set starts in Default mode. For a linked server it uses the saved DNS of that connection; a
+A new rule starts with DNS inherited from its route. For a linked server it uses the saved DNS of that connection; a
 balancer uses its own DNS or that of the selected member; direct access uses the host DNS. The read-only endpoint
 `GET /api/traffic-rules/dns-defaults` returns the host's current resolver addresses. Empty default sources are
 reported as missing; they do not automatically choose a public provider. Presets store explicit addresses and
@@ -63,7 +63,7 @@ method even where earlier independent DNS settings selected a different exit. De
 
 A name server asked over TLS or HTTPS is named by its address, not by a name, so nothing has to be resolved first.
 The certificate it shows is checked against that address under the roots the host trusts, and a server whose
-certificate does not carry the address is not asked; Cloudflare, Google and Quad9 carry theirs. The address-set API refuses an unsupported resolver form with `bad-dns`.
+certificate does not carry the address is not asked; Cloudflare, Google and Quad9 carry theirs. The API refuses an unsupported resolver form with `bad-dns`.
 
 The connections that answered are kept for the questions that follow. The servers are asked in the order written;
 one that gave no answer is asked after the ones that answer for thirty seconds, and then asked aside, so no client

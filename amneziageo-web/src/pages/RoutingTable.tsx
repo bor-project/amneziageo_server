@@ -19,7 +19,7 @@ import { InternetOnlyProfile } from "@/components/InternetOnlyProfile"
 import { RoutingExchange } from "@/components/RoutingExchange"
 import { RoutingSettings, RoutingToolbar } from "@/components/RoutingEditor"
 import { Rows } from "@/components/Rows"
-import { alarmLine, card } from "@/components/styles"
+import { alarmLine, card, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import { RouteTest } from "@/pages/RouteTest"
 import { holds } from "@/store/authSlice"
@@ -46,13 +46,15 @@ export function RoutingTable() {
   const inbound = params.get("inbound") ?? ""
   const rule = params.get("rule") ?? ""
   const all = entries.data ?? []
-  const number = new Map(all.map((one, at) => [one.id, at + 1]))
-  const definitions = (one: RoutingEntry) => one.ruleIds.flatMap((id) => rules.filter((definition) => definition.id === id))
-  const shown = all.filter((one) => (client === "" || one.clients.length === 0 || one.clients.some((name) => name.toLowerCase() === client.toLowerCase()))
+  const regular = all.filter((one) => !one.isDefault)
+  const number = new Map(regular.map((one, at) => [one.id, at + 1]))
+  const definitions = (one: RoutingEntry) => one.criteria ?? one.ruleIds.flatMap((id) => rules.filter((definition) => definition.id === id))
+  const filtered = regular.filter((one) => (client === "" || one.clients.length === 0 || one.clients.some((name) => name.toLowerCase() === client.toLowerCase()))
     && (inbound === "" || one.inbounds.length === 0 || one.inbounds.includes(inbound))
-    && (rule === "" || one.ruleIds.includes(Number(rule)))
+    && (rule === "" || definitions(one).some((definition) => definition.id === Number(rule)))
     && [one.name, one.outbound, ...one.clients, ...one.inbounds, ...definitions(one).flatMap((definition) => [definition.name, ...definition.targets, ...definition.dns])]
       .some((text) => text.toLowerCase().includes(find.trim().toLowerCase())))
+  const shown = [...filtered, ...all.filter((one) => one.isDefault)]
 
   function filter(key: string, value: string) {
     const next = new URLSearchParams(params)
@@ -62,7 +64,11 @@ export function RoutingTable() {
 
   return <>
     <RoutingToolbar onAdd={may && entries.isSuccess ? () => navigate("/routing/rules/new") : undefined}
-      actions={may && entries.isSuccess ? <InternetOnlyProfile configs={configs} /> : undefined}>
+      actions={<>
+        <Link className={secondary} to="/routing/geo">{t("routing.geoTool")}</Link>
+        <Link className={secondary} to="/routing/dns">{t("routing.dnsTool")}</Link>
+        {may && entries.isSuccess && <InternetOnlyProfile configs={configs} />}
+      </>}>
       <Pick id="table-client" caption={t("routing.client")} value={client} onChange={(value) => filter("client", value)}>
         <option value="">{t("routing.all")}</option>{clients.map((one) => <option key={one.id} value={one.name}>{one.name}</option>)}
       </Pick>
@@ -79,29 +85,30 @@ export function RoutingTable() {
       {entries.isPending && <div className="p-4 text-sm text-muted">{t("rules.loading")}</div>}
       {entries.data !== undefined && <Rows name="routing-entry-order" items={shown} keyOf={(one) => one.id}
         drag={may && find === "" && client === "" && inbound === "" && rule === "" ? { title: t("rules.drag"),
+          canMove: (entry) => !entry.isDefault,
           onMove: (one, to) => void place.mutateAsync({ id: one.id, to: number.get(to.id) ?? 1 }).catch(() => undefined) } : undefined}
         columns={[
-          { key: "place", caption: "№", width: 44, cell: (one) => number.get(one.id) },
-
-          { key: "processing", caption: t("routing.processing"), width: 180, lead: true, cell: (one) => {
-            const to = one.action === "out" ? wayTo(one.outbound, outbounds, balancers) : undefined
-            const title = one.action === "out"
-              ? outbounds.some((way) => way.name === one.outbound && way.kind === "local") ? `${t("rules.actionDirect")} (${one.outbound})` : one.outbound
-              : t(one.action === "block" ? "rules.actionBlock" : "rules.actionDirect")
+          { key: "place", caption: "№", width: 44, cell: (one) => one.isDefault ? "—" : number.get(one.id) },
+          { key: "name", caption: t("routing.ruleName"), width: 144, lead: true, wrap: true, cell: (one) => {
+            const name = one.isDefault ? t("routing.defaultRow") : one.name
             return <div>
-              <div className="font-semibold">{to ? <Link to={to} className="text-brand-ink">{title}</Link> : title}</div>
-              <div className="mt-1 flex items-center gap-2 text-xs text-muted">
-                {may ? <Link to={`/routing/rules/${one.id}/edit`} className="hover:text-brand-ink">{one.name}</Link> : one.name}
+              <div className="flex items-center gap-2 font-semibold text-ink">
+                {may ? <Link to={`/routing/rules/${one.id}/edit`} className="hover:text-brand-ink">{name}</Link> : name}
                 <DnsMark findings={findingsOf(report, "rule", one.id)} view="rule" />
               </div>
               {!one.isEnabled && <div className="mt-1 text-xs text-muted">{t("rules.off")}</div>}
               {one.isEnabled && one.state.fault && <div className="mt-1 text-xs text-alarm">{t(reason(one.state.fault))}</div>}
             </div>
           } },
-          { key: "rules", caption: t("routing.addresses"), width: 180, wrap: true, cell: (one) => <div className="flex flex-col gap-1">
-            {one.ruleIds.map((id) => <Link key={id} to={`/routing/addresses/${id}/edit`} className="w-fit rounded bg-chip px-1.5 py-0.5 text-xs text-chip-ink">{rules.find((definition) => definition.id === id)?.name ?? String(id)}</Link>)}
-          </div> },
-          { key: "source", caption: t("routing.filters"), width: 180, cell: (one) => <div className="flex flex-col gap-1 text-xs">
+          { key: "rules", caption: t("routing.destination"), width: 156, wrap: true, cell: (one) => {
+            if (one.isDefault) { return t("routing.otherTraffic") }
+            const targets = definitions(one).flatMap((one) => one.targets)
+            return targets.length === 0 ? t("routing.anyAddress") : <div className="flex flex-col gap-1 text-xs">
+              {targets.slice(0, 3).map((target, at) => <div key={`${at}-${target}`}>{target}</div>)}
+              {targets.length > 3 && <span className="text-muted">+{targets.length - 3}</span>}
+            </div>
+          } },
+          { key: "source", caption: t("routing.filters"), width: 122, cell: (one) => one.isDefault ? "—" : <div className="flex flex-col gap-1 text-xs">
             {one.clients.length > 0 && <div><span className="text-muted">{t("routing.client")}: </span><Names values={one.clients} to={(name) => clientTo(name, clients)} /></div>}
             {one.inbounds.length > 0 && <div><span className="text-muted">{t("routing.inbound")}: </span><Names values={one.inbounds} to={(name) => configTo(name, configs)} /></div>}
             {one.protocol !== "any" && <div>{one.protocol.toUpperCase()}</div>}
@@ -109,18 +116,38 @@ export function RoutingTable() {
             {one.sourcePorts.length > 0 && <div><span className="text-muted">{t("rules.sourcePorts")}: </span>{one.sourcePorts.join(", ")}</div>}
             {one.clients.length === 0 && one.inbounds.length === 0 && one.protocol === "any" && one.ports.length === 0 && one.sourcePorts.length === 0 && <span className="text-muted">{t("routing.all")}</span>}
           </div> },
-          { key: "dns", caption: t("tab.dns"), width: 220, wrap: true, cell: (one) => <div className="flex flex-col gap-3 text-xs">
-            {definitions(one).map((definition) => <div key={definition.id}>
-              {one.ruleIds.length > 1 && <div className="mb-1 text-muted">{definition.name}</div>}
-              <EffectiveDns rule={definition} entry={one} />
-              <div className="mt-1 text-muted"><DnsChoiceLabel rule={definition} /></div>
-            </div>)}
-          </div> },
-          { key: "actions", caption: t("rules.actions"), width: 150, tail: true, cell: (one) => may && <div className="flex items-center justify-end gap-1">
-            <Knob title={t("rules.enabled")} value={one.isEnabled} disabled={toggle.isPending}
-              onChange={(on) => void toggle.mutateAsync({ id: one.id, on }).catch(() => undefined)} />
-            <Move first={number.get(one.id) === 1 || move.isPending || place.isPending} last={number.get(one.id) === all.length || move.isPending || place.isPending}
-              upTitle={t("rules.up")} downTitle={t("rules.down")} onMove={(up) => void move.mutateAsync({ id: one.id, up }).catch(() => undefined)} />
+          { key: "processing", caption: t("routing.route"), width: 124, wrap: true, cell: (one) => {
+            const to = may && one.action === "out" ? wayTo(one.outbound, outbounds, balancers) : undefined
+            const title = one.action === "out"
+              ? outbounds.some((way) => way.name === one.outbound && way.kind === "local") ? `${t("rules.actionDirect")} (${one.outbound})` : one.outbound
+              : t(one.action === "block" ? "rules.actionBlock" : "rules.actionDirect")
+            return <div className={one.action === "block" ? "text-alarm" : ""}>
+              {to ? <Link to={to} className="text-brand-ink">{title}</Link> : title}
+            </div>
+          } },
+          { key: "dns", caption: t("tab.dns"), width: 160, wrap: true, cell: (one) => {
+            const list = definitions(one)
+            const inline = may && (one.isDefault || one.criteria?.length === 1)
+            return <div className="flex flex-col gap-3 text-xs">
+              {list.map((definition) => {
+                const choice = one.action === "block" && definition.dnsMode !== "skip"
+                  ? t("routing.dnsReject") : <DnsChoiceLabel rule={definition} />
+                return <div key={definition.id}>
+                  {list.length > 1 && <div className="mb-1 text-muted">{definition.name}</div>}
+                  {inline ? <Link to={`/routing/rules/${one.id}/edit#entry-dns`} className="text-brand-ink">{choice}</Link> : choice}
+                  {one.action !== "block" && <div className="mt-1 text-muted"><EffectiveDns rule={definition} entry={one} /></div>}
+                </div>
+              })}
+            </div>
+          } },
+          { key: "actions", caption: t("rules.actions"), width: 135, tail: true, cell: (one) => may && <div className="flex items-center justify-end gap-1">
+            {!one.isDefault && <>
+              <Knob title={t("rules.enabled")} value={one.isEnabled} disabled={toggle.isPending}
+                onChange={(on) => void toggle.mutateAsync({ id: one.id, on }).catch(() => undefined)} />
+              <Move first={number.get(one.id) === 1 || move.isPending || place.isPending}
+                last={number.get(one.id) === regular.length || move.isPending || place.isPending}
+                upTitle={t("rules.up")} downTitle={t("rules.down")} onMove={(up) => void move.mutateAsync({ id: one.id, up }).catch(() => undefined)} />
+            </>}
             <RoutingSettings onClick={() => navigate(`/routing/rules/${one.id}/edit`)} />
           </div> },
         ]} />}
