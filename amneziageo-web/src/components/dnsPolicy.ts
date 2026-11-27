@@ -11,13 +11,15 @@ export const dnsPresets = [
 
 export type DnsChoice = "default" | "custom" | typeof dnsPresets[number]["key"]
 
-export function dnsChoice(rule: TrafficRuleDraft): DnsChoice {
+type DnsFields = Pick<TrafficRuleDraft, "dnsMode" | "dns" | "dnsMembers">
+
+export function dnsChoice(rule: DnsFields): DnsChoice {
   if (rule.dnsMode === "default") { return "default" }
   if (Object.keys(rule.dnsMembers ?? {}).length > 0) { return "custom" }
   return dnsPresets.find((one) => one.servers.length === rule.dns.length && one.servers.every((value, index) => value === rule.dns[index]))?.key ?? "custom"
 }
 
-export function dnsChosen(rule: TrafficRuleDraft, choice: DnsChoice): Pick<TrafficRuleDraft, "dnsMode" | "dns" | "dnsMembers"> {
+export function dnsChosen(rule: DnsFields, choice: DnsChoice): DnsFields {
   if (choice === "default") { return { dnsMode: "default", dns: [], dnsMembers: {} } }
   const preset = dnsPresets.find((one) => one.key === choice)
   if (preset) { return { dnsMode: "custom", dns: [...preset.servers], dnsMembers: {} } }
@@ -36,7 +38,7 @@ export interface DnsPolicy {
   options: DnsOption[]
 }
 
-export function dnsPolicy(rule: TrafficRuleDraft, entry: Pick<EntryDraft, "action" | "outbound">, outbounds: Outbound[], balancers: Balancer[], hostDns: string[]): DnsPolicy {
+export function dnsPolicy(rule: DnsFields, entry: Pick<EntryDraft, "action" | "outbound">, outbounds: Outbound[], balancers: Balancer[], hostDns: string[]): DnsPolicy {
   const choice = dnsChoice(rule)
   const result = (state: DnsPolicy["state"], options: DnsOption[] = [], variant: DnsPolicy["variant"] = "single"): DnsPolicy => ({ state, choice, variant, options })
   if (entry.action === "block") { return result("blocked") }

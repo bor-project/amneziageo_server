@@ -14,6 +14,18 @@ export interface RuleState {
   names: number
 }
 
+export interface EntryCriterion {
+  targets: string[]
+  dnsMode: "default" | "custom" | "skip"
+  dns: string[]
+  dnsMembers: Record<string, string[]>
+}
+
+export interface RoutingCriterion extends EntryCriterion {
+  id: number
+  name: string
+}
+
 export interface EntryDraft {
   name: string
   isEnabled: boolean
@@ -25,10 +37,13 @@ export interface EntryDraft {
   ports: string[]
   sourcePorts: string[]
   protocol: RuleProtocol
+  criterion?: EntryCriterion
 }
 
 export interface RoutingEntry extends EntryDraft {
   id: number
+  isDefault?: boolean
+  criteria?: RoutingCriterion[]
   position: number
   state: RuleState
   createdUtc: string
@@ -85,11 +100,11 @@ export function useInternetOnlyProfile() {
 }
 
 export function useAddEntry() {
-  return useRefreshing((draft: EntryDraft) => client.post("/routing-entries", draft))
+  return useRefreshing((draft: EntryDraft) => client.post("/routing-entries", entryPayload(draft)))
 }
 
 export function useChangeEntry() {
-  return useRefreshing(({ id, draft }: { id: number; draft: EntryDraft }) => client.put(`/routing-entries/${id}`, draft))
+  return useRefreshing(({ id, draft }: { id: number; draft: EntryDraft }) => client.put(`/routing-entries/${id}`, entryPayload(draft)))
 }
 
 export function useRemoveEntry() {
@@ -113,13 +128,29 @@ export function useRouteTest() {
 }
 
 export function entryDraft(entry: RoutingEntry): EntryDraft {
+  const stored = entry.criteria?.length === 1 ? entry.criteria[0] : undefined
+  const criterion = stored ? { targets: stored.targets, dnsMode: stored.dnsMode, dns: stored.dns, dnsMembers: stored.dnsMembers ?? {} }
+    : entry.isDefault ? freshCriterion : undefined
+
   return { name: entry.name, isEnabled: entry.isEnabled, action: entry.action, outbound: entry.outbound,
     ruleIds: entry.ruleIds, clients: entry.clients, inbounds: entry.inbounds, ports: entry.ports,
-    sourcePorts: entry.sourcePorts, protocol: entry.protocol }
+    sourcePorts: entry.sourcePorts, protocol: entry.protocol, criterion }
+}
+
+const freshCriterion: EntryCriterion = { targets: [], dnsMode: "default", dns: [], dnsMembers: {} }
+
+function entryPayload(draft: EntryDraft) {
+  if (draft.criterion === undefined) {
+    return draft
+  }
+
+  const { ruleIds: _ruleIds, ...payload } = draft
+  return payload
 }
 
 export const freshEntry: EntryDraft = {
   name: "", isEnabled: true, action: "direct", outbound: "", ruleIds: [], clients: [], inbounds: [], ports: [], sourcePorts: [], protocol: "any",
+  criterion: freshCriterion,
 }
 
 function useRefreshing<T, TResult>(call: (args: T) => Promise<TResult>) {

@@ -6,7 +6,7 @@ import { primary, quiet } from "@/components/styles"
 import { useText } from "@/i18n"
 
 export function RoutingSection() {
-  return <Sectioned title="nav.routing" to="/routing" items={routing} />
+  return <Sectioned title="nav.routing" to="/routing" items={routing} tabbed wrapTabs />
 }
 
 export function RoutingToolbar({ onAdd, actions, children }: { onAdd?: () => void; actions?: ReactNode; children?: ReactNode }) {
@@ -15,7 +15,7 @@ export function RoutingToolbar({ onAdd, actions, children }: { onAdd?: () => voi
   return (
     <div className="mt-4 mb-4 flex flex-wrap items-end gap-3">
       {children}
-      {(onAdd || actions) && <div className="ml-auto flex items-center gap-2">
+      {(onAdd || actions) && <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
         {onAdd && <button type="button" onClick={onAdd} className={primary}>{t("action.add")}</button>}
         {actions}
       </div>}

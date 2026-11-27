@@ -21,7 +21,7 @@ public static class RoutingExport
                 one.DefaultKey == RouteDefaults.InternetOnly ? one.DefaultKey : null))],
             [.. entries.Select(one => new EntryBlock(one.Name, one.Position, one.IsEnabled, one.Action, one.Outbound,
                 [.. one.RuleIds.Select(id => names.TryGetValue(id, out var name) ? name : "#" + id)],
-                one.Clients, one.Inbounds, one.Ports, one.SourcePorts, one.Protocol, RouteBasic.Holds(one.Id) ? one.Id : null))],
+                one.Clients, one.Inbounds, one.Ports, one.SourcePorts, one.Protocol, RouteBasic.Holds(one.Id) ? one.Id : null, one.IsDefault))],
             [.. lists.Select(one => new PresetBlock(one.Name, one.Proxy, one.Direct, one.Block, one.AllUdp, one.Full, one.IsDefault, one.ReadOnly))],
             [.. geo.Select(one => new SourceBlock(one.Name, one.Kind, one.Url, one.Position, one.IsEnabled))]);
     }

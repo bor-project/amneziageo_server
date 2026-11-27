@@ -32,7 +32,11 @@ public sealed record RouteResponse(
     string Protocol,
     RouteStateBody State,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc)
+{
+    public bool IsDefault { get; init; }
+    public IReadOnlyList<TrafficRule> Criteria { get; init; } = [];
+}
 
 /// <summary>
 /// The settings a rule is added or changed with, and the client addresses an older client still sends.
@@ -48,7 +52,14 @@ public sealed record RouteRequest(
     IReadOnlyList<string>? Clients = null,
     IReadOnlyList<string>? Inbounds = null,
     IReadOnlyList<string>? SourcePorts = null,
-    IReadOnlyList<string>? Sources = null);
+    IReadOnlyList<string>? Sources = null,
+    RouteCriterionRequest? Criterion = null);
+
+public sealed record RouteCriterionRequest(
+    IReadOnlyList<string>? Targets,
+    string? DnsMode,
+    IReadOnlyList<string>? Dns,
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? DnsMembers = null);
 
 /// <summary>
 /// Which way a rule moves in the list, or the place it goes to, counting from one.
@@ -143,7 +154,11 @@ public static class RouteAnswers
             rule.Protocol,
             State(leg),
             rule.CreatedUtc,
-            rule.UpdatedUtc);
+            rule.UpdatedUtc)
+        {
+            IsDefault = rule.IsDefault,
+            Criteria = rule.Criteria,
+        };
     }
 
     /// <summary>
@@ -153,18 +168,38 @@ public static class RouteAnswers
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var patch = request.Criterion is null ? null : held;
         return new RouteRule
         {
-            Name = (request.Name ?? string.Empty).Trim(),
+            Name = (request.Name ?? patch?.Name ?? string.Empty).Trim(),
             IsEnabled = request.IsEnabled ?? held?.IsEnabled ?? false,
-            Action = (request.Action ?? RouteAction.Out).Trim(),
-            Outbound = (request.Outbound ?? string.Empty).Trim(),
+            Action = (request.Action ?? patch?.Action ?? RouteAction.Out).Trim(),
+            Outbound = (request.Outbound ?? patch?.Outbound ?? string.Empty).Trim(),
             RuleIds = request.RuleIds ?? held?.RuleIds ?? [],
             Clients = request.Clients is null ? held?.Clients ?? [] : Clean(request.Clients),
             Inbounds = request.Inbounds is null ? held?.Inbounds ?? [] : Clean(request.Inbounds),
-            Ports = Clean(request.Ports),
+            Ports = request.Ports is null ? patch?.Ports ?? [] : Clean(request.Ports),
             SourcePorts = request.SourcePorts is null ? held?.SourcePorts ?? [] : Clean(request.SourcePorts),
-            Protocol = (request.Protocol ?? RouteProtocol.Any).Trim(),
+            Protocol = (request.Protocol ?? patch?.Protocol ?? RouteProtocol.Any).Trim(),
+        };
+    }
+
+    public static TrafficRule? Criterion(RouteRequest request, RouteRule draft, RouteRule? held = null)
+    {
+        if (request.Criterion is not { } row)
+        {
+            return null;
+        }
+
+        var previous = held is { Criteria: [var one] } ? one : null;
+        var mode = row.DnsMode ?? previous?.DnsMode ?? TrafficDnsMode.Default;
+        return new TrafficRule
+        {
+            Name = draft.Name,
+            Targets = row.Targets is null ? previous?.Targets ?? [] : Clean(row.Targets),
+            DnsMode = mode,
+            Dns = row.Dns is null ? previous?.Dns ?? [] : Clean(row.Dns),
+            DnsMembers = row.DnsMembers ?? previous?.DnsMembers ?? new Dictionary<string, IReadOnlyList<string>>(),
         };
     }
 
@@ -175,8 +210,16 @@ public static class RouteAnswers
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return Clean(request.Sources).Count > 0
-            ? new RouteFault("sources-gone", "a rule takes its clients by name, client addresses are not taken")
+        if (Clean(request.Sources).Count > 0)
+        {
+            return new RouteFault("sources-gone", "a rule takes its clients by name, client addresses are not taken");
+        }
+
+        var criterion = request.Criterion;
+        return criterion is not null && (criterion.Targets?.Any(one => one is null) == true
+            || criterion.Dns?.Any(one => one is null) == true
+            || criterion.DnsMembers?.Any(one => one.Value is null || one.Value.Any(value => value is null)) == true)
+            ? new RouteFault("bad-criterion", "routing destinations and DNS lists must contain strings")
             : null;
     }
 

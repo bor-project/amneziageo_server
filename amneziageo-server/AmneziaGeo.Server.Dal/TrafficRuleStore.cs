@@ -77,6 +77,11 @@ public sealed class TrafficRuleStore
         {
             return Missing();
         }
+        if (held?.DefaultKey == RouteDefaults.FallbackKey
+            && (draft.Targets.Count != 0 || draft.DnsMode == TrafficDnsMode.Skip))
+        {
+            return new TrafficRuleResult(null, new RouteFault("bad-default-route", "the default route has no filters and takes DNS"));
+        }
         if (draft.DefaultKey == RouteDefaults.InternetOnly
             && ((held?.DefaultKey is { } key && key != draft.DefaultKey)
                 || await _db.TrafficRules.AnyAsync(rule => rule.DefaultKey == draft.DefaultKey && rule.Id != id, ct).ConfigureAwait(false)))

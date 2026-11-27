@@ -15,7 +15,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace AmneziaGeo.Server.Tests;
 
-public sealed class RoutingModelMigrationTests
+public sealed partial class RoutingModelMigrationTests
 {
     private const string Stable = "20261030101002_ConfigRequireUpdate";
     private const string Beta = "20261124140354_PendingInterfaceChanges";
@@ -46,7 +46,7 @@ public sealed class RoutingModelMigrationTests
 
         var before = await fixture.ProtectedAsync().ConfigureAwait(false);
 
-        await fixture.Db.Database.MigrateAsync().ConfigureAwait(false);
+        await fixture.MigrateRoutingModelAsync().ConfigureAwait(false);
         var after = await fixture.ProtectedAsync(before.Columns).ConfigureAwait(false);
         Assert.Equal(before.Digest, after.Digest);
         Assert.False(fixture.Db.Database.HasPendingModelChanges());
@@ -125,7 +125,7 @@ public sealed class RoutingModelMigrationTests
         Assert.Empty(DnsRouting.Select(held, "base.example").Servers);
 
         var once = await fixture.AllAsync().ConfigureAwait(false);
-        await fixture.Db.Database.MigrateAsync().ConfigureAwait(false);
+        await fixture.MigrateRoutingModelAsync().ConfigureAwait(false);
         fixture.Db.ChangeTracker.Clear();
         Assert.Equal(once, await fixture.AllAsync().ConfigureAwait(false));
         Assert.Equal(before.Digest, (await fixture.ProtectedAsync(before.Columns).ConfigureAwait(false)).Digest);
@@ -163,7 +163,7 @@ public sealed class RoutingModelMigrationTests
         await fixture.SqlAsync("DELETE FROM Resolver").ConfigureAwait(false);
         var before = await fixture.ProtectedAsync().ConfigureAwait(false);
 
-        await fixture.Db.Database.MigrateAsync().ConfigureAwait(false);
+        await fixture.MigrateRoutingModelAsync().ConfigureAwait(false);
 
         var rows = await new RouteStore(fixture.Db).TableAsync(default).ConfigureAwait(false);
         var fallback = rows.Single(row => row.Position == int.MaxValue);
@@ -192,18 +192,18 @@ public sealed class RoutingModelMigrationTests
 
         if (cancellation)
         {
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Db.Database.MigrateAsync(stop.Token)).ConfigureAwait(false);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.MigrateRoutingModelAsync(stop.Token)).ConfigureAwait(false);
         }
         else
         {
-            await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Db.Database.MigrateAsync()).ConfigureAwait(false);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.MigrateRoutingModelAsync()).ConfigureAwait(false);
         }
 
         fixture.Db.ChangeTracker.Clear();
         Assert.Equal(before, await fixture.AllAsync().ConfigureAwait(false));
         Assert.Equal(protectedBefore.Digest, (await fixture.ProtectedAsync(protectedBefore.Columns).ConfigureAwait(false)).Digest);
         Assert.Equal(0L, await fixture.ScalarAsync("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('TrafficRules','RoutingEntries','RoutingEntryRules')").ConfigureAwait(false));
-        await fixture.Db.Database.MigrateAsync().ConfigureAwait(false);
+        await fixture.MigrateRoutingModelAsync().ConfigureAwait(false);
         await fixture.IntegrityAsync().ConfigureAwait(false);
         await fixture.ObsoleteAsync().ConfigureAwait(false);
     }
@@ -215,7 +215,7 @@ public sealed class RoutingModelMigrationTests
         await fixture.SeedAsync(Beta, "routing").ConfigureAwait(false);
         await fixture.SqlAsync("UPDATE Rules SET Name = 'default dns' WHERE Id = 41").ConfigureAwait(false);
         await fixture.SqlAsync("UPDATE AddressGroups SET Name = 'DEFAULT DNS' WHERE Id = 12").ConfigureAwait(false);
-        await fixture.Db.Database.MigrateAsync().ConfigureAwait(false);
+        await fixture.MigrateRoutingModelAsync().ConfigureAwait(false);
         var rows = await new RouteStore(fixture.Db).TableAsync(default).ConfigureAwait(false);
         Assert.Equal("default dns", rows.Single(row => row.Id == 41).Name);
         Assert.Equal(rows.Count, rows.Select(row => row.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count());
@@ -230,7 +230,7 @@ public sealed class RoutingModelMigrationTests
         using var fixture = new PriorDatabase();
         await fixture.SeedAsync(Beta, "routing").ConfigureAwait(false);
         await fixture.SqlAsync("UPDATE Rules SET Name = 'BASIC-BLOCK' WHERE Id = 41").ConfigureAwait(false);
-        await fixture.Db.Database.MigrateAsync().ConfigureAwait(false);
+        await fixture.MigrateRoutingModelAsync().ConfigureAwait(false);
         var rows = await new RouteStore(fixture.Db).TableAsync(default).ConfigureAwait(false);
         Assert.Equal("BASIC-BLOCK", rows.Single(row => row.Id == 41).Name);
         Assert.NotEqual("basic-block", rows.Single(row => row.Id == -1).Name);
@@ -243,7 +243,7 @@ public sealed class RoutingModelMigrationTests
         using var fixture = new PriorDatabase();
         await fixture.SeedAsync(Beta, "routing").ConfigureAwait(false);
         await fixture.SqlAsync("UPDATE Rules SET Groups = '999999' WHERE Id = 41").ConfigureAwait(false);
-        await Assert.ThrowsAnyAsync<Exception>(() => fixture.Db.Database.MigrateAsync()).ConfigureAwait(false);
+        await Assert.ThrowsAnyAsync<Exception>(() => fixture.MigrateRoutingModelAsync()).ConfigureAwait(false);
         Assert.Equal(1L, await fixture.ScalarAsync("SELECT COUNT(*) FROM Rules WHERE Id = 41 AND Groups = '999999'").ConfigureAwait(false));
         Assert.Equal(0L, await fixture.ScalarAsync("SELECT COUNT(*) FROM sqlite_master WHERE name = 'RoutingEntries'").ConfigureAwait(false));
     }
@@ -257,7 +257,7 @@ public sealed class RoutingModelMigrationTests
         await fixture.SqlAsync("UPDATE RouteBasics SET Block = '" + addresses + "' WHERE Id = 1").ConfigureAwait(false);
         await fixture.SqlAsync("UPDATE AddressGroups SET Targets = '" + addresses + "' WHERE Id = 11").ConfigureAwait(false);
 
-        await fixture.Db.Database.MigrateAsync().ConfigureAwait(false);
+        await fixture.MigrateRoutingModelAsync().ConfigureAwait(false);
 
         var rows = await new RouteStore(fixture.Db).TableAsync(default).ConfigureAwait(false);
         var legacy = Assert.Single(rows, row => row.Id == -1);
@@ -284,7 +284,7 @@ public sealed class RoutingModelMigrationTests
         }
         var before = await fixture.ProtectedAsync().ConfigureAwait(false);
 
-        await fixture.Db.Database.MigrateAsync().ConfigureAwait(false);
+        await fixture.MigrateRoutingModelAsync().ConfigureAwait(false);
 
         var store = new RouteStore(fixture.Db);
         var definitions = new TrafficRuleStore(fixture.Db);
@@ -328,7 +328,7 @@ public sealed class RoutingModelMigrationTests
         await fixture.SeedAsync(Beta, "routing").ConfigureAwait(false);
         await fixture.SqlAsync("UPDATE AddressGroups SET Targets = '" + targets + "' WHERE Id = 11").ConfigureAwait(false);
 
-        await Assert.ThrowsAnyAsync<Exception>(() => fixture.Db.Database.MigrateAsync()).ConfigureAwait(false);
+        await Assert.ThrowsAnyAsync<Exception>(() => fixture.MigrateRoutingModelAsync()).ConfigureAwait(false);
 
         Assert.Equal(1L, await fixture.ScalarAsync("SELECT COUNT(*) FROM Rules WHERE Id = 41").ConfigureAwait(false));
         Assert.Equal(0L, await fixture.ScalarAsync("SELECT COUNT(*) FROM sqlite_master WHERE name = 'RoutingEntries'").ConfigureAwait(false));
@@ -341,7 +341,7 @@ public sealed class RoutingModelMigrationTests
         await fixture.SeedAsync(Beta, "routing").ConfigureAwait(false);
         await fixture.SqlAsync("UPDATE Rules SET Targets = ', \t\r\n', Groups = '11' WHERE Id = 41").ConfigureAwait(false);
 
-        await fixture.Db.Database.MigrateAsync().ConfigureAwait(false);
+        await fixture.MigrateRoutingModelAsync().ConfigureAwait(false);
 
         var row = (await new RouteStore(fixture.Db).TableAsync(default).ConfigureAwait(false)).Single(one => one.Id == 41);
         Assert.Equal([11L], row.RuleIds);
@@ -357,7 +357,7 @@ public sealed class RoutingModelMigrationTests
         await fixture.SeedAsync(Beta, "routing").ConfigureAwait(false);
         await fixture.SqlAsync("UPDATE Rules SET Groups = '" + string.Join(",", Enumerable.Repeat("11", 65)) + "' WHERE Id = 41").ConfigureAwait(false);
 
-        await fixture.Db.Database.MigrateAsync().ConfigureAwait(false);
+        await fixture.MigrateRoutingModelAsync().ConfigureAwait(false);
 
         var row = Assert.Single(await new RouteStore(fixture.Db).TableAsync(default).ConfigureAwait(false), one => one.Id == 41);
         Assert.False(row.IsEnabled);
@@ -402,6 +402,9 @@ public sealed class RoutingModelMigrationTests
             }
             Db = new AppDbContext(options.Options);
         }
+
+        public Task MigrateRoutingModelAsync(CancellationToken ct = default) =>
+            Db.GetService<IMigrator>().MigrateAsync("20261125220000_RoutingModel", ct);
 
         public async Task SeedAsync(string version, string mode)
         {

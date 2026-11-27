@@ -8,5 +8,7 @@ public static class TrafficDnsMode
     public const string Default = "default";
     public const string Custom = "custom";
 
-    public static bool Known(string? value) => value is Default or Custom;
+    public const string Skip = "skip";
+
+    public static bool Known(string? value) => value is Default or Custom or Skip;
 }

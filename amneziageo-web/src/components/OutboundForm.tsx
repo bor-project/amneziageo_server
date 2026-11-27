@@ -48,8 +48,12 @@ export function OutboundForm({
   const [draft, setDraft] = useState(start)
   const [shown, setShown] = useState(publicKey)
   const [text, setText] = useState("")
+  const [readingFile, setReadingFile] = useState(false)
+  const [fileFailed, setFileFailed] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const reading = readingFile || read.isPending
   const edited = !same(draft, start)
-  const { leave, prompt } = useEditorExit(edited || text.length > 0, pending)
+  const { leave, prompt } = useEditorExit(edited || text.length > 0, pending || reading)
   const name = interfaceNameFault(t, draft.name, [...outbounds.filter((one) => one.name !== self).map((one) => one.name), ...balancers.map((one) => one.name), ...(self !== undefined && interfaceNameValue(draft.name) === start.name ? [] : configs.map((one) => one.name))])
 
   function put(change: Partial<OutboundDraft>) {
@@ -70,9 +74,9 @@ export function OutboundForm({
     setShown(made.publicKey)
   }
 
-  async function take() {
+  async function take(config: string) {
     const revision = nameChanges.current
-    const found = await read.mutateAsync({ name: nameCustomized.current ? draft.name : "", config: text }).catch(() => null)
+    const found = await read.mutateAsync({ name: nameCustomized.current ? draft.name : "", config }).catch(() => null)
     if (found === null) {
       return
     }
@@ -95,10 +99,71 @@ export function OutboundForm({
     setText("")
   }
 
+  async function takeFile(file: File | undefined) {
+    if (file === undefined) {
+      return
+    }
+
+    setReadingFile(true)
+    setFileFailed(false)
+    read.reset()
+    try {
+      const config = await file.text()
+      setText(config)
+      await take(config)
+    } catch {
+      setFileFailed(true)
+    } finally {
+      setReadingFile(false)
+    }
+  }
+
   const tunnel = draft.kind === "wg" || draft.kind === "ws"
 
   return (
     <div className="mt-4 flex flex-col gap-4">
+      {tunnel && (
+        <Part title={t("outbounds.import")}>
+          <div className="sm:col-span-2">
+            <label className={label} htmlFor="outbound-config">{t("outbounds.paste")}</label>
+            <textarea
+              id="outbound-config"
+              value={text}
+              rows={5}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => {
+                setText(event.target.value)
+                setFileFailed(false)
+                read.reset()
+              }}
+              disabled={pending || reading}
+              className={`mt-1 font-mono text-xs ${field}`}
+            />
+          </div>
+          <div className="sm:col-span-2 flex flex-wrap justify-end gap-2">
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".conf,.ini,.txt,text/plain"
+              hidden
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0]
+                event.currentTarget.value = ""
+                void takeFile(file)
+              }}
+            />
+            <button type="button" onClick={() => fileInput.current?.click()} disabled={pending || reading} className={secondary}>
+              {t("outbounds.configFile")}
+            </button>
+            <button type="button" onClick={() => void take(text)} disabled={pending || reading || text.trim().length === 0} className={secondary}>
+              {t("outbounds.read")}
+            </button>
+          </div>
+          {fileFailed && <div className="text-sm text-alarm sm:col-span-2" role="alert">{t("outbounds.configFileError")}</div>}
+          {read.error != null && <div className="text-sm text-alarm sm:col-span-2" role="alert">{t(complaint(read.error) as TextKey)}</div>}
+        </Part>
+      )}
       <Part title={t("outbounds.settings")}>
         <div className="sm:col-span-2">
           <Switch
@@ -255,35 +320,6 @@ export function OutboundForm({
         </Part>
       )}
 
-      {tunnel && (
-        <Part title={t("outbounds.import")}>
-          <div className="sm:col-span-2">
-            <label className={label} htmlFor="outbound-config">
-              {t("outbounds.paste")}
-            </label>
-            <textarea
-              id="outbound-config"
-              value={text}
-              rows={5}
-              onChange={(e) => setText(e.target.value)}
-              className={`mt-1 font-mono text-xs ${field}`}
-            />
-          </div>
-          <div className="sm:col-span-2 flex justify-end">
-            <button
-              type="button"
-              onClick={() => void take()}
-              disabled={read.isPending || text.trim().length === 0}
-              className={secondary}
-            >
-              {t("outbounds.read")}
-            </button>
-          </div>
-          {read.error !== null && read.error !== undefined && (
-            <div className="text-sm text-alarm sm:col-span-2">{t(complaint(read.error) as TextKey)}</div>
-          )}
-        </Part>
-      )}
 
       {error !== null && error !== undefined && (
         <div className="text-sm text-alarm">{t(complaint(error) as TextKey)}</div>
@@ -301,7 +337,7 @@ export function OutboundForm({
         <button
           type="button"
           onClick={() => void onSave(draft).then(() => leave(() => onSaved(draft))).catch(() => undefined)}
-          disabled={!edited || pending || name.length > 0}
+          disabled={!edited || pending || reading || name.length > 0}
           className={primary}
         >
           {pending ? t("outbounds.busy") : t("outbounds.save")}

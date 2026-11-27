@@ -79,9 +79,32 @@ public static class RoutingFile
             && one.Ports is not null && one.Ports.All(value => value is not null)
             && one.SourcePorts is not null && one.SourcePorts.All(value => value is not null))
         && doc.Entries.Select(one => one.Name).Distinct(StringComparer.Ordinal).Count() == doc.Entries.Count
+        && DefaultsAreValid(doc)
         && doc.Presets.All(one => one is not null && one.Name is not null && one.Proxy is not null
             && one.Direct is not null && one.Block is not null)
         && doc.Sources.All(one => one is not null && one.Name is not null && one.Kind is not null && one.Url is not null);
+
+    private static bool DefaultsAreValid(RoutingDoc doc)
+    {
+        var defaults = doc.Entries.Where(one => one.IsDefault).ToArray();
+        if (defaults.Length == 0)
+        {
+            return true;
+        }
+
+        if (defaults.Length != 1 || !doc.Entries.OrderBy(one => one.Position).Last().IsDefault)
+        {
+            return false;
+        }
+
+        var entry = defaults[0];
+        return entry.LegacyId is null && entry.IsEnabled && RouteAction.Known(entry.Action)
+            && (entry.Action == RouteAction.Out ? !string.IsNullOrWhiteSpace(entry.Outbound) : string.IsNullOrWhiteSpace(entry.Outbound))
+            && entry.Protocol == RouteProtocol.Any && entry.Rules.Count == 1
+            && entry.Clients.Count == 0 && entry.Inbounds.Count == 0 && entry.Ports.Count == 0 && entry.SourcePorts.Count == 0
+            && doc.Rules.Any(one => one.Name == entry.Rules[0] && !HasTargets(one.Targets)
+                && one.Profile is null && one.DnsMode is TrafficDnsMode.Default or TrafficDnsMode.Custom);
+    }
 
     private static bool HasTargets(IReadOnlyList<string>? targets) =>
         targets?.Any(value => value.Trim(',', ' ', '\t', '\r', '\n').Length > 0) == true;
@@ -183,7 +206,8 @@ public sealed record TrafficRuleBlock(string Name, IReadOnlyList<string> Targets
 
 public sealed record EntryBlock(string Name, int Position, bool IsEnabled, string Action, string Outbound,
     IReadOnlyList<string> Rules, IReadOnlyList<string> Clients, IReadOnlyList<string> Inbounds,
-    IReadOnlyList<string> Ports, IReadOnlyList<string> SourcePorts, string Protocol, long? LegacyId = null);
+    IReadOnlyList<string> Ports, IReadOnlyList<string> SourcePorts, string Protocol, long? LegacyId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool IsDefault = false);
 
 public sealed record PresetBlock(string Name, IReadOnlyList<string> Proxy, IReadOnlyList<string> Direct,
     IReadOnlyList<string> Block, bool AllUdp, bool Full, bool IsDefault, bool ReadOnly);

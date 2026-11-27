@@ -49,7 +49,7 @@ export function BalancerForm({
       return { name, isKnown: one !== undefined, isEnabled: one?.isEnabled ?? false, isAlive: one?.state?.carries ?? false, mark: one?.mark ?? 0 }
     }),
   } }
-  const policy = dnsPolicy({ name: "", targets: [], dnsMode: "default", dns: [], dnsMembers: {} },
+  const policy = dnsPolicy({ dnsMode: "default", dns: [], dnsMembers: {} },
     { action: "out", outbound: previewName }, outbounds.data ?? [], [preview], defaults.data?.servers ?? [])
 
   function put(change: Partial<BalancerDraft>) {

@@ -75,18 +75,11 @@ public static class RoutingImport
         var replaced = new List<string>();
         var refused = new List<string>();
         var heldCriteria = (await rules.ListCriteriaAsync(ct).ConfigureAwait(false)).ToDictionary(one => one.Name, StringComparer.Ordinal);
+        var defaults = CriteriaForDefault(plan.Doc);
         var failed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var one in plan.Doc.Rules)
+        foreach (var one in plan.Doc.Rules.Where(one => one.Name != defaults))
         {
-            var result = await rules.ImportCriterionAsync(new TrafficRule
-            {
-                Name = one.Name,
-                DefaultKey = one.Profile,
-                Targets = one.Targets ?? [],
-                Dns = one.Dns ?? [],
-                DnsMode = one.DnsMode,
-                DnsMembers = one.DnsMembers ?? new Dictionary<string, IReadOnlyList<string>>(),
-            }, ct).ConfigureAwait(false);
+            var result = await rules.ImportCriterionAsync(ToCriterion(one), ct).ConfigureAwait(false);
             Keep(result.IsOk, heldCriteria.ContainsKey(one.Name) ? replaced : added, refused, $"traffic rule '{one.Name}'", result.Message);
             if (!result.IsOk)
             {
@@ -97,9 +90,25 @@ public static class RoutingImport
         var known = (await rules.ListCriteriaAsync(ct).ConfigureAwait(false)).ToDictionary(one => one.Name, one => one.Id, StringComparer.Ordinal);
         var held = await rules.TableAsync(ct).ConfigureAwait(false);
         var byName = held.ToDictionary(one => one.Name, StringComparer.Ordinal);
+        var fallback = held.SingleOrDefault(one => one.IsDefault);
         var ordered = new List<long>();
         foreach (var one in plan.Doc.Entries.OrderBy(one => one.Position))
         {
+            if (one.IsDefault)
+            {
+                var imported = plan.Doc.Rules.SingleOrDefault(rule => rule.Name == one.Rules.SingleOrDefault());
+                if (fallback is null || imported is null || failed.Contains(imported.Name))
+                {
+                    refused.Add($"routing entry '{one.Name}': the default policy cannot be applied");
+                    continue;
+                }
+
+                var change = await rules.ChangeAsync(fallback.Id,
+                    fallback with { Action = one.Action, Outbound = one.Outbound }, ct, ToCriterion(imported)).ConfigureAwait(false);
+                Keep(change.IsOk, replaced, refused, $"routing entry '{fallback.Name}'", change.Message);
+                continue;
+            }
+
             if (one.Rules is not { Count: > 0 } || one.Rules.Any(name => !known.ContainsKey(name) || failed.Contains(name)))
             {
                 refused.Add($"routing entry '{one.Name}': a traffic rule is missing");
@@ -196,15 +205,19 @@ public static class RoutingImport
         ArgumentNullException.ThrowIfNull(clients);
 
         var held = await rules.TableAsync(ct).ConfigureAwait(false);
-        var heldNames = (await rules.ListCriteriaAsync(ct).ConfigureAwait(false)).Select(one => one.Name).ToHashSet(StringComparer.Ordinal);
+        var fallback = held.SingleOrDefault(one => one.IsDefault);
+        var definitions = await rules.ListCriteriaAsync(ct).ConfigureAwait(false);
+        doc = Prepare(doc, held, fallback, definitions);
+        var heldNames = definitions.Select(one => one.Name).ToHashSet(StringComparer.Ordinal);
         var entryNames = held.Select(one => one.Name).ToHashSet(StringComparer.Ordinal);
         var heldPresets = (await presets.ListAsync(ct).ConfigureAwait(false))
             .Select(one => one.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var heldSources = (await sources.ListAsync(ct).ConfigureAwait(false))
             .Select(one => one.Name).ToHashSet(StringComparer.Ordinal);
 
-        var newRules = doc.Rules.Where(rule => !heldNames.Contains(rule.Name)).Select(rule => rule.Name).ToList();
-        var replacedRules = doc.Rules.Where(rule => heldNames.Contains(rule.Name)).Select(rule => rule.Name).ToList();
+        var defaults = CriteriaForDefault(doc);
+        var newRules = doc.Rules.Where(rule => rule.Name != defaults && !heldNames.Contains(rule.Name)).Select(rule => rule.Name).ToList();
+        var replacedRules = doc.Rules.Where(rule => rule.Name != defaults && heldNames.Contains(rule.Name)).Select(rule => rule.Name).ToList();
         var newPresets = doc.Presets.Where(one => !heldPresets.Contains(one.Name)).Select(one => one.Name).ToList();
         var replacedPresets = doc.Presets.Where(one => heldPresets.Contains(one.Name)).Select(one => one.Name).ToList();
         var newSources = doc.Sources.Where(one => !heldSources.Contains(one.Name)).Select(one => one.Name).ToList();
@@ -257,10 +270,130 @@ public static class RoutingImport
             [.. missingClients],
             detached)
         {
-            NewEntries = [.. doc.Entries.Where(one => !entryNames.Contains(one.Name)).Select(one => one.Name)],
-            ReplacedEntries = [.. doc.Entries.Where(one => entryNames.Contains(one.Name)).Select(one => one.Name)],
+            NewEntries = [.. doc.Entries.Where(one => !one.IsDefault && !entryNames.Contains(one.Name)).Select(one => one.Name)],
+            ReplacedEntries = [.. doc.Entries.Where(one => one.IsDefault ? fallback is not null : entryNames.Contains(one.Name))
+                .Select(one => one.IsDefault ? fallback!.Name : one.Name)],
         };
     }
+
+    private static RoutingDoc Prepare(
+        RoutingDoc doc, IReadOnlyList<RouteRule> held, RouteRule? fallback, IReadOnlyList<TrafficRule> definitions)
+    {
+        var sourceRules = doc.Rules;
+        var fallbackName = fallback?.Criteria.SingleOrDefault()?.Name;
+        var exclusive = CriteriaForDefault(doc);
+        var collided = sourceRules.FirstOrDefault(one => one.Name != exclusive
+            && string.Equals(one.Name, fallbackName, StringComparison.OrdinalIgnoreCase));
+        var safeCriterion = collided is null ? null : FreeName(collided.Name, sourceRules
+            .Select(one => one.Name).ToHashSet(StringComparer.OrdinalIgnoreCase), name =>
+                definitions.Any(one => string.Equals(one.Name, name, StringComparison.OrdinalIgnoreCase)
+                    && !SameCriterion(one, collided)));
+
+        if (safeCriterion is not null)
+        {
+            sourceRules = [.. sourceRules.Select(one => one == collided ? one with { Name = safeCriterion } : one)];
+        }
+
+        var selected = sourceRules.ToDictionary(one => one.Name, StringComparer.Ordinal);
+        var taken = doc.Entries.Select(one => one.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (fallback is not null)
+        {
+            taken.Add(fallback.Name);
+        }
+        var existing = held.Where(one => !one.IsDefault).ToDictionary(one => one.Name, StringComparer.Ordinal);
+        var entries = new List<EntryBlock>();
+        foreach (var one in doc.Entries.OrderBy(one => one.Position))
+        {
+            var references = safeCriterion is null ? one.Rules
+                : one.Rules.Select(name => name == collided!.Name ? safeCriterion : name).ToArray();
+            var name = !one.IsDefault && string.Equals(one.Name, fallback?.Name, StringComparison.OrdinalIgnoreCase)
+                ? FreeName(one.Name, taken, candidate => existing.TryGetValue(candidate, out var prior)
+                    && !SameEntry(prior, one, references))
+                : one.Name;
+
+            var first = one with { Name = name, Rules = references };
+            if (one.IsDefault || references.Count < 2 || references.Distinct(StringComparer.Ordinal).Count() != references.Count
+                || references.Any(key => !selected.TryGetValue(key, out var rule) || rule.Profile is not null
+                    || RouteRules.Check(ToCriterion(rule)) is not null))
+            {
+                entries.Add(first);
+                continue;
+            }
+
+            entries.Add(first with { Rules = [references[0]] });
+            for (var part = 1; part < references.Count; part++)
+            {
+                var child = ChildName(first, part, references[part], existing, taken);
+                entries.Add(first with { Name = child, Rules = [references[part]], LegacyId = null });
+            }
+        }
+
+        return doc with { Rules = sourceRules, Entries = [.. entries.Select((one, at) => one with { Position = at + 1 })] };
+    }
+
+    private static string ChildName(EntryBlock row, int part, string criterion, IReadOnlyDictionary<string, RouteRule> existing, HashSet<string> taken)
+    {
+        var name = row.Name;
+        if (existing.TryGetValue(name, out var root))
+        {
+            var marker = $" ({root.Id}:{part + 1}";
+            var migrated = existing.Values.FirstOrDefault(row => !taken.Contains(row.Name) && row.Criteria.Count == 1
+                && row.Criteria[0].Name == criterion && (row.Name.Contains(marker + ":", StringComparison.Ordinal)
+                    || row.Name.EndsWith(marker + ")", StringComparison.Ordinal)));
+            if (migrated is not null)
+            {
+                taken.Add(migrated.Name);
+                return migrated.Name;
+            }
+        }
+
+        var tail = $"-{part + 1}";
+        return FreeName(name[..Math.Min(name.Length, RouteRules.MaxNameLength - tail.Length)] + tail, taken,
+            candidate => existing.Values.Any(one => string.Equals(one.Name, candidate, StringComparison.OrdinalIgnoreCase)
+                && !SameEntry(one, row, [criterion])));
+    }
+
+    private static bool SameEntry(RouteRule held, EntryBlock source, IReadOnlyList<string> criteria) =>
+        held.Action == source.Action && held.Outbound == source.Outbound
+        && held.Clients.SequenceEqual(source.Clients) && held.Inbounds.SequenceEqual(source.Inbounds)
+        && held.Ports.SequenceEqual(source.Ports) && held.SourcePorts.SequenceEqual(source.SourcePorts)
+        && held.Protocol == source.Protocol && held.Criteria.Select(one => one.Name).SequenceEqual(criteria);
+
+    private static bool SameCriterion(TrafficRule held, TrafficRuleBlock source) =>
+        held.DefaultKey == source.Profile && held.DnsMode == source.DnsMode
+        && held.Targets.SequenceEqual(source.Targets) && held.Dns.SequenceEqual(source.Dns)
+        && held.DnsMembers.Count == (source.DnsMembers?.Count ?? 0)
+        && held.DnsMembers.All(pair => source.DnsMembers?.TryGetValue(pair.Key, out var dns) == true && pair.Value.SequenceEqual(dns));
+
+    private static string FreeName(string name, HashSet<string> taken, Func<string, bool> blocked)
+    {
+        for (var at = 1; ; at++)
+        {
+            var tail = at == 1 ? string.Empty : $"-{at}";
+            var candidate = name[..Math.Min(name.Length, RouteRules.MaxNameLength - tail.Length)] + tail;
+            if (!blocked(candidate) && taken.Add(candidate))
+            {
+                return candidate;
+            }
+        }
+    }
+
+    private static string? CriteriaForDefault(RoutingDoc doc)
+    {
+        var criterion = doc.Entries.SingleOrDefault(one => one.IsDefault)?.Rules.SingleOrDefault();
+        return criterion is not null && !doc.Entries.Any(one => !one.IsDefault && one.Rules.Contains(criterion, StringComparer.Ordinal))
+            ? criterion : null;
+    }
+
+    private static TrafficRule ToCriterion(TrafficRuleBlock source) => new()
+    {
+        Name = source.Name,
+        DefaultKey = source.Profile,
+        Targets = source.Targets ?? [],
+        Dns = source.Dns ?? [],
+        DnsMode = source.DnsMode,
+        DnsMembers = source.DnsMembers ?? new Dictionary<string, IReadOnlyList<string>>(),
+    };
 
     private static void Keep(bool took, List<string> landed, List<string> refused, string line, string message)
     {

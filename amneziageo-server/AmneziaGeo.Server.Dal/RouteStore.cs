@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AmneziaGeo.Server.Routing.Route;
 using Microsoft.EntityFrameworkCore;
 
@@ -189,8 +190,8 @@ public sealed class RouteStore
     /// <summary>
     /// Adds a rule, giving it the place at the end.
     /// </summary>
-    public Task<RouteResult> AddAsync(RouteRule draft, CancellationToken ct) =>
-        _db.AloneAsync(() => AddCoreAsync(draft, ct), ct);
+    public Task<RouteResult> AddAsync(RouteRule draft, CancellationToken ct, TrafficRule? criterion = null) =>
+        _db.AloneAsync(() => AddCoreAsync(draft, ct, criterion), ct);
 
     public Task<RouteResult?> AddInternetOnlyAsync(IReadOnlyList<long> interfaceIds, string name, string addressesName, CancellationToken ct) =>
         _db.AloneAsync(async () =>
@@ -284,7 +285,7 @@ public sealed class RouteStore
         return candidate;
     }
 
-    private async Task<RouteResult> AddCoreAsync(RouteRule draft, CancellationToken ct)
+    private async Task<RouteResult> AddCoreAsync(RouteRule draft, CancellationToken ct, TrafficRule? criterion)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
@@ -293,8 +294,11 @@ public sealed class RouteStore
             return Taken(draft.Name);
         }
 
-        var full = await WithCriteriaAsync(draft with { Id = 0, Position = await NextPositionAsync(ct).ConfigureAwait(false) }, ct).ConfigureAwait(false);
-        if (Check(full) is { } fault)
+        draft = draft with { Id = 0, Position = await NextPositionAsync(ct).ConfigureAwait(false) };
+        var full = criterion is null
+            ? await WithCriteriaAsync(draft, ct).ConfigureAwait(false)
+            : WithInline(draft, criterion);
+        if (Policy(full, false, criterion is not null) is { } fault)
         {
             return RouteResult.No(RouteOutcome.Invalid, fault.Code, fault.Message);
         }
@@ -306,7 +310,14 @@ public sealed class RouteStore
 
         var now = _time.GetUtcNow();
         var entity = new RoutingEntryEntity { CreatedUtc = now, UpdatedUtc = now };
-        await WriteAsync(entity, full, ct).ConfigureAwait(false);
+        if (criterion is null)
+        {
+            await WriteAsync(entity, full, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            await WriteInlineAsync(entity, full, ct).ConfigureAwait(false);
+        }
 
         _db.Rules.Add(entity);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -317,10 +328,10 @@ public sealed class RouteStore
     /// <summary>
     /// Replaces the settings of a rule, keeping its place.
     /// </summary>
-    public Task<RouteResult> ChangeAsync(long id, RouteRule draft, CancellationToken ct) =>
-        _db.AloneAsync(() => ChangeCoreAsync(id, draft, ct), ct);
+    public Task<RouteResult> ChangeAsync(long id, RouteRule draft, CancellationToken ct, TrafficRule? criterion = null) =>
+        _db.AloneAsync(() => ChangeCoreAsync(id, draft, ct, criterion), ct);
 
-    private async Task<RouteResult> ChangeCoreAsync(long id, RouteRule draft, CancellationToken ct)
+    private async Task<RouteResult> ChangeCoreAsync(long id, RouteRule draft, CancellationToken ct, TrafficRule? criterion = null)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
@@ -335,8 +346,13 @@ public sealed class RouteStore
             return Taken(draft.Name);
         }
 
-        var full = await WithCriteriaAsync(draft with { Id = id, Position = entity.Position }, ct).ConfigureAwait(false);
-        if (Check(full) is { } fault)
+        var old = Read(entity);
+        var isDefault = old.IsDefault;
+        draft = draft with { Id = id, Position = entity.Position };
+        var full = criterion is null
+            ? await WithCriteriaAsync(draft, ct).ConfigureAwait(false)
+            : WithInline(draft, criterion);
+        if (Policy(full, isDefault, criterion is not null, !old.HasTargets && !Scoped(old)) is { } fault)
         {
             return RouteResult.No(RouteOutcome.Invalid, fault.Code, fault.Message);
         }
@@ -346,7 +362,14 @@ public sealed class RouteStore
             return missing;
         }
 
-        await WriteAsync(entity, full, ct).ConfigureAwait(false);
+        if (criterion is null)
+        {
+            await WriteAsync(entity, full, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            await WriteInlineAsync(entity, full, ct).ConfigureAwait(false);
+        }
         entity.UpdatedUtc = _time.GetUtcNow();
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
@@ -364,6 +387,10 @@ public sealed class RouteStore
             return Missing(id);
         }
 
+        if (IsDefault(entity) && !on)
+        {
+            return FixedDefault();
+        }
         entity.IsEnabled = on;
         entity.UpdatedUtc = _time.GetUtcNow();
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -382,6 +409,10 @@ public sealed class RouteStore
             return Missing(id);
         }
 
+        if (IsDefault(entity))
+        {
+            return FixedDefault();
+        }
         var gone = Read(entity);
         _db.Rules.Remove(entity);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -400,15 +431,14 @@ public sealed class RouteStore
             return Missing(id);
         }
 
-        var neighbour = up
-            ? await _db.Rules.Where(one => (table || one.Id > 0) && one.Position < entity.Position)
-                .OrderByDescending(one => one.Position)
-                .FirstOrDefaultAsync(ct)
-                .ConfigureAwait(false)
-            : await _db.Rules.Where(one => (table || one.Id > 0) && one.Position > entity.Position)
-                .OrderBy(one => one.Position)
-                .FirstOrDefaultAsync(ct)
-                .ConfigureAwait(false);
+        if (IsDefault(entity))
+        {
+            return FixedDefault();
+        }
+        var candidates = await _db.Rules.Include(one => one.Matches).ThenInclude(match => match.Rule)
+            .Where(one => (table || one.Id > 0) && (up ? one.Position < entity.Position : one.Position > entity.Position))
+            .OrderBy(one => one.Position).ThenBy(one => one.Id).ToListAsync(ct).ConfigureAwait(false);
+        var neighbour = up ? candidates.LastOrDefault(one => !IsDefault(one)) : candidates.FirstOrDefault(one => !IsDefault(one));
 
         if (neighbour is null)
         {
@@ -427,7 +457,11 @@ public sealed class RouteStore
     public async Task<RouteResult> PlaceAsync(long id, int place, CancellationToken ct, bool table = false)
     {
         var all = await _db.Rules.Include(rule => rule.Matches).ThenInclude(match => match.Rule).OrderBy(rule => rule.Position).ThenBy(rule => rule.Id).ToListAsync(ct).ConfigureAwait(false);
-        var movable = all.Where(rule => table || rule.Id > 0).ToList();
+        if (all.Any(rule => rule.Id == id && IsDefault(rule)))
+        {
+            return FixedDefault();
+        }
+        var movable = all.Where(rule => (table || rule.Id > 0) && !IsDefault(rule)).ToList();
         var entity = movable.FirstOrDefault(rule => rule.Id == id);
         if (entity is null)
         {
@@ -524,13 +558,14 @@ public sealed class RouteStore
     {
         var rows = await _db.Rules.Include(row => row.Matches).ThenInclude(match => match.Rule).OrderBy(row => row.Position).ThenBy(row => row.Id).ToListAsync(ct).ConfigureAwait(false);
         var lastRow = rows.LastOrDefault();
-        var fallback = lastRow is not null && lastRow.Action == RouteAction.Direct
+        var legacy = lastRow is not null && lastRow.Action == RouteAction.Direct
             && lastRow.Outbound.Length == 0 && lastRow.Protocol == RouteProtocol.Any
             && Parts(lastRow.Clients).Count == 0 && Parts(lastRow.Inbounds).Count == 0
             && Parts(lastRow.Ports).Count == 0 && Parts(lastRow.SourcePorts).Count == 0
             && lastRow.Matches.Count == 1
             && lastRow.Matches.Single().Rule.DefaultKey == "resolver-default"
             && Parts(lastRow.Matches.Single().Rule.Targets).Count == 0 ? lastRow : null;
+        var fallback = rows.FirstOrDefault(IsDefault) ?? legacy;
         var last = rows.Where(row => row != fallback).Select(row => row.Position).DefaultIfEmpty(0).Max();
         if (last < int.MaxValue - 1)
         {
@@ -543,7 +578,7 @@ public sealed class RouteStore
         }
         if (fallback is not null)
         {
-            fallback.Position = position + 1;
+            fallback.Position = IsDefault(fallback) ? int.MaxValue : position + 1;
         }
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
         return position;
@@ -683,6 +718,42 @@ public sealed class RouteStore
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
+    private static bool IsDefault(RoutingEntryEntity entity) =>
+        entity.Matches.Count == 1 && entity.Matches.Single().Rule?.DefaultKey == RouteDefaults.FallbackKey;
+
+    private static RouteResult FixedDefault() =>
+        RouteResult.No(RouteOutcome.Invalid, "fixed-default-route", "the default route stays enabled and last");
+
+    private static RouteRule WithInline(RouteRule rule, TrafficRule criterion) =>
+        rule with { RuleIds = [], Criteria = [criterion], Targets = criterion.Targets };
+
+    private static bool Scoped(RouteRule rule) =>
+        rule.Clients.Count != 0 || rule.Inbounds.Count != 0 || rule.Ports.Count != 0
+            || rule.SourcePorts.Count != 0 || rule.Protocol != RouteProtocol.Any;
+
+    private static RouteFault? Policy(RouteRule rule, bool isDefault, bool inline, bool wasWildcard = false)
+    {
+        var scoped = Scoped(rule);
+        if (isDefault && (scoped || !rule.IsEnabled || rule.HasTargets
+            || rule.Criteria is not [var criterion] || criterion.DnsMode == TrafficDnsMode.Skip
+            || !inline && !rule.IsDefault))
+        {
+            return new RouteFault("bad-default-route", "the default route stays enabled, takes DNS and has no filters");
+        }
+
+        if (!isDefault && rule.Criteria.Any(one => one.DefaultKey == RouteDefaults.FallbackKey))
+        {
+            return new RouteFault("bad-default-route", "the default DNS policy belongs to the default route");
+        }
+
+        if (inline && !isDefault && !wasWildcard && !rule.HasTargets && !scoped)
+        {
+            return new RouteFault("use-default-route", "configure all unmatched traffic in the default route");
+        }
+
+        return Check(rule);
+    }
+
     private static RouteResult Missing(long id) =>
         RouteResult.No(RouteOutcome.Unknown, "unknown-rule", $"there is no rule under the number {id}");
 
@@ -711,6 +782,33 @@ public sealed class RouteStore
             CreatedUtc = entity.CreatedUtc,
             UpdatedUtc = entity.UpdatedUtc,
         };
+    }
+
+    private async Task WriteInlineAsync(RoutingEntryEntity entity, RouteRule rule, CancellationToken ct)
+    {
+        var draft = rule.Criteria.Single();
+        var link = entity.Matches.Count == 1 ? entity.Matches.Single() : null;
+        var keep = link is not null && !await _db.RoutingEntryRules.AnyAsync(
+            one => one.RuleId == link.RuleId && one.EntryId != entity.Id, ct).ConfigureAwait(false);
+        var criterion = keep ? link!.Rule : new TrafficRuleEntity
+        {
+            Name = ProfileName(draft.Name, await _db.TrafficRules.Select(one => one.Name).ToListAsync(ct).ConfigureAwait(false)),
+            CreatedUtc = _time.GetUtcNow(),
+        };
+
+        if (!keep)
+        {
+            _db.RoutingEntryRules.RemoveRange(entity.Matches);
+            entity.Matches.Clear();
+            entity.Matches.Add(new RoutingEntryRuleEntity { Rule = criterion, Position = 0 });
+        }
+
+        criterion.UpdatedUtc = _time.GetUtcNow();
+        criterion.Targets = string.Join(", ", draft.Targets);
+        criterion.DnsMode = draft.DnsMode;
+        criterion.Dns = string.Join(", ", draft.Dns);
+        criterion.DnsMembers = JsonSerializer.Serialize(draft.DnsMembers);
+        WriteSettings(entity, rule);
     }
 
     private async Task WriteAsync(RoutingEntryEntity entity, RouteRule rule, CancellationToken ct)
@@ -744,6 +842,11 @@ public sealed class RouteStore
                 entity.Matches.Add(new RoutingEntryRuleEntity { RuleId = ids[at], Position = at, Rule = found[ids[at]] });
             }
         }
+        WriteSettings(entity, rule);
+    }
+
+    private static void WriteSettings(RoutingEntryEntity entity, RouteRule rule)
+    {
         entity.Name = rule.Name.Trim();
         entity.Position = rule.Position;
         entity.IsEnabled = rule.IsEnabled;

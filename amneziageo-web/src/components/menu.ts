@@ -6,6 +6,7 @@ import type { TextKey } from "@/i18n"
 export interface Item {
   to: string
   label: TextKey
+  tabLabel?: TextKey
   about?: TextKey
   icon: GlyphName
   scope: string
@@ -60,21 +61,21 @@ export const clients: Item[] = [
 ]
 
 export const routingMain: Item[] = [
-  { to: "/routing/rules", label: "routing.table", icon: "fork", scope: scopes.readState },
-  { to: "/routing/addresses", label: "routing.addresses", icon: "fork", scope: scopes.readState },
+  { to: "/routing/rules", label: "routing.table", tabLabel: "routing.tab", icon: "fork", scope: scopes.readState },
   { to: "/routing/channels", label: "routing.linkedServers", icon: "route", scope: scopes.readState },
   { to: "/routing/balancers", label: "routing.balancers", icon: "fork", scope: scopes.readState },
+  { to: "/routing/proxies", label: "proxies.title", icon: "route", scope: scopes.readState,
+    add: { to: "/routing/proxies/new", scope: scopes.manageProxies } },
 ]
 
 export const routing: Item[] = [
   ...routingMain,
+  { to: "/routing/addresses", label: "routing.addresses", icon: "fork", scope: scopes.readState, unlisted: true },
   { to: "/routing/basic", label: "tab.basic", icon: "list", scope: scopes.readState, unlisted: true },
   { to: "/routing/test", label: "tab.test", icon: "flask", scope: scopes.readState, unlisted: true },
-  { to: "/routing/proxies", label: "proxies.title", icon: "route", scope: scopes.readState,
-    add: { to: "/routing/proxies/new", scope: scopes.manageProxies } },
   { to: "/routing/geo", label: "tab.geo", icon: "map", scope: scopes.readState,
-    add: { to: "/routing/geo/new", scope: scopes.manageRouting }, only: "geo" },
-  { to: "/routing/dns", label: "tab.dns", icon: "globe", scope: scopes.readState },
+    add: { to: "/routing/geo/new", scope: scopes.manageRouting }, only: "geo", unlisted: true },
+  { to: "/routing/dns", label: "tab.dns", icon: "globe", scope: scopes.readState, unlisted: true },
 ]
 
 export const settings: Item[] = [
@@ -118,7 +119,7 @@ export const sections: Section[] = [
   { to: "/", label: "nav.overview", icon: "home", scope: scopes.readState, items: [] },
   { to: "/interfaces", label: "nav.interfaces", icon: "shield", scope: scopes.readState, items: [] },
   { to: "/clients", label: "nav.clients", icon: "devices", scope: scopes.readState, items: [] },
-  { to: "/routing", label: "nav.routing", icon: "fork", scope: scopes.readState, items: routing },
+  { to: "/routing", label: "nav.routing", icon: "fork", scope: scopes.readState, items: [] },
   { to: "/settings", label: "nav.settings", icon: "gear", scope: scopes.manageAccess, items: settings },
 ]
 

@@ -12,6 +12,7 @@ import { proxyFaults } from "@/components/proxyValidation"
 import type { ProxyField } from "@/components/proxyValidation"
 import { KeepQuestion } from "@/components/PortNote"
 import { useTail } from "@/components/crumbs"
+import { useEditorExit } from "@/components/EditorExit"
 import { danger, footer, note, primary, secondary } from "@/components/styles"
 import { useText } from "@/i18n"
 import type { TextKey } from "@/i18n"
@@ -45,6 +46,7 @@ function ProxyForm({ start }: { start: TransportProxy }) {
   const [draft, setDraft] = useState<ProxyDraft>(initial)
   const [asking, setAsking] = useState(false)
   const edited = !same(draft, initial)
+  const { leave, prompt } = useEditorExit(edited, save.isPending)
   const targets = draft.targets!
   const mode = targets.local ? "local" : targets.restricted ? "selected" : "any"
   const paths = [...usePathHolders({ proxy: start.id, config: start.legacyConfigId ?? undefined }), ...useSocketHolders({ config: start.legacyConfigId ?? undefined })]
@@ -62,7 +64,7 @@ function ProxyForm({ start }: { start: TransportProxy }) {
   }
   function send(keep?: boolean) {
     setAsking(false)
-    void save.mutateAsync({ id: start.id, draft: { ...draft, keep } }).then(() => navigate(back)).catch(() => {})
+    void save.mutateAsync({ id: start.id, draft: { ...draft, keep } }).then(() => leave(() => navigate(back))).catch(() => {})
   }
   function certificate(domain: string) {
     if (domain === "__own") { return }
@@ -128,9 +130,10 @@ function ProxyForm({ start }: { start: TransportProxy }) {
     {save.error !== null && !server?.field && <div className="text-sm text-alarm">{t(complaint(save.error))}</div>}
     <div className={footer}>
       {start.id > 0 && <Link to={`/routing/proxies/${start.id}/delete`} className={`mr-auto ${danger}`}>{t("geo.remove")}</Link>}
-      <button type="button" className={secondary} disabled={!edited || save.isPending} onClick={() => navigate(back)}>{t("geo.cancel")}</button>
+      <button type="button" className={secondary} disabled={save.isPending} onClick={() => navigate(back)}>{t("geo.cancel")}</button>
       <button type="button" className={primary} disabled={!edited || !valid || save.isPending} onClick={() => start.opened && (start.listenPort || start.port) !== listenPort ? setAsking(true) : send()}>{t("geo.save")}</button>
     </div>
+    {prompt}
     {asking && <KeepQuestion ports={[`${start.listenPort || start.port}/${start.transport === "quic" ? "udp" : "tcp"}`]} onAnswer={send} onCancel={() => setAsking(false)} />}
   </div>
 }

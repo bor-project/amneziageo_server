@@ -33,7 +33,7 @@ function NewEntry() {
   useTail([{ label: t("routing.newEntry") }])
 
   return <EntryForm start={freshEntry} resume={resumed} pending={add.isPending} error={add.error} onAddresses={(draft, id) => openEditor(draft, id === undefined ? "/routing/addresses/new" : `/routing/addresses/${id}/edit`)} onHandling={openEditor}
-    onSave={(draft) => void add.mutateAsync(draft).then(() => navigate(back)).catch(() => undefined)} onClose={() => navigate(back)} />
+    onSave={(draft) => add.mutateAsync(draft)} onClose={() => navigate(back)} />
 }
 
 function HeldEntry({ entryId }: { entryId: number }) {
@@ -45,13 +45,13 @@ function HeldEntry({ entryId }: { entryId: number }) {
   const openEditor = useRelatedEditor()
   const resumed = (useLocation().state as RoutingPageState | null)?.entryResume
   const held = entries.data?.find((one) => one.id === entryId)
-  useTail(held === undefined ? [] : [{ label: held.name }])
+  useTail(held === undefined ? [] : [{ label: held.isDefault ? t("routing.defaultRow") : held.name }])
 
   if (held === undefined) {
     return entries.data === undefined ? <div className="mt-4 text-sm text-muted">{t("rules.loading")}</div> : <Navigate to={back} replace />
   }
 
-  return <EntryForm key={held.id} start={entryDraft(held)} resume={resumed} pending={change.isPending} error={change.error} onAddresses={(draft, id) => openEditor(draft, id === undefined ? "/routing/addresses/new" : `/routing/addresses/${id}/edit`)} onHandling={openEditor}
-    onSave={(draft) => void change.mutateAsync({ id: held.id, draft }).then(() => navigate(back)).catch(() => undefined)}
-    onClose={() => navigate(back)} onRemove={() => navigate(`/routing/rules/${held.id}/delete`)} />
+  return <EntryForm key={held.id} start={entryDraft(held)} isDefault={held.isDefault} resume={resumed} pending={change.isPending} error={change.error} onAddresses={(draft, id) => openEditor(draft, id === undefined ? "/routing/addresses/new" : `/routing/addresses/${id}/edit`)} onHandling={openEditor}
+    onSave={(draft) => change.mutateAsync({ id: held.id, draft })}
+    onClose={() => navigate(back)} onRemove={held.isDefault ? undefined : () => navigate(`/routing/rules/${held.id}/delete`)} />
 }

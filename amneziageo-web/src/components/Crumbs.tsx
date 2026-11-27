@@ -39,7 +39,7 @@ export function Crumbs() {
   }, [last, t])
 
   return (
-    <nav className="flex min-w-0 items-center gap-1.5 text-[13px]">
+    <nav aria-label={t("nav.breadcrumbs")} className="flex min-w-0 items-center gap-1.5 text-[13px]">
       {shown.length < items.length && root?.to !== undefined && (
         <>
           <Link to={root.to} className="rounded-md p-1 text-muted hover:bg-active hover:text-ink">
@@ -67,7 +67,7 @@ export function Crumbs() {
 
 function Piece({ crumb, last }: { crumb: Crumb; last: boolean }) {
   if (last || crumb.to === undefined) {
-    return <span className="truncate font-medium text-ink">{crumb.label}</span>
+    return <span aria-current={last ? "page" : undefined} className="truncate font-medium text-ink">{crumb.label}</span>
   }
 
   return (

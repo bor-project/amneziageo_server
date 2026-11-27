@@ -36,8 +36,11 @@ public static class DnsRouting
         long turn = 0,
         long? rule = null)
     {
-        var leg = rule is { } id
+        var forced = rule is { } id
             ? plan?.Legs.FirstOrDefault(one => one.Rule.Id == id && one.IsOnHost)
+            : null;
+        var leg = rule.HasValue && (forced is null || Criterion(forced, name)?.DnsMode != TrafficDnsMode.Skip)
+            ? forced
             : plan?.Legs.FirstOrDefault(one => Matches(one, name, client, inbound));
         if (leg is null)
         {
@@ -49,8 +52,7 @@ public static class DnsRouting
             return Closed("dns-blocked", "the routing entry blocks the name");
         }
 
-        var criterion = leg.Rule.Criteria.FirstOrDefault(one =>
-            one.Targets.Count == 0 || leg.DnsCriteria.TryGetValue(one.Id, out var matcher) && matcher.Matches(name));
+        var criterion = Criterion(leg, name);
         var inherited = criterion?.DnsMode == TrafficDnsMode.Default;
         var servers = criterion?.Dns ?? leg.Rule.Dns;
         var members = criterion?.DnsMembers ?? leg.Rule.DnsMembers;
@@ -96,6 +98,10 @@ public static class DnsRouting
     private static DnsResolution Closed(string code, string message) =>
         new([], DnsWay.Closed(code, message));
 
+    private static TrafficRule? Criterion(RouteLeg leg, string name) =>
+        leg.Rule.Criteria.FirstOrDefault(one =>
+            one.Targets.Count == 0 || leg.DnsCriteria.TryGetValue(one.Id, out var matcher) && matcher.Matches(name));
+
     private static bool Matches(RouteLeg leg, string name, IPAddress? client, string? inbound)
     {
         var rule = leg.Rule;
@@ -114,6 +120,7 @@ public static class DnsRouting
             return false;
         }
 
-        return !rule.HasTargets || (leg.DnsMatcher ?? new DomainMatcher(leg.Domains)).Matches(name);
+        return (!rule.HasTargets || (leg.DnsMatcher ?? new DomainMatcher(leg.Domains)).Matches(name))
+            && Criterion(leg, name)?.DnsMode != TrafficDnsMode.Skip;
     }
 }
